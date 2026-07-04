@@ -1,0 +1,16 @@
+{
+  "name": "pos-samer",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "pnpm --parallel --recursive dev",
+    "build": "pnpm --recursive build",
+    "test": "pnpm --recursive test",
+    "db:migrate": "pnpm --filter @pos/server db:migrate",
+    "db:seed": "pnpm --filter @pos/server db:seed"
+  },
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22"
+  }
+}
