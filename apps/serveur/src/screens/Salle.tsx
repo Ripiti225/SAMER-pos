@@ -4,7 +4,15 @@ import type { TableVue } from '@pos/shared';
 import { api, PlanSalle } from '@pos/shared-ui';
 
 /** Plan de salle (§B1) : composant commun avec la caisse, sans tables partenaires. */
-export function Salle({ onTable }: { onTable: (tableId: string) => void }) {
+export function Salle({
+  onTable,
+  moiServeurId,
+  afficherToast,
+}: {
+  onTable: (tableId: string) => void;
+  moiServeurId: string;
+  afficherToast: (m: string) => void;
+}) {
   const queryClient = useQueryClient();
   const { data: tables } = useQuery({
     queryKey: ['tables'],
@@ -38,7 +46,13 @@ export function Salle({ onTable }: { onTable: (tableId: string) => void }) {
 
   return (
     <div className="p-4">
-      <PlanSalle tables={tables ?? []} onTable={(t) => onTable(t.id)} masquerPartenaires />
+      <PlanSalle
+        tables={tables ?? []}
+        onTable={(t) => onTable(t.id)}
+        masquerPartenaires
+        moiServeurId={moiServeurId}
+        onBloque={(t) => afficherToast(`Table de ${(t.ouverte_par_nom ?? 'un autre serveur').split(' ')[0]} — accès réservé`)}
+      />
     </div>
   );
 }

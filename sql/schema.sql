@@ -173,6 +173,8 @@ CREATE TABLE tables_salle (
   statut      TEXT NOT NULL DEFAULT 'LIBRE'
               CHECK (statut IN ('LIBRE','OCCUPEE','ADDITION_DEMANDEE')),
   qr_token    TEXT UNIQUE,             -- token du QR de notation collé sur la table
+  -- CORRECTIONS3 point 3 : serveur propriétaire (à l'ouverture, NULL si LIBRE)
+  ouverte_par UUID REFERENCES utilisateurs(id),
   UNIQUE (zone_id, numero)
 );
 

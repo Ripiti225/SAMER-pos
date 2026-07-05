@@ -20,6 +20,7 @@ import {
   figerNouvelItem,
   recalculerTotaux,
 } from '../commandes/service.js';
+import { exigerAccesTable, ouvrirTablePar } from '../tables/propriete.js';
 import type { DbOuTx } from '../../db/client.js';
 
 /**
@@ -63,6 +64,8 @@ export function routesServeur(app: FastifyInstance): void {
       if (table.partenaire) {
         throw new ErreurMetier('Les commandes partenaires se prennent à la caisse', 400);
       }
+      // Propriété : un serveur ne peut pas entrer dans la table d'un autre
+      await exigerAccesTable(tx, req.session!, table.id);
 
       // Commande en cours sur cette table, sinon création
       const ouvertes = await tx
@@ -102,6 +105,8 @@ export function routesServeur(app: FastifyInstance): void {
       if (table.statut === 'LIBRE') {
         await tx.update(tablesSalle).set({ statut: 'OCCUPEE' }).where(eq(tablesSalle.id, table.id));
       }
+      // Le serveur devient propriétaire de la table (première commande)
+      await ouvrirTablePar(tx, table.id, req.session!.utilisateur_id);
 
       return { deja_traitee: false as const, commande_id: commande.id };
     });
@@ -130,6 +135,7 @@ export function routesServeur(app: FastifyInstance): void {
         .for('update');
       const table = tables[0];
       if (!table) throw introuvable('Table');
+      await exigerAccesTable(tx, req.session!, table.id);
 
       const ouvertes = await tx
         .select({ id: commandes.id })

@@ -260,10 +260,14 @@ export async function chargerCommandeVue(dbx: DbOuTx, commandeId: string): Promi
   };
 }
 
-/** Libère (ou occupe) la table liée à une commande sur place. */
+/**
+ * Libère (ou occupe) la table liée à une commande sur place. Libérer une table
+ * efface aussi son propriétaire (ouverte_par) — CORRECTIONS3 point 3.
+ */
 export async function majStatutTable(tx: DbOuTx, tableId: string | null, statut: 'LIBRE' | 'OCCUPEE'): Promise<void> {
   if (!tableId) return;
-  await tx.update(tablesSalle).set({ statut }).where(eq(tablesSalle.id, tableId));
+  const valeurs = statut === 'LIBRE' ? { statut, ouverte_par: null } : { statut };
+  await tx.update(tablesSalle).set(valeurs).where(eq(tablesSalle.id, tableId));
 }
 
 /**

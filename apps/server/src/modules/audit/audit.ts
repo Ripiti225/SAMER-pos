@@ -19,7 +19,8 @@ export type ActionAudit =
   | 'ANNULATION_COMMANDE'
   | 'REOUVERTURE_NOTE'
   | 'PAIEMENT'
-  | 'SPLIT_NOTE';
+  | 'SPLIT_NOTE'
+  | 'TRANSFERT_TABLE';
 
 export interface EntreeAudit {
   user_id?: string | null;

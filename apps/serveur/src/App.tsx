@@ -88,7 +88,7 @@ export function App() {
       {tableId ? (
         <PriseCommande tableId={tableId} onRetour={() => setTableId(null)} afficherToast={afficherToast} />
       ) : (
-        <Salle onTable={setTableId} />
+        <Salle onTable={setTableId} moiServeurId={session.utilisateur.id} afficherToast={afficherToast} />
       )}
 
       <NotificationsServeur session={session} afficherToast={afficherToast} />

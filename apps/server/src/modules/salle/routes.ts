@@ -11,9 +11,9 @@
 import type { FastifyInstance } from 'fastify';
 import { and, asc, desc, eq, notInArray } from 'drizzle-orm';
 import type { AppelVue } from '@pos/shared';
-import { RefusCommandeSchema } from '@pos/shared';
+import { RefusCommandeSchema, TransfertTableSchema } from '@pos/shared';
 import { db } from '../../db/client.js';
-import { appelsTable, commandes, tablesSalle, zones } from '../../db/schema/index.js';
+import { appelsTable, commandes, tablesSalle, utilisateurs, zones } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
@@ -25,6 +25,7 @@ import {
   verrouillerCommande,
 } from '../commandes/service.js';
 import { calculerDestinataire } from '../routage/routage.js';
+import { exigerAccesTable, ouvrirTablePar } from '../tables/propriete.js';
 
 const ROLES_SALLE = ['SERVEUR', 'CAISSIER', 'MANAGER', 'PROPRIETAIRE'] as const;
 
@@ -108,6 +109,7 @@ export function routesSalle(app: FastifyInstance): void {
 
     const vue = await db.transaction(async (tx) => {
       const c = await verrouillerCommande(tx, id);
+      await exigerAccesTable(tx, req.session!, c.table_id);
       if (c.origine !== 'CLIENT_QR') {
         throw new ErreurMetier('Cette commande n’est pas une proposition client', 400);
       }
@@ -115,6 +117,8 @@ export function routesSalle(app: FastifyInstance): void {
         throw new ErreurMetier('Cette commande a déjà été traitée', 409);
       }
       const serveurId = c.serveur_id ?? (estServeur ? req.session!.utilisateur_id : null);
+      // Le serveur validant devient propriétaire de la table
+      if (estServeur) await ouvrirTablePar(tx, c.table_id, req.session!.utilisateur_id);
       const [maj] = await tx
         .update(commandes)
         .set({ serveur_id: serveurId, updated_at: new Date() })
@@ -146,6 +150,7 @@ export function routesSalle(app: FastifyInstance): void {
 
     const vue = await db.transaction(async (tx) => {
       const c = await verrouillerCommande(tx, id);
+      await exigerAccesTable(tx, req.session!, c.table_id);
       if (c.origine !== 'CLIENT_QR') {
         throw new ErreurMetier('Cette commande n’est pas une proposition client', 400);
       }
@@ -182,6 +187,7 @@ export function routesSalle(app: FastifyInstance): void {
     const { id } = req.params as { id: string };
     const vue = await db.transaction(async (tx) => {
       const c = await verrouillerCommande(tx, id);
+      await exigerAccesTable(tx, req.session!, c.table_id);
       if (c.statut !== 'PRETE') {
         throw new ErreurMetier('Cette commande n’est pas prête à être servie', 409);
       }
@@ -198,6 +204,54 @@ export function routesSalle(app: FastifyInstance): void {
     if (vue.table_id) app.diffuser('table:changee', vue.table_id);
     return vue;
   });
+
+  /**
+   * Transfert de table à un autre serveur (point 3) : réservé CAISSIER /
+   * MANAGER / PROPRIETAIRE. Réaffecte la propriété + les commandes en cours
+   * au nouveau serveur, et trace un audit TRANSFERT_TABLE.
+   */
+  app.post(
+    '/api/caisse/tables/:id/transferer',
+    { preHandler: app.exigerRole('CAISSIER', 'MANAGER', 'PROPRIETAIRE') },
+    async (req) => {
+      const { id } = req.params as { id: string };
+      const corps = valider(TransfertTableSchema, req.body);
+
+      await db.transaction(async (tx) => {
+        const [table] = await tx.select().from(tablesSalle).where(eq(tablesSalle.id, id)).for('update');
+        if (!table) throw introuvable('Table');
+        const [receveur] = await tx
+          .select()
+          .from(utilisateurs)
+          .where(and(eq(utilisateurs.id, corps.serveur_id), eq(utilisateurs.actif, true)));
+        if (!receveur || receveur.role !== 'SERVEUR') {
+          throw new ErreurMetier('Choisissez un serveur actif', 400);
+        }
+
+        const ancien = table.ouverte_par;
+        await tx.update(tablesSalle).set({ ouverte_par: receveur.id }).where(eq(tablesSalle.id, id));
+        // Les commandes en cours suivent le nouveau propriétaire
+        const majCommandes = await tx
+          .update(commandes)
+          .set({ serveur_id: receveur.id, updated_at: new Date() })
+          .where(and(eq(commandes.table_id, id), notInArray(commandes.statut, ['PAYEE', 'ANNULEE'])))
+          .returning();
+        for (const c of majCommandes) {
+          await ecrireOutbox(tx, 'commandes', 'UPDATE', c.id, c as unknown as Record<string, unknown>);
+        }
+        await journaliser(tx, {
+          user_id: req.session!.utilisateur_id,
+          action: 'TRANSFERT_TABLE',
+          entite: 'tables_salle',
+          entite_id: id,
+          meta: { table_numero: table.numero, ancien_serveur: ancien, nouveau_serveur: receveur.id },
+        });
+      });
+
+      app.diffuser('table:changee', id);
+      return { ok: true };
+    },
+  );
 
   // Liste des commandes client en attente de validation (repli caisse inclus)
   app.get('/api/commandes/a-valider', { preHandler: gardeSalle }, async () => {

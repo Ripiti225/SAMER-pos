@@ -16,6 +16,7 @@ import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
 import { verifierPinManager } from '../auth/pin.js';
+import { exigerAccesTable } from '../tables/propriete.js';
 import {
   chargerCommandeVue,
   exigerModifiable,
@@ -88,7 +89,11 @@ export function routesCommandes(app: FastifyInstance): void {
 
   app.get('/api/commandes/:id', { preHandler: app.exigerAuth }, async (req) => {
     const { id } = req.params as { id: string };
-    return chargerCommandeVue(db, id);
+    const vue = await chargerCommandeVue(db, id);
+    // Propriété de table (point 3) : un serveur ne voit pas la commande d'une
+    // table ouverte par un autre serveur.
+    await exigerAccesTable(db, req.session!, vue.table_id);
+    return vue;
   });
 
   // Ajout d'un article ou d'un combo — prix et nom figés immédiatement
