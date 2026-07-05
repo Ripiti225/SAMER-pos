@@ -4,3 +4,6 @@ dev-dist/
 .env
 *.log
 .DS_Store
+
+# SQL cloud du catalogue : régénéré (porte le restaurant_id du seed)
+sql/cloud/catalogue_import.sql
