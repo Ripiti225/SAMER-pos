@@ -8,6 +8,8 @@
     "build": "tsc --noEmit",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed.ts",
+    "site:enroler": "tsx src/scripts/enroler-site.ts",
+    "sync:reconcile": "tsx src/scripts/reconcilier.ts",
     "test": "vitest run"
   },
   "dependencies": {

@@ -1,0 +1,15 @@
+# Configuration Supabase CLI (projet POS cloud).
+# Les Edge Functions s'authentifient par clé de site (cle_site), PAS par JWT
+# Supabase : on désactive verify_jwt pour qu'elles soient appelables par le
+# serveur local sans jeton Supabase.
+
+project_id = "pos-samer-cloud"
+
+[functions.sync-push]
+verify_jwt = false
+
+[functions.sync-pull]
+verify_jwt = false
+
+[functions.sync-reconcile]
+verify_jwt = false
