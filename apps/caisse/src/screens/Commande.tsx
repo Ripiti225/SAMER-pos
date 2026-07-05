@@ -128,17 +128,22 @@ export function Commande() {
           ))}
         </nav>
 
-        <main className="grid flex-1 auto-rows-min grid-cols-2 gap-3 overflow-y-auto p-3 md:grid-cols-3 xl:grid-cols-4">
+        <main className="grid flex-1 auto-rows-min grid-cols-2 gap-3 overflow-y-auto p-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {combosVisibles.map((combo) => (
             <button
               key={combo.id}
               type="button"
               disabled={!combo.disponible}
-              className="carte flex min-h-[96px] flex-col justify-between p-3 text-left hover:border-marque disabled:opacity-40"
+              className="carte group flex flex-col overflow-hidden p-0 text-left transition hover:-translate-y-0.5 disabled:opacity-40"
               onClick={() => ajouterItem.mutate({ combo_id: combo.id, quantite: 1, options: [], supplements: [] })}
             >
-              <div className="font-semibold">{combo.nom}</div>
-              <div className="text-marque-fonce font-bold">{formatFCFA(combo.prix)}</div>
+              <div className="flex aspect-[4/3] w-full items-center justify-center bg-gradient-to-br from-marque to-marque-fonce p-3 text-center text-lg font-black leading-tight text-white">
+                {combo.nom}
+              </div>
+              <div className="flex items-center justify-between gap-1 p-2.5">
+                <span className="text-xs font-semibold uppercase tracking-wide text-doux">Combo</span>
+                <span className="prix text-lg font-bold">{formatFCFA(combo.prix)}</span>
+              </div>
             </button>
           ))}
           {articlesVisibles.map((a) => (
@@ -146,17 +151,32 @@ export function Commande() {
               key={a.id}
               type="button"
               disabled={!a.disponible}
-              className="carte flex min-h-[96px] flex-col justify-between p-3 text-left hover:border-marque disabled:opacity-45"
+              className="carte group flex flex-col overflow-hidden p-0 text-left transition hover:-translate-y-0.5 disabled:opacity-100"
               onClick={() => clicArticle(a)}
             >
-              <div>
+              <div className="relative aspect-[4/3] w-full overflow-hidden bg-marque-tint">
                 {a.image_url ? (
-                  <img src={a.image_url} alt="" className="mb-1 h-12 w-full rounded object-cover" />
-                ) : null}
-                <div className="font-semibold">{a.nom}</div>
-                {!a.disponible && <div className="text-xs font-semibold text-alerte">Épuisé</div>}
+                  <img
+                    src={a.image_url}
+                    alt=""
+                    loading="lazy"
+                    className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-2xl font-black text-marque-fonce/30">
+                    {a.nom.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                {!a.disponible && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-fort/45">
+                    <span className="rounded-full bg-alerte px-3 py-1 text-sm font-bold text-white">Épuisé</span>
+                  </div>
+                )}
               </div>
-              <div className="prix font-bold">{formatFCFA(a.prix_base)}</div>
+              <div className="flex flex-1 flex-col justify-between gap-1 p-2.5">
+                <div className="line-clamp-2 font-semibold leading-tight">{a.nom}</div>
+                <div className="prix text-lg font-bold">{formatFCFA(a.prix_base)}</div>
+              </div>
             </button>
           ))}
         </main>

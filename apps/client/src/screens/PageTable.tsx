@@ -124,14 +124,28 @@ export function PageTable({ jeton, table }: { jeton: string; table: TableClientV
                 key={a.id}
                 type="button"
                 disabled={!a.disponible}
-                className="carte flex min-h-[84px] flex-col justify-between p-3 text-left disabled:opacity-45"
+                className="carte flex flex-col overflow-hidden p-0 text-left transition active:scale-[0.98]"
                 onClick={() => ajouter(a.id, a.nom, a.prix_base)}
               >
-                <div>
-                  <div className="font-semibold">{a.nom}</div>
-                  {!a.disponible && <div className="text-xs font-semibold text-alerte">Épuisé</div>}
+                <div className="relative aspect-[4/3] w-full overflow-hidden bg-marque-tint">
+                  {a.image_url ? (
+                    <img src={a.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-2xl font-black text-marque-fonce/30">
+                      {a.nom.slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
+                  {!a.disponible && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-fort/45">
+                      <span className="rounded-full bg-alerte px-3 py-1 text-sm font-bold text-white">Épuisé</span>
+                    </div>
+                  )}
                 </div>
-                <div className="prix font-bold">{formatFCFA(a.prix_base)}</div>
+                <div className="flex flex-1 flex-col justify-between gap-1 p-2.5">
+                  <div className="line-clamp-2 font-semibold leading-tight">{a.nom}</div>
+                  {a.description && <div className="line-clamp-1 text-xs text-doux">{a.description}</div>}
+                  <div className="prix text-base font-bold">{formatFCFA(a.prix_base)}</div>
+                </div>
               </button>
             ))}
           </div>
