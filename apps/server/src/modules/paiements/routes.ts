@@ -114,6 +114,18 @@ export function routesPaiements(app: FastifyInstance): void {
         .returning();
       await ecrireOutbox(tx, 'paiements', 'INSERT', paiement!.id, paiement as unknown as Record<string, unknown>);
 
+      // Une commande prise sur tablette (sans service) est rattachée au
+      // service du caissier qui l'encaisse : elle comptera dans SON rapport Z.
+      if (c.service_id === null) {
+        const [maj] = await tx
+          .update(commandes)
+          .set({ service_id: service.id, updated_at: new Date() })
+          .where(eq(commandes.id, id))
+          .returning();
+        await ecrireOutbox(tx, 'commandes', 'UPDATE', id, maj as unknown as Record<string, unknown>);
+        c.service_id = service.id;
+      }
+
       const totalPaye = dejaPaye + corps.montant;
       let estPayee = false;
       if (totalPaye === c.total) {

@@ -259,6 +259,7 @@ export const commandeItems = pgTable('commande_items', {
   options: jsonb('options').notNull().default(sql`'[]'`),
   supplements: jsonb('supplements').notNull().default(sql`'[]'`),
   statut_cuisine: text('statut_cuisine').notNull().default('A_PREPARER'),
+  envoye_le: timestamp('envoye_le', { withTimezone: true }),
   annule_par: uuid('annule_par').references(() => utilisateurs.id),
   annule_motif: text('annule_motif'),
 }, (t) => [
@@ -326,6 +327,12 @@ export const syncEtat = pgTable('sync_etat', {
   flux: text('flux').primaryKey(),
   version: bigint('version', { mode: 'number' }).notNull().default(0),
   synced_at: timestamp('synced_at', { withTimezone: true }),
+});
+
+// Sprint 2 : idempotence de la file locale des tablettes serveur
+export const actionsRecues = pgTable('actions_recues', {
+  uuid: uuid('uuid').primaryKey(),
+  traite_le: timestamp('traite_le', { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ---------------------------------------------------------------------------

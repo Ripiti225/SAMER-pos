@@ -28,12 +28,16 @@ export const PIN_PROPRIO = '852741';
 export const PIN_MANAGER = '963852';
 export const PIN_CAISSIER = '2580';
 export const PIN_CAISSIER2 = '4826';
+export const PIN_SERVEUR = '1357';
+export const PIN_CUISINE = '7913';
 
 export interface Donnees {
   proprio_id: string;
   manager_id: string;
   caissier_id: string;
   caissier2_id: string;
+  serveur_id: string;
+  cuisine_id: string;
   article_id: string;
   supplement_id: string;
   table_id: string;
@@ -42,7 +46,7 @@ export interface Donnees {
 /** Vide la base de test et insère le strict nécessaire (sans promotions). */
 export async function resetDonnees(): Promise<Donnees> {
   await db.execute(sql`
-    TRUNCATE TABLE points_fidelite, clients_fidelite, codes_pointage, pointages,
+    TRUNCATE TABLE actions_recues, points_fidelite, clients_fidelite, codes_pointage, pointages,
       notations, sync_etat, sync_outbox, audit_log, paiements, notes_split,
       commande_items, commandes, services_caisse, tables_salle, zones,
       promotions, combo_articles, combos, supplements, options, groupes_options,
@@ -62,13 +66,15 @@ export async function resetDonnees(): Promise<Donnees> {
     { cle: 'verrouillage_inactivite_secondes', valeur: 60 },
   ]);
 
-  const [proprio, manager, caissier, caissier2] = await db
+  const [proprio, manager, caissier, caissier2, serveur, cuisine] = await db
     .insert(utilisateurs)
     .values([
       { nom_complet: 'Proprio Test', role: 'PROPRIETAIRE', pin_hash: await hacher(PIN_PROPRIO) },
       { nom_complet: 'Manager Test', role: 'MANAGER', pin_hash: await hacher(PIN_MANAGER) },
       { nom_complet: 'Caissier Test', role: 'CAISSIER', pin_hash: await hacher(PIN_CAISSIER) },
       { nom_complet: 'Caissier Suivant', role: 'CAISSIER', pin_hash: await hacher(PIN_CAISSIER2) },
+      { nom_complet: 'Serveur Test', role: 'SERVEUR', pin_hash: await hacher(PIN_SERVEUR) },
+      { nom_complet: 'Cuisine Test', role: 'CUISINE', poste_cuisine: 'CUISINIER', pin_hash: await hacher(PIN_CUISINE) },
     ])
     .returning();
 
@@ -90,6 +96,8 @@ export async function resetDonnees(): Promise<Donnees> {
     manager_id: manager!.id,
     caissier_id: caissier!.id,
     caissier2_id: caissier2!.id,
+    serveur_id: serveur!.id,
+    cuisine_id: cuisine!.id,
     article_id: article!.id,
     supplement_id: suppl!.id,
     table_id: table!.id,

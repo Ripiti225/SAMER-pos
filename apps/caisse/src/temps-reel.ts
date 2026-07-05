@@ -12,12 +12,15 @@ export function connecterTempsReel(queryClient: QueryClient): () => void {
     socket.onmessage = (evt) => {
       try {
         const { type, id } = JSON.parse(evt.data as string) as { type: string; id: string | null };
-        if (type === 'commande') {
+        // Sprint 2 : événements nommés (commande:envoyee, commande_item:annule,
+        // table:addition…) — on invalide par préfixe.
+        if (type.startsWith('commande')) {
           if (id) void queryClient.invalidateQueries({ queryKey: ['commande', id] });
           void queryClient.invalidateQueries({ queryKey: ['commandes-ouvertes'] });
           void queryClient.invalidateQueries({ queryKey: ['tables'] });
           void queryClient.invalidateQueries({ queryKey: ['mes-ventes'] });
         }
+        if (type.startsWith('table')) void queryClient.invalidateQueries({ queryKey: ['tables'] });
         if (type === 'catalogue') void queryClient.invalidateQueries({ queryKey: ['catalogue'] });
       } catch {
         /* message ignoré */

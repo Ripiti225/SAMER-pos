@@ -18,10 +18,11 @@ async function construireSessionInfo(session: {
   const [resto] = await db.select().from(restaurant).limit(1);
   if (!resto) throw new ErreurMetier('Le restaurant n’est pas encore configuré', 500);
 
-  const [param] = await db
-    .select()
-    .from(parametresLocaux)
-    .where(eq(parametresLocaux.cle, 'verrouillage_inactivite_secondes'));
+  const params = await db.select().from(parametresLocaux);
+  const lireParam = (cle: string, defaut: number): number => {
+    const p = params.find((x) => x.cle === cle);
+    return typeof p?.valeur === 'number' ? p.valeur : defaut;
+  };
 
   const [service] = await db
     .select()
@@ -36,7 +37,8 @@ async function construireSessionInfo(session: {
       marque: resto.marque as 'SAMER' | 'AL_KAYAN',
       couleur_hex: resto.couleur_hex,
     },
-    verrouillage_inactivite_secondes: typeof param?.valeur === 'number' ? param.valeur : 60,
+    verrouillage_inactivite_secondes: lireParam('verrouillage_inactivite_secondes', 60),
+    verrouillage_inactivite_serveur_secondes: lireParam('verrouillage_inactivite_serveur_secondes', 120),
     // Vue du service SANS especes_theorique (§14.3)
     service_ouvert: service
       ? {

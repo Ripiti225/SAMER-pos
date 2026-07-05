@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { and, desc, eq, notInArray } from 'drizzle-orm';
+import { and, desc, eq, isNull, notInArray } from 'drizzle-orm';
 import {
   AjouterItemSchema,
   AnnulerCommandeSchema,
@@ -10,15 +10,7 @@ import {
   ReouvrirSchema,
 } from '@pos/shared';
 import { db } from '../../db/client.js';
-import {
-  articles,
-  combos,
-  commandeItems,
-  commandes,
-  prixCanaux,
-  supplements,
-  tablesSalle,
-} from '../../db/schema/index.js';
+import { commandeItems, commandes, tablesSalle } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
@@ -27,8 +19,8 @@ import { verifierPinManager } from '../auth/pin.js';
 import {
   chargerCommandeVue,
   exigerModifiable,
+  figerNouvelItem,
   majStatutTable,
-  prixSelonCanal,
   recalculerTotaux,
   serviceOuvertDe,
   verrouillerCommande,
@@ -106,49 +98,7 @@ export function routesCommandes(app: FastifyInstance): void {
     const vue = await db.transaction(async (tx) => {
       const c = await verrouillerCommande(tx, id);
       exigerModifiable(c);
-
-      let nomSnapshot: string;
-      let prixUnitaire: number;
-      let supplementsFiges: { nom: string; prix: number }[] = [];
-
-      if (corps.article_id) {
-        const [article] = await tx.select().from(articles).where(eq(articles.id, corps.article_id));
-        if (!article || !article.actif) throw introuvable('Article');
-        if (!article.disponible) throw new ErreurMetier('Cet article n’est plus disponible aujourd’hui', 409);
-        const canaux = await tx.select().from(prixCanaux).where(eq(prixCanaux.article_id, article.id));
-        nomSnapshot = article.nom;
-        prixUnitaire = prixSelonCanal(article.prix_base, canaux, c.type, c.partenaire);
-
-        if (corps.supplements.length > 0) {
-          const dispo = await tx.select().from(supplements).where(eq(supplements.article_id, article.id));
-          supplementsFiges = corps.supplements.map((s) => {
-            const trouve = dispo.find((d) => d.id === s.id);
-            if (!trouve) throw new ErreurMetier('Supplément inconnu pour cet article', 400);
-            return { nom: trouve.nom, prix: trouve.prix };
-          });
-        }
-      } else {
-        const [combo] = await tx.select().from(combos).where(eq(combos.id, corps.combo_id!));
-        if (!combo || !combo.actif) throw introuvable('Combo');
-        if (!combo.disponible) throw new ErreurMetier('Ce combo n’est plus disponible aujourd’hui', 409);
-        nomSnapshot = combo.nom;
-        prixUnitaire = combo.prix;
-      }
-
-      const [item] = await tx
-        .insert(commandeItems)
-        .values({
-          commande_id: id,
-          article_id: corps.article_id ?? null,
-          combo_id: corps.combo_id ?? null,
-          nom_snapshot: nomSnapshot,
-          prix_unitaire: prixUnitaire,
-          quantite: corps.quantite,
-          options: corps.options,
-          supplements: supplementsFiges,
-        })
-        .returning();
-      await ecrireOutbox(tx, 'commande_items', 'INSERT', item!.id, item as unknown as Record<string, unknown>);
+      await figerNouvelItem(tx, c, corps);
       await recalculerTotaux(tx, id);
       return chargerCommandeVue(tx, id);
     });
@@ -170,7 +120,7 @@ export function routesCommandes(app: FastifyInstance): void {
         .from(commandeItems)
         .where(and(eq(commandeItems.id, itemId), eq(commandeItems.commande_id, id)));
       if (!item) throw introuvable('Article de la commande');
-      if (item.statut_cuisine !== 'A_PREPARER') {
+      if (item.envoye_le !== null || item.statut_cuisine !== 'A_PREPARER') {
         throw new ErreurMetier('Cet article est déjà en cuisine — passez par une annulation manager', 409);
       }
       const [maj] = await tx
@@ -203,8 +153,10 @@ export function routesCommandes(app: FastifyInstance): void {
     if (!itemAvant) throw introuvable('Article de la commande');
     if (itemAvant.statut_cuisine === 'ANNULE') throw new ErreurMetier('Cet article est déjà annulé', 409);
 
+    // Action protégée si l'article est déjà parti en cuisine (§ CLAUDE.md)
+    const dejaEnvoye = itemAvant.envoye_le !== null || itemAvant.statut_cuisine !== 'A_PREPARER';
     let annulePar = req.session!.utilisateur_id;
-    if (itemAvant.statut_cuisine !== 'A_PREPARER') {
+    if (dejaEnvoye) {
       if (!corps.pin_manager) {
         throw new ErreurMetier('Cet article est déjà en cuisine : PIN manager obligatoire', 403);
       }
@@ -234,11 +186,18 @@ export function routesCommandes(app: FastifyInstance): void {
       return chargerCommandeVue(tx, id);
     });
 
+    // Le KDS affiche l'article barré « ANNULÉ » s'il était déjà parti en cuisine
+    if (dejaEnvoye) app.diffuser('commande_item:annule', id);
     app.diffuser('commande', id);
     return vue;
   });
 
-  // Envoi en cuisine (KDS hors périmètre : trace seulement les statuts)
+  /**
+   * Envoi en cuisine : marque envoye_le sur les articles pas encore partis
+   * (ils restent A_PREPARER — c'est le KDS qui les passera EN_COURS avec
+   * « Commencer ») et passe la commande à ENVOYEE_CUISINE.
+   * Ajout en plusieurs fois : seuls les NOUVEAUX articles partent (§B2).
+   */
   app.post('/api/commandes/:id/envoyer', { preHandler: gardeCaisse }, async (req) => {
     const { id } = req.params as { id: string };
     const vue = await db.transaction(async (tx) => {
@@ -247,11 +206,12 @@ export function routesCommandes(app: FastifyInstance): void {
       const items = await tx
         .select()
         .from(commandeItems)
-        .where(and(eq(commandeItems.commande_id, id), eq(commandeItems.statut_cuisine, 'A_PREPARER')));
+        .where(and(eq(commandeItems.commande_id, id), isNull(commandeItems.envoye_le)));
       for (const item of items) {
+        if (item.statut_cuisine === 'ANNULE') continue;
         const [maj] = await tx
           .update(commandeItems)
-          .set({ statut_cuisine: 'EN_COURS' })
+          .set({ envoye_le: new Date() })
           .where(eq(commandeItems.id, item.id))
           .returning();
         await ecrireOutbox(tx, 'commande_items', 'UPDATE', item.id, maj as unknown as Record<string, unknown>);
@@ -264,6 +224,7 @@ export function routesCommandes(app: FastifyInstance): void {
       await ecrireOutbox(tx, 'commandes', 'UPDATE', id, maj as unknown as Record<string, unknown>);
       return chargerCommandeVue(tx, id);
     });
+    app.diffuser('commande:envoyee', id);
     app.diffuser('commande', id);
     return vue;
   });

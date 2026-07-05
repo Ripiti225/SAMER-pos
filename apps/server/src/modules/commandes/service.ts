@@ -10,12 +10,16 @@ import { and, eq, sql } from 'drizzle-orm';
 import type { CommandeVue, CommandeItemVue } from '@pos/shared';
 import type { DbOuTx } from '../../db/client.js';
 import {
+  articles,
+  combos,
   commandeItems,
   commandes,
   notesSplit,
   paiements,
+  prixCanaux,
   promotions,
   servicesCaisse,
+  supplements,
   tablesSalle,
 } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
@@ -61,6 +65,72 @@ export async function verrouillerCommande(tx: DbOuTx, commandeId: string): Promi
   const c = lignes[0];
   if (!c) throw introuvable('Commande');
   return c;
+}
+
+export interface NouvelItem {
+  article_id?: string | null;
+  combo_id?: string | null;
+  quantite: number;
+  options: { groupe: string; choix: string[] }[];
+  supplements: { id: string }[];
+}
+
+/**
+ * Fige et insère un article/combo dans une commande : nom + prix snapshot
+ * (canal appliqué), suppléments figés, ligne outbox — dans la transaction.
+ * Utilisé par la caisse ET par l'app serveur tablette (sprint 2).
+ * `envoye` = true quand l'article part directement en cuisine (tablette).
+ */
+export async function figerNouvelItem(
+  tx: DbOuTx,
+  c: CommandeDb,
+  corps: NouvelItem,
+  envoye = false,
+): Promise<ItemDb> {
+  let nomSnapshot: string;
+  let prixUnitaire: number;
+  let supplementsFiges: { nom: string; prix: number }[] = [];
+
+  if (corps.article_id) {
+    const [article] = await tx.select().from(articles).where(eq(articles.id, corps.article_id));
+    if (!article || !article.actif) throw introuvable('Article');
+    if (!article.disponible) throw new ErreurMetier('Cet article n’est plus disponible aujourd’hui', 409);
+    const canaux = await tx.select().from(prixCanaux).where(eq(prixCanaux.article_id, article.id));
+    nomSnapshot = article.nom;
+    prixUnitaire = prixSelonCanal(article.prix_base, canaux, c.type, c.partenaire);
+
+    if (corps.supplements.length > 0) {
+      const dispo = await tx.select().from(supplements).where(eq(supplements.article_id, article.id));
+      supplementsFiges = corps.supplements.map((s) => {
+        const trouve = dispo.find((d) => d.id === s.id);
+        if (!trouve) throw new ErreurMetier('Supplément inconnu pour cet article', 400);
+        return { nom: trouve.nom, prix: trouve.prix };
+      });
+    }
+  } else {
+    const [combo] = await tx.select().from(combos).where(eq(combos.id, corps.combo_id!));
+    if (!combo || !combo.actif) throw introuvable('Combo');
+    if (!combo.disponible) throw new ErreurMetier('Ce combo n’est plus disponible aujourd’hui', 409);
+    nomSnapshot = combo.nom;
+    prixUnitaire = combo.prix;
+  }
+
+  const [item] = await tx
+    .insert(commandeItems)
+    .values({
+      commande_id: c.id,
+      article_id: corps.article_id ?? null,
+      combo_id: corps.combo_id ?? null,
+      nom_snapshot: nomSnapshot,
+      prix_unitaire: prixUnitaire,
+      quantite: corps.quantite,
+      options: corps.options,
+      supplements: supplementsFiges,
+      envoye_le: envoye ? new Date() : null,
+    })
+    .returning();
+  await ecrireOutbox(tx, 'commande_items', 'INSERT', item!.id, item as unknown as Record<string, unknown>);
+  return item!;
 }
 
 export function exigerModifiable(c: CommandeDb): void {
@@ -153,6 +223,7 @@ export async function chargerCommandeVue(dbx: DbOuTx, commandeId: string): Promi
     options: (i.options as { groupe: string; choix: string[] }[]) ?? [],
     supplements: (i.supplements as { nom: string; prix: number }[]) ?? [],
     statut_cuisine: i.statut_cuisine as CommandeItemVue['statut_cuisine'],
+    envoye: i.envoye_le !== null,
     total_ligne: i.statut_cuisine === 'ANNULE' ? 0 : totalLigne(i),
   }));
 

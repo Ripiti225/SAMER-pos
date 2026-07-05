@@ -176,7 +176,7 @@ export function Commande() {
                     {item.options.filter((o) => o.choix.length > 0).map((o) => (
                       <div key={o.groupe} className="text-xs text-zinc-400">{o.groupe} : {o.choix.join(', ')}</div>
                     ))}
-                    {item.statut_cuisine !== 'A_PREPARER' && (
+                    {item.envoye && (
                       <div className="mt-1 text-xs text-amber-400">En cuisine</div>
                     )}
                   </div>
@@ -186,7 +186,7 @@ export function Commande() {
                   <button
                     type="button"
                     className="btn-sombre h-12 w-12 p-0 text-xl"
-                    disabled={item.quantite <= 1 || item.statut_cuisine !== 'A_PREPARER'}
+                    disabled={item.quantite <= 1 || item.envoye}
                     onClick={() => changerQuantite.mutate({ itemId: item.id, quantite: item.quantite - 1 })}
                   >
                     −
@@ -195,7 +195,7 @@ export function Commande() {
                   <button
                     type="button"
                     className="btn-sombre h-12 w-12 p-0 text-xl"
-                    disabled={item.statut_cuisine !== 'A_PREPARER'}
+                    disabled={item.envoye}
                     onClick={() => changerQuantite.mutate({ itemId: item.id, quantite: item.quantite + 1 })}
                   >
                     +
@@ -379,7 +379,7 @@ function ModaleAnnulation({
   onFermer: () => void;
   enCours: boolean;
 }) {
-  const dejaEnCuisine = item.statut_cuisine !== 'A_PREPARER';
+  const dejaEnCuisine = item.envoye || item.statut_cuisine !== 'A_PREPARER';
   const [motif, setMotif] = useState('');
 
   // Article déjà envoyé en cuisine → PIN manager obligatoire (action protégée)

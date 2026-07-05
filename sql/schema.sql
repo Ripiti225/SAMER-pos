@@ -241,6 +241,9 @@ CREATE TABLE commande_items (
   supplements    JSONB NOT NULL DEFAULT '[]',   -- [{nom, prix}]
   statut_cuisine TEXT NOT NULL DEFAULT 'A_PREPARER'
                  CHECK (statut_cuisine IN ('A_PREPARER','EN_COURS','PRET','ANNULE')),
+  -- Sprint 2 (KDS) : NULL = article encore dans l'addition, non NULL = parti
+  -- en cuisine (son annulation devient une action protégée PIN manager).
+  envoye_le      TIMESTAMPTZ,
   annule_par     UUID REFERENCES utilisateurs(id),
   annule_motif   TEXT,
   CONSTRAINT item_source CHECK (article_id IS NOT NULL OR combo_id IS NOT NULL),
@@ -325,6 +328,14 @@ CREATE TABLE sync_etat (               -- suivi descente catalogue
   flux        TEXT PRIMARY KEY,        -- 'CATALOGUE','PROMOTIONS','UTILISATEURS'
   version     BIGINT NOT NULL DEFAULT 0,
   synced_at   TIMESTAMPTZ
+);
+
+-- Sprint 2 (§16 risque 7) : idempotence des actions rejouées par la file
+-- locale des tablettes serveur. Chaque action porte un UUID généré sur la
+-- tablette ; un UUID déjà présent ici est ignoré (rejeu sans doublon).
+CREATE TABLE actions_recues (
+  uuid       UUID PRIMARY KEY,
+  traite_le  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- ============================================================================

@@ -9,6 +9,8 @@ import { routesCommandes } from './modules/commandes/routes.js';
 import { routesPaiements } from './modules/paiements/routes.js';
 import { routesServices } from './modules/services/routes.js';
 import { routesRapports } from './modules/rapports/routes.js';
+import { routesKds } from './modules/kds/routes.js';
+import { routesServeur } from './modules/serveur/routes.js';
 import { ConsolePrinter } from './printer/ConsolePrinter.js';
 import type { PrinterService } from './printer/PrinterService.js';
 
@@ -34,6 +36,8 @@ export async function construireApp(options: { logger?: boolean } = {}): Promise
   routesPaiements(app);
   routesServices(app);
   routesRapports(app);
+  routesKds(app);
+  routesServeur(app);
 
   app.get('/api/sante', async () => ({ ok: true }));
 

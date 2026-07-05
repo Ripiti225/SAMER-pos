@@ -127,6 +127,26 @@ export const SplitSchema = z.object({
     .min(2, 'Un split comporte au moins 2 notes'),
 });
 
+// ---------------------------------------------------------------------------
+// Sprint 2 — App serveur tablette (actions idempotentes, file anti-coupure §B4)
+// ---------------------------------------------------------------------------
+
+/**
+ * « Envoyer en cuisine » depuis la tablette : UNE action idempotente qui crée
+ * la commande de table si besoin, ajoute le lot d'articles et l'envoie au KDS.
+ * L'action_uuid est généré sur la tablette ; rejouer le même uuid est sans effet.
+ */
+export const EnvoyerCuisineSchema = z.object({
+  action_uuid: z.string().uuid('Action invalide'),
+  table_id: z.string().uuid('Table invalide'),
+  items: z.array(AjouterItemSchema).min(1, 'Ajoutez au moins un article avant d’envoyer'),
+});
+
+export const DemanderAdditionSchema = z.object({
+  action_uuid: z.string().uuid('Action invalide'),
+  table_id: z.string().uuid('Table invalide'),
+});
+
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type CreerCommandeInput = z.infer<typeof CreerCommandeSchema>;
 export type AjouterItemInput = z.infer<typeof AjouterItemSchema>;

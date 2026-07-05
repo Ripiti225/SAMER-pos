@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --accent: #ef9f27;
+}
+
+html,
+body,
+#racine {
+  height: 100%;
+}
+
+body {
+  @apply bg-zinc-950 text-zinc-100 antialiased select-none;
+  touch-action: manipulation;
+}
+
+/* KDS : consulté à 2 m, doigts mouillés/gras → tout est plus grand (§A1) */
+.btn {
+  @apply min-h-[64px] rounded-xl px-5 text-xl font-bold transition active:scale-95 disabled:opacity-40 disabled:active:scale-100;
+}
+.btn-accent {
+  @apply btn bg-accent text-zinc-950;
+}
+.btn-sombre {
+  @apply btn bg-zinc-800 text-zinc-100 hover:bg-zinc-700;
+}
+.carte {
+  @apply rounded-2xl bg-zinc-900 border border-zinc-800;
+}
+.champ {
+  @apply min-h-[56px] w-full rounded-xl bg-zinc-800 border border-zinc-700 px-4 text-xl text-zinc-100 outline-none focus:border-[var(--accent)];
+}

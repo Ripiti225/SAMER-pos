@@ -30,7 +30,7 @@ export async function seed(): Promise<void> {
   // Remise à zéro complète (TRUNCATE n'est pas bloqué par le trigger append-only,
   // qui ne vise que UPDATE/DELETE ligne à ligne — acceptable pour un seed de démo).
   await db.execute(sql`
-    TRUNCATE TABLE points_fidelite, clients_fidelite, codes_pointage, pointages,
+    TRUNCATE TABLE actions_recues, points_fidelite, clients_fidelite, codes_pointage, pointages,
       notations, sync_etat, sync_outbox, audit_log, paiements, notes_split,
       commande_items, commandes, services_caisse, tables_salle, zones,
       promotions, combo_articles, combos, supplements, options, groupes_options,
@@ -49,6 +49,11 @@ export async function seed(): Promise<void> {
   await db.insert(parametresLocaux).values([
     { cle: 'seuil_alerte_ecart_caisse', valeur: 2000 },
     { cle: 'verrouillage_inactivite_secondes', valeur: 60 },
+    // Sprint 2 : les serveurs bougent, verrouillage plus long sur tablette
+    { cle: 'verrouillage_inactivite_serveur_secondes', valeur: 120 },
+    // Sprint 2 : seuils du chronomètre KDS (minutes)
+    { cle: 'kds_seuil_orange_minutes', valeur: 10 },
+    { cle: 'kds_seuil_rouge_minutes', valeur: 20 },
   ]);
 
   // --- Utilisateurs (PIN de démo — à changer en production) ---
@@ -59,6 +64,9 @@ export async function seed(): Promise<void> {
     { nom_complet: 'Ibrahim Traoré', role: 'CAISSIER', pin_hash: await hacherPin('4826') },
     { nom_complet: 'Fatou Bamba', role: 'SERVEUR', pin_hash: await hacherPin('1357') },
     { nom_complet: 'Moussa Cissé', role: 'SERVEUR', pin_hash: await hacherPin('2468') },
+    { nom_complet: 'Kouadio Yao', role: 'CUISINE', poste_cuisine: 'CUISINIER', pin_hash: await hacherPin('7913') },
+    { nom_complet: 'Luigi Kouassi', role: 'CUISINE', poste_cuisine: 'PIZZAIOLO', pin_hash: await hacherPin('8024') },
+    { nom_complet: 'Aminata Touré', role: 'CUISINE', poste_cuisine: 'COMPTOIRISTE', pin_hash: await hacherPin('4652') },
   ]);
 
   // --- Catalogue ---

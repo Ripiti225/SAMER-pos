@@ -12,6 +12,8 @@ export interface SessionInfo {
   utilisateur: UtilisateurPublic;
   restaurant: { code: string; nom: string; marque: 'SAMER' | 'AL_KAYAN'; couleur_hex: string };
   verrouillage_inactivite_secondes: number;
+  /** Sprint 2 : verrouillage plus long pour l'app serveur tablette (§B5). */
+  verrouillage_inactivite_serveur_secondes: number;
   service_ouvert: ServiceOuvertVue | null;
 }
 
@@ -108,6 +110,8 @@ export interface CommandeItemVue {
   options: { groupe: string; choix: string[] }[];
   supplements: { nom: string; prix: number }[];
   statut_cuisine: 'A_PREPARER' | 'EN_COURS' | 'PRET' | 'ANNULE';
+  /** Sprint 2 : true = déjà parti en cuisine (annulation = action protégée). */
+  envoye: boolean;
   total_ligne: number;
 }
 
@@ -148,6 +152,37 @@ export interface CommandeVue {
   paiements: PaiementVue[];
   notes: NoteSplitVue[];
   created_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Sprint 2 — KDS
+// ---------------------------------------------------------------------------
+
+export interface CarteKdsItem {
+  id: string;
+  nom_snapshot: string;
+  quantite: number;
+  options: { groupe: string; choix: string[] }[];
+  supplements: { nom: string; prix: number }[];
+  statut_cuisine: 'A_PREPARER' | 'EN_COURS' | 'PRET' | 'ANNULE';
+}
+
+export interface CarteKds {
+  id: string;
+  numero_ticket: number;
+  type: TypeCommande;
+  partenaire: string | null;
+  table_numero: string | null;
+  statut: StatutCommande;
+  /** Heure du premier envoi en cuisine (base du chronomètre). */
+  envoyee_le: string;
+  items: CarteKdsItem[];
+}
+
+export interface KdsVue {
+  seuils: { orange_minutes: number; rouge_minutes: number };
+  en_cuisine: CarteKds[];
+  pretes: CarteKds[];
 }
 
 export interface RapportZ {
