@@ -23,6 +23,7 @@ import {
 import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier } from '../../lib/erreurs.js';
 import { verrouillerCommande } from '../commandes/service.js';
+import { attribuerPlats } from './attribution.js';
 
 /** Garde d'appareil KDS : jeton d'installation, pas d'identité humaine. */
 async function exigerJetonKds(req: FastifyRequest): Promise<void> {
@@ -179,6 +180,10 @@ export function routesKds(app: FastifyInstance): void {
         .where(eq(commandes.id, id))
         .returning();
       await ecrireOutbox(tx, 'commandes', 'UPDATE', id, maj as unknown as Record<string, unknown>);
+
+      // Correction 4 : attribution automatique des plats aux employés en
+      // poste, par mapping catégorie → poste_cuisine. Invisible pour le KDS.
+      await attribuerPlats(tx, id);
     });
     app.diffuser('commande:modifiee', id);
     return { ok: true };

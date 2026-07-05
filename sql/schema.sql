@@ -132,6 +132,14 @@ CREATE TABLE combo_articles (
   PRIMARY KEY (combo_id, article_id)
 );
 
+-- Correction 4 : correspondance poste de cuisine ↔ catégorie, pour
+-- l'attribution automatique des plats préparés (ex. Pizzas → PIZZAIOLO).
+CREATE TABLE mapping_poste_categorie (
+  poste_cuisine  poste_cuisine NOT NULL,
+  categorie_id   UUID NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+  PRIMARY KEY (poste_cuisine, categorie_id)
+);
+
 -- Promotions automatiques (§5.5) : happy hour, promo du jour
 CREATE TABLE promotions (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -244,6 +252,10 @@ CREATE TABLE commande_items (
   -- Sprint 2 (KDS) : NULL = article encore dans l'addition, non NULL = parti
   -- en cuisine (son annulation devient une action protégée PIN manager).
   envoye_le      TIMESTAMPTZ,
+  -- Correction 4 : attribution automatique du plat aux employés du poste
+  -- correspondant (mapping_poste_categorie) pointés au moment de la
+  -- préparation. Collective si plusieurs. Vide si personne n'est pointé.
+  attribue_a     UUID[] NOT NULL DEFAULT '{}',
   annule_par     UUID REFERENCES utilisateurs(id),
   annule_motif   TEXT,
   CONSTRAINT item_source CHECK (article_id IS NOT NULL OR combo_id IS NOT NULL),

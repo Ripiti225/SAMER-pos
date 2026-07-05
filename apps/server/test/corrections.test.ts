@@ -3,11 +3,12 @@ import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { setTimeout as attendre } from 'node:timers/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { WebSocket } from 'ws';
 import { construireApp } from '../src/app.js';
 import { db, fermerDb } from '../src/db/client.js';
-import { parametresLocaux } from '../src/db/schema/index.js';
+import { commandeItems, parametresLocaux, pointages } from '../src/db/schema/index.js';
 import { JETON_KDS, PIN_CAISSIER, PIN_SERVEUR, resetDonnees, seConnecter, type Donnees } from './aide.js';
 
 let app: FastifyInstance;
@@ -173,5 +174,67 @@ describe('correction 3 — KDS sans PIN : jeton d’appareil, aucune donnée sen
       payload: { mode: 'ESPECES', montant: 1000 },
     });
     expect(paiement.statusCode).toBe(401);
+  });
+});
+
+describe('correction 4 — attribution automatique des plats par poste (mapping)', () => {
+  const jeton = { 'x-jeton-kds': JETON_KDS };
+  let commandeId: string;
+  let itemChawarmaId: string;
+  let itemPizzaId: string;
+
+  it('au passage « Prêt », chaque plat est attribué au bon poste (fallback : tous actifs en poste)', async () => {
+    // Envoi tablette : 1 chawarma (CUISINIER) + 1 pizza (PIZZAIOLO)
+    const envoi = await app.inject({
+      method: 'POST',
+      url: '/api/serveur/envoyer',
+      cookies: cookiesServeur,
+      payload: {
+        action_uuid: randomUUID(),
+        table_id: donnees.table_id,
+        items: [
+          { article_id: donnees.article_id, quantite: 1, options: [], supplements: [] },
+          { article_id: donnees.pizza_id, quantite: 1, options: [], supplements: [] },
+        ],
+      },
+    });
+    expect(envoi.statusCode).toBe(200);
+    commandeId = envoi.json().commande_id;
+
+    const pret = await app.inject({
+      method: 'POST',
+      url: `/api/kds/commandes/${commandeId}/pret`,
+      headers: jeton,
+    });
+    expect(pret.statusCode).toBe(200);
+
+    const items = await db.select().from(commandeItems).where(eq(commandeItems.commande_id, commandeId));
+    const chawarma = items.find((i) => i.article_id === donnees.article_id)!;
+    const pizza = items.find((i) => i.article_id === donnees.pizza_id)!;
+    itemChawarmaId = chawarma.id;
+    itemPizzaId = pizza.id;
+
+    // Aucun pointage → tous les employés cuisine actifs sont « en poste »
+    expect(chawarma.attribue_a).toEqual([donnees.cuisine_id]);
+    expect(pizza.attribue_a).toEqual([donnees.pizzaiolo_id]);
+  });
+
+  it('avec le pointage : seuls les employés pointés sont attribués, vide sinon (ne bloque jamais)', async () => {
+    // Le cuisinier pointe son arrivée ; le pizzaiolo NON
+    await db.insert(pointages).values({ user_id: donnees.cuisine_id, methode: 'PIN_POS' });
+
+    // Reprendre puis re-Prêt → l'attribution est recalculée au moment de la préparation
+    await app.inject({ method: 'POST', url: `/api/kds/commandes/${commandeId}/reprendre`, headers: jeton });
+    const rePret = await app.inject({
+      method: 'POST',
+      url: `/api/kds/commandes/${commandeId}/pret`,
+      headers: jeton,
+    });
+    expect(rePret.statusCode).toBe(200); // le service n'est jamais bloqué
+
+    const items = await db.select().from(commandeItems).where(eq(commandeItems.commande_id, commandeId));
+    expect(items.find((i) => i.id === itemChawarmaId)!.attribue_a).toEqual([donnees.cuisine_id]);
+    // Personne du poste PIZZAIOLO n'est pointé → attribution vide, à rattacher plus tard
+    expect(items.find((i) => i.id === itemPizzaId)!.attribue_a).toEqual([]);
   });
 });

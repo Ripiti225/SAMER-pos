@@ -260,6 +260,7 @@ export const commandeItems = pgTable('commande_items', {
   supplements: jsonb('supplements').notNull().default(sql`'[]'`),
   statut_cuisine: text('statut_cuisine').notNull().default('A_PREPARER'),
   envoye_le: timestamp('envoye_le', { withTimezone: true }),
+  attribue_a: uuid('attribue_a').array().notNull().default(sql`'{}'`),
   annule_par: uuid('annule_par').references(() => utilisateurs.id),
   annule_motif: text('annule_motif'),
 }, (t) => [
@@ -328,6 +329,12 @@ export const syncEtat = pgTable('sync_etat', {
   version: bigint('version', { mode: 'number' }).notNull().default(0),
   synced_at: timestamp('synced_at', { withTimezone: true }),
 });
+
+// Correction 4 : poste de cuisine ↔ catégorie (attribution automatique)
+export const mappingPosteCategorie = pgTable('mapping_poste_categorie', {
+  poste_cuisine: posteCuisine('poste_cuisine').notNull(),
+  categorie_id: uuid('categorie_id').notNull().references(() => categories.id, { onDelete: 'cascade' }),
+}, (t) => [primaryKey({ columns: [t.poste_cuisine, t.categorie_id] })]);
 
 // Sprint 2 : idempotence de la file locale des tablettes serveur
 export const actionsRecues = pgTable('actions_recues', {

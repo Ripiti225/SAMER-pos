@@ -11,6 +11,7 @@ import {
   comboArticles,
   combos,
   groupesOptions,
+  mappingPosteCategorie,
   options,
   parametresLocaux,
   prixCanaux,
@@ -33,8 +34,9 @@ export async function seed(): Promise<void> {
     TRUNCATE TABLE actions_recues, points_fidelite, clients_fidelite, codes_pointage, pointages,
       notations, sync_etat, sync_outbox, audit_log, paiements, notes_split,
       commande_items, commandes, services_caisse, tables_salle, zones,
-      promotions, combo_articles, combos, supplements, options, groupes_options,
-      prix_canaux, articles, categories, utilisateurs, parametres_locaux, restaurant
+      promotions, mapping_poste_categorie, combo_articles, combos, supplements,
+      options, groupes_options, prix_canaux, articles, categories, utilisateurs,
+      parametres_locaux, restaurant
       RESTART IDENTITY CASCADE
   `);
   await db.execute(sql`ALTER SEQUENCE seq_numero_ticket RESTART WITH 1`);
@@ -146,6 +148,15 @@ export async function seed(): Promise<void> {
   await db.insert(comboArticles).values([
     { combo_id: combo!.id, article_id: chawarmaPoulet.id, quantite: 1 },
     { combo_id: combo!.id, article_id: coca.id, quantite: 1 },
+  ]);
+
+  // Correction 4 : attribution automatique — poste de cuisine par catégorie
+  // (les catégories absentes du mapping vont au CUISINIER par défaut)
+  await db.insert(mappingPosteCategorie).values([
+    { poste_cuisine: 'CUISINIER', categorie_id: catChawarmas!.id },
+    { poste_cuisine: 'PIZZAIOLO', categorie_id: catPizzas!.id },
+    { poste_cuisine: 'CUISINIER', categorie_id: catGrillades!.id },
+    { poste_cuisine: 'COMPTOIRISTE', categorie_id: catBoissons!.id },
   ]);
 
   // Happy hour −20 % sur tout le menu, 17 h à 19 h, tous les jours

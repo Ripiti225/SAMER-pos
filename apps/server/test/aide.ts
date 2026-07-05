@@ -6,6 +6,7 @@ import { db } from '../src/db/client.js';
 import {
   articles,
   categories,
+  mappingPosteCategorie,
   parametresLocaux,
   restaurant,
   supplements,
@@ -40,7 +41,9 @@ export interface Donnees {
   caissier2_id: string;
   serveur_id: string;
   cuisine_id: string;
+  pizzaiolo_id: string;
   article_id: string;
+  pizza_id: string;
   supplement_id: string;
   table_id: string;
 }
@@ -51,8 +54,9 @@ export async function resetDonnees(): Promise<Donnees> {
     TRUNCATE TABLE actions_recues, points_fidelite, clients_fidelite, codes_pointage, pointages,
       notations, sync_etat, sync_outbox, audit_log, paiements, notes_split,
       commande_items, commandes, services_caisse, tables_salle, zones,
-      promotions, combo_articles, combos, supplements, options, groupes_options,
-      prix_canaux, articles, categories, utilisateurs, parametres_locaux, restaurant
+      promotions, mapping_poste_categorie, combo_articles, combos, supplements,
+      options, groupes_options, prix_canaux, articles, categories, utilisateurs,
+      parametres_locaux, restaurant
       RESTART IDENTITY CASCADE
   `);
   await db.execute(sql`ALTER SEQUENCE seq_numero_ticket RESTART WITH 1`);
@@ -68,7 +72,7 @@ export async function resetDonnees(): Promise<Donnees> {
     { cle: 'kds_jeton_appareil', valeur: 'JETON-KDS-TEST' },
   ]);
 
-  const [proprio, manager, caissier, caissier2, serveur, cuisine] = await db
+  const [proprio, manager, caissier, caissier2, serveur, cuisine, pizzaiolo] = await db
     .insert(utilisateurs)
     .values([
       { nom_complet: 'Proprio Test', role: 'PROPRIETAIRE', pin_hash: await hacher(PIN_PROPRIO) },
@@ -77,18 +81,34 @@ export async function resetDonnees(): Promise<Donnees> {
       { nom_complet: 'Caissier Suivant', role: 'CAISSIER', pin_hash: await hacher(PIN_CAISSIER2) },
       { nom_complet: 'Serveur Test', role: 'SERVEUR', pin_hash: await hacher(PIN_SERVEUR) },
       { nom_complet: 'Cuisine Test', role: 'CUISINE', poste_cuisine: 'CUISINIER', pin_hash: await hacher(PIN_CUISINE) },
+      { nom_complet: 'Pizzaiolo Test', role: 'CUISINE', poste_cuisine: 'PIZZAIOLO', pin_hash: await hacher(PIN_CUISINE) },
     ])
     .returning();
 
-  const [cat] = await db.insert(categories).values({ nom: 'Chawarmas', ordre: 1 }).returning();
-  const [article] = await db
+  const [cat, catPizzas] = await db
+    .insert(categories)
+    .values([
+      { nom: 'Chawarmas', ordre: 1 },
+      { nom: 'Pizzas', ordre: 2 },
+    ])
+    .returning();
+  const [article, pizza] = await db
     .insert(articles)
-    .values({ categorie_id: cat!.id, nom: 'Chawarma Poulet', prix_base: 3000 })
+    .values([
+      { categorie_id: cat!.id, nom: 'Chawarma Poulet', prix_base: 3000 },
+      { categorie_id: catPizzas!.id, nom: 'Pizza Test', prix_base: 6000 },
+    ])
     .returning();
   const [suppl] = await db
     .insert(supplements)
     .values({ article_id: article!.id, nom: 'Frites', prix: 1000 })
     .returning();
+
+  // Correction 4 : mapping poste ↔ catégorie pour l'attribution automatique
+  await db.insert(mappingPosteCategorie).values([
+    { poste_cuisine: 'CUISINIER', categorie_id: cat!.id },
+    { poste_cuisine: 'PIZZAIOLO', categorie_id: catPizzas!.id },
+  ]);
 
   const [zone] = await db.insert(zones).values({ nom: 'RC', ordre: 1 }).returning();
   const [table] = await db.insert(tablesSalle).values({ zone_id: zone!.id, numero: 'T1' }).returning();
@@ -100,7 +120,9 @@ export async function resetDonnees(): Promise<Donnees> {
     caissier2_id: caissier2!.id,
     serveur_id: serveur!.id,
     cuisine_id: cuisine!.id,
+    pizzaiolo_id: pizzaiolo!.id,
     article_id: article!.id,
+    pizza_id: pizza!.id,
     supplement_id: suppl!.id,
     table_id: table!.id,
   };
