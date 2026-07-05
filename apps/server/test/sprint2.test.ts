@@ -7,8 +7,8 @@ import { construireApp } from '../src/app.js';
 import { db, fermerDb } from '../src/db/client.js';
 import { commandes, tablesSalle } from '../src/db/schema/index.js';
 import {
+  JETON_KDS,
   PIN_CAISSIER,
-  PIN_CUISINE,
   PIN_MANAGER,
   PIN_SERVEUR,
   resetDonnees,
@@ -19,7 +19,6 @@ import {
 let app: FastifyInstance;
 let donnees: Donnees;
 let cookiesServeur: Record<string, string>;
-let cookiesCuisine: Record<string, string>;
 let cookiesCaissier: Record<string, string>;
 let commandeId: string;
 
@@ -34,7 +33,7 @@ async function vueCommande(): Promise<CommandeVue> {
 }
 
 async function vueKds(): Promise<KdsVue> {
-  const rep = await app.inject({ method: 'GET', url: '/api/kds/commandes', cookies: cookiesCuisine });
+  const rep = await app.inject({ method: 'GET', url: '/api/kds/commandes', headers: { 'x-jeton-kds': JETON_KDS } });
   expect(rep.statusCode).toBe(200);
   return rep.json() as KdsVue;
 }
@@ -43,7 +42,6 @@ beforeAll(async () => {
   donnees = await resetDonnees();
   app = await construireApp();
   cookiesServeur = await seConnecter(app, donnees.serveur_id, PIN_SERVEUR);
-  cookiesCuisine = await seConnecter(app, donnees.cuisine_id, PIN_CUISINE);
   cookiesCaissier = await seConnecter(app, donnees.caissier_id, PIN_CAISSIER);
   await app.inject({
     method: 'POST',
@@ -163,7 +161,7 @@ describe('guard de rôle : le SERVEUR ne peut ni encaisser, ni remiser, ni clôt
     expect(cloture.statusCode).toBe(403);
   });
 
-  it('le KDS est réservé au rôle CUISINE (et manager/propriétaire)', async () => {
+  it('le KDS est réservé aux appareils munis du jeton (correction 3)', async () => {
     const rep = await app.inject({ method: 'GET', url: '/api/kds/commandes', cookies: cookiesServeur });
     expect(rep.statusCode).toBe(403);
   });
@@ -185,7 +183,7 @@ describe('KDS : cycle Commencer → Prêt → Reprendre, article annulé barré'
     const rep = await app.inject({
       method: 'POST',
       url: `/api/kds/commandes/${commandeId}/commencer`,
-      cookies: cookiesCuisine,
+      headers: { 'x-jeton-kds': JETON_KDS },
     });
     expect(rep.statusCode).toBe(200);
     const kds = await vueKds();
@@ -226,7 +224,7 @@ describe('KDS : cycle Commencer → Prêt → Reprendre, article annulé barré'
     const pret = await app.inject({
       method: 'POST',
       url: `/api/kds/commandes/${commandeId}/pret`,
-      cookies: cookiesCuisine,
+      headers: { 'x-jeton-kds': JETON_KDS },
     });
     expect(pret.statusCode).toBe(200);
 
@@ -241,7 +239,7 @@ describe('KDS : cycle Commencer → Prêt → Reprendre, article annulé barré'
     const reprendre = await app.inject({
       method: 'POST',
       url: `/api/kds/commandes/${commandeId}/reprendre`,
-      cookies: cookiesCuisine,
+      headers: { 'x-jeton-kds': JETON_KDS },
     });
     expect(reprendre.statusCode).toBe(200);
     kds = await vueKds();
@@ -249,7 +247,7 @@ describe('KDS : cycle Commencer → Prêt → Reprendre, article annulé barré'
     expect(kds.pretes.find((c) => c.id === commandeId)).toBeUndefined();
 
     // On remet Prêt pour la suite du parcours
-    await app.inject({ method: 'POST', url: `/api/kds/commandes/${commandeId}/pret`, cookies: cookiesCuisine });
+    await app.inject({ method: 'POST', url: `/api/kds/commandes/${commandeId}/pret`, headers: { 'x-jeton-kds': JETON_KDS } });
   });
 });
 

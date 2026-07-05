@@ -55,6 +55,9 @@ export async function seed(): Promise<void> {
     // Sprint 2 : seuils du chronomètre KDS (minutes)
     { cle: 'kds_seuil_orange_minutes', valeur: 10 },
     { cle: 'kds_seuil_rouge_minutes', valeur: 20 },
+    // Correction 3 : le KDS s'identifie par un jeton d'appareil, pas par PIN.
+    // À changer à l'installation de chaque site.
+    { cle: 'kds_jeton_appareil', valeur: 'SAMER-ANGRE7E-KDS-1' },
   ]);
 
   // --- Utilisateurs (PIN de démo — à changer en production) ---

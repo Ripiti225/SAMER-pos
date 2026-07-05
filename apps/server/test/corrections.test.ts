@@ -8,7 +8,7 @@ import { WebSocket } from 'ws';
 import { construireApp } from '../src/app.js';
 import { db, fermerDb } from '../src/db/client.js';
 import { parametresLocaux } from '../src/db/schema/index.js';
-import { PIN_CAISSIER, PIN_SERVEUR, resetDonnees, seConnecter, type Donnees } from './aide.js';
+import { JETON_KDS, PIN_CAISSIER, PIN_SERVEUR, resetDonnees, seConnecter, type Donnees } from './aide.js';
 
 let app: FastifyInstance;
 let donnees: Donnees;
@@ -121,5 +121,57 @@ describe('correction 2 — la demande d’addition alerte la caisse (WebSocket)'
     expect(evenements.filter((e) => e.type === 'table:addition_demandee')).toHaveLength(1);
 
     socket.close();
+  });
+});
+
+describe('correction 3 — KDS sans PIN : jeton d’appareil, aucune donnée sensible', () => {
+  it('refuse le KDS sans jeton ou avec un mauvais jeton', async () => {
+    const sans = await app.inject({ method: 'GET', url: '/api/kds/commandes' });
+    expect(sans.statusCode).toBe(403);
+    expect(sans.json().erreur).toContain('jeton');
+
+    const mauvais = await app.inject({
+      method: 'GET',
+      url: '/api/kds/commandes',
+      headers: { 'x-jeton-kds': 'FAUX-JETON' },
+    });
+    expect(mauvais.statusCode).toBe(403);
+  });
+
+  it('ouvre la grille directement avec le jeton, sans session ni PIN', async () => {
+    const rep = await app.inject({
+      method: 'GET',
+      url: '/api/kds/commandes',
+      headers: { 'x-jeton-kds': JETON_KDS },
+    });
+    expect(rep.statusCode).toBe(200);
+    const corps = rep.json();
+    expect(corps.en_cuisine).toBeDefined();
+
+    // Aucune donnée de caisse dans la réponse : ni prix, ni totaux, ni CA
+    const brut = JSON.stringify(corps);
+    expect(brut).not.toContain('"prix"');
+    expect(brut).not.toContain('"total"');
+    expect(brut).not.toContain('"sous_total"');
+  });
+
+  it('le jeton KDS ne donne accès à AUCUNE route sensible', async () => {
+    const jeton = { 'x-jeton-kds': JETON_KDS };
+    const rapports = await app.inject({ method: 'GET', url: '/api/rapports/jour', headers: jeton });
+    expect(rapports.statusCode).toBe(401);
+
+    const catalogue = await app.inject({ method: 'GET', url: '/api/catalogue', headers: jeton });
+    expect(catalogue.statusCode).toBe(401);
+
+    const utilisateursMoi = await app.inject({ method: 'GET', url: '/api/auth/moi', headers: jeton });
+    expect(utilisateursMoi.statusCode).toBe(401);
+
+    const paiement = await app.inject({
+      method: 'POST',
+      url: '/api/commandes/00000000-0000-0000-0000-000000000000/paiements',
+      headers: jeton,
+      payload: { mode: 'ESPECES', montant: 1000 },
+    });
+    expect(paiement.statusCode).toBe(401);
   });
 });

@@ -158,12 +158,13 @@ export interface CommandeVue {
 // Sprint 2 — KDS
 // ---------------------------------------------------------------------------
 
+/** Aucune donnée de caisse sur le KDS (correction 3) : pas de prix ici. */
 export interface CarteKdsItem {
   id: string;
   nom_snapshot: string;
   quantite: number;
   options: { groupe: string; choix: string[] }[];
-  supplements: { nom: string; prix: number }[];
+  supplements: { nom: string }[];
   statut_cuisine: 'A_PREPARER' | 'EN_COURS' | 'PRET' | 'ANNULE';
 }
 
@@ -180,6 +181,9 @@ export interface CarteKds {
 }
 
 export interface KdsVue {
+  /** Marque pour le thème — le KDS n'a pas de session utilisateur. */
+  marque: 'SAMER' | 'AL_KAYAN';
+  couleur_hex: string;
   seuils: { orange_minutes: number; rouge_minutes: number };
   en_cuisine: CarteKds[];
   pretes: CarteKds[];

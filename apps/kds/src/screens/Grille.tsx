@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import type { CarteKds, KdsVue, SessionInfo } from '@pos/shared';
+import type { CarteKds, KdsVue } from '@pos/shared';
 import { LIBELLES_TYPES_COMMANDE } from '@pos/shared';
-import { api } from '@pos/shared-ui';
+import { apiKds, ErreurApi } from '../api';
 import { sons } from '../sons';
 
-export function Grille({ session, onDeconnexion }: { session: SessionInfo; onDeconnexion: () => void }) {
+export function Grille({ onJetonRefuse }: { onJetonRefuse: () => void }) {
   const queryClient = useQueryClient();
   const [connecte, setConnecte] = useState(true);
   const [muet, setMuet] = useState(sons.muet);
@@ -13,11 +13,21 @@ export function Grille({ session, onDeconnexion }: { session: SessionInfo; onDec
   const idsConnus = useRef<Set<string> | null>(null);
   const idsAlertes = useRef(new Set<string>());
 
-  const { data } = useQuery({
+  const { data, error } = useQuery({
     queryKey: ['kds'],
-    queryFn: () => api<KdsVue>('/api/kds/commandes'),
+    queryFn: () => apiKds<KdsVue>('/api/kds/commandes'),
     refetchInterval: 10000, // filet de sécurité si le WebSocket tombe
   });
+
+  // Jeton d'appareil refusé → retour à l'écran d'installation
+  useEffect(() => {
+    if (error instanceof ErreurApi && error.statusCode === 403) onJetonRefuse();
+  }, [error, onJetonRefuse]);
+
+  // Couleur de marque lue depuis la réponse (pas de session sur le KDS)
+  useEffect(() => {
+    if (data) document.documentElement.style.setProperty('--accent', data.couleur_hex);
+  }, [data]);
 
   // Chronomètres : tic chaque seconde
   useEffect(() => {
@@ -76,28 +86,22 @@ export function Grille({ session, onDeconnexion }: { session: SessionInfo; onDec
   });
 
   const commencer = useMutation({
-    mutationFn: (id: string) => api(`/api/kds/commandes/${id}/commencer`, { method: 'POST', corps: {} }),
+    mutationFn: (id: string) => apiKds(`/api/kds/commandes/${id}/commencer`, { method: 'POST', corps: {} }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['kds'] }),
   });
   const pret = useMutation({
-    mutationFn: (id: string) => api(`/api/kds/commandes/${id}/pret`, { method: 'POST', corps: {} }),
+    mutationFn: (id: string) => apiKds(`/api/kds/commandes/${id}/pret`, { method: 'POST', corps: {} }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['kds'] }),
   });
   const reprendre = useMutation({
-    mutationFn: (id: string) => api(`/api/kds/commandes/${id}/reprendre`, { method: 'POST', corps: {} }),
+    mutationFn: (id: string) => apiKds(`/api/kds/commandes/${id}/reprendre`, { method: 'POST', corps: {} }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['kds'] }),
   });
-
-  const deconnecter = async () => {
-    try { await api('/api/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
-    onDeconnexion();
-  };
 
   return (
     <div className="flex h-screen flex-col">
       <header className="flex items-center gap-4 border-b border-zinc-800 px-4 py-2">
-        <h1 className="text-2xl font-black text-accent">CUISINE</h1>
-        <span className="text-zinc-400">{session.utilisateur.nom_complet}</span>
+        <h1 className="text-2xl font-black text-accent">Cuisine</h1>
         {!connecte && (
           <span className="animate-pulse rounded-full bg-amber-900 px-4 py-1 text-amber-200">
             Reconnexion…
@@ -109,10 +113,7 @@ export function Grille({ session, onDeconnexion }: { session: SessionInfo; onDec
             className={`btn ${muet ? 'bg-red-900 text-red-100' : 'bg-zinc-800'}`}
             onClick={() => { sons.basculerMute(); setMuet(sons.muet); }}
           >
-            {muet ? '🔇 Muet (30 min)' : '🔊 Son'}
-          </button>
-          <button type="button" className="btn-sombre" onClick={deconnecter}>
-            Quitter
+            {muet ? 'Son coupé (30 min max)' : 'Couper le son'}
           </button>
         </div>
       </header>

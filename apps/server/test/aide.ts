@@ -30,6 +30,8 @@ export const PIN_CAISSIER = '2580';
 export const PIN_CAISSIER2 = '4826';
 export const PIN_SERVEUR = '1357';
 export const PIN_CUISINE = '7913';
+/** Jeton d'appareil KDS des fixtures (correction 3 — plus de PIN sur le KDS). */
+export const JETON_KDS = 'JETON-KDS-TEST';
 
 export interface Donnees {
   proprio_id: string;
@@ -63,6 +65,7 @@ export async function resetDonnees(): Promise<Donnees> {
   });
   await db.insert(parametresLocaux).values([
     { cle: 'seuil_alerte_ecart_caisse', valeur: 2000 },
+    { cle: 'kds_jeton_appareil', valeur: 'JETON-KDS-TEST' },
   ]);
 
   const [proprio, manager, caissier, caissier2, serveur, cuisine] = await db
