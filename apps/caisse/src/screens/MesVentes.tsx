@@ -3,6 +3,7 @@ import { formatFCFA, LIBELLES_STATUTS_COMMANDE, LIBELLES_TYPES_COMMANDE, type St
 import { api } from '../api';
 import { CarteSante } from '../components/SanteSync';
 import { PresencesJour } from '../components/PresencesJour';
+import { TableauBord } from '../components/TableauBord';
 import { useCaisse } from '../stores/session';
 
 interface MesVentesVue {
@@ -118,6 +119,7 @@ export function MesVentes() {
           </div>
           <CarteSante />
           <PresencesJour />
+          <TableauBord />
         </section>
       )}
     </div>

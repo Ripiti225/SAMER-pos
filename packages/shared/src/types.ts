@@ -243,7 +243,12 @@ export interface RapportZ {
   total_ventes: number;
   total_remises: number;
   total_promos: number;
+  total_fidelite: number;
+  panier_moyen: number;
   par_mode: Record<ModePaiement, number>;
+  par_type: Record<TypeCommande, { nb: number; total: number }>;
   partenaires: Record<string, { nb: number; total: number }>;
   top_articles: { nom: string; quantite: number; total: number }[];
+  remises_detail: { numero_ticket: number; montant: number; motif: string | null; par_nom: string | null }[];
+  annulations_detail: { numero_ticket: number; total: number }[];
 }

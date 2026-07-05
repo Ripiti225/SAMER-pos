@@ -52,6 +52,13 @@ export class ConsolePrinter implements PrinterService {
         .filter(([, montant]) => montant > 0)
         .map(([mode, montant]) => ligne(mode, formatFCFA(montant))),
       '-'.repeat(LARGEUR),
+      'Par type :',
+      ...Object.entries(z.par_type)
+        .filter(([, s]) => s.nb > 0)
+        .map(([t, s]) => ligne(`  ${t} (${s.nb})`, formatFCFA(s.total))),
+      ...(z.remises_detail.length ? ['-'.repeat(LARGEUR), 'Remises :'] : []),
+      ...z.remises_detail.map((r) => ligne(`  N°${r.numero_ticket} ${r.par_nom ?? ''} (${r.motif ?? ''})`, `-${formatFCFA(r.montant)}`)),
+      '-'.repeat(LARGEUR),
       ligne('Fond de caisse', formatFCFA(z.fond_de_caisse)),
       ligne('Espèces comptées', formatFCFA(z.especes_comptees)),
       ligne('Espèces théoriques', formatFCFA(z.especes_theorique)),
