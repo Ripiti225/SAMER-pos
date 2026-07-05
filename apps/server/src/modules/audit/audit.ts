@@ -20,7 +20,8 @@ export type ActionAudit =
   | 'REOUVERTURE_NOTE'
   | 'PAIEMENT'
   | 'SPLIT_NOTE'
-  | 'TRANSFERT_TABLE';
+  | 'TRANSFERT_TABLE'
+  | 'ECART_RECONCILIATION';
 
 export interface EntreeAudit {
   user_id?: string | null;

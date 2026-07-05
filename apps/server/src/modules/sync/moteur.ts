@@ -3,15 +3,18 @@
  * purge quotidienne de l'outbox. Indépendant du reste : une panne de synchro
  * ne bloque JAMAIS une vente. Démarré depuis index.ts uniquement (pas en test).
  */
+import { schedule, type ScheduledTask } from 'node-cron';
 import { chargerConfigSync, prochainBackoff } from './config.js';
 import { ClientCloud, ErreurSync } from './cloud-client.js';
 import { compterEnAttente, pousserUnLot, purgerOutbox } from './montee.js';
 import { tirerCatalogue } from './descente.js';
+import { hier, reconcilierJour } from './reconcile.js';
 import { etatSync } from './etat.js';
 
 export class MoteurSync {
   private client: ClientCloud | null = null;
   private timers: ReturnType<typeof setTimeout>[] = [];
+  private tacheReconcile: ScheduledTask | null = null;
   private arrete = false;
 
   async demarrer(): Promise<void> {
@@ -27,12 +30,19 @@ export class MoteurSync {
     this.boucleMontee(cfg.intervalleMonteeMs);
     this.boucleDescente(cfg.intervalleDescenteMs);
     this.bouclePurge();
+
+    // Réconciliation quotidienne à 03h00 (heure locale du mini-PC).
+    this.tacheReconcile = schedule('0 3 * * *', () => {
+      void reconcilierJour(this.client!, hier()).catch((e) => console.error('Réconciliation:', e));
+    });
   }
 
   arreter(): void {
     this.arrete = true;
     for (const t of this.timers) clearTimeout(t);
     this.timers = [];
+    this.tacheReconcile?.stop();
+    this.tacheReconcile = null;
   }
 
   private planifier(fn: () => void, delai: number): void {

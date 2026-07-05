@@ -178,6 +178,9 @@ importers:
       fastify:
         specifier: ^5.4.0
         version: 5.9.0
+      node-cron:
+        specifier: ^4.5.0
+        version: 4.5.0
       pg:
         specifier: ^8.16.0
         version: 8.22.0
@@ -191,6 +194,9 @@ importers:
       '@types/node':
         specifier: ^22.15.0
         version: 22.20.0
+      '@types/node-cron':
+        specifier: ^3.0.11
+        version: 3.0.11
       '@types/pg':
         specifier: ^8.15.4
         version: 8.20.0
@@ -1562,6 +1568,9 @@ packages:
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
 
+  '@types/node-cron@3.0.11':
+    resolution: {integrity: sha512-0ikrnug3/IyneSHqCBeslAhlK2aBfYek1fGo4bP4QnZPmiqSGRK+Oy7ZMisLWkesffJvQ1cqAcBnJC+8+nxIAg==}
+
   '@types/node@22.20.0':
     resolution: {integrity: sha512-QWlFW2wf3nTjC13/DqRnBpR4ZO36VJH/JVBkA/vcnmbTBNQIlnObqyqZE1tUR7+Ni23Lda8R1BxMfbXRpCUx5g==}
 
@@ -2466,6 +2475,10 @@ packages:
   node-addon-api@8.9.0:
     resolution: {integrity: sha512-ekZMeaaIzSQTSpr7X2X3iJM7lTzgnx8ahAG9pJfT/7+14mlEM8ZYQ9cgCDvSSRbReFK0oHli3WrZdCiRsgAT9Q==}
     engines: {node: ^18 || ^20 || >= 21}
+
+  node-cron@4.5.0:
+    resolution: {integrity: sha512-4Trh+kjvbXokyJkwQumvD5YAgeJfgHLR/sKyu71uSmxfCR5QMO1hldpvmFZOICN5pLgNY+J5Y8+ar3XKo5/4tQ==}
+    engines: {node: '>=20'}
 
   node-gyp-build@4.8.4:
     resolution: {integrity: sha512-LA4ZjwlnUblHVgq0oBF3Jl/6h/Nvs5fzBLwdEF4nuxnFdsfajde4WfxtJr3CaiH+F6ewcIB/q4jQ4UzPyid+CQ==}
@@ -4449,6 +4462,8 @@ snapshots:
 
   '@types/estree@1.0.9': {}
 
+  '@types/node-cron@3.0.11': {}
+
   '@types/node@22.20.0':
     dependencies:
       undici-types: 6.21.0
@@ -5422,6 +5437,8 @@ snapshots:
   nanoid@3.3.15: {}
 
   node-addon-api@8.9.0: {}
+
+  node-cron@4.5.0: {}
 
   node-gyp-build@4.8.4: {}
 
