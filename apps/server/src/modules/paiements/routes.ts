@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { PaiementSchema, SplitSchema } from '@pos/shared';
 import { db } from '../../db/client.js';
-import { commandes, notesSplit, paiements } from '../../db/schema/index.js';
+import { appelsTable, commandes, notesSplit, paiements } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
@@ -137,6 +137,14 @@ export function routesPaiements(app: FastifyInstance): void {
           .returning();
         await ecrireOutbox(tx, 'commandes', 'UPDATE', id, maj as unknown as Record<string, unknown>);
         await majStatutTable(tx, c.table_id, 'LIBRE');
+        // CORRECTIONS3 point 4 : l'encaissement efface les appels/badges
+        // résiduels de la table (traités par le caissier).
+        if (c.table_id) {
+          await tx
+            .update(appelsTable)
+            .set({ statut: 'TRAITE', traite_le: new Date(), traite_par: req.session!.utilisateur_id })
+            .where(and(eq(appelsTable.table_id, c.table_id), eq(appelsTable.statut, 'EN_ATTENTE')));
+        }
         await journaliser(tx, {
           user_id: req.session!.utilisateur_id,
           action: 'PAIEMENT',

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { CatalogueVue, TableClientVue } from '@pos/shared';
-import { formatFCFA } from '@pos/shared';
+import { formatFCFA, LIBELLES_ETAT_TABLE } from '@pos/shared';
 import { api } from '../api';
 import { SuiviCommandes } from './SuiviCommandes';
 
@@ -69,7 +69,14 @@ export function PageTable({ jeton, table }: { jeton: string; table: TableClientV
       <header className="sticky top-0 z-10 border-b border-bordure bg-surface px-4 py-3">
         <div className="text-sm text-doux">{table.restaurant.nom}</div>
         <div className="text-2xl font-black text-marque-fonce">Table {table.numero}</div>
-        <div className="text-xs text-doux">{table.zone_nom}</div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-doux">{table.zone_nom}</span>
+          {table.etat !== 'LIBRE' && (
+            <span className="rounded-full bg-marque-tint px-2 py-0.5 text-xs font-semibold text-marque-fonce">
+              {LIBELLES_ETAT_TABLE[table.etat]}
+            </span>
+          )}
+        </div>
       </header>
 
       <div className="space-y-4 p-4">

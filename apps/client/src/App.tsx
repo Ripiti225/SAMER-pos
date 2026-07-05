@@ -17,6 +17,8 @@ export function App() {
     queryKey: ['table', jeton],
     queryFn: () => api<TableClientVue>(`/api/client/${jeton}`),
     enabled: !!jeton,
+    // Point 4 : l'état de table reste synchronisé côté client (polling léger).
+    refetchInterval: 10_000,
   });
 
   useEffect(() => {
