@@ -48,7 +48,8 @@ export async function seed(): Promise<void> {
 
   await db.insert(parametresLocaux).values([
     { cle: 'seuil_alerte_ecart_caisse', valeur: 2000 },
-    { cle: 'verrouillage_inactivite_secondes', valeur: 60 },
+    // Correction 1 (retour terrain) : 10 min — un verrou trop court bloque le travail
+    { cle: 'verrou_inactivite_caisse_secondes', valeur: 600 },
     // Sprint 2 : les serveurs bougent, verrouillage plus long sur tablette
     { cle: 'verrouillage_inactivite_serveur_secondes', valeur: 120 },
     // Sprint 2 : seuils du chronomètre KDS (minutes)

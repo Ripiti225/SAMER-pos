@@ -37,7 +37,8 @@ async function construireSessionInfo(session: {
       marque: resto.marque as 'SAMER' | 'AL_KAYAN',
       couleur_hex: resto.couleur_hex,
     },
-    verrouillage_inactivite_secondes: lireParam('verrouillage_inactivite_secondes', 60),
+    // Correction 1 : 10 min par défaut, modifiable par le manager dans parametres_locaux
+    verrouillage_inactivite_secondes: lireParam('verrou_inactivite_caisse_secondes', 600),
     verrouillage_inactivite_serveur_secondes: lireParam('verrouillage_inactivite_serveur_secondes', 120),
     // Vue du service SANS especes_theorique (§14.3)
     service_ouvert: service

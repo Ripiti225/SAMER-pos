@@ -4,8 +4,12 @@ import { useCaisse } from '../stores/session';
 import { Numpad } from './Numpad';
 
 /**
- * Verrouillage automatique après inactivité (§14) : au bout de N secondes
- * sans interaction, un écran de déverrouillage par PIN recouvre la caisse.
+ * Verrouillage automatique après inactivité (§14, correction 1) :
+ * - Se déclenche UNIQUEMENT après N secondes sans interaction réelle
+ *   (10 min par défaut, clé parametres_locaux `verrou_inactivite_caisse_secondes`).
+ *   Jamais au changement d'écran, au retour d'onglet ni à la perte de focus.
+ * - Ne déconnecte PAS et ne ferme PAS le service : simple surcouche, le PIN
+ *   ré-affiche exactement l'écran quitté (commande en cours intacte).
  */
 export function VerrouInactivite() {
   const { session, verrouille, verrouiller, poserSession, afficherToast } = useCaisse();
@@ -13,7 +17,7 @@ export function VerrouInactivite() {
   const [enCours, setEnCours] = useState(false);
   const minuteur = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const delaiMs = (session?.verrouillage_inactivite_secondes ?? 60) * 1000;
+  const delaiMs = (session?.verrouillage_inactivite_secondes ?? 600) * 1000;
 
   useEffect(() => {
     if (!session) return;

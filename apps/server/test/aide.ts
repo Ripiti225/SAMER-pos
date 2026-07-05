@@ -63,7 +63,6 @@ export async function resetDonnees(): Promise<Donnees> {
   });
   await db.insert(parametresLocaux).values([
     { cle: 'seuil_alerte_ecart_caisse', valeur: 2000 },
-    { cle: 'verrouillage_inactivite_secondes', valeur: 60 },
   ]);
 
   const [proprio, manager, caissier, caissier2, serveur, cuisine] = await db
