@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { formatFCFA, LIBELLES_STATUTS_COMMANDE, LIBELLES_TYPES_COMMANDE, type StatutCommande, type TypeCommande } from '@pos/shared';
 import { api } from '../api';
+import { CarteSante } from '../components/SanteSync';
 import { useCaisse } from '../stores/session';
 
 interface MesVentesVue {
@@ -114,6 +115,7 @@ export function MesVentes() {
               </div>
             ))}
           </div>
+          <CarteSante />
         </section>
       )}
     </div>

@@ -5,6 +5,7 @@ import { PARTENAIRES } from '@pos/shared';
 import { api } from '../api';
 import { Modale } from '../components/Modale';
 import { useNbAdditionsEnAttente } from '../components/BandeauAdditions';
+import { PastilleSync } from '../components/SanteSync';
 import { useCaisse } from '../stores/session';
 
 /** Accueil caissier : exactement 4 boutons (§15). */
@@ -48,9 +49,12 @@ export function Accueil() {
           <div className="text-2xl font-black text-marque-fonce">{session?.restaurant.nom}</div>
           <div className="text-sm text-doux">{session?.utilisateur.nom_complet}</div>
         </div>
-        <button type="button" className="btn-blanc" onClick={seDeconnecter}>
-          Se déconnecter
-        </button>
+        <div className="ml-auto flex items-center gap-4">
+          <PastilleSync />
+          <button type="button" className="btn-blanc" onClick={seDeconnecter}>
+            Se déconnecter
+          </button>
+        </div>
       </header>
 
       <div className="grid flex-1 grid-cols-1 content-center gap-4 sm:grid-cols-2 max-w-3xl mx-auto w-full">

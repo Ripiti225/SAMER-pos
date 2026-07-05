@@ -13,6 +13,7 @@ import { routesKds } from './modules/kds/routes.js';
 import { routesServeur } from './modules/serveur/routes.js';
 import { routesClient } from './modules/client/routes.js';
 import { routesSalle } from './modules/salle/routes.js';
+import { routesSante } from './modules/sante/routes.js';
 import { ConsolePrinter } from './printer/ConsolePrinter.js';
 import type { PrinterService } from './printer/PrinterService.js';
 
@@ -42,8 +43,7 @@ export async function construireApp(options: { logger?: boolean } = {}): Promise
   routesServeur(app);
   routesSalle(app);
   routesClient(app);
-
-  app.get('/api/sante', async () => ({ ok: true }));
+  routesSante(app);
 
   return app;
 }
