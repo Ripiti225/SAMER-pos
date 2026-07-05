@@ -36,6 +36,13 @@
       "when": 1751880000000,
       "tag": "0004_propriete_table",
       "breakpoints": false
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1751940000000,
+      "tag": "0005_fidelite",
+      "breakpoints": false
     }
   ]
 }

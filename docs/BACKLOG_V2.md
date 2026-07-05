@@ -28,3 +28,17 @@ Toute idée hors périmètre du sprint 1 est notée ici, jamais implémentée en
   passer par réouverture manager de la commande.
 - Rendu monnaie tracé en base (sprint 1 : calculé à l'écran uniquement, seul le montant dû est enregistré).
 - Servir la PWA compilée directement depuis le serveur Fastify (déploiement mono-processus sur le mini-PC).
+
+## Idées notées pendant le sprint 4
+- Fidélité — rapprochement cloud (fusions_clients) : la fusion des clients POS
+  et SAMER DELIV sur le même téléphone se fait côté cloud (Edge Function à la
+  montée) et redescend une table `fusions_clients(ancien_id, id_retenu)`
+  appliquée à la descente. Reporté à l'intégration SAMER DELIV (nécessite le
+  projet cloud SAMER DELIV comme référence des clients). En attendant, le POS
+  génère des id clients locaux qui remontent au cloud ; l'unicité par téléphone
+  y sera réconciliée lors de ce jalon.
+- Notation client (QR) : la prise de note par le client reste sprint 5+ ; le
+  récap manager (moyennes, dernières mauvaises notes) lit les `notations`
+  existantes.
+- Horaires prévus des employés (retards vs planning) : champ texte simple en
+  v2, planning complet reporté.

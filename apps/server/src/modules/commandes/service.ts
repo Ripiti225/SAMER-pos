@@ -177,7 +177,9 @@ export async function recalculerTotaux(tx: DbOuTx, commandeId: string, quand = n
   if (!avant) throw introuvable('Commande');
   const remise = Math.min(avant.remise_montant, sousTotal);
   const promoMontant = meilleure ? Math.min(meilleure.montant, sousTotal - remise) : 0;
-  const total = Math.max(0, sousTotal - remise - promoMontant);
+  // Sprint 4 B : la remise fidélité (points) réduit aussi le total.
+  const fidelite = Math.min(avant.fidelite_montant, Math.max(0, sousTotal - remise - promoMontant));
+  const total = Math.max(0, sousTotal - remise - promoMontant - fidelite);
 
   const [maj] = await tx
     .update(commandes)
@@ -186,6 +188,7 @@ export async function recalculerTotaux(tx: DbOuTx, commandeId: string, quand = n
       remise_montant: remise,
       promo_id: meilleure?.promo.id ?? null,
       promo_montant: promoMontant,
+      fidelite_montant: fidelite,
       total,
       updated_at: new Date(),
     })
@@ -241,6 +244,8 @@ export async function chargerCommandeVue(dbx: DbOuTx, commandeId: string): Promi
     remise_motif: c.remise_motif,
     promo_montant: c.promo_montant,
     promo_nom: promoLigne[0]?.nom ?? null,
+    fidelite_montant: c.fidelite_montant,
+    client_fidelite_id: c.client_fidelite_id,
     total: c.total,
     paye,
     reste: Math.max(0, c.total - paye),

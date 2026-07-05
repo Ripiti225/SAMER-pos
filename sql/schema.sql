@@ -242,6 +242,11 @@ CREATE TABLE commandes (
   origine        TEXT NOT NULL DEFAULT 'CAISSE'
                  CHECK (origine IN ('CAISSE','SERVEUR','CLIENT_QR')),
   refus_motif    TEXT,                              -- message si commande client refusée
+  -- Sprint 4 B : fidélité (rattachement client + remise en points).
+  -- FK vers clients_fidelite ajoutée par la migration 0005 (table définie §11).
+  client_fidelite_id UUID,
+  fidelite_points    INTEGER NOT NULL DEFAULT 0,
+  fidelite_montant   INTEGER NOT NULL DEFAULT 0,
   -- montants figés (snapshot, jamais recalculés après paiement)
   sous_total     INTEGER NOT NULL DEFAULT 0,
   remise_montant INTEGER NOT NULL DEFAULT 0,

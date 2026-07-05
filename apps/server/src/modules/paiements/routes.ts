@@ -7,6 +7,7 @@ import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
+import { crediterVente } from '../fidelite/service.js';
 import {
   chargerCommandeVue,
   majStatutTable,
@@ -144,6 +145,10 @@ export function routesPaiements(app: FastifyInstance): void {
             .update(appelsTable)
             .set({ statut: 'TRAITE', traite_le: new Date(), traite_par: req.session!.utilisateur_id })
             .where(and(eq(appelsTable.table_id, c.table_id), eq(appelsTable.statut, 'EN_ATTENTE')));
+        }
+        // Sprint 4 B : crédit des points fidélité, dans la transaction du paiement.
+        if (c.client_fidelite_id) {
+          await crediterVente(tx, c.client_fidelite_id, id, c.total);
         }
         await journaliser(tx, {
           user_id: req.session!.utilisateur_id,

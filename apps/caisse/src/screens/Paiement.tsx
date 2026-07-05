@@ -5,6 +5,7 @@ import { formatFCFA, LIBELLES_MODES, MODES_PAIEMENT } from '@pos/shared';
 import { api } from '../api';
 import { Modale } from '../components/Modale';
 import { Numpad } from '../components/Numpad';
+import { Fidelite } from '../components/Fidelite';
 import { useCaisse } from '../stores/session';
 
 export function Paiement() {
@@ -81,6 +82,13 @@ export function Paiement() {
           Total {formatFCFA(commande.total)} — déjà payé {formatFCFA(commande.paye)}
         </div>
       </div>
+
+      {!estPayee && (
+        <Fidelite
+          commande={commande}
+          onMaj={(vue) => queryClient.setQueryData(['commande', commandeId], vue)}
+        />
+      )}
 
       {commande.notes.length > 0 && !estPayee && (
         <div className="mb-4 flex flex-wrap gap-2">

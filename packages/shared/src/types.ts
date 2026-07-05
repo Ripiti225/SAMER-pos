@@ -183,6 +183,8 @@ export interface CommandeVue {
   remise_motif: string | null;
   promo_montant: number;
   promo_nom: string | null;
+  fidelite_montant: number;
+  client_fidelite_id: string | null;
   total: number;
   paye: number;
   reste: number;
