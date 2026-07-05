@@ -9,7 +9,8 @@
     "db:migrate": "pnpm --filter @pos/server db:migrate",
     "db:seed": "pnpm --filter @pos/server db:seed",
     "site:enroler": "pnpm --filter @pos/server site:enroler",
-    "sync:reconcile": "pnpm --filter @pos/server sync:reconcile"
+    "sync:reconcile": "pnpm --filter @pos/server sync:reconcile",
+    "catalogue:importer": "pnpm --filter @pos/server catalogue:importer"
   },
   "packageManager": "pnpm@11.9.0",
   "engines": {

@@ -10,6 +10,7 @@
     "db:seed": "tsx src/db/seed.ts",
     "site:enroler": "tsx src/scripts/enroler-site.ts",
     "sync:reconcile": "tsx src/scripts/reconcilier.ts",
+    "catalogue:importer": "tsx src/scripts/importer-catalogue.ts",
     "test": "vitest run"
   },
   "dependencies": {
