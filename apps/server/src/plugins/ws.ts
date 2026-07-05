@@ -13,7 +13,7 @@ export type EvenementWs =
   | 'commande:envoyee'
   | 'commande:modifiee'
   | 'commande_item:annule'
-  | 'table:addition'
+  | 'table:addition_demandee'
   | 'service'
   | 'catalogue';
 

@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
+import { sons } from './sons';
 
 /** WebSocket LAN : invalide les requêtes quand le serveur pousse un changement. */
 export function connecterTempsReel(queryClient: QueryClient): () => void {
@@ -11,7 +12,15 @@ export function connecterTempsReel(queryClient: QueryClient): () => void {
     socket = new WebSocket(`${protocole}://${location.host}/ws`);
     socket.onmessage = (evt) => {
       try {
-        const { type, id } = JSON.parse(evt.data as string) as { type: string; id: string | null };
+        const { type, id, quand } = JSON.parse(evt.data as string) as {
+          type: string;
+          id: string | null;
+          quand: number;
+        };
+        // Correction 2 : la demande d'addition fait sonner la caisse (une fois)
+        if (type === 'table:addition_demandee') {
+          sons.additionDemandee(`${id}:${quand}`);
+        }
         // Sprint 2 : événements nommés (commande:envoyee, commande_item:annule,
         // table:addition…) — on invalide par préfixe.
         if (type.startsWith('commande')) {

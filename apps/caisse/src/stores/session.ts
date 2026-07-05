@@ -15,6 +15,8 @@ interface EtatCaisse {
   ecran: Ecran;
   commandeId: string | null;
   toast: string | null;
+  /** Tables dont la demande d'addition a été OUVERTE par le caissier (bandeau masqué). */
+  tablesVues: string[];
 
   poserSession: (s: SessionInfo | null) => void;
   poserServiceOuvert: (service: SessionInfo['service_ouvert']) => void;
@@ -22,6 +24,8 @@ interface EtatCaisse {
   aller: (ecran: Ecran, commandeId?: string | null) => void;
   afficherToast: (message: string) => void;
   effacerToast: () => void;
+  marquerTableVue: (tableId: string) => void;
+  reconcilierTablesVues: (idsEncoreEnAttente: string[]) => void;
 }
 
 export const useCaisse = create<EtatCaisse>((set, get) => ({
@@ -30,6 +34,7 @@ export const useCaisse = create<EtatCaisse>((set, get) => ({
   ecran: 'accueil',
   commandeId: null,
   toast: null,
+  tablesVues: [],
 
   poserSession: (session) => {
     if (session) {
@@ -50,4 +55,9 @@ export const useCaisse = create<EtatCaisse>((set, get) => ({
     }, 3500);
   },
   effacerToast: () => set({ toast: null }),
+  marquerTableVue: (tableId) => set({ tablesVues: [...get().tablesVues, tableId] }),
+  // Une table encaissée (redevenue LIBRE) sort de la liste « vues » :
+  // une prochaine demande d'addition fera réapparaître le bandeau.
+  reconcilierTablesVues: (idsEncoreEnAttente) =>
+    set({ tablesVues: get().tablesVues.filter((id) => idsEncoreEnAttente.includes(id)) }),
 }));

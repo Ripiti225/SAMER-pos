@@ -4,6 +4,7 @@ import type { CommandeVue, TableVue } from '@pos/shared';
 import { PARTENAIRES } from '@pos/shared';
 import { api } from '../api';
 import { Modale } from '../components/Modale';
+import { useNbAdditionsEnAttente } from '../components/BandeauAdditions';
 import { useCaisse } from '../stores/session';
 
 /** Accueil caissier : exactement 4 boutons (§15). */
@@ -12,6 +13,8 @@ export function Accueil() {
   const [choixType, setChoixType] = useState(false);
   const [choixTable, setChoixTable] = useState(false);
   const [choixLivraison, setChoixLivraison] = useState(false);
+  // Correction 2 : compteur d'additions en attente, visible en permanence
+  const nbAdditions = useNbAdditionsEnAttente();
 
   const { data: tables } = useQuery({
     queryKey: ['tables'],
@@ -54,8 +57,13 @@ export function Accueil() {
         <button type="button" className="btn-accent py-12 text-2xl" onClick={() => setChoixType(true)}>
           Nouvelle commande
         </button>
-        <button type="button" className="btn-sombre py-12 text-2xl" onClick={() => aller('tables')}>
+        <button type="button" className="btn-sombre relative py-12 text-2xl" onClick={() => aller('tables')}>
           Tables
+          {nbAdditions > 0 && (
+            <span className="absolute right-4 top-4 flex min-h-[36px] min-w-[36px] items-center justify-center rounded-full bg-blue-500 px-2 text-lg font-black text-white">
+              {nbAdditions}
+            </span>
+          )}
         </button>
         <button type="button" className="btn-sombre py-12 text-2xl" onClick={() => aller('mes-ventes')}>
           Mes ventes

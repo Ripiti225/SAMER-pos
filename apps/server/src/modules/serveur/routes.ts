@@ -148,7 +148,11 @@ export function routesServeur(app: FastifyInstance): void {
       return { deja_traitee: false as const };
     });
 
-    app.diffuser('table:addition', corps.table_id);
+    // Une seule diffusion par demande : le rejeu idempotent ne refait pas
+    // sonner la caisse (correction 2 — le son ne se joue qu'une fois).
+    if (!resultat.deja_traitee) {
+      app.diffuser('table:addition_demandee', corps.table_id);
+    }
     return { ok: true, ...resultat };
   });
 }

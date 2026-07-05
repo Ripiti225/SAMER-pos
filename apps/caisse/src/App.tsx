@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import type { SessionInfo } from '@pos/shared';
 import { api, ErreurApi } from './api';
+import { BandeauAdditions } from './components/BandeauAdditions';
 import { VerrouInactivite } from './components/VerrouInactivite';
 import { Accueil } from './screens/Accueil';
 import { Cloture } from './screens/Cloture';
@@ -57,6 +58,7 @@ export function App() {
   return (
     <div className="h-full">
       {contenu}
+      <BandeauAdditions />
       <VerrouInactivite />
       {toast && (
         <div className="fixed bottom-4 left-1/2 z-[60] -translate-x-1/2 rounded-xl bg-zinc-800 px-5 py-3 text-lg shadow-xl">
