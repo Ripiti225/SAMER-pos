@@ -103,33 +103,33 @@ export function PriseCommande({
 
   return (
     <div className="flex h-[calc(100vh-57px)] flex-col">
-      <div className="flex items-center gap-3 border-b border-zinc-800 p-3">
-        <button type="button" className="btn-sombre" onClick={onRetour}>
+      <div className="flex items-center gap-3 border-b border-bordure p-3">
+        <button type="button" className="btn-blanc" onClick={onRetour}>
           ← Salle
         </button>
         <span className="text-xl font-black">Table {table?.numero ?? '…'}</span>
         {commande && (
-          <span className="text-sm text-zinc-400">
+          <span className="text-sm text-doux">
             Ticket n° {commande.numero_ticket} — {formatFCFA(commande.total)}
           </span>
         )}
         <button
           type="button"
-          className="btn-sombre ml-auto"
+          className="btn-blanc ml-auto"
           disabled={!table?.commande_id && panier.length === 0}
           onClick={() => void demanderAddition()}
         >
-          💶 Demander l’addition
+          Demander l’addition
         </button>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        <nav className="w-36 shrink-0 space-y-2 overflow-y-auto border-r border-zinc-800 p-2">
+        <nav className="w-36 shrink-0 space-y-2 overflow-y-auto border-r border-bordure p-2">
           {categories.map((c) => (
             <button
               key={c.id}
               type="button"
-              className={`btn w-full ${c.id === categorieActive ? 'bg-accent text-zinc-950' : 'bg-zinc-800'}`}
+              className={`btn w-full ${c.id === categorieActive ? 'bg-marque text-white' : 'border border-bordure bg-surface'}`}
               onClick={() => setCategorieId(c.id)}
             >
               {c.nom}
@@ -143,13 +143,13 @@ export function PriseCommande({
               key={combo.id}
               type="button"
               disabled={!combo.disponible}
-              className="carte flex min-h-[88px] flex-col justify-between p-3 text-left hover:border-accent disabled:opacity-40"
+              className="carte flex min-h-[88px] flex-col justify-between p-3 text-left hover:border-marque disabled:opacity-40"
               onClick={() =>
                 ajouterAuPanier({ article_id: null, combo_id: combo.id, nom: combo.nom, prix_affiche: combo.prix, quantite: 1, options: [], supplements: [] })
               }
             >
-              <div className="font-semibold">🎁 {combo.nom}</div>
-              <div className="font-bold text-accent">{formatFCFA(combo.prix)}</div>
+              <div className="font-semibold">{combo.nom}</div>
+              <div className="font-bold text-marque-fonce">{formatFCFA(combo.prix)}</div>
             </button>
           ))}
           {articlesVisibles.map((a) => (
@@ -157,24 +157,27 @@ export function PriseCommande({
               key={a.id}
               type="button"
               disabled={!a.disponible}
-              className="carte flex min-h-[88px] flex-col justify-between p-3 text-left hover:border-accent disabled:opacity-40"
+              className="carte flex min-h-[88px] flex-col justify-between p-3 text-left hover:border-marque disabled:opacity-45"
               onClick={() => clicArticle(a)}
             >
-              <div className="font-semibold">{a.nom}</div>
-              <div className="font-bold text-accent">{formatFCFA(a.prix_base)}</div>
+              <div>
+                <div className="font-semibold">{a.nom}</div>
+                {!a.disponible && <div className="text-xs font-semibold text-alerte">Épuisé</div>}
+              </div>
+              <div className="font-bold text-marque-fonce">{formatFCFA(a.prix_base)}</div>
             </button>
           ))}
         </main>
 
-        <aside className="flex w-80 shrink-0 flex-col border-l border-zinc-800">
+        <aside className="flex w-80 shrink-0 flex-col border-l border-bordure">
           <div className="flex-1 space-y-2 overflow-y-auto p-3">
             {commande && commande.items.length > 0 && (
               <div className="mb-2">
-                <div className="mb-1 text-xs font-semibold uppercase text-zinc-500">Déjà en cuisine</div>
+                <div className="mb-1 text-xs font-semibold text-doux">Déjà en cuisine</div>
                 {commande.items.map((i) => (
                   <div
                     key={i.id}
-                    className={`text-sm ${i.statut_cuisine === 'ANNULE' ? 'text-red-500 line-through' : 'text-zinc-400'}`}
+                    className={`text-sm ${i.statut_cuisine === 'ANNULE' ? 'text-alerte line-through' : 'text-doux'}`}
                   >
                     {i.quantite} × {i.nom_snapshot}
                   </div>
@@ -182,8 +185,8 @@ export function PriseCommande({
               </div>
             )}
 
-            <div className="text-xs font-semibold uppercase text-zinc-500">Nouveaux articles</div>
-            {panier.length === 0 && <div className="pt-2 text-sm text-zinc-500">Touchez un article…</div>}
+            <div className="text-xs font-semibold text-doux">Nouveaux articles</div>
+            {panier.length === 0 && <div className="pt-2 text-sm text-doux">Touchez un article…</div>}
             {panier.map((l) => (
               <div key={l.cle} className="carte p-3">
                 <div className="flex justify-between">
@@ -193,15 +196,15 @@ export function PriseCommande({
                   </div>
                 </div>
                 {l.supplements.map((s) => (
-                  <div key={s.id} className="text-xs text-zinc-400">+ {s.nom}</div>
+                  <div key={s.id} className="text-xs text-doux">+ {s.nom}</div>
                 ))}
                 {l.options.filter((o) => o.choix.length > 0).map((o) => (
-                  <div key={o.groupe} className="text-xs text-zinc-400">{o.groupe} : {o.choix.join(', ')}</div>
+                  <div key={o.groupe} className="text-xs text-doux">{o.groupe} : {o.choix.join(', ')}</div>
                 ))}
                 <div className="mt-2 flex items-center gap-2">
                   <button
                     type="button"
-                    className="btn-sombre h-12 w-12 p-0 text-xl"
+                    className="btn-blanc h-12 w-12 p-0 text-xl"
                     onClick={() =>
                       setPanier((p) =>
                         p.map((x) => (x.cle === l.cle ? { ...x, quantite: Math.max(1, x.quantite - 1) } : x)),
@@ -213,12 +216,12 @@ export function PriseCommande({
                   <span className="w-8 text-center font-bold">{l.quantite}</span>
                   <button
                     type="button"
-                    className="btn-sombre h-12 w-12 p-0 text-xl"
+                    className="btn-blanc h-12 w-12 p-0 text-xl"
                     onClick={() => setPanier((p) => p.map((x) => (x.cle === l.cle ? { ...x, quantite: x.quantite + 1 } : x)))}
                   >
                     +
                   </button>
-                  <button type="button" className="btn-danger ml-auto px-3" onClick={() => setPanier((p) => p.filter((x) => x.cle !== l.cle))}>
+                  <button type="button" className="btn-alerte ml-auto px-3" onClick={() => setPanier((p) => p.filter((x) => x.cle !== l.cle))}>
                     ✕
                   </button>
                 </div>
@@ -226,7 +229,7 @@ export function PriseCommande({
             ))}
           </div>
 
-          <div className="border-t border-zinc-800 p-3">
+          <div className="border-t border-bordure p-3">
             {/* Bouton UNIQUE « Envoyer en cuisine » (§B2) — pas d'encaissement ici */}
             <button
               type="button"
@@ -291,7 +294,7 @@ function ModaleArticle({
                 <button
                   key={o.id}
                   type="button"
-                  className={`btn ${choix[g.nom]?.includes(o.nom) ? 'bg-accent text-zinc-950' : 'bg-zinc-800'}`}
+                  className={`btn ${choix[g.nom]?.includes(o.nom) ? 'bg-marque text-white' : 'border border-bordure bg-surface'}`}
                   onClick={() => basculerChoix(g.nom, o.nom, g.choix_max)}
                 >
                   {o.nom}
@@ -308,7 +311,7 @@ function ModaleArticle({
                 <button
                   key={s.id}
                   type="button"
-                  className={`btn ${supplements.includes(s.id) ? 'bg-accent text-zinc-950' : 'bg-zinc-800'}`}
+                  className={`btn ${supplements.includes(s.id) ? 'bg-marque text-white' : 'border border-bordure bg-surface'}`}
                   onClick={() =>
                     setSupplements((prev) => (prev.includes(s.id) ? prev.filter((x) => x !== s.id) : [...prev, s.id]))
                   }
@@ -320,9 +323,9 @@ function ModaleArticle({
           </div>
         )}
         <div className="flex items-center gap-3">
-          <button type="button" className="btn-sombre h-12 w-12 p-0 text-xl" onClick={() => setQuantite(Math.max(1, quantite - 1))}>−</button>
+          <button type="button" className="btn-blanc h-12 w-12 p-0 text-xl" onClick={() => setQuantite(Math.max(1, quantite - 1))}>−</button>
           <span className="w-8 text-center text-xl font-bold">{quantite}</span>
-          <button type="button" className="btn-sombre h-12 w-12 p-0 text-xl" onClick={() => setQuantite(quantite + 1)}>+</button>
+          <button type="button" className="btn-blanc h-12 w-12 p-0 text-xl" onClick={() => setQuantite(quantite + 1)}>+</button>
         </div>
         <button
           type="button"

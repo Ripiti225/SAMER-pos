@@ -44,16 +44,16 @@ export function Login() {
   return (
     <div className="flex min-h-full flex-col items-center justify-center gap-8 p-6">
       <div className="text-center">
-        <h1 className="text-4xl font-black text-accent">Chez Samer / Al Kayan</h1>
-        <p className="mt-2 text-zinc-400">Caisse — connexion par PIN</p>
+        <h1 className="text-4xl font-black text-marque-fonce">Chez Samer / Al Kayan</h1>
+        <p className="mt-2 text-doux">Caisse — connexion par PIN</p>
       </div>
 
       {!choisi ? (
         <div className="grid w-full max-w-2xl grid-cols-2 gap-3 sm:grid-cols-3">
           {(utilisateurs ?? []).map((u) => (
-            <button key={u.id} type="button" className="carte min-h-[80px] p-4 text-left hover:border-accent" onClick={() => setChoisi(u)}>
+            <button key={u.id} type="button" className="carte min-h-[80px] p-4 text-left hover:border-marque" onClick={() => setChoisi(u)}>
               <div className="font-bold">{u.nom_complet}</div>
-              <div className="text-sm text-zinc-400">{LIBELLES_ROLES[u.role] ?? u.role}</div>
+              <div className="text-sm text-doux">{LIBELLES_ROLES[u.role] ?? u.role}</div>
             </button>
           ))}
         </div>
@@ -61,7 +61,7 @@ export function Login() {
         <div className="w-full max-w-xs space-y-3">
           <div className="text-center text-lg font-semibold">{choisi.nom_complet}</div>
           <div className="champ flex items-center justify-center text-3xl tracking-[0.5em]">
-            {'•'.repeat(pin.length) || <span className="text-base tracking-normal text-zinc-500">PIN</span>}
+            {'•'.repeat(pin.length) || <span className="text-base tracking-normal text-doux">PIN</span>}
           </div>
           <Numpad
             valeur={pin}
@@ -71,7 +71,7 @@ export function Login() {
             libelleValider={enCours ? 'Connexion…' : 'Se connecter'}
             validerDesactive={pin.length < 4 || enCours}
           />
-          <button type="button" className="btn-sombre w-full" onClick={() => { setChoisi(null); setPin(''); }}>
+          <button type="button" className="btn-blanc w-full" onClick={() => { setChoisi(null); setPin(''); }}>
             ← Changer d’utilisateur
           </button>
         </div>

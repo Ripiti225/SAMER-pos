@@ -1,0 +1,14 @@
+{
+  "name": "@pos/theme",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Thème clair partagé caisse / KDS / serveur — rebranding Samer↔Al Kayan par variables CSS",
+  "exports": {
+    "./theme.css": "./theme.css"
+  },
+  "scripts": {
+    "dev": "exit 0",
+    "build": "exit 0",
+    "test": "exit 0"
+  }
+}

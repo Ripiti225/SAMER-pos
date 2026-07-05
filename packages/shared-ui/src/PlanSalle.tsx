@@ -25,7 +25,7 @@ export function PlanSalle({ tables, onTable, masquerPartenaires }: Props) {
           <button
             key={z}
             type="button"
-            className={`btn ${z === zone ? 'bg-accent text-zinc-950' : 'bg-zinc-800'}`}
+            className={`btn ${z === zone ? 'bg-marque text-white' : 'border border-bordure bg-surface'}`}
             onClick={() => setZoneActive(z)}
           >
             {z}
@@ -49,23 +49,23 @@ export function PlanSalle({ tables, onTable, masquerPartenaires }: Props) {
           ))}
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-4 text-xs text-zinc-400">
-        <span><span className="mr-1 inline-block h-3 w-3 rounded bg-zinc-700 align-middle" /> Libre</span>
-        <span><span className="mr-1 inline-block h-3 w-3 rounded bg-accent align-middle" /> Occupée</span>
-        <span><span className="mr-1 inline-block h-3 w-3 rounded bg-blue-500 align-middle" /> Addition demandée</span>
+      <div className="mt-6 flex flex-wrap gap-4 text-xs text-doux">
+        <span><span className="mr-1 inline-block h-3 w-3 rounded border border-bordure bg-surface align-middle" /> Libre</span>
+        <span><span className="mr-1 inline-block h-3 w-3 rounded bg-marque align-middle" /> Occupée</span>
+        <span><span className="mr-1 inline-block h-3 w-3 rounded bg-info align-middle" /> Addition demandée</span>
       </div>
     </div>
   );
 }
 
 function couleurTable(statut: TableVue['statut']): string {
-  if (statut === 'ADDITION_DEMANDEE') return 'bg-blue-500 text-white';
-  if (statut === 'OCCUPEE') return 'bg-accent text-zinc-950';
-  return 'bg-zinc-800 hover:bg-zinc-700';
+  if (statut === 'ADDITION_DEMANDEE') return 'bg-info text-white';
+  if (statut === 'OCCUPEE') return 'bg-marque text-white';
+  return 'border border-bordure bg-surface hover:bg-marque-tint';
 }
 
 function libelleStatut(statut: TableVue['statut']): string {
-  if (statut === 'ADDITION_DEMANDEE') return 'Addition 💶';
+  if (statut === 'ADDITION_DEMANDEE') return 'Addition demandée';
   if (statut === 'OCCUPEE') return 'Occupée';
   return 'Libre';
 }

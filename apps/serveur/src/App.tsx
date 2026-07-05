@@ -27,7 +27,8 @@ export function App() {
     api<SessionInfo>('/api/auth/moi')
       .then((s) => {
         if (ROLES_SALLE.includes(s.utilisateur.role)) {
-          document.documentElement.style.setProperty('--accent', s.restaurant.couleur_hex);
+          document.documentElement.dataset.marque = s.restaurant.marque;
+          document.documentElement.style.setProperty('--marque', s.restaurant.couleur_hex);
           setSession(s);
         }
       })
@@ -51,7 +52,7 @@ export function App() {
   }, [queryClient]);
 
   if (chargement) {
-    return <div className="flex h-screen items-center justify-center text-zinc-400">Démarrage…</div>;
+    return <div className="flex h-screen items-center justify-center text-doux">Démarrage…</div>;
   }
   if (!session) {
     return <LoginServeur onConnecte={setSession} />;
@@ -60,19 +61,19 @@ export function App() {
   return (
     <div className="h-full">
       {/* Le nom du serveur connecté est affiché en permanence (§B5) */}
-      <header className="flex items-center gap-3 border-b border-zinc-800 px-4 py-2">
-        <span className="font-black text-accent">{session.restaurant.nom}</span>
-        <span className="rounded-full bg-zinc-800 px-3 py-1 text-sm font-semibold">
-          🧑‍🍳 {session.utilisateur.nom_complet}
+      <header className="flex items-center gap-3 border-b border-bordure px-4 py-2">
+        <span className="font-black text-marque-fonce">{session.restaurant.nom}</span>
+        <span className="rounded-full border border-bordure bg-surface px-3 py-1 text-sm font-semibold">
+          {session.utilisateur.nom_complet}
         </span>
         {enAttente > 0 && (
-          <span className="animate-pulse rounded-full bg-amber-900 px-3 py-1 text-sm text-amber-200">
-            ⏳ En attente de connexion ({enAttente})
+          <span className="animate-pulse rounded-full bg-alerte-tint px-3 py-1 text-sm text-alerte">
+            En attente de connexion ({enAttente})
           </span>
         )}
         <button
           type="button"
-          className="btn-sombre ml-auto"
+          className="btn-blanc ml-auto"
           onClick={async () => {
             try { await api('/api/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
             setSession(null);
@@ -92,7 +93,7 @@ export function App() {
       <VerrouInactivite session={session} onDeconnexion={() => { setSession(null); setTableId(null); }} />
 
       {toast && (
-        <div className="fixed bottom-4 left-1/2 z-[60] -translate-x-1/2 rounded-xl bg-zinc-800 px-5 py-3 text-lg shadow-xl">
+        <div className="fixed bottom-4 left-1/2 z-[60] -translate-x-1/2 rounded-xl border border-bordure bg-surface px-5 py-3 text-lg shadow-xl">
           {toast}
         </div>
       )}

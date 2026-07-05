@@ -76,7 +76,7 @@ export async function attribuerPlats(tx: DbOuTx, commandeId: string): Promise<vo
   for (const item of items) {
     if (item.statut_cuisine === 'ANNULE' || item.envoye_le === null) continue;
     const categorieId = item.article_id ? categorieParArticle.get(item.article_id) : undefined;
-    const poste = (categorieId && posteParCategorie.get(categorieId)) ?? POSTE_PAR_DEFAUT;
+    const poste = (categorieId ? posteParCategorie.get(categorieId) : undefined) ?? POSTE_PAR_DEFAUT;
     const attribues = parPoste.get(poste) ?? []; // vide = à rattacher plus tard
 
     const [maj] = await tx

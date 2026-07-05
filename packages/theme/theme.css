@@ -1,0 +1,189 @@
+/* ===========================================================================
+   THÈME CLAIR PARTAGÉ — caisse / KDS / serveur (correction 5, retours terrain)
+   Le rebranding Samer ↔ Al Kayan se fait en une variable :
+   les apps posent data-marque="SAMER|AL_KAYAN" sur <html> (et peuvent
+   surcharger --marque avec restaurant.couleur_hex).
+   =========================================================================== */
+
+:root {
+  /* Base claire et chaude — jamais de blanc pur, jamais de sombre */
+  --fond-page: #f7f5f0;
+  --surface-carte: #ffffff;
+  --bordure: #e5e2da;
+  --texte-fort: #2c2c2a;
+  --texte-doux: #5f5e5a;
+
+  /* Accent de marque (défaut : Chez Samer) */
+  --marque: #ef9f27;
+  --marque-foncee: #ba7517;
+  --marque-tint: #faeeda;
+
+  /* Couleurs FONCTIONNELLES, identiques pour les deux marques :
+     reconnaissables sans lire, même en plein rush */
+  --ok: #2d7d46;
+  --ok-tint: #eaf3de;
+  --alerte: #d85a30;
+  --alerte-tint: #faece7;
+  --info: #378add;
+  --info-tint: #e6f1fb;
+
+  /* Compatibilité : l'ancien alias --accent suit la marque */
+  --accent: var(--marque);
+}
+
+:root[data-marque='AL_KAYAN'] {
+  --marque: #2d7d46;
+  --marque-foncee: #1b5e33;
+  --marque-tint: #e3f0e7;
+}
+
+body {
+  background: var(--fond-page);
+  color: var(--texte-fort);
+}
+
+/* ---------------------------------------------------------------------------
+   Composants communs — boutons tactiles ≥ 48 px, texte 15 px, coins 10 px.
+   Le bouton principal de chaque écran est plein couleur ; les secondaires
+   sont blancs bordés. Pas d'ombre lourde.
+   --------------------------------------------------------------------------- */
+.btn {
+  min-height: 48px;
+  border-radius: 10px;
+  padding: 0 16px;
+  font-size: 15px;
+  font-weight: 600;
+  transition: transform 0.08s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+.btn:active {
+  transform: scale(0.97);
+}
+.btn:disabled {
+  opacity: 0.45;
+  transform: none;
+}
+
+/* Action de marque (nouvelle commande, continuer…) */
+.btn-accent {
+  min-height: 48px;
+  border-radius: 10px;
+  padding: 0 16px;
+  font-size: 15px;
+  font-weight: 700;
+  background: var(--marque);
+  color: #ffffff;
+  transition: transform 0.08s ease, filter 0.15s ease;
+}
+.btn-accent:hover {
+  filter: brightness(1.05);
+}
+.btn-accent:active {
+  transform: scale(0.97);
+}
+.btn-accent:disabled {
+  opacity: 0.45;
+  transform: none;
+}
+
+/* Valider / encaisser / prêt */
+.btn-ok {
+  min-height: 48px;
+  border-radius: 10px;
+  padding: 0 16px;
+  font-size: 15px;
+  font-weight: 700;
+  background: var(--ok);
+  color: #ffffff;
+  transition: transform 0.08s ease, filter 0.15s ease;
+}
+.btn-ok:hover {
+  filter: brightness(1.06);
+}
+.btn-ok:active {
+  transform: scale(0.97);
+}
+.btn-ok:disabled {
+  opacity: 0.45;
+  transform: none;
+}
+
+/* Secondaire : blanc bordé */
+.btn-blanc {
+  min-height: 48px;
+  border-radius: 10px;
+  padding: 0 16px;
+  font-size: 15px;
+  font-weight: 600;
+  background: var(--surface-carte);
+  color: var(--texte-fort);
+  border: 1px solid var(--bordure);
+  transition: transform 0.08s ease, background-color 0.15s ease;
+}
+.btn-blanc:hover {
+  background: var(--marque-tint);
+}
+.btn-blanc:active {
+  transform: scale(0.97);
+}
+.btn-blanc:disabled {
+  opacity: 0.45;
+  transform: none;
+}
+
+/* Urgent / destructif */
+.btn-alerte {
+  min-height: 48px;
+  border-radius: 10px;
+  padding: 0 16px;
+  font-size: 15px;
+  font-weight: 700;
+  background: var(--alerte);
+  color: #ffffff;
+  transition: transform 0.08s ease, filter 0.15s ease;
+}
+.btn-alerte:hover {
+  filter: brightness(1.05);
+}
+.btn-alerte:active {
+  transform: scale(0.97);
+}
+.btn-alerte:disabled {
+  opacity: 0.45;
+  transform: none;
+}
+
+/* Cartes : blanches, coins 12 px, bordure hairline, ombre légère au survol */
+.carte {
+  background: var(--surface-carte);
+  border: 1px solid var(--bordure);
+  border-radius: 12px;
+}
+button.carte:hover {
+  box-shadow: 0 2px 10px rgba(44, 44, 42, 0.07);
+}
+
+/* Champs de saisie */
+.champ {
+  min-height: 48px;
+  width: 100%;
+  border-radius: 10px;
+  background: var(--surface-carte);
+  border: 1px solid var(--bordure);
+  padding: 0 16px;
+  font-size: 17px;
+  color: var(--texte-fort);
+  outline: none;
+}
+.champ:focus,
+.champ:focus-within {
+  border-color: var(--marque);
+}
+.champ::placeholder {
+  color: var(--texte-doux);
+}
+
+/* Prix : toujours en marque foncée, jamais en gris pâle */
+.prix {
+  color: var(--marque-foncee);
+  font-weight: 500;
+}

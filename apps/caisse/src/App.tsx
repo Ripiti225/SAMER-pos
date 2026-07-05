@@ -35,7 +35,7 @@ export function App() {
   useEffect(() => connecterTempsReel(queryClient), [queryClient]);
 
   if (chargement) {
-    return <div className="flex h-screen items-center justify-center text-zinc-400">Démarrage de la caisse…</div>;
+    return <div className="flex h-screen items-center justify-center text-doux">Démarrage de la caisse…</div>;
   }
 
   let contenu: JSX.Element;
@@ -61,7 +61,7 @@ export function App() {
       <BandeauAdditions />
       <VerrouInactivite />
       {toast && (
-        <div className="fixed bottom-4 left-1/2 z-[60] -translate-x-1/2 rounded-xl bg-zinc-800 px-5 py-3 text-lg shadow-xl">
+        <div className="fixed bottom-4 left-1/2 z-[60] -translate-x-1/2 rounded-xl border border-bordure bg-surface px-5 py-3 text-lg shadow-xl">
           {toast}
         </div>
       )}

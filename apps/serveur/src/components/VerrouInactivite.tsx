@@ -53,14 +53,14 @@ export function VerrouInactivite({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-zinc-950/95 p-6">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-fond/95 p-6">
       <div className="text-center">
         <div className="text-3xl font-bold">Tablette verrouillée</div>
-        <div className="mt-1 text-zinc-400">{session.utilisateur.nom_complet} — saisissez votre PIN</div>
+        <div className="mt-1 text-doux">{session.utilisateur.nom_complet} — saisissez votre PIN</div>
       </div>
       <div className="w-full max-w-xs space-y-3">
         <div className="champ flex items-center justify-center text-3xl tracking-[0.5em]">
-          {'•'.repeat(pin.length) || <span className="text-base tracking-normal text-zinc-500">PIN</span>}
+          {'•'.repeat(pin.length) || <span className="text-base tracking-normal text-doux">PIN</span>}
         </div>
         <Numpad
           valeur={pin}
@@ -70,10 +70,10 @@ export function VerrouInactivite({
           libelleValider={enCours ? 'Vérification…' : 'Déverrouiller'}
           validerDesactive={pin.length < 4 || enCours}
         />
-        {erreur && <div className="text-center text-red-400">{erreur}</div>}
+        {erreur && <div className="text-center text-alerte">{erreur}</div>}
         <button
           type="button"
-          className="btn-sombre w-full"
+          className="btn-blanc w-full"
           onClick={async () => {
             try { await api('/api/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
             onDeconnexion();

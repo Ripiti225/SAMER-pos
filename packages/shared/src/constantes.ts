@@ -41,6 +41,16 @@ export const STATUTS_COMMANDE = [
 ] as const;
 export type StatutCommande = (typeof STATUTS_COMMANDE)[number];
 
+/** Libellés en français courant, jamais de code technique à l'écran (§15). */
+export const LIBELLES_STATUTS_COMMANDE: Record<StatutCommande, string> = {
+  OUVERTE: 'Ouverte',
+  ENVOYEE_CUISINE: 'En cuisine',
+  PRETE: 'Prête',
+  SERVIE: 'Servie',
+  PAYEE: 'Payée',
+  ANNULEE: 'Annulée',
+};
+
 export const PARTENAIRES = ['YANGO', 'GLOVO', 'SAMER_DELIV'] as const;
 export type Partenaire = (typeof PARTENAIRES)[number];
 

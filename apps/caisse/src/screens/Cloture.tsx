@@ -66,9 +66,9 @@ export function Cloture() {
   return (
     <div className="flex min-h-full flex-col items-center justify-center p-6">
       <div className="w-full max-w-lg">
-        <div className="mb-6 flex items-center justify-between text-sm text-zinc-400">
+        <div className="mb-6 flex items-center justify-between text-sm text-doux">
           {(['compter', 'saisir', 'confirmer', 'rapport'] as Etape[]).map((e, i) => (
-            <span key={e} className={etape === e ? 'font-bold text-accent' : ''}>
+            <span key={e} className={etape === e ? 'font-bold text-marque-fonce' : ''}>
               {i + 1}. {{ compter: 'Compter', saisir: 'Saisir', confirmer: 'Confirmer', rapport: 'Rapport Z' }[e]}
             </span>
           ))}
@@ -79,15 +79,15 @@ export function Cloture() {
             <h1 className="text-2xl font-bold">Comptez votre caisse</h1>
 
             {commandesEnCours.length > 0 && (
-              <div className="rounded-xl bg-amber-950 p-4 text-left">
-                <div className="font-semibold text-amber-300">
+              <div className="rounded-xl bg-alerte-tint p-4 text-left">
+                <div className="font-semibold text-marque-fonce">
                   {commandesEnCours.length} commande(s) non encaissée(s)
                 </div>
-                <p className="mt-1 text-sm text-zinc-300">
+                <p className="mt-1 text-sm text-doux">
                   Encaissez-les, ou confiez-les au caissier suivant : il devra accepter
                   le transfert en saisissant son propre PIN.
                 </p>
-                <div className="mt-2 max-h-24 overflow-y-auto text-sm text-zinc-400">
+                <div className="mt-2 max-h-24 overflow-y-auto text-sm text-doux">
                   {commandesEnCours.map((c) => (
                     <div key={c.id}>Ticket n° {c.numero_ticket} — {formatFCFA(c.total)}</div>
                   ))}
@@ -98,7 +98,7 @@ export function Cloture() {
               </div>
             )}
 
-            <p className="text-zinc-400">
+            <p className="text-doux">
               Comptez TOUTES les espèces du tiroir (fond de caisse inclus), à l’abri des regards.
               Le montant attendu ne sera affiché qu’après votre saisie.
             </p>
@@ -110,7 +110,7 @@ export function Cloture() {
             >
               {commandesEnCours.length > 0 ? 'Commandes en cours à régler d’abord' : 'J’ai compté'}
             </button>
-            <button type="button" className="btn-sombre w-full" onClick={() => aller('accueil')}>
+            <button type="button" className="btn-blanc w-full" onClick={() => aller('accueil')}>
               ← Revenir à l’accueil
             </button>
           </div>
@@ -120,7 +120,7 @@ export function Cloture() {
           <div className="carte space-y-3 p-6">
             <h1 className="text-center text-2xl font-bold">Espèces comptées</h1>
             <div className="champ flex items-center justify-center text-3xl font-bold">
-              {montant ? formatFCFA(Number(montant)) : <span className="text-base font-normal text-zinc-500">Montant compté…</span>}
+              {montant ? formatFCFA(Number(montant)) : <span className="text-base font-normal text-doux">Montant compté…</span>}
             </div>
             <Numpad
               valeur={montant}
@@ -135,14 +135,14 @@ export function Cloture() {
         {etape === 'confirmer' && (
           <div className="carte space-y-4 p-6 text-center">
             <h1 className="text-2xl font-bold">Confirmer la clôture ?</h1>
-            <div className="text-4xl font-black text-accent">{formatFCFA(Number(montant))}</div>
-            <p className="text-zinc-400">
+            <div className="text-4xl font-black text-marque-fonce">{formatFCFA(Number(montant))}</div>
+            <p className="text-doux">
               Cette action est définitive : le service sera clôturé et le rapport Z figé.
             </p>
             <button type="button" className="btn-accent w-full py-4 text-lg" disabled={enCours} onClick={cloturer}>
               {enCours ? 'Clôture…' : 'Clôturer le service'}
             </button>
-            <button type="button" className="btn-sombre w-full" disabled={enCours} onClick={() => setEtape('saisir')}>
+            <button type="button" className="btn-blanc w-full" disabled={enCours} onClick={() => setEtape('saisir')}>
               ← Corriger le montant
             </button>
           </div>
@@ -151,14 +151,14 @@ export function Cloture() {
         {etape === 'rapport' && rapport && (
           <div className="carte space-y-3 p-6">
             <h1 className="text-center text-2xl font-bold">Rapport Z</h1>
-            <div className="text-center text-sm text-zinc-400">
+            <div className="text-center text-sm text-doux">
               {rapport.caissier} — service du {new Date(rapport.ouvert_le).toLocaleString('fr-FR')}
             </div>
 
-            <div className={`rounded-xl p-4 text-center ${Math.abs(rapport.ecart) > 0 ? (Math.abs(rapport.ecart) > 2000 ? 'bg-red-950' : 'bg-amber-950') : 'bg-emerald-950'}`}>
-              <div className="text-sm text-zinc-300">Écart de caisse</div>
+            <div className={`rounded-xl p-4 text-center ${Math.abs(rapport.ecart) > 0 ? (Math.abs(rapport.ecart) > 2000 ? 'bg-alerte-tint' : 'bg-alerte-tint') : 'bg-ok-tint'}`}>
+              <div className="text-sm text-doux">Écart de caisse</div>
               <div className="text-4xl font-black">{rapport.ecart > 0 ? '+' : ''}{formatFCFA(rapport.ecart)}</div>
-              <div className="mt-1 text-xs text-zinc-400">
+              <div className="mt-1 text-xs text-doux">
                 Comptées {formatFCFA(rapport.especes_comptees)} / Théoriques {formatFCFA(rapport.especes_theorique)}
               </div>
             </div>
@@ -169,7 +169,7 @@ export function Cloture() {
               <Ligne libelle="Total ventes" valeur={formatFCFA(rapport.total_ventes)} />
               <Ligne libelle="Remises" valeur={formatFCFA(rapport.total_remises)} />
               <Ligne libelle="Promotions" valeur={formatFCFA(rapport.total_promos)} />
-              <div className="border-t border-zinc-800 pt-1" />
+              <div className="border-t border-bordure pt-1" />
               {(Object.entries(rapport.par_mode) as [ModePaiement, number][])
                 .filter(([, v]) => v > 0)
                 .map(([m, v]) => (
@@ -177,7 +177,7 @@ export function Cloture() {
                 ))}
               {Object.keys(rapport.partenaires).length > 0 && (
                 <>
-                  <div className="border-t border-zinc-800 pt-1 font-semibold">Partenaires livraison</div>
+                  <div className="border-t border-bordure pt-1 font-semibold">Partenaires livraison</div>
                   {Object.entries(rapport.partenaires).map(([p, s]) => (
                     <Ligne key={p} libelle={`${p} (${s.nb} commandes)`} valeur={formatFCFA(s.total)} />
                   ))}
@@ -254,28 +254,28 @@ function ModaleTransfert({
     <Modale titre="Transférer au caissier suivant" onFermer={onFermer} enfants={
       !receveur ? (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-400">Qui prend la relève ?</p>
+          <p className="text-sm text-doux">Qui prend la relève ?</p>
           {candidats.map((u) => (
             <button
               key={u.id}
               type="button"
-              className="carte w-full p-4 text-left hover:border-accent"
+              className="carte w-full p-4 text-left hover:border-marque"
               onClick={() => setReceveur(u)}
             >
               <div className="font-bold">{u.nom_complet}</div>
-              <div className="text-sm text-zinc-400">{u.role === 'CAISSIER' ? 'Caissier' : u.role === 'MANAGER' ? 'Manager' : 'Propriétaire'}</div>
+              <div className="text-sm text-doux">{u.role === 'CAISSIER' ? 'Caissier' : u.role === 'MANAGER' ? 'Manager' : 'Propriétaire'}</div>
             </button>
           ))}
-          {candidats.length === 0 && <div className="text-zinc-400">Aucun autre caissier disponible.</div>}
+          {candidats.length === 0 && <div className="text-doux">Aucun autre caissier disponible.</div>}
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-sm text-zinc-400">
-            <span className="font-semibold text-zinc-200">{receveur.nom_complet}</span> accepte le
-            transfert en saisissant <span className="font-semibold text-zinc-200">son propre PIN</span>.
+          <p className="text-sm text-doux">
+            <span className="font-semibold text-fort">{receveur.nom_complet}</span> accepte le
+            transfert en saisissant <span className="font-semibold text-fort">son propre PIN</span>.
           </p>
           <div className="champ flex items-center justify-center text-2xl tracking-[0.5em]">
-            {'•'.repeat(pin.length) || <span className="text-base tracking-normal text-zinc-500">PIN du receveur…</span>}
+            {'•'.repeat(pin.length) || <span className="text-base tracking-normal text-doux">PIN du receveur…</span>}
           </div>
           <Numpad
             valeur={pin}
@@ -285,7 +285,7 @@ function ModaleTransfert({
             libelleValider={enCours ? 'Transfert…' : 'Accepter le transfert'}
             validerDesactive={pin.length < 4 || enCours}
           />
-          <button type="button" className="btn-sombre w-full" onClick={() => { setReceveur(null); setPin(''); }}>
+          <button type="button" className="btn-blanc w-full" onClick={() => { setReceveur(null); setPin(''); }}>
             ← Changer de caissier
           </button>
         </div>
@@ -297,7 +297,7 @@ function ModaleTransfert({
 function Ligne({ libelle, valeur }: { libelle: string; valeur: string }) {
   return (
     <div className="flex justify-between">
-      <span className="text-zinc-400">{libelle}</span>
+      <span className="text-doux">{libelle}</span>
       <span className="font-semibold">{valeur}</span>
     </div>
   );

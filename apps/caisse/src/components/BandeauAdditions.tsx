@@ -36,12 +36,12 @@ export function BandeauAdditions() {
 
   return (
     <div className="fixed left-1/2 top-3 z-[55] w-full max-w-xl -translate-x-1/2 px-3">
-      <div className="carte border-2 border-blue-500 bg-blue-950/95 p-3 shadow-2xl">
+      <div className="carte border-2 border-info bg-info-tint p-3 shadow-2xl">
         <div className="flex items-center gap-2">
-          <span className="text-lg font-bold text-blue-200">Addition demandée</span>
+          <span className="text-lg font-bold text-info">Addition demandée</span>
           <button
             type="button"
-            className="btn-sombre ml-auto min-h-[36px] px-3 text-sm"
+            className="btn-blanc ml-auto min-h-[36px] px-3 text-sm"
             onClick={() => {
               sons.basculerMute();
               setMuet(sons.muet);
@@ -53,7 +53,7 @@ export function BandeauAdditions() {
         <div className="mt-2 space-y-2">
           {aAfficher.map((t) => (
             <div key={t.id} className="flex items-center gap-3">
-              <span className="text-blue-100">
+              <span className="text-fort">
                 Table <span className="font-black">{t.numero}</span> ({t.zone_nom}) demande l’addition
               </span>
               <button

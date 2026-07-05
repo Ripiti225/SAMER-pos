@@ -26,7 +26,10 @@ export function Grille({ onJetonRefuse }: { onJetonRefuse: () => void }) {
 
   // Couleur de marque lue depuis la réponse (pas de session sur le KDS)
   useEffect(() => {
-    if (data) document.documentElement.style.setProperty('--accent', data.couleur_hex);
+    if (data) {
+      document.documentElement.dataset.marque = data.marque;
+      document.documentElement.style.setProperty('--marque', data.couleur_hex);
+    }
   }, [data]);
 
   // Chronomètres : tic chaque seconde
@@ -100,17 +103,17 @@ export function Grille({ onJetonRefuse }: { onJetonRefuse: () => void }) {
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex items-center gap-4 border-b border-zinc-800 px-4 py-2">
-        <h1 className="text-2xl font-black text-accent">Cuisine</h1>
+      <header className="flex items-center gap-4 border-b border-bordure px-4 py-2">
+        <h1 className="text-2xl font-black text-marque-fonce">Cuisine</h1>
         {!connecte && (
-          <span className="animate-pulse rounded-full bg-amber-900 px-4 py-1 text-amber-200">
+          <span className="animate-pulse rounded-full bg-alerte-tint px-4 py-1 text-alerte">
             Reconnexion…
           </span>
         )}
         <div className="ml-auto flex gap-2">
           <button
             type="button"
-            className={`btn ${muet ? 'bg-red-900 text-red-100' : 'bg-zinc-800'}`}
+            className={`btn ${muet ? 'bg-alerte text-white' : 'border border-bordure bg-surface'}`}
             onClick={() => { sons.basculerMute(); setMuet(sons.muet); }}
           >
             {muet ? 'Son coupé (30 min max)' : 'Couper le son'}
@@ -131,22 +134,22 @@ export function Grille({ onJetonRefuse }: { onJetonRefuse: () => void }) {
             />
           ))}
           {data?.en_cuisine.length === 0 && (
-            <div className="col-span-full pt-20 text-center text-3xl text-zinc-600">
-              Aucune commande en attente 👨‍🍳
+            <div className="col-span-full pt-20 text-center text-3xl text-doux">
+              Aucune commande en attente
             </div>
           )}
         </main>
 
         {/* Colonne « Prêtes » : 10 dernières, rappelables (§A2) */}
-        <aside className="w-64 shrink-0 space-y-2 overflow-y-auto border-l border-zinc-800 p-3">
-          <h2 className="text-lg font-bold text-emerald-400">Prêtes ✔</h2>
+        <aside className="w-64 shrink-0 space-y-2 overflow-y-auto border-l border-bordure p-3">
+          <h2 className="text-lg font-bold text-ok">Prêtes ✔</h2>
           {(data?.pretes ?? []).map((carte) => (
-            <div key={carte.id} className="carte border-emerald-900 p-3">
+            <div key={carte.id} className="carte border-ok p-3">
               <div className="text-2xl font-black">N° {carte.numero_ticket}</div>
-              <div className="text-sm text-zinc-400">
+              <div className="text-sm text-doux">
                 {carte.table_numero ? `Table ${carte.table_numero}` : LIBELLES_TYPES_COMMANDE[carte.type]}
               </div>
-              <button type="button" className="btn-sombre mt-2 w-full min-h-[48px] text-base" onClick={() => reprendre.mutate(carte.id)}>
+              <button type="button" className="btn-blanc mt-2 w-full min-h-[48px] text-base" onClick={() => reprendre.mutate(carte.id)}>
                 ↩ Reprendre
               </button>
             </div>
@@ -173,27 +176,29 @@ function Carte({
   const mm = String(Math.floor(ecouleMs / 60000)).padStart(2, '0');
   const ss = String(Math.floor((ecouleMs % 60000) / 1000)).padStart(2, '0');
 
+  // Le chronomètre est le SEUL élément vraiment coloré de la carte :
+  // vert < 10 min, orange 10–20 min, rouge > 20 min (correction 5)
   const couleurChrono =
     minutes > seuils.rouge_minutes
-      ? 'bg-red-600 text-white'
+      ? 'bg-alerte text-white'
       : minutes > seuils.orange_minutes
-        ? 'bg-orange-500 text-zinc-950'
-        : 'bg-emerald-600 text-white';
+        ? 'border border-alerte bg-alerte-tint text-alerte'
+        : 'bg-ok text-white';
 
   const enAttente = carte.items.some((i) => i.statut_cuisine === 'A_PREPARER');
 
   return (
-    <div className={`carte flex flex-col p-4 ${minutes > seuils.rouge_minutes ? 'border-red-600' : ''}`}>
+    <div className={`carte flex flex-col p-4 ${minutes > seuils.rouge_minutes ? 'border-alerte' : ''}`}>
       <div className="flex items-start justify-between gap-2">
         <div>
           {/* Numéro de ticket en TRÈS grand (§A1) */}
           <div className="text-5xl font-black leading-none">N° {carte.numero_ticket}</div>
-          <div className="mt-1 text-lg text-zinc-300">
+          <div className="mt-1 text-lg text-doux">
             {LIBELLES_TYPES_COMMANDE[carte.type]}
             {carte.partenaire ? ` — ${carte.partenaire}` : ''}
             {carte.table_numero ? ` — Table ${carte.table_numero}` : ''}
           </div>
-          <div className="text-sm text-zinc-500">
+          <div className="text-sm text-doux">
             Envoyée à {new Date(carte.envoyee_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
           </div>
         </div>
@@ -207,18 +212,18 @@ function Carte({
           <li
             key={item.id}
             className={`text-2xl font-bold leading-tight ${
-              item.statut_cuisine === 'ANNULE' ? 'text-red-500 line-through' : ''
+              item.statut_cuisine === 'ANNULE' ? 'text-alerte line-through' : ''
             }`}
           >
             {item.quantite} × {item.nom_snapshot}
-            {item.statut_cuisine === 'ANNULE' && <span className="ml-2 no-underline">ANNULÉ</span>}
+            {item.statut_cuisine === 'ANNULE' && <span className="ml-2 no-underline">Annulé</span>}
             {item.supplements.map((s) => (
-              <div key={s.nom} className="ml-6 text-lg font-semibold text-amber-300">+ {s.nom}</div>
+              <div key={s.nom} className="ml-6 text-lg font-semibold text-marque-fonce">+ {s.nom}</div>
             ))}
             {item.options
               .filter((o) => o.choix.length > 0)
               .map((o) => (
-                <div key={o.groupe} className="ml-6 text-lg font-semibold text-sky-300">
+                <div key={o.groupe} className="ml-6 text-lg font-semibold text-info">
                   {o.groupe} : {o.choix.join(', ')}
                 </div>
               ))}
@@ -228,10 +233,10 @@ function Carte({
 
       {/* 2 boutons par carte, la carte entière change d'état (§A2) */}
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" className="btn-sombre py-5" disabled={!enAttente} onClick={onCommencer}>
+        <button type="button" className="btn-blanc py-5" disabled={!enAttente} onClick={onCommencer}>
           {enAttente ? 'Commencer' : 'En cours…'}
         </button>
-        <button type="button" className="btn-accent py-5" onClick={onPret}>
+        <button type="button" className="btn-ok py-5" onClick={onPret}>
           Prêt ✔
         </button>
       </div>

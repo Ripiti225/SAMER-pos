@@ -12,8 +12,8 @@ export function EcranJeton({ refuse, onConfigure }: { refuse: boolean; onConfigu
   return (
     <div className="flex min-h-full flex-col items-center justify-center gap-6 p-6">
       <div className="text-center">
-        <h1 className="text-3xl font-black text-accent">Installation de l’écran cuisine</h1>
-        <p className="mt-2 max-w-md text-zinc-400">
+        <h1 className="text-3xl font-black text-marque-fonce">Installation de l’écran cuisine</h1>
+        <p className="mt-2 max-w-md text-doux">
           Saisissez le jeton d’appareil fourni à l’installation (paramètre
           « kds_jeton_appareil » du serveur). À faire une seule fois : ensuite,
           l’écran s’ouvrira directement sur les commandes.
@@ -21,7 +21,7 @@ export function EcranJeton({ refuse, onConfigure }: { refuse: boolean; onConfigu
       </div>
 
       {refuse && (
-        <div className="rounded-xl bg-red-950 px-5 py-3 text-red-200">
+        <div className="rounded-xl bg-alerte-tint px-5 py-3 text-alerte">
           Jeton refusé par le serveur — vérifiez-le et réessayez.
         </div>
       )}

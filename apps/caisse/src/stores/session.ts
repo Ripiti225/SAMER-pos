@@ -38,7 +38,8 @@ export const useCaisse = create<EtatCaisse>((set, get) => ({
 
   poserSession: (session) => {
     if (session) {
-      document.documentElement.style.setProperty('--accent', session.restaurant.couleur_hex);
+      document.documentElement.dataset.marque = session.restaurant.marque;
+      document.documentElement.style.setProperty('--marque', session.restaurant.couleur_hex);
     }
     set({ session, ecran: 'accueil', commandeId: null, verrouille: false });
   },

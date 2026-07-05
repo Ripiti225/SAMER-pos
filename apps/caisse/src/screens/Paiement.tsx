@@ -47,7 +47,7 @@ export function Paiement() {
   });
 
   if (!commande) {
-    return <div className="flex min-h-full items-center justify-center text-zinc-400">Chargement…</div>;
+    return <div className="flex min-h-full items-center justify-center text-doux">Chargement…</div>;
   }
 
   const noteActive = commande.notes.find((n) => n.id === noteId) ?? null;
@@ -60,12 +60,12 @@ export function Paiement() {
   return (
     <div className="flex min-h-screen flex-col p-4">
       <header className="mb-4 flex items-center gap-3">
-        <button type="button" className="btn-sombre" onClick={() => aller('commande', commande.id)} disabled={estPayee}>
+        <button type="button" className="btn-blanc" onClick={() => aller('commande', commande.id)} disabled={estPayee}>
           ← Commande
         </button>
         <h1 className="text-xl font-bold">Paiement — Ticket n° {commande.numero_ticket}</h1>
         {commande.notes.length === 0 && !estPayee && (
-          <button type="button" className="btn-sombre ml-auto" onClick={() => setSplitOuvert(true)}>
+          <button type="button" className="btn-blanc ml-auto" onClick={() => setSplitOuvert(true)}>
             Diviser la note
           </button>
         )}
@@ -73,25 +73,25 @@ export function Paiement() {
 
       {/* Reste à payer en TRÈS grand (§ paiement mixte) */}
       <div className="carte mb-4 p-6 text-center">
-        <div className="text-zinc-400">{estPayee ? 'Commande encaissée' : noteActive ? `Reste à payer — ${noteActive.libelle}` : 'Reste à payer'}</div>
-        <div className={`text-7xl font-black ${estPayee ? 'text-emerald-400' : 'text-accent'}`}>
+        <div className="text-doux">{estPayee ? 'Commande encaissée' : noteActive ? `Reste à payer — ${noteActive.libelle}` : 'Reste à payer'}</div>
+        <div className={`text-7xl font-black ${estPayee ? 'text-ok' : 'text-marque-fonce'}`}>
           {formatFCFA(resteCible)}
         </div>
-        <div className="mt-1 text-sm text-zinc-500">
+        <div className="mt-1 text-sm text-doux">
           Total {formatFCFA(commande.total)} — déjà payé {formatFCFA(commande.paye)}
         </div>
       </div>
 
       {commande.notes.length > 0 && !estPayee && (
         <div className="mb-4 flex flex-wrap gap-2">
-          <button type="button" className={`btn ${noteId === null ? 'bg-accent text-zinc-950' : 'bg-zinc-800'}`} onClick={() => setNoteId(null)}>
+          <button type="button" className={`btn ${noteId === null ? 'bg-marque text-white' : 'border border-bordure bg-surface'}`} onClick={() => setNoteId(null)}>
             Toute la commande
           </button>
           {commande.notes.map((n) => (
             <button
               key={n.id}
               type="button"
-              className={`btn ${noteId === n.id ? 'bg-accent text-zinc-950' : n.reste === 0 ? 'bg-zinc-900 text-emerald-400' : 'bg-zinc-800'}`}
+              className={`btn ${noteId === n.id ? 'bg-marque text-white' : n.reste === 0 ? 'bg-surface text-ok' : 'border border-bordure bg-surface'}`}
               onClick={() => setNoteId(n.id)}
             >
               {n.libelle} — {n.reste === 0 ? 'payée ✔' : formatFCFA(n.reste)}
@@ -103,13 +103,13 @@ export function Paiement() {
       {!estPayee && (
         <div className="grid flex-1 gap-4 lg:grid-cols-2">
           <div>
-            <div className="mb-2 font-semibold text-zinc-400">Mode de paiement</div>
+            <div className="mb-2 font-semibold text-doux">Mode de paiement</div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {MODES_PAIEMENT.map((m) => (
                 <button
                   key={m}
                   type="button"
-                  className={`btn min-h-[64px] ${mode === m ? 'bg-accent text-zinc-950' : 'bg-zinc-800'}`}
+                  className={`btn min-h-[64px] ${mode === m ? 'bg-marque text-white' : 'border border-bordure bg-surface'}`}
                   onClick={() => setMode(m)}
                 >
                   {LIBELLES_MODES[m]}
@@ -119,7 +119,7 @@ export function Paiement() {
 
             {mode === 'ESPECES' && (
               <div className="mt-4">
-                <label className="mb-1 block text-sm text-zinc-400">Montant donné par le client (optionnel)</label>
+                <label className="mb-1 block text-sm text-doux">Montant donné par le client (optionnel)</label>
                 <input
                   className="champ"
                   inputMode="numeric"
@@ -129,13 +129,13 @@ export function Paiement() {
                 />
                 {monnaie > 0 && (
                   <div className="mt-2 text-lg">
-                    Monnaie à rendre : <span className="font-bold text-accent">{formatFCFA(monnaie)}</span>
+                    Monnaie à rendre : <span className="font-bold text-marque-fonce">{formatFCFA(monnaie)}</span>
                   </div>
                 )}
               </div>
             )}
 
-            <div className="mt-4 space-y-1 text-sm text-zinc-400">
+            <div className="mt-4 space-y-1 text-sm text-doux">
               {commande.paiements.map((p) => (
                 <div key={p.id} className="flex justify-between">
                   <span>{LIBELLES_MODES[p.mode]}</span>
@@ -146,7 +146,7 @@ export function Paiement() {
           </div>
 
           <div>
-            <div className="mb-2 font-semibold text-zinc-400">Montant encaissé</div>
+            <div className="mb-2 font-semibold text-doux">Montant encaissé</div>
             <div className="champ mb-2 flex items-center justify-center text-3xl font-bold">
               {formatFCFA(montantSaisi)}
             </div>
@@ -160,7 +160,7 @@ export function Paiement() {
               validerDesactive={montantSaisi <= 0 || montantSaisi > resteCible || encaisser.isPending}
             />
             {montantSaisi > resteCible && (
-              <div className="mt-2 text-sm text-red-400">Le montant dépasse le reste à payer</div>
+              <div className="mt-2 text-sm text-alerte">Le montant dépasse le reste à payer</div>
             )}
           </div>
         </div>
@@ -169,7 +169,7 @@ export function Paiement() {
       {/* Bouton Valider : désactivé tant que reste > 0 (règle §5.5) */}
       <button
         type="button"
-        className="btn-accent mt-4 py-5 text-2xl"
+        className="btn-ok mt-4 py-5 text-2xl"
         disabled={commande.reste > 0}
         onClick={() => aller('accueil')}
       >
@@ -212,12 +212,12 @@ function ModaleSplit({
     <Modale titre="Diviser la note" onFermer={onFermer} enfants={
       <div className="space-y-4">
         <div className="flex items-center justify-center gap-4">
-          <button type="button" className="btn-sombre h-14 w-14 p-0 text-2xl" onClick={() => setNb(Math.max(2, nb - 1))}>−</button>
+          <button type="button" className="btn-blanc h-14 w-14 p-0 text-2xl" onClick={() => setNb(Math.max(2, nb - 1))}>−</button>
           <div className="text-center">
             <div className="text-4xl font-black">{nb}</div>
-            <div className="text-sm text-zinc-400">personnes</div>
+            <div className="text-sm text-doux">personnes</div>
           </div>
-          <button type="button" className="btn-sombre h-14 w-14 p-0 text-2xl" onClick={() => setNb(Math.min(10, nb + 1))}>+</button>
+          <button type="button" className="btn-blanc h-14 w-14 p-0 text-2xl" onClick={() => setNb(Math.min(10, nb + 1))}>+</button>
         </div>
         <div className="space-y-1 text-sm">
           {notes.map((n) => (

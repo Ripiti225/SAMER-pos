@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { formatFCFA, LIBELLES_TYPES_COMMANDE, type StatutCommande, type TypeCommande } from '@pos/shared';
+import { formatFCFA, LIBELLES_STATUTS_COMMANDE, LIBELLES_TYPES_COMMANDE, type StatutCommande, type TypeCommande } from '@pos/shared';
 import { api } from '../api';
 import { useCaisse } from '../stores/session';
 
@@ -18,8 +18,8 @@ interface MesVentesVue {
 }
 
 const COULEURS_STATUT: Record<string, string> = {
-  PAYEE: 'text-emerald-400',
-  ANNULEE: 'text-red-400',
+  PAYEE: 'text-ok',
+  ANNULEE: 'text-alerte',
 };
 
 /** « Mes ventes » : les commandes du service en cours du caissier connecté. */
@@ -50,36 +50,36 @@ export function MesVentes() {
   return (
     <div className="min-h-full p-6">
       <header className="mb-6 flex items-center gap-4">
-        <button type="button" className="btn-sombre" onClick={() => aller('accueil')}>
+        <button type="button" className="btn-blanc" onClick={() => aller('accueil')}>
           ← Accueil
         </button>
         <h1 className="text-2xl font-bold">Mes ventes</h1>
         {data?.nb_payees !== undefined && (
-          <span className="ml-auto text-zinc-400">
-            {data.nb_payees} encaissées — <span className="font-bold text-accent">{formatFCFA(data.total_payees ?? 0)}</span>
+          <span className="ml-auto text-doux">
+            {data.nb_payees} encaissées — <span className="font-bold text-marque-fonce">{formatFCFA(data.total_payees ?? 0)}</span>
           </span>
         )}
       </header>
 
-      {!data?.service && <div className="text-zinc-400">Aucun service ouvert.</div>}
+      {!data?.service && <div className="text-doux">Aucun service ouvert.</div>}
 
       <div className="space-y-2">
         {(data?.commandes ?? []).map((c) => (
           <button
             key={c.id}
             type="button"
-            className="carte flex w-full items-center justify-between p-4 text-left hover:border-accent"
+            className="carte flex w-full items-center justify-between p-4 text-left hover:border-marque"
             onClick={() => aller(c.statut === 'PAYEE' || c.statut === 'ANNULEE' ? 'paiement' : 'commande', c.id)}
           >
             <div>
               <span className="font-bold">Ticket n° {c.numero_ticket}</span>
-              <span className="ml-3 text-sm text-zinc-400">
+              <span className="ml-3 text-sm text-doux">
                 {LIBELLES_TYPES_COMMANDE[c.type]} — {new Date(c.created_at).toLocaleTimeString('fr-FR')}
               </span>
             </div>
             <div className="text-right">
               <div className="font-bold">{formatFCFA(c.total)}</div>
-              <div className={`text-sm ${COULEURS_STATUT[c.statut] ?? 'text-zinc-400'}`}>{c.statut}</div>
+              <div className={`text-sm ${COULEURS_STATUT[c.statut] ?? 'text-doux'}`}>{LIBELLES_STATUTS_COMMANDE[c.statut]}</div>
             </div>
           </button>
         ))}
@@ -91,8 +91,8 @@ export function MesVentes() {
             <h2 className="mb-2 font-bold">Ventes du jour</h2>
             {jour ? (
               <>
-                <div className="text-3xl font-black text-accent">{formatFCFA(jour.total_ventes)}</div>
-                <div className="text-sm text-zinc-400">{jour.nb_commandes} commandes</div>
+                <div className="text-3xl font-black text-marque-fonce">{formatFCFA(jour.total_ventes)}</div>
+                <div className="text-sm text-doux">{jour.nb_commandes} commandes</div>
               </>
             ) : '…'}
           </div>
@@ -101,7 +101,7 @@ export function MesVentes() {
             {(topPlats ?? []).slice(0, 5).map((p) => (
               <div key={p.nom} className="flex justify-between text-sm">
                 <span>{p.nom}</span>
-                <span className="text-zinc-400">×{p.quantite}</span>
+                <span className="text-doux">×{p.quantite}</span>
               </div>
             ))}
           </div>
@@ -110,7 +110,7 @@ export function MesVentes() {
             {(parHeure ?? []).map((h) => (
               <div key={h.heure} className="flex justify-between text-sm">
                 <span>{String(h.heure).padStart(2, '0')} h</span>
-                <span className="text-zinc-400">{formatFCFA(h.total)}</span>
+                <span className="text-doux">{formatFCFA(h.total)}</span>
               </div>
             ))}
           </div>

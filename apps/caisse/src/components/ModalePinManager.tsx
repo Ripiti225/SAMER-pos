@@ -28,7 +28,7 @@ export function ModalePinManager({ titre, demanderMotif = true, demanderMontant 
       <div className="space-y-4">
         {demanderMontant && (
           <div>
-            <label className="mb-1 block text-sm text-zinc-400">Montant (FCFA)</label>
+            <label className="mb-1 block text-sm text-doux">Montant (FCFA)</label>
             <input
               className="champ"
               inputMode="numeric"
@@ -40,7 +40,7 @@ export function ModalePinManager({ titre, demanderMotif = true, demanderMontant 
         )}
         {demanderMotif && (
           <div>
-            <label className="mb-1 block text-sm text-zinc-400">Motif (obligatoire)</label>
+            <label className="mb-1 block text-sm text-doux">Motif (obligatoire)</label>
             <input
               className="champ"
               value={motif}
@@ -50,9 +50,9 @@ export function ModalePinManager({ titre, demanderMotif = true, demanderMontant 
           </div>
         )}
         <div>
-          <label className="mb-1 block text-sm text-zinc-400">PIN manager</label>
+          <label className="mb-1 block text-sm text-doux">PIN manager</label>
           <div className="champ mb-2 flex items-center text-2xl tracking-[0.5em]">
-            {'•'.repeat(pin.length) || <span className="text-zinc-500 text-base tracking-normal">Saisir le PIN…</span>}
+            {'•'.repeat(pin.length) || <span className="text-doux text-base tracking-normal">Saisir le PIN…</span>}
           </div>
           <Numpad
             valeur={pin}

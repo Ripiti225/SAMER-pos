@@ -45,10 +45,10 @@ export function Accueil() {
     <div className="flex min-h-full flex-col p-6">
       <header className="mb-8 flex items-center justify-between">
         <div>
-          <div className="text-2xl font-black text-accent">{session?.restaurant.nom}</div>
-          <div className="text-sm text-zinc-400">{session?.utilisateur.nom_complet}</div>
+          <div className="text-2xl font-black text-marque-fonce">{session?.restaurant.nom}</div>
+          <div className="text-sm text-doux">{session?.utilisateur.nom_complet}</div>
         </div>
-        <button type="button" className="btn-sombre" onClick={seDeconnecter}>
+        <button type="button" className="btn-blanc" onClick={seDeconnecter}>
           Se déconnecter
         </button>
       </header>
@@ -57,18 +57,18 @@ export function Accueil() {
         <button type="button" className="btn-accent py-12 text-2xl" onClick={() => setChoixType(true)}>
           Nouvelle commande
         </button>
-        <button type="button" className="btn-sombre relative py-12 text-2xl" onClick={() => aller('tables')}>
+        <button type="button" className="btn-blanc relative py-12 text-2xl" onClick={() => aller('tables')}>
           Tables
           {nbAdditions > 0 && (
-            <span className="absolute right-4 top-4 flex min-h-[36px] min-w-[36px] items-center justify-center rounded-full bg-blue-500 px-2 text-lg font-black text-white">
+            <span className="absolute right-4 top-4 flex min-h-[36px] min-w-[36px] items-center justify-center rounded-full bg-info px-2 text-lg font-black text-white">
               {nbAdditions}
             </span>
           )}
         </button>
-        <button type="button" className="btn-sombre py-12 text-2xl" onClick={() => aller('mes-ventes')}>
+        <button type="button" className="btn-blanc py-12 text-2xl" onClick={() => aller('mes-ventes')}>
           Mes ventes
         </button>
-        <button type="button" className="btn-danger py-12 text-2xl" onClick={() => aller('cloture')}>
+        <button type="button" className="btn-alerte py-12 text-2xl" onClick={() => aller('cloture')}>
           J’ai fini
         </button>
       </div>
@@ -79,10 +79,10 @@ export function Accueil() {
             <button type="button" className="btn-accent py-6 text-xl" onClick={() => { setChoixType(false); setChoixTable(true); }}>
               Sur place
             </button>
-            <button type="button" className="btn-sombre py-6 text-xl" onClick={() => creerCommande({ type: 'EMPORTER' })}>
+            <button type="button" className="btn-blanc py-6 text-xl" onClick={() => creerCommande({ type: 'EMPORTER' })}>
               À emporter
             </button>
-            <button type="button" className="btn-sombre py-6 text-xl" onClick={() => { setChoixType(false); setChoixLivraison(true); }}>
+            <button type="button" className="btn-blanc py-6 text-xl" onClick={() => { setChoixType(false); setChoixLivraison(true); }}>
               Livraison
             </button>
           </div>
@@ -99,11 +99,11 @@ export function Accueil() {
                   key={t.id}
                   type="button"
                   disabled={t.statut !== 'LIBRE'}
-                  className={`btn min-h-[64px] ${t.statut === 'LIBRE' ? 'bg-zinc-800 hover:bg-zinc-700' : 'bg-zinc-900 text-zinc-600'}`}
+                  className={`btn min-h-[64px] ${t.statut === 'LIBRE' ? 'border border-bordure bg-surface hover:bg-marque-tint' : 'bg-surface text-doux'}`}
                   onClick={() => creerCommande({ type: 'SUR_PLACE', table_id: t.id })}
                 >
                   <div className="font-bold">{t.numero}</div>
-                  <div className="text-xs text-zinc-400">{t.zone_nom}</div>
+                  <div className="text-xs text-doux">{t.zone_nom}</div>
                 </button>
               ))}
           </div>
@@ -114,7 +114,7 @@ export function Accueil() {
         <Modale titre="Partenaire de livraison" onFermer={() => setChoixLivraison(false)} enfants={
           <div className="grid gap-3">
             {PARTENAIRES.map((p) => (
-              <button key={p} type="button" className="btn-sombre py-5 text-lg" onClick={() => creerCommande({ type: 'LIVRAISON', partenaire: p })}>
+              <button key={p} type="button" className="btn-blanc py-5 text-lg" onClick={() => creerCommande({ type: 'LIVRAISON', partenaire: p })}>
                 {p.replace('_', ' ')}
               </button>
             ))}

@@ -37,13 +37,13 @@ export function OuvertureService() {
     <div className="flex min-h-full flex-col items-center justify-center gap-6 p-6">
       <div className="text-center">
         <h1 className="text-3xl font-bold">Ouverture de service</h1>
-        <p className="mt-1 text-zinc-400">
+        <p className="mt-1 text-doux">
           {session?.utilisateur.nom_complet} — comptez le fond de caisse et saisissez le montant
         </p>
       </div>
       <div className="w-full max-w-xs space-y-3">
         <div className="champ flex items-center justify-center text-3xl font-bold">
-          {montant ? formatFCFA(Number(montant)) : <span className="text-base font-normal text-zinc-500">Fond de caisse…</span>}
+          {montant ? formatFCFA(Number(montant)) : <span className="text-base font-normal text-doux">Fond de caisse…</span>}
         </div>
         <Numpad
           valeur={montant}
@@ -52,7 +52,7 @@ export function OuvertureService() {
           libelleValider={enCours ? 'Ouverture…' : 'Ouvrir le service'}
           validerDesactive={montant === '' || enCours}
         />
-        <button type="button" className="btn-sombre w-full" onClick={seDeconnecter}>
+        <button type="button" className="btn-blanc w-full" onClick={seDeconnecter}>
           Se déconnecter
         </button>
       </div>

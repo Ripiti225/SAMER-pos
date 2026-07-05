@@ -40,7 +40,7 @@ export function Tables() {
   return (
     <div className="min-h-full p-6">
       <header className="mb-6 flex items-center gap-4">
-        <button type="button" className="btn-sombre" onClick={() => aller('accueil')}>
+        <button type="button" className="btn-blanc" onClick={() => aller('accueil')}>
           ← Accueil
         </button>
         <h1 className="text-2xl font-bold">Tables</h1>
