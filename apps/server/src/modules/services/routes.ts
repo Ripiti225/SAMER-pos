@@ -9,6 +9,7 @@ import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
 import { verifierPinUtilisateur } from '../auth/pin.js';
+import { fermerPointagesOublies } from '../pointage/service.js';
 import { calculerStatsService } from './rapport.js';
 
 const ROLES_CAISSE = ['CAISSIER', 'MANAGER', 'PROPRIETAIRE'] as const;
@@ -265,6 +266,26 @@ export function routesServices(app: FastifyInstance): void {
           montant: ecart,
           meta: { seuil, especes_comptees: corps.especes_comptees, especes_theorique: especesTheorique },
         });
+      }
+
+      // Sprint 4 A4 : si c'était le DERNIER service ouvert du jour, on ferme les
+      // pointages encore ouverts (depart_oublie) — alerte manager sur la santé.
+      const [autreOuvert] = await tx
+        .select({ id: servicesCaisse.id })
+        .from(servicesCaisse)
+        .where(eq(servicesCaisse.statut, 'OUVERT'));
+      if (!autreOuvert) {
+        const oublies = await fermerPointagesOublies(tx);
+        if (oublies > 0) {
+          await journaliser(tx, {
+            user_id: caissierId,
+            action: 'CORRECTION_POINTAGE',
+            entite: 'pointages',
+            montant: oublies,
+            motif: 'Départ oublié — fermeture automatique à la clôture du jour',
+            meta: { nb_pointages_oublies: oublies },
+          });
+        }
       }
 
       return rapportZ;

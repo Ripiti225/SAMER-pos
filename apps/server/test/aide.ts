@@ -74,18 +74,26 @@ export async function resetDonnees(): Promise<Donnees> {
   await db.insert(parametresLocaux).values([
     { cle: 'seuil_alerte_ecart_caisse', valeur: 2000 },
     { cle: 'kds_jeton_appareil', valeur: 'JETON-KDS-TEST' },
+    // Sprint 4 : pointage géoloc + fidélité
+    { cle: 'pointage_lat', valeur: 5.395 },
+    { cle: 'pointage_lng', valeur: -3.984 },
+    { cle: 'pointage_rayon_metres', valeur: 150 },
+    { cle: 'sms_plafond_mensuel', valeur: 2000 },
+    { cle: 'fidelite_points_par_tranche', valeur: { tranche_fcfa: 1000, points: 1 } },
+    { cle: 'fidelite_valeur_point_fcfa', valeur: 10 },
+    { cle: 'fidelite_seuil_utilisation', valeur: 50 },
   ]);
 
   const [proprio, manager, caissier, caissier2, serveur, cuisine, pizzaiolo] = await db
     .insert(utilisateurs)
     .values([
-      { nom_complet: 'Proprio Test', role: 'PROPRIETAIRE', pin_hash: await hacher(PIN_PROPRIO) },
-      { nom_complet: 'Manager Test', role: 'MANAGER', pin_hash: await hacher(PIN_MANAGER) },
-      { nom_complet: 'Caissier Test', role: 'CAISSIER', pin_hash: await hacher(PIN_CAISSIER) },
-      { nom_complet: 'Caissier Suivant', role: 'CAISSIER', pin_hash: await hacher(PIN_CAISSIER2) },
-      { nom_complet: 'Serveur Test', role: 'SERVEUR', pin_hash: await hacher(PIN_SERVEUR) },
-      { nom_complet: 'Cuisine Test', role: 'CUISINE', poste_cuisine: 'CUISINIER', pin_hash: await hacher(PIN_CUISINE) },
-      { nom_complet: 'Pizzaiolo Test', role: 'CUISINE', poste_cuisine: 'PIZZAIOLO', pin_hash: await hacher(PIN_CUISINE) },
+      { nom_complet: 'Proprio Test', role: 'PROPRIETAIRE', pin_hash: await hacher(PIN_PROPRIO), telephone: '+2250700000001' },
+      { nom_complet: 'Manager Test', role: 'MANAGER', pin_hash: await hacher(PIN_MANAGER), telephone: '+2250700000002' },
+      { nom_complet: 'Caissier Test', role: 'CAISSIER', pin_hash: await hacher(PIN_CAISSIER), telephone: '+2250700000003' },
+      { nom_complet: 'Caissier Suivant', role: 'CAISSIER', pin_hash: await hacher(PIN_CAISSIER2), telephone: '+2250700000004' },
+      { nom_complet: 'Serveur Test', role: 'SERVEUR', pin_hash: await hacher(PIN_SERVEUR), telephone: '+2250700000005' },
+      { nom_complet: 'Cuisine Test', role: 'CUISINE', poste_cuisine: 'CUISINIER', pin_hash: await hacher(PIN_CUISINE), telephone: '+2250700000007' },
+      { nom_complet: 'Pizzaiolo Test', role: 'CUISINE', poste_cuisine: 'PIZZAIOLO', pin_hash: await hacher(PIN_CUISINE), telephone: '+2250700000008' },
     ])
     .returning();
 

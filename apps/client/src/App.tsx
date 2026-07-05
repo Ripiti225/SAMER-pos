@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import type { TableClientVue } from '@pos/shared';
 import { api } from './api';
 import { PageTable } from './screens/PageTable';
+import { PagePointage } from './screens/PagePointage';
 
 /** Le qr_token est le dernier segment de l'URL /t/:qr_token. */
 function lireJeton(): string | null {
@@ -11,6 +12,9 @@ function lireJeton(): string | null {
 }
 
 export function App() {
+  // Page pointage employé (§7 A2/A3), servie sur le même port restreint.
+  if (location.pathname.startsWith('/pointage')) return <PagePointage />;
+
   const jeton = lireJeton();
 
   const { data, error, isLoading } = useQuery({

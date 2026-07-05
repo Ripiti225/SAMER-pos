@@ -21,7 +21,9 @@ export type ActionAudit =
   | 'PAIEMENT'
   | 'SPLIT_NOTE'
   | 'TRANSFERT_TABLE'
-  | 'ECART_RECONCILIATION';
+  | 'ECART_RECONCILIATION'
+  | 'CORRECTION_POINTAGE'
+  | 'UTILISATION_POINTS';
 
 export interface EntreeAudit {
   user_id?: string | null;

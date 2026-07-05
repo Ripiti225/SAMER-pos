@@ -60,19 +60,29 @@ export async function seed(): Promise<void> {
     // Correction 3 : le KDS s'identifie par un jeton d'appareil, pas par PIN.
     // À changer à l'installation de chaque site.
     { cle: 'kds_jeton_appareil', valeur: 'SAMER-ANGRE7E-KDS-1' },
+    // Sprint 4 A2 : géolocalisation du pointage (Angré 7e, Abidjan)
+    { cle: 'pointage_lat', valeur: 5.395 },
+    { cle: 'pointage_lng', valeur: -3.984 },
+    { cle: 'pointage_rayon_metres', valeur: 150 },
+    // Sprint 4 A3 : plafond mensuel de SMS + seuil d'alerte (§14.5)
+    { cle: 'sms_plafond_mensuel', valeur: 2000 },
+    // Sprint 4 B : barème fidélité (descendu du siège en production)
+    { cle: 'fidelite_points_par_tranche', valeur: { tranche_fcfa: 1000, points: 1 } },
+    { cle: 'fidelite_valeur_point_fcfa', valeur: 10 },
+    { cle: 'fidelite_seuil_utilisation', valeur: 50 },
   ]);
 
   // --- Utilisateurs (PIN de démo — à changer en production) ---
   await db.insert(utilisateurs).values([
-    { nom_complet: 'Samer El Khoury', role: 'PROPRIETAIRE', pin_hash: await hacherPin('852741') },
-    { nom_complet: 'Awa Koné', role: 'MANAGER', pin_hash: await hacherPin('963852') },
-    { nom_complet: 'Mariam Diabaté', role: 'CAISSIER', pin_hash: await hacherPin('2580') },
-    { nom_complet: 'Ibrahim Traoré', role: 'CAISSIER', pin_hash: await hacherPin('4826') },
-    { nom_complet: 'Fatou Bamba', role: 'SERVEUR', pin_hash: await hacherPin('1357') },
-    { nom_complet: 'Moussa Cissé', role: 'SERVEUR', pin_hash: await hacherPin('2468') },
-    { nom_complet: 'Kouadio Yao', role: 'CUISINE', poste_cuisine: 'CUISINIER', pin_hash: await hacherPin('7913') },
-    { nom_complet: 'Luigi Kouassi', role: 'CUISINE', poste_cuisine: 'PIZZAIOLO', pin_hash: await hacherPin('8024') },
-    { nom_complet: 'Aminata Touré', role: 'CUISINE', poste_cuisine: 'COMPTOIRISTE', pin_hash: await hacherPin('4652') },
+    { nom_complet: 'Samer El Khoury', role: 'PROPRIETAIRE', pin_hash: await hacherPin('852741'), telephone: '+2250700000001' },
+    { nom_complet: 'Awa Koné', role: 'MANAGER', pin_hash: await hacherPin('963852'), telephone: '+2250700000002' },
+    { nom_complet: 'Mariam Diabaté', role: 'CAISSIER', pin_hash: await hacherPin('2580'), telephone: '+2250700000003' },
+    { nom_complet: 'Ibrahim Traoré', role: 'CAISSIER', pin_hash: await hacherPin('4826'), telephone: '+2250700000004' },
+    { nom_complet: 'Fatou Bamba', role: 'SERVEUR', pin_hash: await hacherPin('1357'), telephone: '+2250700000005' },
+    { nom_complet: 'Moussa Cissé', role: 'SERVEUR', pin_hash: await hacherPin('2468'), telephone: '+2250700000006' },
+    { nom_complet: 'Kouadio Yao', role: 'CUISINE', poste_cuisine: 'CUISINIER', pin_hash: await hacherPin('7913'), telephone: '+2250700000007' },
+    { nom_complet: 'Luigi Kouassi', role: 'CUISINE', poste_cuisine: 'PIZZAIOLO', pin_hash: await hacherPin('8024'), telephone: '+2250700000008' },
+    { nom_complet: 'Aminata Touré', role: 'CUISINE', poste_cuisine: 'COMPTOIRISTE', pin_hash: await hacherPin('4652'), telephone: '+2250700000009' },
   ]);
 
   // --- Catalogue ---

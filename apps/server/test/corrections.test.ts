@@ -183,7 +183,13 @@ describe('correction 4 — attribution automatique des plats par poste (mapping)
   let itemChawarmaId: string;
   let itemPizzaId: string;
 
-  it('au passage « Prêt », chaque plat est attribué au bon poste (fallback : tous actifs en poste)', async () => {
+  it('au passage « Prêt », chaque plat est attribué au bon poste (employés pointés)', async () => {
+    // Sprint 4 A4 : attribution réelle — le cuisinier ET le pizzaiolo pointent
+    await db.insert(pointages).values([
+      { user_id: donnees.cuisine_id, methode: 'PIN_POS' },
+      { user_id: donnees.pizzaiolo_id, methode: 'PIN_POS' },
+    ]);
+
     // Envoi tablette : 1 chawarma (CUISINIER) + 1 pizza (PIZZAIOLO)
     const envoi = await app.inject({
       method: 'POST',
@@ -220,8 +226,11 @@ describe('correction 4 — attribution automatique des plats par poste (mapping)
   });
 
   it('avec le pointage : seuls les employés pointés sont attribués, vide sinon (ne bloque jamais)', async () => {
-    // Le cuisinier pointe son arrivée ; le pizzaiolo NON
-    await db.insert(pointages).values({ user_id: donnees.cuisine_id, methode: 'PIN_POS' });
+    // Le pizzaiolo termine (son pointage se ferme) → il n'est plus « en poste »
+    await db
+      .update(pointages)
+      .set({ depart: new Date() })
+      .where(eq(pointages.user_id, donnees.pizzaiolo_id));
 
     // Reprendre puis re-Prêt → l'attribution est recalculée au moment de la préparation
     await app.inject({ method: 'POST', url: `/api/kds/commandes/${commandeId}/reprendre`, headers: jeton });

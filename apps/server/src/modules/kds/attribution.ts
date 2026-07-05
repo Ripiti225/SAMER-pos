@@ -40,10 +40,11 @@ async function enPosteParPoste(tx: DbOuTx): Promise<Map<Poste, string[]>> {
     .from(pointages)
     .where(and(gte(pointages.arrivee, debutJour), isNull(pointages.depart)));
 
-  // Fallback tant que le module pointage n'est pas déployé :
-  // aucun pointage ouvert → tous les employés cuisine actifs sont en poste.
+  // Sprint 4 A4 : attribution RÉELLE — seuls les employés effectivement
+  // POINTÉS (pointage d'arrivée ouvert aujourd'hui) sont « en poste ». Si
+  // personne du poste n'est pointé, l'attribution reste vide (à rattacher).
   const idsPointes = new Set(pointes.map((p) => p.user_id));
-  const enPoste = idsPointes.size > 0 ? cuisine.filter((u) => idsPointes.has(u.id)) : cuisine;
+  const enPoste = cuisine.filter((u) => idsPointes.has(u.id));
 
   const parPoste = new Map<Poste, string[]>();
   for (const u of enPoste) {

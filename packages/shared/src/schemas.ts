@@ -173,6 +173,57 @@ export const TransfertTableSchema = z.object({
   serveur_id: z.string().uuid('Serveur invalide'),
 });
 
+// ---------------------------------------------------------------------------
+// SPRINT 4 — Pointage (§7)
+// ---------------------------------------------------------------------------
+
+/** Pointage par PIN au POS (méthode universelle, hors ligne). */
+export const PointagePinSchema = z.object({
+  utilisateur_id: z.string().uuid('Employé invalide'),
+  pin: PinSaisiSchema,
+});
+
+/** Pointage par géolocalisation (téléphone + PIN + position). */
+export const PointageGeolocSchema = z.object({
+  telephone: z.string().trim().min(6, 'Numéro de téléphone invalide'),
+  pin: PinSaisiSchema,
+  lat: z.number({ invalid_type_error: 'Position invalide' }),
+  lng: z.number({ invalid_type_error: 'Position invalide' }),
+});
+
+export const PointageSmsDemandeSchema = z.object({
+  telephone: z.string().trim().min(6, 'Numéro de téléphone invalide'),
+});
+
+/** Validation du code SMS : par téléphone (page /pointage) ou au POS. */
+export const PointageSmsValiderSchema = z
+  .object({
+    telephone: z.string().trim().min(6).optional(),
+    utilisateur_id: z.string().uuid().optional(),
+    code: z.string().regex(/^\d{6}$/, 'Code à 6 chiffres attendu'),
+  })
+  .refine((v) => !!v.telephone || !!v.utilisateur_id, {
+    message: 'Téléphone ou employé requis',
+  });
+
+/** Correction d'un pointage (PIN manager + motif obligatoires). */
+export const CorrectionPointageSchema = z.object({
+  arrivee: z.string().datetime().optional(),
+  depart: z.string().datetime().nullish(),
+  motif: z.string().trim().min(3, 'Le motif est obligatoire'),
+  pin_manager: PinSaisiSchema,
+});
+
+// ---------------------------------------------------------------------------
+// SPRINT 4 — Fidélité (§9)
+// ---------------------------------------------------------------------------
+
+/** Numéro de téléphone du client fidélité (saisi au paiement). */
+export const TelephoneFideliteSchema = z
+  .string()
+  .trim()
+  .regex(/^[+0-9][0-9 ]{5,19}$/, 'Numéro de téléphone invalide');
+
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type CreerCommandeInput = z.infer<typeof CreerCommandeSchema>;
 export type AjouterItemInput = z.infer<typeof AjouterItemSchema>;

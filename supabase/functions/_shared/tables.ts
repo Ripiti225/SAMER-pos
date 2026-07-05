@@ -20,6 +20,10 @@ export const COLONNES_VENTES: Record<string, string[]> = {
     'especes_comptees', 'especes_theorique', 'ecart', 'rapport_z',
   ],
   audit_log: ['id', 'seq', 'user_id', 'action', 'entite', 'entite_id', 'montant', 'motif', 'meta', 'created_at'],
+  // Sprint 4 : présences + fidélité remontent aussi (SamerTrackly).
+  pointages: ['id', 'user_id', 'methode', 'arrivee', 'depart', 'depart_oublie'],
+  clients_fidelite: ['id', 'telephone', 'nom', 'created_at'],
+  points_fidelite: ['id', 'client_id', 'commande_id', 'points', 'source', 'created_at'],
 };
 
 /** Flux de descente (cloud → local) et leurs tables. */

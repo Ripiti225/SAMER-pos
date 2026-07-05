@@ -15,6 +15,8 @@ const LIBELLES_ROLES: Record<string, string> = {
 
 export function Login() {
   const { poserSession, afficherToast } = useCaisse();
+  // Deux modes accessibles sans session : connexion caisse, ou pointage (§7 A1).
+  const [mode, setMode] = useState<'connexion' | 'pointage'>('connexion');
   const [choisi, setChoisi] = useState<UtilisateurPublic | null>(null);
   const [pin, setPin] = useState('');
   const [enCours, setEnCours] = useState(false);
@@ -24,19 +26,29 @@ export function Login() {
     queryFn: () => api<UtilisateurPublic[]>('/api/auth/utilisateurs'),
   });
 
-  const seConnecter = async () => {
+  const valider = async () => {
     if (!choisi) return;
     setEnCours(true);
     try {
-      const session = await api<SessionInfo>('/api/auth/login', {
-        method: 'POST',
-        corps: { utilisateur_id: choisi.id, pin },
-      });
-      poserSession(session);
+      if (mode === 'connexion') {
+        const session = await api<SessionInfo>('/api/auth/login', {
+          method: 'POST',
+          corps: { utilisateur_id: choisi.id, pin },
+        });
+        poserSession(session);
+      } else {
+        const r = await api<{ message: string }>('/api/pointage/pin', {
+          method: 'POST',
+          corps: { utilisateur_id: choisi.id, pin },
+        });
+        afficherToast(r.message);
+        setChoisi(null);
+        setMode('connexion');
+      }
     } catch (e) {
       afficherToast((e as Error).message);
-      setPin('');
     } finally {
+      setPin('');
       setEnCours(false);
     }
   };
@@ -45,18 +57,29 @@ export function Login() {
     <div className="flex min-h-full flex-col items-center justify-center gap-8 p-6">
       <div className="text-center">
         <h1 className="text-4xl font-black text-marque-fonce">Chez Samer / Al Kayan</h1>
-        <p className="mt-2 text-doux">Caisse — connexion par PIN</p>
+        <p className="mt-2 text-doux">
+          {mode === 'connexion' ? 'Caisse — connexion par PIN' : 'Pointage — arrivée / départ'}
+        </p>
       </div>
 
       {!choisi ? (
-        <div className="grid w-full max-w-2xl grid-cols-2 gap-3 sm:grid-cols-3">
-          {(utilisateurs ?? []).map((u) => (
-            <button key={u.id} type="button" className="carte min-h-[80px] p-4 text-left hover:border-marque" onClick={() => setChoisi(u)}>
-              <div className="font-bold">{u.nom_complet}</div>
-              <div className="text-sm text-doux">{LIBELLES_ROLES[u.role] ?? u.role}</div>
-            </button>
-          ))}
-        </div>
+        <>
+          <div className="grid w-full max-w-2xl grid-cols-2 gap-3 sm:grid-cols-3">
+            {(utilisateurs ?? []).map((u) => (
+              <button key={u.id} type="button" className="carte min-h-[80px] p-4 text-left hover:border-marque" onClick={() => setChoisi(u)}>
+                <div className="font-bold">{u.nom_complet}</div>
+                <div className="text-sm text-doux">{LIBELLES_ROLES[u.role] ?? u.role}</div>
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className={mode === 'pointage' ? 'btn-accent' : 'btn-blanc'}
+            onClick={() => setMode(mode === 'pointage' ? 'connexion' : 'pointage')}
+          >
+            {mode === 'pointage' ? '← Revenir à la connexion' : 'Pointer mon arrivée / départ'}
+          </button>
+        </>
       ) : (
         <div className="w-full max-w-xs space-y-3">
           <div className="text-center text-lg font-semibold">{choisi.nom_complet}</div>
@@ -67,8 +90,8 @@ export function Login() {
             valeur={pin}
             onChange={setPin}
             longueurMax={6}
-            onValider={seConnecter}
-            libelleValider={enCours ? 'Connexion…' : 'Se connecter'}
+            onValider={valider}
+            libelleValider={enCours ? '…' : mode === 'connexion' ? 'Se connecter' : 'Pointer'}
             validerDesactive={pin.length < 4 || enCours}
           />
           <button type="button" className="btn-blanc w-full" onClick={() => { setChoisi(null); setPin(''); }}>

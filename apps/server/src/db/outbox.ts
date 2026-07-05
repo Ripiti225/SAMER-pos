@@ -12,7 +12,11 @@ export type TableSynchronisee =
   | 'paiements'
   | 'services_caisse'
   | 'audit_log'
-  | 'notes_split';
+  | 'notes_split'
+  // Sprint 4 : présences et fidélité remontent aussi vers le cloud (SamerTrackly).
+  | 'pointages'
+  | 'clients_fidelite'
+  | 'points_fidelite';
 
 export async function ecrireOutbox(
   tx: DbOuTx,

@@ -155,6 +155,38 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 CREATE INDEX IF NOT EXISTS idx_cloud_audit ON audit_log (restaurant_id, created_at);
 
+-- Sprint 4 : présences (pointages) et fidélité (réplica montée).
+CREATE TABLE IF NOT EXISTS pointages (
+  id             UUID PRIMARY KEY,
+  restaurant_id  UUID NOT NULL,
+  user_id        UUID,
+  methode        TEXT,
+  arrivee        TIMESTAMPTZ,
+  depart         TIMESTAMPTZ,
+  depart_oublie  BOOLEAN
+);
+CREATE INDEX IF NOT EXISTS idx_cloud_pointages ON pointages (restaurant_id, arrivee);
+
+CREATE TABLE IF NOT EXISTS clients_fidelite (
+  id            UUID PRIMARY KEY,
+  restaurant_id UUID NOT NULL,
+  telephone     TEXT,
+  nom           TEXT,
+  created_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_cloud_clients ON clients_fidelite (restaurant_id, telephone);
+
+CREATE TABLE IF NOT EXISTS points_fidelite (
+  id            UUID PRIMARY KEY,
+  restaurant_id UUID NOT NULL,
+  client_id     UUID,
+  commande_id   UUID,
+  points        INTEGER,
+  source        TEXT,
+  created_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_cloud_points ON points_fidelite (restaurant_id, client_id);
+
 -- ----------------------------------------------------------------------------
 -- Tables de CATALOGUE / UTILISATEURS / PROMOTIONS (descente cloud → local).
 -- Source siège. Colonne version : monotone, bump à chaque écriture (trigger).
@@ -299,6 +331,7 @@ DECLARE t TEXT;
 BEGIN
   FOREACH t IN ARRAY ARRAY['sites_autorises','sync_journal','reconciliations',
     'commandes','commande_items','notes_split','paiements','services_caisse','audit_log',
+    'pointages','clients_fidelite','points_fidelite',
     'categories','articles','prix_canaux','groupes_options','options','supplements',
     'combos','combo_articles','promotions','utilisateurs']
   LOOP
