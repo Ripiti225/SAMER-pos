@@ -176,6 +176,20 @@ CREATE TABLE tables_salle (
   UNIQUE (zone_id, numero)
 );
 
+-- CORRECTIONS3 Point 1 : appels d'une table depuis le téléphone client (QR).
+CREATE TABLE appels_table (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  table_id    UUID NOT NULL REFERENCES tables_salle(id) ON DELETE CASCADE,
+  type        TEXT NOT NULL CHECK (type IN ('APPEL_SERVEUR','DEMANDE_FACTURE')),
+  statut      TEXT NOT NULL DEFAULT 'EN_ATTENTE' CHECK (statut IN ('EN_ATTENTE','TRAITE')),
+  cree_le     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  traite_le   TIMESTAMPTZ,
+  traite_par  UUID REFERENCES utilisateurs(id)
+);
+-- Anti-doublon : un seul appel EN_ATTENTE par (table, type).
+CREATE UNIQUE INDEX un_appel_en_attente_par_table_type
+  ON appels_table (table_id, type) WHERE statut = 'EN_ATTENTE';
+
 -- ============================================================================
 -- 4. SERVICES CAISSE / SHIFTS (§5.7, §14.3)
 -- ============================================================================
@@ -221,6 +235,11 @@ CREATE TABLE commandes (
   caissier_id    UUID REFERENCES utilisateurs(id),
   serveur_id     UUID REFERENCES utilisateurs(id),  -- si prise en salle
   statut         statut_commande NOT NULL DEFAULT 'OUVERTE',
+  -- CORRECTIONS3 : origine de la commande. Une proposition CLIENT_QR n'atteint
+  -- JAMAIS la cuisine sans validation (serveur ou caisse en repli).
+  origine        TEXT NOT NULL DEFAULT 'CAISSE'
+                 CHECK (origine IN ('CAISSE','SERVEUR','CLIENT_QR')),
+  refus_motif    TEXT,                              -- message si commande client refusée
   -- montants figés (snapshot, jamais recalculés après paiement)
   sous_total     INTEGER NOT NULL DEFAULT 0,
   remise_montant INTEGER NOT NULL DEFAULT 0,

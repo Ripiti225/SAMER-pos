@@ -46,12 +46,16 @@ export interface Donnees {
   pizza_id: string;
   supplement_id: string;
   table_id: string;
+  table_qr: string;
+  table2_id: string;
+  table2_qr: string;
+  zone_id: string;
 }
 
 /** Vide la base de test et insère le strict nécessaire (sans promotions). */
 export async function resetDonnees(): Promise<Donnees> {
   await db.execute(sql`
-    TRUNCATE TABLE actions_recues, points_fidelite, clients_fidelite, codes_pointage, pointages,
+    TRUNCATE TABLE appels_table, actions_recues, points_fidelite, clients_fidelite, codes_pointage, pointages,
       notations, sync_etat, sync_outbox, audit_log, paiements, notes_split,
       commande_items, commandes, services_caisse, tables_salle, zones,
       promotions, mapping_poste_categorie, combo_articles, combos, supplements,
@@ -111,7 +115,13 @@ export async function resetDonnees(): Promise<Donnees> {
   ]);
 
   const [zone] = await db.insert(zones).values({ nom: 'RC', ordre: 1 }).returning();
-  const [table] = await db.insert(tablesSalle).values({ zone_id: zone!.id, numero: 'T1' }).returning();
+  const [table, table2] = await db
+    .insert(tablesSalle)
+    .values([
+      { zone_id: zone!.id, numero: 'T1', qr_token: 'QR-T1-TEST' },
+      { zone_id: zone!.id, numero: 'T2', qr_token: 'QR-T2-TEST' },
+    ])
+    .returning();
 
   return {
     proprio_id: proprio!.id,
@@ -125,6 +135,10 @@ export async function resetDonnees(): Promise<Donnees> {
     pizza_id: pizza!.id,
     supplement_id: suppl!.id,
     table_id: table!.id,
+    table_qr: table!.qr_token!,
+    table2_id: table2!.id,
+    table2_qr: table2!.qr_token!,
+    zone_id: zone!.id,
   };
 }
 

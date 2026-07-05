@@ -6,7 +6,7 @@
  *  - Promotions appliquées automatiquement selon heure/jour, montant tracé
  *    dans promo_montant. Une commande PAYEE/ANNULEE n'est plus recalculée.
  */
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { CommandeVue, CommandeItemVue } from '@pos/shared';
 import type { DbOuTx } from '../../db/client.js';
 import {
@@ -264,6 +264,34 @@ export async function chargerCommandeVue(dbx: DbOuTx, commandeId: string): Promi
 export async function majStatutTable(tx: DbOuTx, tableId: string | null, statut: 'LIBRE' | 'OCCUPEE'): Promise<void> {
   if (!tableId) return;
   await tx.update(tablesSalle).set({ statut }).where(eq(tablesSalle.id, tableId));
+}
+
+/**
+ * Envoi en cuisine : marque envoye_le sur les articles pas encore partis
+ * (ils restent A_PREPARER — le KDS les passera EN_COURS) et passe la commande
+ * à ENVOYEE_CUISINE. Seuls les NOUVEAUX articles partent (ajout en plusieurs
+ * fois, §B2). Utilisé par la caisse ET par la validation d'une commande client.
+ */
+export async function marquerEnvoiCuisine(tx: DbOuTx, commandeId: string): Promise<void> {
+  const items = await tx
+    .select()
+    .from(commandeItems)
+    .where(and(eq(commandeItems.commande_id, commandeId), isNull(commandeItems.envoye_le)));
+  for (const item of items) {
+    if (item.statut_cuisine === 'ANNULE') continue;
+    const [maj] = await tx
+      .update(commandeItems)
+      .set({ envoye_le: new Date() })
+      .where(eq(commandeItems.id, item.id))
+      .returning();
+    await ecrireOutbox(tx, 'commande_items', 'UPDATE', item.id, maj as unknown as Record<string, unknown>);
+  }
+  const [maj] = await tx
+    .update(commandes)
+    .set({ statut: 'ENVOYEE_CUISINE', updated_at: new Date() })
+    .where(eq(commandes.id, commandeId))
+    .returning();
+  await ecrireOutbox(tx, 'commandes', 'UPDATE', commandeId, maj as unknown as Record<string, unknown>);
 }
 
 /** Le service ouvert du caissier courant est obligatoire pour encaisser. */

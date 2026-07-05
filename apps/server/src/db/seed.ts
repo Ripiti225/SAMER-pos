@@ -31,7 +31,7 @@ export async function seed(): Promise<void> {
   // Remise à zéro complète (TRUNCATE n'est pas bloqué par le trigger append-only,
   // qui ne vise que UPDATE/DELETE ligne à ligne — acceptable pour un seed de démo).
   await db.execute(sql`
-    TRUNCATE TABLE actions_recues, points_fidelite, clients_fidelite, codes_pointage, pointages,
+    TRUNCATE TABLE appels_table, actions_recues, points_fidelite, clients_fidelite, codes_pointage, pointages,
       notations, sync_etat, sync_outbox, audit_log, paiements, notes_split,
       commande_items, commandes, services_caisse, tables_salle, zones,
       promotions, mapping_poste_categorie, combo_articles, combos, supplements,
@@ -180,10 +180,12 @@ export async function seed(): Promise<void> {
     ])
     .returning();
 
+  // qr_token : jeton du QR collé sur chaque table (CORRECTIONS3 — page client /t/:qr_token)
+  const jeton = (numero: string) => `SAMER-${numero.replace(/\s+/g, '-')}`;
   await db.insert(tablesSalle).values([
-    ...Array.from({ length: 6 }, (_, i) => ({ zone_id: zoneRC!.id, numero: `T${i + 1}` })),
-    ...Array.from({ length: 4 }, (_, i) => ({ zone_id: zoneTerrasse!.id, numero: `TE${i + 1}` })),
-    ...Array.from({ length: 2 }, (_, i) => ({ zone_id: zoneVIP!.id, numero: `VIP${i + 1}` })),
+    ...Array.from({ length: 6 }, (_, i) => ({ zone_id: zoneRC!.id, numero: `T${i + 1}`, qr_token: jeton(`T${i + 1}`) })),
+    ...Array.from({ length: 4 }, (_, i) => ({ zone_id: zoneTerrasse!.id, numero: `TE${i + 1}`, qr_token: jeton(`TE${i + 1}`) })),
+    ...Array.from({ length: 2 }, (_, i) => ({ zone_id: zoneVIP!.id, numero: `VIP${i + 1}`, qr_token: jeton(`VIP${i + 1}`) })),
     { zone_id: zoneLivraison!.id, numero: 'YANGO', partenaire: 'YANGO' },
     { zone_id: zoneLivraison!.id, numero: 'GLOVO', partenaire: 'GLOVO' },
     { zone_id: zoneLivraison!.id, numero: 'SAMER DELIV', partenaire: 'SAMER_DELIV' },

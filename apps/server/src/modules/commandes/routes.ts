@@ -21,6 +21,7 @@ import {
   exigerModifiable,
   figerNouvelItem,
   majStatutTable,
+  marquerEnvoiCuisine,
   recalculerTotaux,
   serviceOuvertDe,
   verrouillerCommande,
@@ -203,25 +204,7 @@ export function routesCommandes(app: FastifyInstance): void {
     const vue = await db.transaction(async (tx) => {
       const c = await verrouillerCommande(tx, id);
       exigerModifiable(c);
-      const items = await tx
-        .select()
-        .from(commandeItems)
-        .where(and(eq(commandeItems.commande_id, id), isNull(commandeItems.envoye_le)));
-      for (const item of items) {
-        if (item.statut_cuisine === 'ANNULE') continue;
-        const [maj] = await tx
-          .update(commandeItems)
-          .set({ envoye_le: new Date() })
-          .where(eq(commandeItems.id, item.id))
-          .returning();
-        await ecrireOutbox(tx, 'commande_items', 'UPDATE', item.id, maj as unknown as Record<string, unknown>);
-      }
-      const [maj] = await tx
-        .update(commandes)
-        .set({ statut: 'ENVOYEE_CUISINE', updated_at: new Date() })
-        .where(eq(commandes.id, id))
-        .returning();
-      await ecrireOutbox(tx, 'commandes', 'UPDATE', id, maj as unknown as Record<string, unknown>);
+      await marquerEnvoiCuisine(tx, id);
       return chargerCommandeVue(tx, id);
     });
     app.diffuser('commande:envoyee', id);

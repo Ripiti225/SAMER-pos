@@ -147,6 +147,32 @@ export const DemanderAdditionSchema = z.object({
   table_id: z.string().uuid('Table invalide'),
 });
 
+// ---------------------------------------------------------------------------
+// CORRECTIONS3 — circuit client ↔ serveur
+// ---------------------------------------------------------------------------
+
+/** Appel client (téléphone via QR) : appeler le serveur ou demander la facture. */
+export const AppelClientSchema = z.object({
+  type: z.enum(['APPEL_SERVEUR', 'DEMANDE_FACTURE'], {
+    errorMap: () => ({ message: 'Type d’appel invalide' }),
+  }),
+});
+
+/** Proposition de commande depuis le téléphone client (jamais envoyée en cuisine directement). */
+export const CommandeClientSchema = z.object({
+  items: z.array(AjouterItemSchema).min(1, 'Ajoutez au moins un article'),
+});
+
+/** Refus d'une commande client (message obligatoire montré au client). */
+export const RefusCommandeSchema = z.object({
+  motif: z.string().trim().min(3, 'Indiquez la raison du refus (montrée au client)'),
+});
+
+/** Transfert d'une table à un autre serveur (caisse/manager uniquement). */
+export const TransfertTableSchema = z.object({
+  serveur_id: z.string().uuid('Serveur invalide'),
+});
+
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type CreerCommandeInput = z.infer<typeof CreerCommandeSchema>;
 export type AjouterItemInput = z.infer<typeof AjouterItemSchema>;

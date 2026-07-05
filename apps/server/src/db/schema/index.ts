@@ -230,6 +230,8 @@ export const commandes = pgTable('commandes', {
   caissier_id: uuid('caissier_id').references(() => utilisateurs.id),
   serveur_id: uuid('serveur_id').references(() => utilisateurs.id),
   statut: statutCommande('statut').notNull().default('OUVERTE'),
+  origine: text('origine').notNull().default('CAISSE'),
+  refus_motif: text('refus_motif'),
   sous_total: integer('sous_total').notNull().default(0),
   remise_montant: integer('remise_montant').notNull().default(0),
   remise_par: uuid('remise_par').references(() => utilisateurs.id),
@@ -329,6 +331,23 @@ export const syncEtat = pgTable('sync_etat', {
   version: bigint('version', { mode: 'number' }).notNull().default(0),
   synced_at: timestamp('synced_at', { withTimezone: true }),
 });
+
+// CORRECTIONS3 Point 1 : appels d'une table depuis le téléphone client (QR)
+export const appelsTable = pgTable('appels_table', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  table_id: uuid('table_id').notNull().references(() => tablesSalle.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(),
+  statut: text('statut').notNull().default('EN_ATTENTE'),
+  cree_le: timestamp('cree_le', { withTimezone: true }).notNull().defaultNow(),
+  traite_le: timestamp('traite_le', { withTimezone: true }),
+  traite_par: uuid('traite_par').references(() => utilisateurs.id),
+}, (t) => [
+  uniqueIndex('un_appel_en_attente_par_table_type')
+    .on(t.table_id, t.type)
+    .where(sql`statut = 'EN_ATTENTE'`),
+  check('appels_table_type_check', sql`${t.type} IN ('APPEL_SERVEUR','DEMANDE_FACTURE')`),
+  check('appels_table_statut_check', sql`${t.statut} IN ('EN_ATTENTE','TRAITE')`),
+]);
 
 // Correction 4 : poste de cuisine ↔ catégorie (attribution automatique)
 export const mappingPosteCategorie = pgTable('mapping_poste_categorie', {

@@ -54,6 +54,69 @@ export const LIBELLES_STATUTS_COMMANDE: Record<StatutCommande, string> = {
 export const PARTENAIRES = ['YANGO', 'GLOVO', 'SAMER_DELIV'] as const;
 export type Partenaire = (typeof PARTENAIRES)[number];
 
+// ---------------------------------------------------------------------------
+// CORRECTIONS3 — circuit client ↔ serveur
+// ---------------------------------------------------------------------------
+
+export const TYPES_APPEL = ['APPEL_SERVEUR', 'DEMANDE_FACTURE'] as const;
+export type TypeAppel = (typeof TYPES_APPEL)[number];
+
+export const LIBELLES_APPEL: Record<TypeAppel, string> = {
+  APPEL_SERVEUR: 'Appel serveur',
+  DEMANDE_FACTURE: 'Facture demandée',
+};
+
+export const ORIGINES_COMMANDE = ['CAISSE', 'SERVEUR', 'CLIENT_QR'] as const;
+export type OrigineCommande = (typeof ORIGINES_COMMANDE)[number];
+
+/** Étapes de suivi montrées au client (dérivées côté serveur). */
+export const ETATS_SUIVI_CLIENT = [
+  'EN_VALIDATION',
+  'EN_PREPARATION',
+  'PRETE',
+  'SERVIE',
+  'REFUSEE',
+  'PAYEE',
+] as const;
+export type EtatSuiviClient = (typeof ETATS_SUIVI_CLIENT)[number];
+
+export const LIBELLES_SUIVI_CLIENT: Record<EtatSuiviClient, string> = {
+  EN_VALIDATION: 'En validation',
+  EN_PREPARATION: 'En préparation',
+  PRETE: 'Prête',
+  SERVIE: 'Servie',
+  REFUSEE: 'Refusée',
+  PAYEE: 'Réglée',
+};
+
+/**
+ * État de table DÉRIVÉ (point 4), calculé côté serveur, identique partout
+ * (caisse, serveur, client). Distinct du statut physique en base.
+ */
+export const ETATS_TABLE = [
+  'LIBRE',
+  'COMMANDE_CLIENT_A_VALIDER',
+  'EN_PREPARATION',
+  'PRETE',
+  'SERVIE',
+  'ADDITION_DEMANDEE',
+] as const;
+export type EtatTable = (typeof ETATS_TABLE)[number];
+
+export const LIBELLES_ETAT_TABLE: Record<EtatTable, string> = {
+  LIBRE: 'Libre',
+  COMMANDE_CLIENT_A_VALIDER: 'Commande client à valider',
+  EN_PREPARATION: 'En préparation',
+  PRETE: 'Prête',
+  SERVIE: 'En cours de repas',
+  ADDITION_DEMANDEE: 'Facture demandée',
+};
+
+export type BadgeTable = 'APPEL' | 'FACTURE' | 'PRETE';
+
+/** Cible de routage d'un appel/commande client (point 1b). */
+export type CibleRoutage = 'SERVEUR' | 'CAISSE';
+
 /** PIN interdits (§14.1) : 1234, 123456, et toutes les répétitions 0000…9999. */
 export const PINS_INTERDITS: readonly string[] = [
   '1234',

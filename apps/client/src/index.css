@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Thème clair partagé importé dans main.tsx. Réglages propres au client. */
+html,
+body,
+#racine {
+  height: 100%;
+}
+
+body {
+  @apply antialiased;
+  touch-action: manipulation;
+}

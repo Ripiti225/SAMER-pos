@@ -98,6 +98,44 @@ export interface TableVue {
   partenaire: string | null;
   statut: 'LIBRE' | 'OCCUPEE' | 'ADDITION_DEMANDEE';
   commande_id: string | null;
+  // CORRECTIONS3 point 4 : état dérivé côté serveur, identique partout
+  etat: import('./constantes.js').EtatTable;
+  badges: import('./constantes.js').BadgeTable[];
+  // CORRECTIONS3 point 3 : propriété de table
+  ouverte_par: string | null;
+  ouverte_par_nom: string | null;
+}
+
+/** Appel client reçu par un serveur/la caisse (point 1). */
+export interface AppelVue {
+  id: string;
+  table_id: string;
+  table_numero: string;
+  zone_nom: string;
+  type: import('./constantes.js').TypeAppel;
+  cible: import('./constantes.js').CibleRoutage;
+  serveur_id: string | null;
+  cree_le: string;
+}
+
+/** Suivi d'une commande côté client (point 1c). */
+export interface SuiviCommandeClient {
+  id: string;
+  numero_ticket: number;
+  etat: import('./constantes.js').EtatSuiviClient;
+  origine: import('./constantes.js').OrigineCommande;
+  refus_motif: string | null;
+  total: number;
+  articles: { nom: string; quantite: number }[];
+}
+
+/** Vue publique d'une table pour la page client (portée à SA table). */
+export interface TableClientVue {
+  table_id: string;
+  numero: string;
+  zone_nom: string;
+  restaurant: { nom: string; marque: 'SAMER' | 'AL_KAYAN'; couleur_hex: string };
+  etat: import('./constantes.js').EtatTable;
 }
 
 export interface CommandeItemVue {
