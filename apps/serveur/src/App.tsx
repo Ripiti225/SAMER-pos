@@ -7,6 +7,7 @@ import { LoginServeur } from './screens/LoginServeur';
 import { Salle } from './screens/Salle';
 import { PriseCommande } from './screens/PriseCommande';
 import { VerrouInactivite } from './components/VerrouInactivite';
+import { NotificationsServeur } from './components/NotificationsServeur';
 
 const ROLES_SALLE = ['SERVEUR', 'MANAGER', 'PROPRIETAIRE'];
 
@@ -89,6 +90,8 @@ export function App() {
       ) : (
         <Salle onTable={setTableId} />
       )}
+
+      <NotificationsServeur session={session} afficherToast={afficherToast} />
 
       <VerrouInactivite session={session} onDeconnexion={() => { setSession(null); setTableId(null); }} />
 

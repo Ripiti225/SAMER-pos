@@ -174,6 +174,31 @@ export function routesSalle(app: FastifyInstance): void {
     return vue;
   });
 
+  /**
+   * « Servie » (point 2) : PRETE → SERVIE. Le serveur (ou la caisse en repli)
+   * marque le plat servi, ce qui éteint la notification « prête ».
+   */
+  app.post('/api/commandes/:id/servir', { preHandler: gardeSalle }, async (req) => {
+    const { id } = req.params as { id: string };
+    const vue = await db.transaction(async (tx) => {
+      const c = await verrouillerCommande(tx, id);
+      if (c.statut !== 'PRETE') {
+        throw new ErreurMetier('Cette commande n’est pas prête à être servie', 409);
+      }
+      const [maj] = await tx
+        .update(commandes)
+        .set({ statut: 'SERVIE', updated_at: new Date() })
+        .where(eq(commandes.id, id))
+        .returning();
+      await ecrireOutbox(tx, 'commandes', 'UPDATE', id, maj as unknown as Record<string, unknown>);
+      return chargerCommandeVue(tx, id);
+    });
+    app.diffuser('commande:servie', id);
+    app.diffuser('commande', id);
+    if (vue.table_id) app.diffuser('table:changee', vue.table_id);
+    return vue;
+  });
+
   // Liste des commandes client en attente de validation (repli caisse inclus)
   app.get('/api/commandes/a-valider', { preHandler: gardeSalle }, async () => {
     const lignes = await db

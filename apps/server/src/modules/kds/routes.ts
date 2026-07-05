@@ -185,7 +185,28 @@ export function routesKds(app: FastifyInstance): void {
       // poste, par mapping catégorie → poste_cuisine. Invisible pour le KDS.
       await attribuerPlats(tx, id);
     });
+
+    // CORRECTIONS3 point 2 : sonner le serveur rattaché (serveur_id) ; s'il est
+    // déconnecté (ou commande prise à la caisse), notifier la caisse.
+    const [c] = await db
+      .select({
+        serveur_id: commandes.serveur_id,
+        table_id: commandes.table_id,
+        table_numero: tablesSalle.numero,
+      })
+      .from(commandes)
+      .leftJoin(tablesSalle, eq(tablesSalle.id, commandes.table_id))
+      .where(eq(commandes.id, id));
+    const versServeur = !!c?.serveur_id && app.presence.estPresent(c.serveur_id);
+    app.diffuserPayload('commande:prete', {
+      commande_id: id,
+      table_id: c?.table_id ?? null,
+      table_numero: c?.table_numero ?? null,
+      serveur_id: c?.serveur_id ?? null,
+      cible: versServeur ? 'SERVEUR' : 'CAISSE',
+    });
     app.diffuser('commande:modifiee', id);
+    if (c?.table_id) app.diffuser('table:changee', c.table_id);
     return { ok: true };
   });
 
