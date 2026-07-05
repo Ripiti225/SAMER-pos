@@ -14,10 +14,18 @@
  *   temps_preparation_min.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { sql } from 'drizzle-orm';
 import { db, fermerDb, pool } from '../db/client.js';
 import { articles, categories, restaurant } from '../db/schema/index.js';
+
+// Racine du dépôt (le script vit dans apps/server/src/scripts) : les chemins
+// relatifs sont résolus depuis la racine, quel que soit le cwd de pnpm.
+const RACINE = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
+function versRacine(chemin: string): string {
+  return isAbsolute(chemin) ? chemin : resolve(RACINE, chemin);
+}
 
 interface Produit {
   id: string;
@@ -149,12 +157,12 @@ async function genererSqlCloud(exp: Export, sortie: string): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const fichier = resolve(arg('fichier', 'docs/catalogue_samer.json'));
+  const fichier = versRacine(arg('fichier', 'docs/catalogue_samer.json'));
   const cible = arg('cible', 'local');
   const exp = lireExport(fichier);
 
   if (cible === 'cloud') {
-    await genererSqlCloud(exp, resolve(arg('sql-sortie', 'sql/cloud/catalogue_import.sql')));
+    await genererSqlCloud(exp, versRacine(arg('sql-sortie', 'sql/cloud/catalogue_import.sql')));
   } else if (cible === 'local') {
     await importerLocal(exp);
   } else {

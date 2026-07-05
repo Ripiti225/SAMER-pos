@@ -1,0 +1,1536 @@
+{
+  "source": "Supabase mobmgbedyyqeggxjpbrk",
+  "genere_le": "2026-07-05",
+  "bucket_photos": "photos (lecture publique)",
+  "total_categories": 15,
+  "total_produits": 128,
+  "categories": [
+    {
+      "id": "0c42bff2-9230-4699-b03b-63007d50f022",
+      "nom": "Salades",
+      "ordre": 1,
+      "active": true,
+      "produits": [
+        {
+          "id": "3f3ef1f6-71cd-4432-8cba-b5f262706386",
+          "nom": "Fattouche",
+          "description": "Laitue, tomate, concombre, oignon vert, menthe, persil, pain grillé",
+          "prix": 3000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/c1283a82-18d8-477a-acb0-0810ad0bd1ff.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "75be0d94-36ba-45c7-8fd6-1904c5e78fae",
+          "nom": "Salade au Poulet",
+          "description": "Laitue, poulet, tomate, concombre, carotte, poivron, oignon, maïs, olive, fromage",
+          "prix": 4000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/e275d7c2-227c-49df-b0a0-82cbfd1340be.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "4cec4358-ed14-4201-8c46-400932ebf2f5",
+          "nom": "Salade Choux",
+          "description": "Choux, carotte, maïs, oignon",
+          "prix": 3000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/5350e5c4-af02-47ea-ae9b-39110432f39c.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "1042925a-8988-4b63-ab7c-940c92982608",
+          "nom": "Salade Classique",
+          "description": "Laitue, tomate, concombre, oignon",
+          "prix": 3000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/3d541a74-0d4d-47bb-a438-1acc4681ed4a.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "1c8e243d-3c6d-432a-8406-6cca54022d21",
+          "nom": "Salade de Crevette",
+          "description": "Laitue, tomate, avocat, oignon, crevette",
+          "prix": 5000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/d4a8a1ee-5e00-4f71-bed6-819a0339dff1.png",
+          "allergenes": "Crustacés",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "2600733d-a285-4fd6-8f49-02d11e90f17c",
+          "nom": "Salade Niçoise",
+          "description": "Laitue, tomate, concombre, œuf, pomme de terre, thon, olive noire, poivron, haricot vert",
+          "prix": 4000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/4cbbc100-4553-4b1b-9b6a-9dbb25eac5b7.png",
+          "allergenes": "Œuf, Poisson",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        }
+      ]
+    },
+    {
+      "id": "2ac2fa43-f073-4101-a377-9c1724a8d7b2",
+      "nom": "Chawarmas",
+      "ordre": 2,
+      "active": true,
+      "produits": [
+        {
+          "id": "5a4fedc9-ed76-45c7-9d5b-befc9d6cf9d4",
+          "nom": "Chawarma Crevette",
+          "description": null,
+          "prix": 3000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/e45219e6-3c82-44bf-be66-da1d40fbf060.png",
+          "allergenes": "Crustacés",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "16e9fbaa-f4c4-4843-9510-b3160ab31110",
+          "nom": "Chawarma Mélange",
+          "description": null,
+          "prix": 2500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/5f2310a8-8806-4976-a75a-69d0c07353f4.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "2499f4da-512c-4beb-af75-392c6e4aad95",
+          "nom": "Chawarma Poulet",
+          "description": null,
+          "prix": 2500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/44336bc4-ee43-4d20-8750-2c830fb40fde.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": true,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "9c85dad7-1186-4ba1-a291-bf54819b71bb",
+          "nom": "Chawarma Spécial",
+          "description": null,
+          "prix": 3000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/27d08adb-c36d-4d8c-a4a6-d92286f4ea24.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "4f53e1a1-03ec-46ee-8f77-bd1d816c7aba",
+          "nom": "Chawarma Végétarien",
+          "description": "pate a l'ail, piment, salade, cornichon, oignon , tomate, foie, rognon, coeur, viande de boeuf, boulette, merguez ( mais droit a 3 choix )",
+          "prix": 2500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/a9227bfe-dbf7-463d-96f6-49d5d5871003.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "9b7836c9-9a1d-4009-9a06-53b90614a871",
+          "nom": "Chawarma Viande",
+          "description": "Legumes , viande de boeuf",
+          "prix": 2500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/19f0b91f-b8ed-453d-9458-bd3944d1dae5.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        }
+      ]
+    },
+    {
+      "id": "233d52d7-5762-4c55-9a27-d122c4d1ae01",
+      "nom": "Sandwiches",
+      "ordre": 3,
+      "active": true,
+      "produits": [
+        {
+          "id": "057525c6-ef9d-4caf-a8df-ac6e3b109b2d",
+          "nom": "Burger",
+          "description": "Viande, œuf, fromage, choux mayo, laitue, tomate, oignon, sauce rose",
+          "prix": 3500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/c812300c-267b-4842-9606-a4ba2aa65f80.png",
+          "allergenes": "Gluten, Œuf",
+          "disponible": true,
+          "populaire": true,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "3eb83615-bc85-4e8a-a9b0-90316b7d3998",
+          "nom": "Chicken Burger",
+          "description": "Poulet, fromage, choux mayo, laitue, tomate, oignon, sauce rose",
+          "prix": 3500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/7128ff22-9db5-40f1-acd5-33784566b1f5.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "bbc75152-17e4-4700-b6ad-64533be65dfa",
+          "nom": "Crispy",
+          "description": "Poulet crispy, choux mayo, cornichons, sauce rose, fromage",
+          "prix": 3000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/1fcdc1fc-cb43-45b6-979c-d0150056378d.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "382b365f-0377-4096-b5c8-d63856a53693",
+          "nom": "Escalope",
+          "description": "Poulet pané, choux mayo, cornichons, sauce rose, fromage",
+          "prix": 3000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/21549ec1-9058-4817-9903-893c67639ec6.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "564408e3-0034-4fdd-ae4e-1be8deb21372",
+          "nom": "Francisco",
+          "description": "Poulet, champignon, maïs, poivron, fromage, laitue, cornichons, mayonnaise",
+          "prix": 3000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/fb658426-9a9a-4a7c-9064-9155d689eef6.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "1eec494e-2a18-421c-b51a-b169aaf32869",
+          "nom": "Philadelphia",
+          "description": "Viande, champignon, maïs, poivron, fromage, laitue, cornichons, mayonnaise",
+          "prix": 3000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/b13952c1-3f0d-4663-9448-bcb9cfddeab9.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        }
+      ]
+    },
+    {
+      "id": "c843361b-82d8-48cf-8450-41f42e14d7bc",
+      "nom": "Tacos",
+      "ordre": 4,
+      "active": true,
+      "produits": [
+        {
+          "id": "4c068155-e01c-4458-82ac-ff2b006ec41b",
+          "nom": "Tacos Maison",
+          "description": "Servi avec frites + 1 boisson",
+          "prix": 6500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/753b8e43-7c0a-4619-b5a8-ac0b2b906a41.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "54029574-15cd-4516-b89f-cb7cb93bf8e6",
+          "nom": "Tacos Mixte",
+          "description": "Servi avec frites + 1 boisson",
+          "prix": 6000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/07a1bdaa-29f6-4f99-81e3-9b265b5cfd58.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": true,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "0a6f7212-e708-4562-b116-e88d81109153",
+          "nom": "Tacos Poulet",
+          "description": "Servi avec frites + 1 boisson",
+          "prix": 5000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/26a72ba8-6c41-48e1-9696-eb929df7276e.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "0f47c6e8-ecdc-4ca6-8c0c-39538b826dfa",
+          "nom": "Tacos Viande",
+          "description": "Servi avec frites + 1 boisson",
+          "prix": 5000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/5d7d3860-274b-481d-bcd7-bbd798035fdc.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        }
+      ]
+    },
+    {
+      "id": "0e6f98c4-c76a-4bce-9462-de4d9e0e8694",
+      "nom": "Assiettes",
+      "ordre": 5,
+      "active": true,
+      "produits": [
+        {
+          "id": "851b01dd-1af4-4a9e-9bd0-57fef4e7da65",
+          "nom": "Assiette Chawarma",
+          "description": "Servi avec frites",
+          "prix": 5000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/9bccdfeb-9b8a-4090-9273-7f24491aed9f.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "9303ddc6-5b7e-45e2-99fd-29b695930063",
+          "nom": "Assiette Chicken",
+          "description": "Servi avec frites",
+          "prix": 5000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/6015b2e5-fc62-49fb-8068-26b989977a8b.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "409acf45-2fd6-4d8d-a724-5f0a7a81870a",
+          "nom": "Assiette Escalope",
+          "description": "Servi avec frites",
+          "prix": 5000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/5be403ad-c900-4860-9a36-454ea48bcda0.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "a5a541c8-a7f7-4996-a5b4-0bca72993547",
+          "nom": "Assiette Hamburger",
+          "description": "Servi avec frites",
+          "prix": 5000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/7051786b-a5ba-4446-8cfc-e16edf6e4788.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "0a701065-b63e-4e83-9191-56620fe46052",
+          "nom": "Assiette Viande Mixte",
+          "description": "Servi avec frites",
+          "prix": 5000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/dec6b06a-4d3e-4810-9fe7-4dcdc584dc64.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "0daa9a7d-d6f4-4cce-91a5-e7adbb81640e",
+          "nom": "Brochette Frites",
+          "description": null,
+          "prix": 6000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/eb6c2512-277f-4009-acb1-4f518c0e5232.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "508ae8c5-213c-4468-8016-c3cc626904d4",
+          "nom": "Escalope Crème Fraîche",
+          "description": null,
+          "prix": 6000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/80a74993-c223-4d46-aede-9cb37cc35530.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "7996ad34-6559-4c96-86c0-74b8599545ad",
+          "nom": "Spaghetti Bolognaise",
+          "description": null,
+          "prix": 4000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/69d0214c-275c-46fb-8f4f-ca27bbcb5216.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "8ea75d03-2883-4e0b-8e01-bbc560ce5ecc",
+          "nom": "Steak Crème Fraîche",
+          "description": null,
+          "prix": 7000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/9c538762-cd42-4cd0-b3f1-1e3fd3bccbe3.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "640383af-bcd9-4015-af35-915fd4a8cc73",
+          "nom": "Steak Frites",
+          "description": "filet de viande de boeuf , frite",
+          "prix": 6000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/b9d85a61-9d47-46a5-9494-4230b2a880e8.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "670e5aa1-8767-4f85-84fa-04568af90665",
+          "nom": "Steak Petits Pois",
+          "description": null,
+          "prix": 6000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/5fb9463d-c9b7-415a-89ad-fa61daa68e74.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "1917e2a7-451e-49ee-898f-8050cdfa9893",
+          "nom": "Steak Spaghetti",
+          "description": null,
+          "prix": 6000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/5e6ff9c8-3581-4963-8b5e-d1079f14ae9c.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        }
+      ]
+    },
+    {
+      "id": "06b96906-6979-4554-9c06-926c5352415e",
+      "nom": "Poulet & Poisson",
+      "ordre": 6,
+      "active": true,
+      "produits": [
+        {
+          "id": "a7e3277e-7883-4801-bec5-030372b7f7d3",
+          "nom": "10 Pièces Crispy + Frites",
+          "description": null,
+          "prix": 10000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/7cf8a1ea-4227-48ef-a15e-f4ff6aabc34c.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "279ee1cf-553e-439d-a3a3-09725b52dc80",
+          "nom": "5 Pièces Crispy + Frites",
+          "description": "Demi-portion",
+          "prix": 5000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/58a71720-1efb-4b22-8f9a-ff8209955326.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "4a342e8d-4d24-41c2-9587-8469ac895ddc",
+          "nom": "Demi Poulet Braisé + Frites",
+          "description": "Demi-portion",
+          "prix": 5000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/08d51715-b5b4-48f2-b2bc-656cb46bc9cc.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "5a24f90b-3340-4b8d-980a-233185fab027",
+          "nom": "Demi Poulet Pané + Frites",
+          "description": "Demi-portion",
+          "prix": 5000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/68252b01-a109-448e-a0bc-49eb252439b3.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "4c6d6480-b534-4996-b293-6fb76914e416",
+          "nom": "Demi Poulet Rôti + Frites",
+          "description": "Demi-portion",
+          "prix": 5000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/a4fa03a2-ccd6-492f-86d8-05b38509adb4.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "6d8fa182-400c-46e6-a974-5a2da32a7042",
+          "nom": "Demi Poulet Sauté à la Crème",
+          "description": "Demi-portion",
+          "prix": 6000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/5bd04102-2df9-41c8-9dab-72e09d70391e.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "33a98033-5d59-4f70-93c9-cdbdc06413d9",
+          "nom": "Demi Poulet Sauté aux Légumes",
+          "description": "Demi-portion",
+          "prix": 5000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/ba0030d4-dea5-4423-bb96-0aaca740413a.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "2b5da396-71a3-467a-9dcf-1c221253790b",
+          "nom": "Poisson Braisé",
+          "description": null,
+          "prix": 7000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/eef6e466-da9b-4a81-8916-fc0a10794a12.png",
+          "allergenes": "Poisson",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "a7086360-056f-44a6-8f65-c349634f205e",
+          "nom": "Poisson Grillé",
+          "description": null,
+          "prix": 7000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/a2138919-d703-4cd1-8a03-a3399434790f.png",
+          "allergenes": "Poisson",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "27ab1be3-c7bd-480b-8a2e-b102ab09b9d3",
+          "nom": "Poulet Braisé + Frites",
+          "description": null,
+          "prix": 9000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/17c94310-8bf0-4aa5-9efe-605816442d55.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": true,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "126390f2-cec9-49b2-9878-e3e07efe94cc",
+          "nom": "Poulet Pané + Frites",
+          "description": null,
+          "prix": 9000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/efb3d9a4-1235-4af9-b00c-6b27dc7890a1.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "30b1b012-afae-4c29-85d3-d89ba3fa79fa",
+          "nom": "Poulet Rôti + Frites",
+          "description": null,
+          "prix": 8000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/ae4512fd-4a64-4cf2-ba68-11766eb97952.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "63497f21-d413-4f95-90d4-8517b06f9c69",
+          "nom": "Poulet Sauté à la Crème",
+          "description": null,
+          "prix": 10000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/9a2b0ab1-b1b0-401c-9d10-55d464dbf74f.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "a4a58c96-651e-4342-ad2d-0292cc381921",
+          "nom": "Poulet Sauté aux Légumes",
+          "description": "Poulet , legumes et frite portion",
+          "prix": 10000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/c0d78abe-243b-459d-a80f-0ad18c4d8e56.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        }
+      ]
+    },
+    {
+      "id": "03e9489a-4fd6-49bd-9526-ca33c8fbd3e9",
+      "nom": "Accompagnements",
+      "ordre": 7,
+      "active": true,
+      "produits": [
+        {
+          "id": "28f88c2d-7624-497c-abae-235d2bb270a3",
+          "nom": "Attiéké",
+          "description": null,
+          "prix": 1000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/69ffe29e-4bec-4435-b674-e27e009d5612.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "11563780-aec4-4e83-8db8-91a6b27a8dd8",
+          "nom": "Frites",
+          "description": null,
+          "prix": 1500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/929298d5-d3c3-40c3-ba5f-703b87bef7d3.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "504d2c1e-695d-4c22-a2db-340d61b8b9d3",
+          "nom": "Riz",
+          "description": null,
+          "prix": 1000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/dd1e0b4d-cdc7-4143-aaed-3cd7d06d3005.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "6d17e616-02a1-4ca3-8006-e0a1e25cf330",
+          "nom": "Riz Cantonais",
+          "description": null,
+          "prix": 2000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/d9f8241a-7db6-48f9-8643-41a13889f119.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        }
+      ]
+    },
+    {
+      "id": "2114d1f1-609d-49ef-bab9-2fc46f7947ed",
+      "nom": "Manaiches",
+      "ordre": 8,
+      "active": true,
+      "produits": [
+        {
+          "id": "85cbd5dd-5a16-4c52-9fbf-c331640873ee",
+          "nom": "Manaich Cocktail",
+          "description": "viande + fromage ou zatar + fromage ou poulet + fromage\nmerci de mettre ce que vous voulez en description",
+          "prix": 2500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/ce76bba2-f6b2-4485-97ef-4bdd4432b694.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "2cc468dc-7dd1-4f35-b676-7b179d866861",
+          "nom": "Manaich Fromage",
+          "description": null,
+          "prix": 2000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/18665074-12ed-4ce1-8c90-a6498f1ee9fe.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "371bc231-0b96-4392-9ff8-a2a9f277f437",
+          "nom": "Manaich Fromage Crémière",
+          "description": null,
+          "prix": 3000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/bc3bc84a-4f8c-494b-9480-4f6e032fd374.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "04287d84-db28-474f-90d2-0fb9da171dc7",
+          "nom": "Manaich Jambon Fromage",
+          "description": null,
+          "prix": 2500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/15b378fd-24e4-40dc-9d81-e2fbd59bb72f.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "462cfa55-86da-4aad-8fdd-2be695dfc631",
+          "nom": "Manaich Légumes",
+          "description": null,
+          "prix": 2000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/24e8cde2-b973-4295-ba08-d54616b2f199.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "1d2aa398-7114-457b-833d-644d092590fc",
+          "nom": "Manaich Viande",
+          "description": null,
+          "prix": 2500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/66550ad9-f648-4f5f-8d2e-38601af97f2f.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "8308f46f-1c60-46eb-9e3d-c97f4b55845b",
+          "nom": "Manaich Zaatar",
+          "description": null,
+          "prix": 1000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/59749ea5-d5fb-42a5-86c3-2503c6cc5c99.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        }
+      ]
+    },
+    {
+      "id": "0891f580-e750-4559-80a6-859433f1c21e",
+      "nom": "Pizzas",
+      "ordre": 9,
+      "active": true,
+      "produits": [
+        {
+          "id": "3a292176-8896-45e4-887e-26731bda6990",
+          "nom": "Pizza 4 Saisons (G)",
+          "description": "Sauce pizza, jambon, fromage, champignon, olive, viande hachée ou poulet",
+          "prix": 8000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/77a71f04-c092-4bc4-9c05-966d05377392.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": true,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "523b9ab8-c57c-46f5-970f-55c556242ece",
+          "nom": "Pizza 4 Saisons (M)",
+          "description": "Sauce pizza, jambon, fromage, champignon, olive, viande hachée ou poulet",
+          "prix": 6000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/f1e33e58-738b-4d67-8968-de7ae24cfafa.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "905fe022-4dda-47b7-9f55-778153ffdbb6",
+          "nom": "Pizza Bolognaise (G)",
+          "description": "Sauce pizza, viande hachée, fromage, olive, champignon",
+          "prix": 8000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/d9e1eea1-b690-4ea0-b937-21e8c721e75b.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "08f4f0dc-d513-4554-b246-f6b3b6c788b4",
+          "nom": "Pizza Bolognaise (M)",
+          "description": "Sauce pizza, viande hachée, fromage, olive, champignon",
+          "prix": 6000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/aac5cbbe-8de1-44a2-96e4-bb151536e564.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "937ec78a-6bf9-479c-af0d-d5ae960f38dc",
+          "nom": "Pizza Calabraise (G)",
+          "description": "Fromage, jambon, olive, crème fraîche",
+          "prix": 8000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/21e5b9c4-d914-43be-a2c3-59ea07ace87c.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "9ccbdc49-404f-4ca5-848d-5c61746f0451",
+          "nom": "Pizza Calabraise (M)",
+          "description": "Fromage, jambon, olive, crème fraîche",
+          "prix": 6000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/439c7c45-67e5-4996-bc17-e216b5ade90c.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "96fbf33a-d3ce-4201-8050-e0561490be06",
+          "nom": "Pizza Calsonne (G)",
+          "description": "Sauce pizza, fromage, jambon, champignon, olive, œuf",
+          "prix": 8000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/05cc4092-198c-469c-b527-fa4e76d578a8.png",
+          "allergenes": "Gluten, Œuf",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "694444fc-ddba-4d16-9d2c-adf4c8edf427",
+          "nom": "Pizza Calsonne (M)",
+          "description": "Sauce pizza, fromage, jambon, champignon, olive, œuf",
+          "prix": 6000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/156fe353-4983-4cf5-bbab-aa4255440280.png",
+          "allergenes": "Gluten, Œuf",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "40e96460-e851-4530-b4d4-3691c739fb21",
+          "nom": "Pizza Canadienne (G)",
+          "description": "Sauce pizza, fromage, poulet, jambon, champignon, œuf",
+          "prix": 10000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/d587cdc0-5843-4a1d-960d-672cee04d709.png",
+          "allergenes": "Gluten, Œuf",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "3c175a6b-df06-4d4a-a822-2314ee59e031",
+          "nom": "Pizza Canadienne (M)",
+          "description": "Sauce pizza, fromage, poulet, jambon, champignon, œuf",
+          "prix": 8000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/ae5f89c7-b776-43ef-9541-2f42d11955fa.png",
+          "allergenes": "Gluten, Œuf",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "c712e607-3d7c-4739-b218-a3b561098cd3",
+          "nom": "Pizza Crevette (G)",
+          "description": "Sauce pizza, fromage, champignon, crevette",
+          "prix": 10000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/9ce9d2b2-4671-47fe-a3ad-c78b3b6cad92.png",
+          "allergenes": "Gluten, Crustacés",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "296c2503-4c94-46b1-86d8-a303d60635d5",
+          "nom": "Pizza Crevette (M)",
+          "description": "Sauce pizza, fromage, champignon, crevette",
+          "prix": 8000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/cb221019-8e9d-4542-943f-a1db2b76dce4.png",
+          "allergenes": "Gluten, Crustacés",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "03649ce7-4d04-410f-93f6-84d98bebf852",
+          "nom": "Pizza Margherita (G)",
+          "description": "Sauce pizza, mozzarella",
+          "prix": 8000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/5d024130-6fcf-41ee-b2be-ec52cabfd8ec.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "79418317-a649-40d7-88fc-9534a155e053",
+          "nom": "Pizza Margherita (M)",
+          "description": "Sauce pizza, mozzarella",
+          "prix": 6000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/401e6bb2-eb3f-4b8f-9bb7-2cc2058e45c2.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": true,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "99a7251b-c0fc-4591-bc3b-a8911b648e8f",
+          "nom": "Pizza Merguez (G)",
+          "description": "Sauce pizza, merguez, olive, fromage, champignon",
+          "prix": 8000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/c99a3a69-576f-403c-8605-fa60daedaf20.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "20d71ef2-005a-4046-9148-0b002e8ef5f8",
+          "nom": "Pizza Merguez (M)",
+          "description": "Sauce pizza, merguez, olive, fromage, champignon",
+          "prix": 6000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/728eebb7-ca69-41a6-b779-2ec73eea418e.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "85a8458f-4739-4c8e-8b4e-cc890c41daa8",
+          "nom": "Pizza Mexicaine (G)",
+          "description": "Sauce pizza, poulet, fromage, champignon, olive, piment",
+          "prix": 10000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/ae9a222c-3b57-41cb-8c59-0ca9386e9f58.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "438cc096-f559-4899-a914-188d12b05037",
+          "nom": "Pizza Mexicaine (M)",
+          "description": "Sauce pizza, poulet, fromage, champignon, olive, piment",
+          "prix": 8000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/12743979-4a6b-4bf0-8702-876462d5cb59.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "0afe0297-218f-4494-a481-7b93b9d725bd",
+          "nom": "Pizza Miami (G)",
+          "description": "Sauce pizza, crème fraîche, ananas, olive",
+          "prix": 8000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/207982cf-ad3c-412e-913d-7bb56ea2555c.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "588ad7d1-50fc-4af0-bd3a-b27848903720",
+          "nom": "Pizza Miami (M)",
+          "description": "Sauce pizza, crème fraîche, ananas, olive",
+          "prix": 6000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/8cf14c46-3c57-49f5-8c16-91deded0b9a4.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "24511aa5-8fde-4efa-8646-1926e4e99390",
+          "nom": "Pizza Picasso (G)",
+          "description": "Sauce pizza, fromage, légumes, maïs, poulet",
+          "prix": 10000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/7c6f7c53-f3ae-420c-a431-d6be1ed985cc.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "63abec7d-48b8-454c-b970-f41546b60d64",
+          "nom": "Pizza Picasso (M)",
+          "description": "Sauce pizza, fromage, légumes, maïs, poulet",
+          "prix": 8000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/7dd3ffda-bdfb-497b-9780-8a7294261231.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "2a6738e6-9a75-4fc5-aa7a-4c08d42c3d76",
+          "nom": "Pizza Reine (G)",
+          "description": "Sauce pizza, mozzarella, champignon, olive",
+          "prix": 8000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/5ce3f5b8-4df5-4337-a3ed-2c49163923b2.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "2b08ffc3-ae2f-49b7-9abb-50524ca21aad",
+          "nom": "Pizza Reine (M)",
+          "description": "Sauce pizza, mozzarella, champignon, olive",
+          "prix": 6000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/7af1767e-130b-4784-aeda-8c3348a285f9.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "2f9481a0-894d-45f3-b8d0-98b2b546a60a",
+          "nom": "Pizza Royale (G)",
+          "description": "Sauce pizza, fromage, jambon, olive, champignon",
+          "prix": 8000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/82568f0a-4804-4a9e-a10d-5bd6349fbaed.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "395d3a48-8dff-4d63-b4af-3de6d7595422",
+          "nom": "Pizza Royale (M)",
+          "description": "Sauce pizza, fromage, jambon, olive, champignon",
+          "prix": 6000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/1ba88acd-382b-4421-9c89-3fe08dc85c10.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "3082f890-ac75-42c3-98aa-7ca0efb1c0ad",
+          "nom": "Pizza Royale Crémeuse (G)",
+          "description": "Sauce pizza, jambon, champignon, sauce crémière",
+          "prix": 10000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/128b217b-509e-42aa-8e7a-ef28abe1fb9e.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "234a4d90-4aa7-4937-8686-18141feddd9a",
+          "nom": "Pizza Royale Crémeuse (M)",
+          "description": "Sauce pizza, jambon, champignon, sauce crémière",
+          "prix": 8000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/53b9d170-2ef2-4882-8b20-38a1c0812538.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "b071938f-1c06-438c-94a2-9bd95634b1a0",
+          "nom": "Pizza Thona (G)",
+          "description": "Sauce pizza, fromage, thon, oignon, olive",
+          "prix": 8000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/f88d0fd5-ce88-469d-86a8-8527f0d1571e.png",
+          "allergenes": "Gluten, Poisson",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "47926464-d374-464d-bfc7-10e700abf19c",
+          "nom": "Pizza Thona (M)",
+          "description": "Sauce pizza, fromage, thon, oignon, olive",
+          "prix": 6000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/2c5d406c-df55-4155-bf5b-938a97128d14.png",
+          "allergenes": "Gluten, Poisson",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "9d00d920-9970-43fb-bb87-95f3e9e4d8f8",
+          "nom": "Pizza Végéta (G)",
+          "description": "Sauce pizza, fromage, oignon, tomate, olive, champignon",
+          "prix": 8000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/8bc5aac4-0d76-4ed4-8f66-c3fdd7102dec.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "10da11bb-99ba-4944-9ff7-87f55ef6340a",
+          "nom": "Pizza Végéta (M)",
+          "description": "Sauce pizza, fromage, oignon, tomate, olive, champignon",
+          "prix": 6000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/5fb5bdfa-e87c-42a6-adec-bcfc53a5904d.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        }
+      ]
+    },
+    {
+      "id": "65712bc8-bbaa-42de-aefd-e088da38bda8",
+      "nom": "Apéritifs",
+      "ordre": 10,
+      "active": true,
+      "produits": [
+        {
+          "id": "12cbc996-58cc-4e70-aacf-11a66d15964b",
+          "nom": "Bourak",
+          "description": "Galette enrobée de chapelure grillée, garnie de viande",
+          "prix": 2000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/c78bdbd2-8294-4b59-bc55-2852707d86b0.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "549d4a2d-384c-4fcb-9a78-2fd518472da2",
+          "nom": "Fatayer Jambon Fromage",
+          "description": null,
+          "prix": 1500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/a550cc93-6cc7-47ae-b7ae-407215363ac0.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "2e2bba3a-9528-4524-a713-8422b1ff7828",
+          "nom": "Fatayer Légumes",
+          "description": null,
+          "prix": 1000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/730f6846-233d-4730-85f4-9c0f4aca2543.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "86398c1c-af70-44a1-ae20-c7cd0a36c478",
+          "nom": "Fatayer Maison",
+          "description": null,
+          "prix": 1000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/633677ff-29a8-40bf-845a-156db5a3b81c.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "6f9fd442-420d-4312-9e6b-fe378b23e822",
+          "nom": "Fatayer Viande",
+          "description": null,
+          "prix": 1000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/1fa02f04-6455-4e40-8423-20e6c6c73717.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "1ab41bf5-8c57-41b4-8d50-e809758d14df",
+          "nom": "Kebbé",
+          "description": null,
+          "prix": 1000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/f55f1ebc-80df-4010-81b9-b3c94d70199a.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "64d98903-6fb7-4590-9c7e-bb860a440b00",
+          "nom": "Mini Tacos",
+          "description": "Galette enroulée, viande et fromage",
+          "prix": 2000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/07aa04b2-e481-4847-8519-4655454b4533.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "0751cde8-f5c3-49d9-8334-26a066f2e7db",
+          "nom": "Nems (10 pièces)",
+          "description": null,
+          "prix": 2000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/5c2b8caf-18e2-4152-adc8-fb78f4e905d7.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        }
+      ]
+    },
+    {
+      "id": "59c3db9e-9e6a-4dc4-bd26-1effba5e70a3",
+      "nom": "Jus Naturels",
+      "ordre": 11,
+      "active": true,
+      "produits": [
+        {
+          "id": "962035c2-ea58-42c7-ae5f-540fbe4cb47b",
+          "nom": "Cocktail de Jus",
+          "description": null,
+          "prix": 2500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/60ac84b6-513a-4f68-8f72-4de5cd506db4.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "2cf1db70-6e7a-4bec-9192-68f814072585",
+          "nom": "Jus Ananas",
+          "description": null,
+          "prix": 2500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/38d5873f-8a45-4067-b811-966300f734c4.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "4238eafd-1692-482b-bc0a-f02d54a8c269",
+          "nom": "Jus Carotte",
+          "description": null,
+          "prix": 3000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/a76ae2d1-a7c6-422b-8eb9-4a7c8616ab4e.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "8e944c5d-2ee3-45ab-a10f-20ebebbca6b6",
+          "nom": "Jus Citron Menthe",
+          "description": null,
+          "prix": 2500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/e9c655ce-9500-49ea-93e7-6da4abdb82c7.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "865ca49e-ec1c-48c6-b772-11be261a21f0",
+          "nom": "Jus d'Orange",
+          "description": null,
+          "prix": 2000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/ed24fa08-a542-467e-b8d0-358f035ce12f.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "2ef8f279-b44c-420c-b586-789735aceccc",
+          "nom": "Jus Gingembre",
+          "description": null,
+          "prix": 1500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/8a8ad7bc-de70-46d0-a706-e16f4433ce55.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": true,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "4b508a51-f2ba-49aa-91e6-d14d38796c9c",
+          "nom": "Jus Limonade",
+          "description": null,
+          "prix": 2000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/5edaf04f-4e45-481a-848c-dae11caec4d2.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "44f91928-99ab-4b76-a103-8f5b1b96abc9",
+          "nom": "Jus Pamplemousse",
+          "description": null,
+          "prix": 2500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/967eb7c7-139c-488c-b7e8-ad764725b96b.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "5055b9d5-bfbc-42e2-94c7-0938e6a25cc9",
+          "nom": "Jus Pastèque",
+          "description": null,
+          "prix": 2500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/2b5b52dd-0dd1-42b2-b476-ff626eac9ee7.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "68362117-b16b-4e17-bae7-e290080d75e4",
+          "nom": "Jus Pomme",
+          "description": null,
+          "prix": 2500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/8398419c-a650-4e66-90dd-fe7aedd41755.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "5ea1c0b4-b94a-47d7-8565-ac2fc386bfc6",
+          "nom": "Tout Laisse",
+          "description": "Pastèque, petit cola, gingembre",
+          "prix": 3000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/1878b156-f81c-4c76-b4d2-e41f811533bb.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        }
+      ]
+    },
+    {
+      "id": "0a9d4e29-290b-4089-80de-283562adc21c",
+      "nom": "Boissons",
+      "ordre": 12,
+      "active": true,
+      "produits": [
+        {
+          "id": "5f37a2b0-a73b-4465-baeb-afa7a79f0110",
+          "nom": "Bavaria (Bouteille)",
+          "description": null,
+          "prix": 1500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/8c008121-12fc-405d-8d5b-cfd2f27f18e8.avif",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "9f1be937-9ba5-45aa-8d08-630bd3eb72c1",
+          "nom": "Boisson",
+          "description": "coca, fanta , orangina , cody's energie , sprite , moka cafe, youzou \n\nmerci de mettre votre choix en description svp",
+          "prix": 1000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/b4c5cdc3-43c5-4663-87dd-fde46e986fc8.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "c3baa0eb-6467-4c07-881a-4b2e7a633aa8",
+          "nom": "Café au Lait",
+          "description": null,
+          "prix": 1000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/f7a7875a-f94f-4630-b701-30c37a9d2dd4.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "0d9318d4-5b4c-4f3b-9b4a-8848a4dd253d",
+          "nom": "Cody's Énergie",
+          "description": null,
+          "prix": 1000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/353dbf2d-f719-4143-9482-6b04f586920f.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "354ac83c-9489-4633-ba97-ff52ebc6b100",
+          "nom": "Cody's Malta",
+          "description": null,
+          "prix": 1500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/944cd702-f722-4366-99e3-a2d7380e46bb.webp",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "251fab17-fe3f-46d4-8129-5136698385e2",
+          "nom": "Eau Céleste (Grande)",
+          "description": null,
+          "prix": 1000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/002032bd-e9c0-4f08-be16-a35fa434955b.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "2f47a9df-70c2-40f2-b96e-e322f7098540",
+          "nom": "Eau Céleste (Petite)",
+          "description": null,
+          "prix": 500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/56f6dae3-50b7-40cd-9c5f-2fec0301a35f.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "170b392c-1c17-4793-a57c-8b3a58699a43",
+          "nom": "Fresco",
+          "description": null,
+          "prix": 1000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/6bfb8ed9-824f-4999-93f6-856182b908a3.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "6091e47b-76d3-4688-aefe-bdcb6fefe8b2",
+          "nom": "Nespresso",
+          "description": null,
+          "prix": 1000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/646aa147-0b82-46a8-85c0-3c0a4e8cd29c.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "d3d34858-fa9d-4ad3-9c3a-ad37b7e1bbe7",
+          "nom": "Thé",
+          "description": null,
+          "prix": 1000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/d4ded178-04e1-41a8-b243-799f85bcf4c0.avif",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "b125a439-2a72-4ae9-8da3-d48a6ef736c9",
+          "nom": "Thé Infusion",
+          "description": "Gingembre, citron, miel",
+          "prix": 2000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/3160c33c-2873-4251-916f-9222ca9e8e2f.avif",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        }
+      ]
+    },
+    {
+      "id": "20eb893f-c177-4ce0-8949-957d20d3f9ce",
+      "nom": "Crêpes",
+      "ordre": 13,
+      "active": true,
+      "produits": [
+        {
+          "id": "4e137007-f94d-445e-9b8f-8ec2d4fa9d84",
+          "nom": "Crêpe aux Fruits",
+          "description": null,
+          "prix": 4500,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/3772b5ea-ba50-4b7c-87b8-fe3a9e9b9bca.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "05570d1b-6d64-4a24-917f-ddc9d61ce1a3",
+          "nom": "Crêpe Nutella",
+          "description": null,
+          "prix": 3000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/6d9b413d-fa10-471d-bde1-8204d9cbce7d.png",
+          "allergenes": "Gluten, Fruits à coque",
+          "disponible": true,
+          "populaire": true,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "30ef0f80-3958-4de4-ad8e-b54a620fd816",
+          "nom": "Crêpe Sucrée",
+          "description": null,
+          "prix": 2000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/f8c952ab-5eb9-4a34-bae3-bd08139143e8.png",
+          "allergenes": "Gluten",
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        }
+      ]
+    },
+    {
+      "id": "1558a155-8d0d-447b-ac8e-6533afeff3db",
+      "nom": "Desserts",
+      "ordre": 14,
+      "active": true,
+      "produits": [
+        {
+          "id": "4012baa5-59bf-4fcd-a320-d2f2b39c75ad",
+          "nom": "Glace (2 Boules)",
+          "description": null,
+          "prix": 1000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/b4047411-4940-4b1a-b5a8-213ab82259b6.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "0446bde8-cc06-403f-b1c3-b9dd679502ce",
+          "nom": "Glace Spéciale",
+          "description": null,
+          "prix": 3000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/7e4f1c87-2f2f-43d0-898b-b951fe360764.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": true,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "85615e29-00ed-41fc-8c8b-46470cbd949f",
+          "nom": "Milkshake",
+          "description": null,
+          "prix": 3000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/0c58e5bd-2b10-4b80-8b65-7f94898d7ab4.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        },
+        {
+          "id": "8aa4181d-367a-4036-bc89-de2cc9cc2ca0",
+          "nom": "Salade de Fruits",
+          "description": null,
+          "prix": 3000,
+          "photo_url": "https://mobmgbedyyqeggxjpbrk.supabase.co/storage/v1/object/public/photos/produits/408af82d-1186-47c8-93b7-babf5ba3c360.png",
+          "allergenes": null,
+          "disponible": true,
+          "populaire": false,
+          "temps_preparation_min": 20
+        }
+      ]
+    },
+    {
+      "id": "119ea8f3-f49c-457e-b1d8-8baeeab16590",
+      "nom": "Chicha",
+      "ordre": 15,
+      "active": false,
+      "produits": []
+    }
+  ]
+}
