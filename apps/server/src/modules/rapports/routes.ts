@@ -18,8 +18,8 @@ function debutIlYaJours(jours: number): Date {
 }
 
 export function routesRapports(app: FastifyInstance): void {
-  const gardeManager = app.exigerRole('MANAGER', 'PROPRIETAIRE');
-  const gardeProprio = app.exigerRole('PROPRIETAIRE');
+  const gardeManager = app.exigePermission('rapports.z');
+  const gardeProprio = app.exigePermission('rapports.tableau_bord');
 
   // Ventes du jour (tous services confondus) — manager / propriétaire
   app.get('/api/rapports/jour', { preHandler: gardeManager }, async () => {
@@ -178,7 +178,7 @@ export function routesRapports(app: FastifyInstance): void {
   });
 
   /** C4 — Récap notation (manager) : moyennes 7/30 j + dernières mauvaises notes. */
-  app.get('/api/rapports/notations', { preHandler: gardeManager }, async () => {
+  app.get('/api/rapports/notations', { preHandler: app.exigePermission('rapports.notation') }, async () => {
     const calcul = async (jours: number) => {
       const depuis = debutIlYaJours(jours);
       const [r] = await db

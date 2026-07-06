@@ -15,10 +15,8 @@ import {
   verrouillerCommande,
 } from '../commandes/service.js';
 
-const ROLES_CAISSE = ['CAISSIER', 'MANAGER', 'PROPRIETAIRE'] as const;
-
 export function routesPaiements(app: FastifyInstance): void {
-  const gardeCaisse = app.exigerRole(...ROLES_CAISSE);
+  const gardeCaisse = app.exigePermission('caisse.encaisser');
 
   /**
    * Split de note : somme des notes == total de la commande, avant tout paiement.

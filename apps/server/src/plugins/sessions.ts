@@ -1,28 +1,26 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { Role } from '@pos/shared';
 import { ErreurMetier } from '../lib/erreurs.js';
+import { permissionsDuRole } from '../modules/roles/service.js';
 
 export interface SessionUtilisateur {
   id: string;
   utilisateur_id: string;
   nom_complet: string;
-  role: Role;
+  role_id: string | null;
+  role_nom: string;
+  est_proprietaire: boolean;
+  est_superviseur: boolean;
   expire_a: number;
 }
 
 const DUREE_SESSION_MS = 12 * 60 * 60 * 1000; // 12 h (le service peut durer la journée)
 export const NOM_COOKIE = 'pos_session';
 
-/**
- * Sessions serveur en mémoire, id opaque dans un cookie httpOnly (§14).
- * Un seul serveur local par restaurant : un store mémoire suffit en sprint 1.
- * Aucune donnée sensible côté navigateur autre que l'id de session.
- */
 export class MagasinSessions {
   private sessions = new Map<string, SessionUtilisateur>();
 
-  creer(u: { utilisateur_id: string; nom_complet: string; role: Role }): SessionUtilisateur {
+  creer(u: Omit<SessionUtilisateur, 'id' | 'expire_a'>): SessionUtilisateur {
     const session: SessionUtilisateur = {
       id: randomBytes(32).toString('hex'),
       ...u,
@@ -47,13 +45,31 @@ export class MagasinSessions {
   detruire(id: string | undefined): void {
     if (id) this.sessions.delete(id);
   }
+
+  /** Coupe toutes les sessions d'un utilisateur (désactivation, réinit PIN). */
+  detruirePourUtilisateur(utilisateurId: string): void {
+    for (const [id, s] of this.sessions) {
+      if (s.utilisateur_id === utilisateurId) this.sessions.delete(id);
+    }
+  }
+}
+
+/**
+ * Le PROPRIETAIRE a TOUJOURS toutes les permissions (invariant anti-verrouillage
+ * 1.5) : même si role_permissions était vide, il passe.
+ */
+export async function aPermission(session: SessionUtilisateur, cle: string): Promise<boolean> {
+  if (session.est_proprietaire) return true;
+  const perms = await permissionsDuRole(session.role_id);
+  return perms.has(cle);
 }
 
 declare module 'fastify' {
   interface FastifyInstance {
     sessions: MagasinSessions;
     exigerAuth: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
-    exigerRole: (...roles: Role[]) => (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    /** Guard : la route exige la permission `cle` (403 sinon). */
+    exigePermission: (cle: string) => (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
   interface FastifyRequest {
     session: SessionUtilisateur | null;
@@ -72,10 +88,10 @@ export function enregistrerSessions(app: FastifyInstance): void {
     if (!req.session) throw new ErreurMetier('Connectez-vous pour continuer', 401);
   });
 
-  app.decorate('exigerRole', (...roles: Role[]) => {
+  app.decorate('exigePermission', (cle: string) => {
     return async (req: FastifyRequest) => {
       if (!req.session) throw new ErreurMetier('Connectez-vous pour continuer', 401);
-      if (!roles.includes(req.session.role)) {
+      if (!(await aPermission(req.session, cle))) {
         throw new ErreurMetier('Vous n’avez pas le droit d’effectuer cette action', 403);
       }
     };
@@ -87,7 +103,6 @@ export function poserCookieSession(reply: FastifyReply, sessionId: string): void
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
-    // secure: false — réseau local sans TLS en sprint 1 (LAN du restaurant)
   });
 }
 

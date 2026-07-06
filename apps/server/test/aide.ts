@@ -3,6 +3,7 @@ import argon2 from 'argon2';
 import { sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { db } from '../src/db/client.js';
+import { etablirRolesSysteme } from '../src/modules/roles/service.js';
 import {
   articles,
   categories,
@@ -50,6 +51,7 @@ export interface Donnees {
   table2_id: string;
   table2_qr: string;
   zone_id: string;
+  roles: Record<string, string>;
 }
 
 /** Vide la base de test et insère le strict nécessaire (sans promotions). */
@@ -59,7 +61,8 @@ export async function resetDonnees(): Promise<Donnees> {
       notations, sync_etat, sync_outbox, audit_log, paiements, notes_split,
       commande_items, commandes, services_caisse, tables_salle, zones,
       promotions, mapping_poste_categorie, combo_articles, combos, supplements,
-      options, groupes_options, prix_canaux, articles, categories, utilisateurs,
+      options, groupes_options, prix_canaux, articles, categories,
+      role_permissions, utilisateurs, roles,
       parametres_locaux, restaurant
       RESTART IDENTITY CASCADE
   `);
@@ -84,16 +87,20 @@ export async function resetDonnees(): Promise<Donnees> {
     { cle: 'fidelite_seuil_utilisation', valeur: 50 },
   ]);
 
+  // Rôles système (sprint 4B+4C) puis utilisateurs raccordés
+  const roleIdParNom = await etablirRolesSysteme(db);
+  const rid = (nom: string) => roleIdParNom.get(nom)!;
+
   const [proprio, manager, caissier, caissier2, serveur, cuisine, pizzaiolo] = await db
     .insert(utilisateurs)
     .values([
-      { nom_complet: 'Proprio Test', role: 'PROPRIETAIRE', pin_hash: await hacher(PIN_PROPRIO), telephone: '+2250700000001' },
-      { nom_complet: 'Manager Test', role: 'MANAGER', pin_hash: await hacher(PIN_MANAGER), telephone: '+2250700000002' },
-      { nom_complet: 'Caissier Test', role: 'CAISSIER', pin_hash: await hacher(PIN_CAISSIER), telephone: '+2250700000003' },
-      { nom_complet: 'Caissier Suivant', role: 'CAISSIER', pin_hash: await hacher(PIN_CAISSIER2), telephone: '+2250700000004' },
-      { nom_complet: 'Serveur Test', role: 'SERVEUR', pin_hash: await hacher(PIN_SERVEUR), telephone: '+2250700000005' },
-      { nom_complet: 'Cuisine Test', role: 'CUISINE', poste_cuisine: 'CUISINIER', pin_hash: await hacher(PIN_CUISINE), telephone: '+2250700000007' },
-      { nom_complet: 'Pizzaiolo Test', role: 'CUISINE', poste_cuisine: 'PIZZAIOLO', pin_hash: await hacher(PIN_CUISINE), telephone: '+2250700000008' },
+      { nom_complet: 'Proprio Test', role: 'PROPRIETAIRE', role_id: rid('PROPRIETAIRE'), pin_hash: await hacher(PIN_PROPRIO), telephone: '+2250700000001' },
+      { nom_complet: 'Manager Test', role: 'MANAGER', role_id: rid('MANAGER'), pin_hash: await hacher(PIN_MANAGER), telephone: '+2250700000002' },
+      { nom_complet: 'Caissier Test', role: 'CAISSIER', role_id: rid('CAISSIER'), pin_hash: await hacher(PIN_CAISSIER), telephone: '+2250700000003' },
+      { nom_complet: 'Caissier Suivant', role: 'CAISSIER', role_id: rid('CAISSIER'), pin_hash: await hacher(PIN_CAISSIER2), telephone: '+2250700000004' },
+      { nom_complet: 'Serveur Test', role: 'SERVEUR', role_id: rid('SERVEUR'), pin_hash: await hacher(PIN_SERVEUR), telephone: '+2250700000005' },
+      { nom_complet: 'Cuisine Test', role: 'CUISINE', role_id: rid('CUISINE'), poste_cuisine: 'CUISINIER', pin_hash: await hacher(PIN_CUISINE), telephone: '+2250700000007' },
+      { nom_complet: 'Pizzaiolo Test', role: 'CUISINE', role_id: rid('CUISINE'), poste_cuisine: 'PIZZAIOLO', pin_hash: await hacher(PIN_CUISINE), telephone: '+2250700000008' },
     ])
     .returning();
 
@@ -147,6 +154,7 @@ export async function resetDonnees(): Promise<Donnees> {
     table2_id: table2!.id,
     table2_qr: table2!.qr_token!,
     zone_id: zone!.id,
+    roles: Object.fromEntries(roleIdParNom),
   };
 }
 

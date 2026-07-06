@@ -45,11 +45,27 @@ CREATE TABLE parametres_locaux (        -- LOCAL UNIQUEMENT
 CREATE TYPE role_pos AS ENUM ('PROPRIETAIRE','MANAGER','CAISSIER','SERVEUR','CUISINE');
 CREATE TYPE poste_cuisine AS ENUM ('CUISINIER','PIZZAIOLO','COMPTOIRISTE');
 
+-- Sprint 4B+4C : rôles composés de permissions (roles + role_permissions).
+CREATE TABLE roles (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nom        TEXT NOT NULL UNIQUE,
+  systeme    BOOLEAN NOT NULL DEFAULT FALSE,
+  actif      BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE role_permissions (
+  role_id        UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  permission_cle TEXT NOT NULL,
+  PRIMARY KEY (role_id, permission_cle)
+);
+
 CREATE TABLE utilisateurs (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nom_complet     TEXT NOT NULL,
-  role            role_pos NOT NULL,
-  poste_cuisine   poste_cuisine,                -- NULL sauf role = CUISINE
+  role            role_pos,                     -- ancien enum (compat), source = role_id
+  role_id         UUID REFERENCES roles(id),    -- rôle composé (sprint 4B+4C)
+  poste_cuisine   poste_cuisine,                -- NULL sauf cuisine
   pin_hash        TEXT NOT NULL,                -- argon2id, jamais le PIN en clair
   telephone       TEXT,                         -- pour pointage SMS
   actif           BOOLEAN NOT NULL DEFAULT TRUE,

@@ -37,7 +37,7 @@ beforeAll(async () => {
   // Un 2e serveur « Fatou » (le fixture n'en a qu'un)
   const [fatou] = await db
     .insert(utilisateurs)
-    .values({ nom_complet: 'Fatou Bamba', role: 'SERVEUR', pin_hash: (await db.select().from(utilisateurs).where(eq(utilisateurs.id, donnees.serveur_id)))[0]!.pin_hash })
+    .values({ nom_complet: 'Fatou Bamba', role: 'SERVEUR', role_id: donnees.roles.SERVEUR, pin_hash: (await db.select().from(utilisateurs).where(eq(utilisateurs.id, donnees.serveur_id)))[0]!.pin_hash })
     .returning();
   fatouId = fatou!.id;
 

@@ -23,6 +23,8 @@ import {
   zones,
 } from './schema/index.js';
 
+import { etablirRolesSysteme } from '../modules/roles/service.js';
+
 export async function hacherPin(pin: string): Promise<string> {
   return argon2.hash(pin, { type: argon2.argon2id });
 }
@@ -35,7 +37,8 @@ export async function seed(): Promise<void> {
       notations, sync_etat, sync_outbox, audit_log, paiements, notes_split,
       commande_items, commandes, services_caisse, tables_salle, zones,
       promotions, mapping_poste_categorie, combo_articles, combos, supplements,
-      options, groupes_options, prix_canaux, articles, categories, utilisateurs,
+      options, groupes_options, prix_canaux, articles, categories,
+      role_permissions, utilisateurs, roles,
       parametres_locaux, restaurant
       RESTART IDENTITY CASCADE
   `);
@@ -72,17 +75,21 @@ export async function seed(): Promise<void> {
     { cle: 'fidelite_seuil_utilisation', valeur: 50 },
   ]);
 
+  // --- Rôles système (sprint 4B+4C) puis utilisateurs raccordés ---
+  const roleIdParNom = await etablirRolesSysteme(db);
+  const rid = (nom: string) => roleIdParNom.get(nom)!;
+
   // --- Utilisateurs (PIN de démo — à changer en production) ---
   await db.insert(utilisateurs).values([
-    { nom_complet: 'Samer El Khoury', role: 'PROPRIETAIRE', pin_hash: await hacherPin('852741'), telephone: '+2250700000001' },
-    { nom_complet: 'Awa Koné', role: 'MANAGER', pin_hash: await hacherPin('963852'), telephone: '+2250700000002' },
-    { nom_complet: 'Mariam Diabaté', role: 'CAISSIER', pin_hash: await hacherPin('2580'), telephone: '+2250700000003' },
-    { nom_complet: 'Ibrahim Traoré', role: 'CAISSIER', pin_hash: await hacherPin('4826'), telephone: '+2250700000004' },
-    { nom_complet: 'Fatou Bamba', role: 'SERVEUR', pin_hash: await hacherPin('1357'), telephone: '+2250700000005' },
-    { nom_complet: 'Moussa Cissé', role: 'SERVEUR', pin_hash: await hacherPin('2468'), telephone: '+2250700000006' },
-    { nom_complet: 'Kouadio Yao', role: 'CUISINE', poste_cuisine: 'CUISINIER', pin_hash: await hacherPin('7913'), telephone: '+2250700000007' },
-    { nom_complet: 'Luigi Kouassi', role: 'CUISINE', poste_cuisine: 'PIZZAIOLO', pin_hash: await hacherPin('8024'), telephone: '+2250700000008' },
-    { nom_complet: 'Aminata Touré', role: 'CUISINE', poste_cuisine: 'COMPTOIRISTE', pin_hash: await hacherPin('4652'), telephone: '+2250700000009' },
+    { nom_complet: 'Samer El Khoury', role: 'PROPRIETAIRE', role_id: rid('PROPRIETAIRE'), pin_hash: await hacherPin('852741'), telephone: '+2250700000001' },
+    { nom_complet: 'Awa Koné', role: 'MANAGER', role_id: rid('MANAGER'), pin_hash: await hacherPin('963852'), telephone: '+2250700000002' },
+    { nom_complet: 'Mariam Diabaté', role: 'CAISSIER', role_id: rid('CAISSIER'), pin_hash: await hacherPin('2580'), telephone: '+2250700000003' },
+    { nom_complet: 'Ibrahim Traoré', role: 'CAISSIER', role_id: rid('CAISSIER'), pin_hash: await hacherPin('4826'), telephone: '+2250700000004' },
+    { nom_complet: 'Fatou Bamba', role: 'SERVEUR', role_id: rid('SERVEUR'), pin_hash: await hacherPin('1357'), telephone: '+2250700000005' },
+    { nom_complet: 'Moussa Cissé', role: 'SERVEUR', role_id: rid('SERVEUR'), pin_hash: await hacherPin('2468'), telephone: '+2250700000006' },
+    { nom_complet: 'Kouadio Yao', role: 'CUISINE', role_id: rid('CUISINE'), poste_cuisine: 'CUISINIER', pin_hash: await hacherPin('7913'), telephone: '+2250700000007' },
+    { nom_complet: 'Luigi Kouassi', role: 'CUISINE', role_id: rid('CUISINE'), poste_cuisine: 'PIZZAIOLO', pin_hash: await hacherPin('8024'), telephone: '+2250700000008' },
+    { nom_complet: 'Aminata Touré', role: 'CUISINE', role_id: rid('CUISINE'), poste_cuisine: 'COMPTOIRISTE', pin_hash: await hacherPin('4652'), telephone: '+2250700000009' },
   ]);
 
   // --- Catalogue ---

@@ -77,12 +77,28 @@ export const parametresLocaux = pgTable('parametres_locaux', {
 });
 
 // ---------------------------------------------------------------------------
-// 1. Utilisateurs et rôles (§8, §14.1)
+// 1. Utilisateurs et rôles (§8, §14.1) — sprint 4B+4C : rôles composés
 // ---------------------------------------------------------------------------
+export const roles = pgTable('roles', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  nom: text('nom').notNull().unique(),
+  systeme: boolean('systeme').notNull().default(false),
+  actif: boolean('actif').notNull().default(true),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const rolePermissions = pgTable('role_permissions', {
+  role_id: uuid('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
+  permission_cle: text('permission_cle').notNull(),
+}, (t) => [primaryKey({ columns: [t.role_id, t.permission_cle] })]);
+
 export const utilisateurs = pgTable('utilisateurs', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   nom_complet: text('nom_complet').notNull(),
-  role: rolePos('role').notNull(),
+  // Ancien enum conservé (compat) ; source de vérité = role_id.
+  role: rolePos('role'),
+  role_id: uuid('role_id').references(() => roles.id),
   poste_cuisine: posteCuisine('poste_cuisine'),
   pin_hash: text('pin_hash').notNull(),
   telephone: text('telephone'),

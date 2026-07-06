@@ -19,7 +19,8 @@ export type EvenementWs =
   | 'table:changee'
   | 'appel:nouveau'
   | 'service'
-  | 'catalogue';
+  | 'catalogue'
+  | 'permissions';
 
 /**
  * Présence des serveurs (point 1b) : un serveur est « présent » s'il a une
@@ -118,7 +119,7 @@ export async function enregistrerWs(app: FastifyInstance): Promise<void> {
     const conn: Connexion = {
       socket,
       utilisateur_id: req.session?.utilisateur_id ?? null,
-      role: req.session?.role ?? null,
+      role: req.session?.role_nom ?? null,
       dernier_battement: Date.now(),
     };
     presence.ajouter(conn);

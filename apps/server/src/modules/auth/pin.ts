@@ -8,6 +8,15 @@ import { db } from '../../db/client.js';
 import { utilisateurs } from '../../db/schema/index.js';
 import { journaliser } from '../audit/audit.js';
 import { ErreurMetier } from '../../lib/erreurs.js';
+import { permissionsDuRole } from '../roles/service.js';
+
+/**
+ * Permission qui marque l'autorité « manager » pour valider une action protégée
+ * (remise, annulation d'article envoyé, réouverture, correction pointage).
+ * MANAGER / PROPRIETAIRE / SUPERVISEUR la possèdent ; un CAISSIER non — ce qui
+ * préserve la règle « PIN manager » sous le modèle par permissions.
+ */
+const PERMISSION_SUPERVISION = 'rapports.z';
 
 const SEUIL_ECHECS = 5;
 const PALIERS_VERROU_SECONDES = [30, 60, 300] as const;
@@ -82,7 +91,11 @@ export async function verifierPinManager(pin: string, contexte: string): Promise
     .from(utilisateurs)
     .where(and(eq(utilisateurs.actif, true)));
   for (const m of managers) {
-    if (m.role !== 'MANAGER' && m.role !== 'PROPRIETAIRE') continue;
+    // Propriétaire : toujours autorisé (invariant anti-verrouillage 1.5).
+    // Sinon, le rôle doit porter la permission de supervision.
+    const estAutorise =
+      m.role === 'PROPRIETAIRE' || (await permissionsDuRole(m.role_id)).has(PERMISSION_SUPERVISION);
+    if (!estAutorise) continue;
     if (m.verrou_jusqua && m.verrou_jusqua.getTime() > Date.now()) continue;
     if (await argon2.verify(m.pin_hash, pin)) return m;
   }

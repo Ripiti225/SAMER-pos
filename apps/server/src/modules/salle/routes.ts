@@ -26,11 +26,11 @@ import {
 } from '../commandes/service.js';
 import { calculerDestinataire } from '../routage/routage.js';
 import { exigerAccesTable, ouvrirTablePar } from '../tables/propriete.js';
-
-const ROLES_SALLE = ['SERVEUR', 'CAISSIER', 'MANAGER', 'PROPRIETAIRE'] as const;
+import { aPermission } from '../../plugins/sessions.js';
+import { permissionsDuRole } from '../roles/service.js';
 
 export function routesSalle(app: FastifyInstance): void {
-  const gardeSalle = app.exigerRole(...ROLES_SALLE);
+  const gardeSalle = app.exigePermission('salle.commande');
 
   // Appels client en attente, avec leur destinataire recalculé (présence à jour)
   app.get('/api/appels/en-attente', { preHandler: gardeSalle }, async (): Promise<AppelVue[]> => {
@@ -105,7 +105,9 @@ export function routesSalle(app: FastifyInstance): void {
    */
   app.post('/api/commandes/:id/valider', { preHandler: gardeSalle }, async (req) => {
     const { id } = req.params as { id: string };
-    const estServeur = req.session!.role === 'SERVEUR';
+    // « Serveur » au sens propriété de table : celui qui ne voit pas toutes les
+    // tables devient responsable de celle qu'il ouvre (caisse/manager : accès total).
+    const estServeur = !(await aPermission(req.session!, 'salle.voir_toutes_tables'));
 
     const vue = await db.transaction(async (tx) => {
       const c = await verrouillerCommande(tx, id);
@@ -212,7 +214,7 @@ export function routesSalle(app: FastifyInstance): void {
    */
   app.post(
     '/api/caisse/tables/:id/transferer',
-    { preHandler: app.exigerRole('CAISSIER', 'MANAGER', 'PROPRIETAIRE') },
+    { preHandler: app.exigePermission('salle.transferer_table') },
     async (req) => {
       const { id } = req.params as { id: string };
       const corps = valider(TransfertTableSchema, req.body);
@@ -224,7 +226,7 @@ export function routesSalle(app: FastifyInstance): void {
           .select()
           .from(utilisateurs)
           .where(and(eq(utilisateurs.id, corps.serveur_id), eq(utilisateurs.actif, true)));
-        if (!receveur || receveur.role !== 'SERVEUR') {
+        if (!receveur || !(await permissionsDuRole(receveur.role_id)).has('salle.commande')) {
           throw new ErreurMetier('Choisissez un serveur actif', 400);
         }
 

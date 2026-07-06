@@ -37,7 +37,7 @@ async function actionInedite(tx: DbOuTx, actionUuid: string): Promise<boolean> {
 }
 
 export function routesServeur(app: FastifyInstance): void {
-  const gardeSalle = app.exigerRole('SERVEUR', 'MANAGER', 'PROPRIETAIRE');
+  const gardeSalle = app.exigePermission('salle.envoyer_cuisine');
 
   /**
    * « Envoyer en cuisine » : action unique qui, en une transaction,

@@ -99,7 +99,7 @@ export function routesPointage(app: FastifyInstance): void {
   });
 
   // A4 — Présences du jour (manager)
-  app.get('/api/pointage/presences', { preHandler: app.exigerRole('MANAGER', 'PROPRIETAIRE') }, async () => {
+  app.get('/api/pointage/presences', { preHandler: app.exigePermission('reglages.pointage') }, async () => {
     const debut = new Date();
     debut.setHours(0, 0, 0, 0);
     const lignes = await db
@@ -131,7 +131,7 @@ export function routesPointage(app: FastifyInstance): void {
   });
 
   // Correction d'un pointage : PIN manager + motif → audit CORRECTION_POINTAGE
-  app.post('/api/pointage/:id/corriger', { preHandler: app.exigerRole('MANAGER', 'PROPRIETAIRE') }, async (req) => {
+  app.post('/api/pointage/:id/corriger', { preHandler: app.exigePermission('reglages.pointage') }, async (req) => {
     const { id } = req.params as { id: string };
     const corps = valider(CorrectionPointageSchema, req.body);
     const manager = await verifierPinManager(corps.pin_manager, 'CORRECTION_POINTAGE');

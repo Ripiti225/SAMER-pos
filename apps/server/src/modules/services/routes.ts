@@ -11,8 +11,8 @@ import { journaliser } from '../audit/audit.js';
 import { verifierPinUtilisateur } from '../auth/pin.js';
 import { fermerPointagesOublies } from '../pointage/service.js';
 import { calculerStatsService } from './rapport.js';
-
-const ROLES_CAISSE = ['CAISSIER', 'MANAGER', 'PROPRIETAIRE'] as const;
+import { aPermission } from '../../plugins/sessions.js';
+import { permissionsDuRole } from '../roles/service.js';
 
 /** Vue publique d'un service : ne contient JAMAIS especes_theorique tant que non clôturé. */
 function vueService(s: typeof servicesCaisse.$inferSelect) {
@@ -25,7 +25,7 @@ function vueService(s: typeof servicesCaisse.$inferSelect) {
 }
 
 export function routesServices(app: FastifyInstance): void {
-  const gardeCaisse = app.exigerRole(...ROLES_CAISSE);
+  const gardeCaisse = app.exigePermission('caisse.service.ouvrir');
 
   // Ouverture de service : saisie du fond de caisse
   app.post('/api/services/ouvrir', { preHandler: gardeCaisse }, async (req) => {
@@ -110,7 +110,7 @@ export function routesServices(app: FastifyInstance): void {
       .from(utilisateurs)
       .where(and(eq(utilisateurs.id, corps.receveur_id), eq(utilisateurs.actif, true)));
     if (!receveur) throw introuvable('Caissier receveur');
-    if (receveur.role !== 'CAISSIER' && receveur.role !== 'MANAGER' && receveur.role !== 'PROPRIETAIRE') {
+    if (!(await permissionsDuRole(receveur.role_id)).has('caisse.service.ouvrir')) {
       throw new ErreurMetier('Ce collègue ne peut pas tenir la caisse', 400);
     }
 
@@ -185,7 +185,7 @@ export function routesServices(app: FastifyInstance): void {
    * cette route est le seul endroit où il est calculé, et il n'existe aucune
    * route qui le renvoie pour un service encore OUVERT.
    */
-  app.post('/api/services/cloturer', { preHandler: gardeCaisse }, async (req) => {
+  app.post('/api/services/cloturer', { preHandler: app.exigePermission('caisse.cloturer') }, async (req) => {
     const corps = valider(CloturerServiceSchema, req.body);
     const caissierId = req.session!.utilisateur_id;
 
@@ -302,8 +302,8 @@ export function routesServices(app: FastifyInstance): void {
     const [service] = await db.select().from(servicesCaisse).where(eq(servicesCaisse.id, id));
     if (!service) throw introuvable('Service');
 
-    const estManager = req.session!.role === 'MANAGER' || req.session!.role === 'PROPRIETAIRE';
-    if (!estManager && service.caissier_id !== req.session!.utilisateur_id) {
+    const voitTousRapports = await aPermission(req.session!, 'rapports.z');
+    if (!voitTousRapports && service.caissier_id !== req.session!.utilisateur_id) {
       throw new ErreurMetier('Vous n’avez pas le droit de consulter ce rapport', 403);
     }
     // Comptage à l'aveugle : rien n'est révélé tant que le comptage n'est pas enregistré
@@ -316,7 +316,7 @@ export function routesServices(app: FastifyInstance): void {
   // Rapport X (ventes en cours de service) : MANAGER / PROPRIETAIRE uniquement (§14)
   app.get(
     '/api/services/:id/rapport-x',
-    { preHandler: app.exigerRole('MANAGER', 'PROPRIETAIRE') },
+    { preHandler: app.exigePermission('rapports.x') },
     async (req) => {
       const { id } = req.params as { id: string };
       const [service] = await db.select().from(servicesCaisse).where(eq(servicesCaisse.id, id));

@@ -43,6 +43,13 @@
       "when": 1751940000000,
       "tag": "0005_fidelite",
       "breakpoints": false
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1752000000000,
+      "tag": "0006_roles_permissions",
+      "breakpoints": false
     }
   ]
 }

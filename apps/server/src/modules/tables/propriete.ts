@@ -5,7 +5,7 @@
  */
 import { eq } from 'drizzle-orm';
 import type { DbOuTx } from '../../db/client.js';
-import type { SessionUtilisateur } from '../../plugins/sessions.js';
+import { aPermission, type SessionUtilisateur } from '../../plugins/sessions.js';
 import { tablesSalle, utilisateurs } from '../../db/schema/index.js';
 import { ErreurMetier } from '../../lib/erreurs.js';
 
@@ -32,7 +32,8 @@ export async function exigerAccesTable(
   tableId: string | null,
 ): Promise<void> {
   if (!tableId) return;
-  if (session.role !== 'SERVEUR') return; // caisse / manager / propriétaire : accès total
+  // Accès total pour qui voit toutes les tables (caisse / manager / propriétaire)
+  if (await aPermission(session, 'salle.voir_toutes_tables')) return;
   const [t] = await dbx
     .select({ ouverte_par: tablesSalle.ouverte_par, nom: utilisateurs.nom_complet })
     .from(tablesSalle)

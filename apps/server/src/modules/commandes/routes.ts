@@ -28,13 +28,9 @@ import {
   verrouillerCommande,
 } from './service.js';
 
-const ROLES_CAISSE = ['CAISSIER', 'MANAGER', 'PROPRIETAIRE'] as const;
-
 export function routesCommandes(app: FastifyInstance): void {
-  const gardeCaisse = app.exigerRole(...ROLES_CAISSE);
-
   // Nouvelle commande — exige un service ouvert (le n° de ticket est définitif)
-  app.post('/api/commandes', { preHandler: gardeCaisse }, async (req) => {
+  app.post('/api/commandes', { preHandler: app.exigePermission('salle.commande') }, async (req) => {
     const corps = valider(CreerCommandeSchema, req.body);
     const service = await serviceOuvertDe(db, req.session!.utilisateur_id);
 
@@ -97,7 +93,7 @@ export function routesCommandes(app: FastifyInstance): void {
   });
 
   // Ajout d'un article ou d'un combo — prix et nom figés immédiatement
-  app.post('/api/commandes/:id/items', { preHandler: gardeCaisse }, async (req) => {
+  app.post('/api/commandes/:id/items', { preHandler: app.exigePermission('salle.commande') }, async (req) => {
     const { id } = req.params as { id: string };
     const corps = valider(AjouterItemSchema, req.body);
 
@@ -114,7 +110,7 @@ export function routesCommandes(app: FastifyInstance): void {
   });
 
   // Changement de quantité (article pas encore envoyé en cuisine)
-  app.patch('/api/commandes/:id/items/:itemId', { preHandler: gardeCaisse }, async (req) => {
+  app.patch('/api/commandes/:id/items/:itemId', { preHandler: app.exigePermission('salle.commande') }, async (req) => {
     const { id, itemId } = req.params as { id: string; itemId: string };
     const corps = valider(ModifierItemSchema, req.body);
 
@@ -148,7 +144,7 @@ export function routesCommandes(app: FastifyInstance): void {
    * Article déjà envoyé en cuisine (statut_cuisine ≠ A_PREPARER) :
    * PIN manager obligatoire (§ actions protégées).
    */
-  app.post('/api/commandes/:id/items/:itemId/annuler', { preHandler: gardeCaisse }, async (req) => {
+  app.post('/api/commandes/:id/items/:itemId/annuler', { preHandler: app.exigePermission('salle.commande') }, async (req) => {
     const { id, itemId } = req.params as { id: string; itemId: string };
     const corps = valider(AnnulerItemSchema, req.body);
 
@@ -204,7 +200,7 @@ export function routesCommandes(app: FastifyInstance): void {
    * « Commencer ») et passe la commande à ENVOYEE_CUISINE.
    * Ajout en plusieurs fois : seuls les NOUVEAUX articles partent (§B2).
    */
-  app.post('/api/commandes/:id/envoyer', { preHandler: gardeCaisse }, async (req) => {
+  app.post('/api/commandes/:id/envoyer', { preHandler: app.exigePermission('salle.envoyer_cuisine') }, async (req) => {
     const { id } = req.params as { id: string };
     const vue = await db.transaction(async (tx) => {
       const c = await verrouillerCommande(tx, id);
@@ -218,7 +214,7 @@ export function routesCommandes(app: FastifyInstance): void {
   });
 
   // Remise : PIN manager + motif OBLIGATOIRES (§ actions protégées), audit
-  app.post('/api/commandes/:id/remise', { preHandler: gardeCaisse }, async (req) => {
+  app.post('/api/commandes/:id/remise', { preHandler: app.exigePermission('caisse.remise') }, async (req) => {
     const { id } = req.params as { id: string };
     const corps = valider(RemiseSchema, req.body);
     const manager = await verifierPinManager(corps.pin_manager, 'REMISE');
@@ -258,7 +254,7 @@ export function routesCommandes(app: FastifyInstance): void {
   });
 
   // Annulation de toute la commande (le n° de ticket est conservé, statut ANNULEE)
-  app.post('/api/commandes/:id/annuler', { preHandler: gardeCaisse }, async (req) => {
+  app.post('/api/commandes/:id/annuler', { preHandler: app.exigePermission('caisse.annuler_envoye') }, async (req) => {
     const { id } = req.params as { id: string };
     const corps = valider(AnnulerCommandeSchema, req.body);
     const manager = await verifierPinManager(corps.pin_manager, 'ANNULATION_COMMANDE');
@@ -290,7 +286,7 @@ export function routesCommandes(app: FastifyInstance): void {
   });
 
   // Réouverture d'une commande PAYEE : PIN manager + motif (§ actions protégées)
-  app.post('/api/commandes/:id/reouvrir', { preHandler: gardeCaisse }, async (req) => {
+  app.post('/api/commandes/:id/reouvrir', { preHandler: app.exigePermission('caisse.rouvrir') }, async (req) => {
     const { id } = req.params as { id: string };
     const corps = valider(ReouvrirSchema, req.body);
     const manager = await verifierPinManager(corps.pin_manager, 'REOUVERTURE_NOTE');

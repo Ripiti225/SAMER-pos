@@ -16,7 +16,11 @@ export type TableSynchronisee =
   // Sprint 4 : présences et fidélité remontent aussi vers le cloud (SamerTrackly).
   | 'pointages'
   | 'clients_fidelite'
-  | 'points_fidelite';
+  | 'points_fidelite'
+  // Sprint 4B/4C : rôles, permissions et employés (administration).
+  | 'roles'
+  | 'role_permissions'
+  | 'utilisateurs';
 
 export async function ecrireOutbox(
   tx: DbOuTx,

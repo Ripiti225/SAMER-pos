@@ -5,11 +5,24 @@ import type { ModePaiement, Partenaire, Role, StatutCommande, TypeCommande } fro
 export interface UtilisateurPublic {
   id: string;
   nom_complet: string;
-  role: Role;
+  role: Role | null;
+  role_nom?: string;
+  role_id?: string | null;
 }
 
 export interface SessionInfo {
-  utilisateur: UtilisateurPublic;
+  utilisateur: {
+    id: string;
+    nom_complet: string;
+    /** Nom du rôle (compat : ex-champ `role`). Vide si non résolu. */
+    role: string;
+    role_id: string | null;
+    role_nom: string;
+    est_proprietaire: boolean;
+    est_superviseur: boolean;
+  };
+  /** Sprint 4B+4C : permissions effectives de l'utilisateur (guards UI). */
+  permissions: string[];
   restaurant: { code: string; nom: string; marque: 'SAMER' | 'AL_KAYAN'; couleur_hex: string };
   verrouillage_inactivite_secondes: number;
   /** Sprint 2 : verrouillage plus long pour l'app serveur tablette (§B5). */

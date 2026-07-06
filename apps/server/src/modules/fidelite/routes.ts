@@ -14,15 +14,13 @@ import { journaliser } from '../audit/audit.js';
 import { chargerCommandeVue, exigerModifiable, recalculerTotaux, verrouillerCommande } from '../commandes/service.js';
 import { lireBareme, soldePoints, trouverOuCreer, utiliserPoints } from './service.js';
 
-const ROLES_CAISSE = ['CAISSIER', 'MANAGER', 'PROPRIETAIRE'] as const;
-
 const RattacherSchema = z.object({
   telephone: TelephoneFideliteSchema,
   utiliser_points: z.number().int().min(0).optional(),
 });
 
 export function routesFidelite(app: FastifyInstance): void {
-  const gardeCaisse = app.exigerRole(...ROLES_CAISSE);
+  const gardeCaisse = app.exigePermission('caisse.encaisser');
 
   // Consulter un solde par téléphone (pavé de saisie au paiement)
   app.get('/api/fidelite/:telephone', { preHandler: gardeCaisse }, async (req) => {
