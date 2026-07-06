@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { IconWifi } from '@tabler/icons-react';
 import { api } from '../api';
 import { useCaisse } from '../stores/session';
 
@@ -36,6 +37,30 @@ export function PastilleSync() {
       {data.lignes_en_attente > 0 && (
         <span className="text-xs text-doux">{data.lignes_en_attente} en attente</span>
       )}
+    </span>
+  );
+}
+
+const PILULE: Record<string, string> = {
+  vert: 'bg-ok-tint text-ok',
+  orange: 'bg-marque-tint text-marque-fonce',
+  rouge: 'bg-alerte-tint text-alerte',
+};
+
+/** Pastille « Synchronisé » avec libellé (en-tête caisse rush). */
+export function PiluleSync() {
+  const { data } = useSante();
+  const couleur = data?.voyant.couleur ?? 'vert';
+  const libelle =
+    couleur === 'vert'
+      ? 'Synchronisé'
+      : couleur === 'orange'
+        ? `${data?.lignes_en_attente ?? 0} en attente`
+        : 'Hors ligne';
+  return (
+    <span className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${PILULE[couleur]}`} title={data?.voyant.message}>
+      <IconWifi size={14} />
+      {libelle}
     </span>
   );
 }

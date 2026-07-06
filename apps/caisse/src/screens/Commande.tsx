@@ -1,14 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import {
+  IconCash,
+  IconFlagCheck,
+  IconFlame,
+  IconLayoutGrid,
+  IconList,
+  IconPlus,
+  IconReceipt,
+  IconSend,
+} from '@tabler/icons-react';
 import type { ArticleVue, CatalogueVue, CommandeItemVue, CommandeVue } from '@pos/shared';
 import { formatFCFA, LIBELLES_STATUTS_COMMANDE, LIBELLES_TYPES_COMMANDE } from '@pos/shared';
 import { api } from '../api';
 import { Modale } from '../components/Modale';
 import { ModalePinManager } from '../components/ModalePinManager';
+import { PiluleSync } from '../components/SanteSync';
 import { useCaisse } from '../stores/session';
 
 export function Commande() {
-  const { commandeId, aller, afficherToast } = useCaisse();
+  const { commandeId, aller, afficherToast, session } = useCaisse();
   const queryClient = useQueryClient();
   const [categorieId, setCategorieId] = useState<string | null>(null);
   const [articleOuvert, setArticleOuvert] = useState<ArticleVue | null>(null);
@@ -24,6 +35,11 @@ export function Commande() {
     queryKey: ['commande', commandeId],
     queryFn: () => api<CommandeVue>(`/api/commandes/${commandeId}`),
     enabled: !!commandeId,
+  });
+  // Montant encaissé du service (pastille d'en-tête)
+  const { data: mesVentes } = useQuery({
+    queryKey: ['mes-ventes'],
+    queryFn: () => api<{ total_payees?: number }>('/api/rapports/mes-ventes'),
   });
 
   const rafraichir = (vue: CommandeVue) => {
@@ -86,6 +102,7 @@ export function Commande() {
   const articlesVisibles = catalogue.articles.filter((a) => a.categorie_id === categorieActive);
   const combosVisibles = categorieActive === categories[0]?.id ? catalogue.combos : [];
   const itemsActifs = commande.items.filter((i) => i.statut_cuisine !== 'ANNULE');
+  const prenom = session?.utilisateur.nom_complet.split(' ')[0] ?? '';
 
   const clicArticle = (a: ArticleVue) => {
     if (!a.disponible) return;
@@ -97,136 +114,122 @@ export function Commande() {
   };
 
   return (
-    <div className="flex h-screen flex-col bg-fond">
-      <header className="z-10 flex items-center gap-3 border-b border-bordure bg-surface px-4 py-3 shadow-[var(--ombre-1)]">
-        <button type="button" className="btn-blanc" onClick={() => aller('accueil')}>
-          ← Accueil
-        </button>
-        <div className="flex-1">
-          <div className="text-lg font-black text-marque-fonce">Ticket n° {commande.numero_ticket}</div>
-          <div className="text-sm text-doux">
-            {LIBELLES_TYPES_COMMANDE[commande.type]}
-            {commande.table_numero ? ` — Table ${commande.table_numero}` : ''}
-            {commande.partenaire ? ` — ${commande.partenaire}` : ''}
+    <div className="flex h-screen flex-col gap-3 bg-fond p-3">
+      {/* En-tête (maquette rush) */}
+      <header className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            className="flex h-[38px] w-[38px] items-center justify-center rounded-[9px] bg-marque text-[#412402]"
+            onClick={() => aller('accueil')}
+            title="Accueil"
+          >
+            <IconFlame size={20} />
+          </button>
+          <div>
+            <div className="text-[15px] font-bold text-marque-fonce">{session?.restaurant.nom}</div>
+            <div className="text-xs text-doux">Caissier : {prenom} · Service ouvert</div>
           </div>
         </div>
-        <span className="rounded-full bg-marque-tint px-3 py-1 text-sm font-semibold text-marque-fonce">
-          {LIBELLES_STATUTS_COMMANDE[commande.statut]}
-        </span>
+        <div className="flex items-center gap-2">
+          <PiluleSync />
+          <span className="rounded-full bg-marque-tint px-3 py-1 text-xs font-medium text-marque-fonce">
+            {formatFCFA(mesVentes?.total_payees ?? 0)}
+          </span>
+        </div>
       </header>
 
-      {/* Layout §15 : catégories à gauche, articles au centre, addition à droite */}
-      <div className="flex flex-1 overflow-hidden">
-        <nav className="w-44 shrink-0 space-y-1.5 overflow-y-auto border-r border-bordure bg-[var(--surface-douce)] p-2.5">
-          {categories.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              className={`btn w-full justify-start ${c.id === categorieActive ? 'bg-marque text-white shadow-[var(--ombre-marque)]' : 'bg-transparent hover:bg-marque-tint'}`}
-              onClick={() => setCategorieId(c.id)}
-            >
-              {c.nom}
-            </button>
-          ))}
-        </nav>
-
-        <main className="grid flex-1 auto-rows-min grid-cols-2 gap-3 overflow-y-auto p-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-          {combosVisibles.map((combo) => (
-            <button
-              key={combo.id}
-              type="button"
-              disabled={!combo.disponible}
-              className="carte group flex flex-col overflow-hidden p-0 text-left transition hover:-translate-y-0.5 disabled:opacity-40"
-              onClick={() => ajouterItem.mutate({ combo_id: combo.id, quantite: 1, options: [], supplements: [] })}
-            >
-              <div className="flex aspect-[4/3] w-full items-center justify-center bg-gradient-to-br from-marque to-marque-fonce p-3 text-center text-lg font-black leading-tight text-white">
-                {combo.nom}
-              </div>
-              <div className="flex items-center justify-between gap-1 p-2.5">
-                <span className="text-xs font-semibold uppercase tracking-wide text-doux">Combo</span>
-                <span className="prix text-lg font-bold">{formatFCFA(combo.prix)}</span>
-              </div>
-            </button>
-          ))}
-          {articlesVisibles.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              disabled={!a.disponible}
-              className="carte group flex flex-col overflow-hidden p-0 text-left transition hover:-translate-y-0.5 disabled:opacity-100"
-              onClick={() => clicArticle(a)}
-            >
-              <div className="relative aspect-[4/3] w-full overflow-hidden bg-marque-tint">
-                {a.image_url ? (
-                  <img
-                    src={a.image_url}
-                    alt=""
-                    loading="lazy"
-                    className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-2xl font-black text-marque-fonce/30">
-                    {a.nom.slice(0, 2).toUpperCase()}
-                  </div>
-                )}
-                {!a.disponible && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-fort/45">
-                    <span className="rounded-full bg-alerte px-3 py-1 text-sm font-bold text-white">Épuisé</span>
-                  </div>
-                )}
-              </div>
-              <div className="flex flex-1 flex-col justify-between gap-1 p-2.5">
-                <div className="line-clamp-2 font-semibold leading-tight">{a.nom}</div>
-                <div className="prix text-lg font-bold">{formatFCFA(a.prix_base)}</div>
-              </div>
-            </button>
-          ))}
-        </main>
-
-        <aside className="flex w-96 shrink-0 flex-col border-l border-bordure bg-surface">
-          <div className="border-b border-bordure px-4 py-2.5 text-sm font-bold uppercase tracking-wide text-doux">
-            Addition
+      {/* Catalogue (gauche) + addition (droite) */}
+      <div className="grid flex-1 grid-cols-[1.15fr_0.85fr] gap-3 overflow-hidden">
+        <div className="flex flex-col overflow-hidden">
+          {/* Catégories en chips horizontales */}
+          <div className="mb-2.5 flex flex-wrap gap-1.5">
+            {categories.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className={`rounded-[9px] px-4 py-2 text-sm font-medium transition ${
+                  c.id === categorieActive
+                    ? 'bg-marque text-[#412402] shadow-[var(--ombre-marque)]'
+                    : 'border border-bordure bg-surface text-doux hover:bg-marque-tint'
+                }`}
+                onClick={() => setCategorieId(c.id)}
+              >
+                {c.nom}
+              </button>
+            ))}
           </div>
-          <div className="flex-1 space-y-2 overflow-y-auto p-3">
-            {itemsActifs.length === 0 && (
-              <div className="pt-10 text-center text-doux">Addition vide — touchez un article</div>
-            )}
+
+          {/* Grille produits */}
+          <div className="grid auto-rows-min grid-cols-3 gap-2.5 overflow-y-auto pr-1 xl:grid-cols-4">
+            {combosVisibles.map((combo) => (
+              <button
+                key={combo.id}
+                type="button"
+                disabled={!combo.disponible}
+                className="carte px-2.5 py-3 text-center transition hover:-translate-y-0.5 disabled:opacity-45"
+                onClick={() => ajouterItem.mutate({ combo_id: combo.id, quantite: 1, options: [], supplements: [] })}
+              >
+                <div className="mb-1 text-sm font-semibold leading-tight">{combo.nom}</div>
+                <div className="prix text-sm">{formatFCFA(combo.prix)}</div>
+              </button>
+            ))}
+            {articlesVisibles.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                disabled={!a.disponible}
+                className={`carte px-2.5 py-3 text-center transition hover:-translate-y-0.5 ${a.disponible ? '' : 'opacity-45'}`}
+                onClick={() => clicArticle(a)}
+              >
+                <div className="mb-1 line-clamp-2 text-sm font-semibold leading-tight">{a.nom}</div>
+                {a.disponible ? (
+                  <div className="prix text-sm">{formatFCFA(a.prix_base)}</div>
+                ) : (
+                  <div className="text-[11px] text-doux">Épuisé</div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Addition */}
+        <aside className="carte flex flex-col overflow-hidden p-3.5">
+          <div className="mb-2.5 flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-sm font-semibold">
+              <IconReceipt size={17} />
+              {commande.table_numero ? `Table ${commande.table_numero}` : `Ticket n° ${commande.numero_ticket}`}
+            </span>
+            <span className="rounded-full bg-info-tint px-2.5 py-0.5 text-[11px] font-medium text-info">
+              {LIBELLES_TYPES_COMMANDE[commande.type]}
+            </span>
+          </div>
+
+          <div className="flex-1 space-y-1 overflow-y-auto border-t border-bordure pt-2 text-sm">
+            {itemsActifs.length === 0 && <div className="pt-6 text-center text-doux">Addition vide — touchez un article</div>}
             {itemsActifs.map((item) => (
-              <div key={item.id} className="carte p-3">
+              <div key={item.id} className="rounded-lg px-1 py-1.5 hover:bg-[var(--surface-douce)]">
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="font-semibold">{item.nom_snapshot}</div>
-                    {item.supplements.map((s) => (
-                      <div key={s.nom} className="text-xs text-doux">+ {s.nom} ({formatFCFA(s.prix)})</div>
-                    ))}
-                    {item.options.filter((o) => o.choix.length > 0).map((o) => (
-                      <div key={o.groupe} className="text-xs text-doux">{o.groupe} : {o.choix.join(', ')}</div>
-                    ))}
-                    {item.envoye && (
-                      <div className="mt-1 text-xs text-alerte">En cuisine</div>
-                    )}
-                  </div>
-                  <div className="font-bold">{formatFCFA(item.total_ligne)}</div>
+                  <span className="font-medium">{item.quantite}× {item.nom_snapshot}</span>
+                  <span className="font-semibold tabular-nums">{formatFCFA(item.total_ligne)}</span>
                 </div>
-                <div className="mt-2 flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="btn-blanc h-12 w-12 p-0 text-xl"
-                    disabled={item.quantite <= 1 || item.envoye}
-                    onClick={() => changerQuantite.mutate({ itemId: item.id, quantite: item.quantite - 1 })}
-                  >
-                    −
-                  </button>
-                  <span className="w-8 text-center text-lg font-bold">{item.quantite}</span>
-                  <button
-                    type="button"
-                    className="btn-blanc h-12 w-12 p-0 text-xl"
-                    disabled={item.envoye}
-                    onClick={() => changerQuantite.mutate({ itemId: item.id, quantite: item.quantite + 1 })}
-                  >
-                    +
-                  </button>
-                  <button type="button" className="btn-alerte ml-auto px-3" onClick={() => setItemAAnnuler(item)}>
+                {item.supplements.map((s) => (
+                  <div key={s.nom} className="pl-3 text-xs text-doux">+ {s.nom} ({formatFCFA(s.prix)})</div>
+                ))}
+                {item.options.filter((o) => o.choix.length > 0).map((o) => (
+                  <div key={o.groupe} className="pl-3 text-xs text-doux">{o.groupe} : {o.choix.join(', ')}</div>
+                ))}
+                <div className="mt-1 flex items-center gap-1.5">
+                  {item.envoye ? (
+                    <span className="text-xs text-alerte">En cuisine</span>
+                  ) : (
+                    <>
+                      <button type="button" className="btn-blanc h-8 w-8 p-0" disabled={item.quantite <= 1} onClick={() => changerQuantite.mutate({ itemId: item.id, quantite: item.quantite - 1 })}>−</button>
+                      <span className="w-6 text-center font-bold">{item.quantite}</span>
+                      <button type="button" className="btn-blanc h-8 w-8 p-0" onClick={() => changerQuantite.mutate({ itemId: item.id, quantite: item.quantite + 1 })}>+</button>
+                    </>
+                  )}
+                  <button type="button" className="ml-auto text-xs font-medium text-alerte" onClick={() => setItemAAnnuler(item)}>
                     Annuler
                   </button>
                 </div>
@@ -234,41 +237,47 @@ export function Commande() {
             ))}
           </div>
 
-          <div className="space-y-1 border-t border-bordure bg-[var(--surface-douce)] p-4 text-sm">
-            <div className="flex justify-between text-doux"><span>Sous-total</span><span>{formatFCFA(commande.sous_total)}</span></div>
+          <div className="mt-auto border-t border-bordure pt-2.5">
             {commande.promo_montant > 0 && (
-              <div className="flex justify-between text-ok">
-                <span>Promo {commande.promo_nom}</span><span>−{formatFCFA(commande.promo_montant)}</span>
-              </div>
+              <div className="flex justify-between text-xs text-ok"><span>Promo {commande.promo_nom}</span><span>−{formatFCFA(commande.promo_montant)}</span></div>
             )}
             {commande.remise_montant > 0 && (
-              <div className="flex justify-between text-ok">
-                <span>Remise</span><span>−{formatFCFA(commande.remise_montant)}</span>
-              </div>
+              <div className="flex justify-between text-xs text-ok"><span>Remise</span><span>−{formatFCFA(commande.remise_montant)}</span></div>
             )}
-            <div className="mt-1 flex items-baseline justify-between border-t border-bordure pt-2">
-              <span className="text-base font-bold">Total</span>
-              <span className="text-3xl font-black text-marque-fonce">{formatFCFA(commande.total)}</span>
+            {commande.fidelite_montant > 0 && (
+              <div className="flex justify-between text-xs text-ok"><span>Fidélité</span><span>−{formatFCFA(commande.fidelite_montant)}</span></div>
+            )}
+            <div className="mb-2.5 flex items-baseline justify-between">
+              <span className="text-sm text-doux">Total</span>
+              <span className="text-[23px] font-black text-marque-fonce">{formatFCFA(commande.total)}</span>
             </div>
-            <div className="grid grid-cols-2 gap-2 pt-2">
-              <button type="button" className="btn-blanc" onClick={() => envoyerCuisine.mutate()} disabled={itemsActifs.length === 0}>
-                Envoyer cuisine
+            <button
+              type="button"
+              className="btn-ok w-full py-3.5"
+              disabled={commande.total <= 0}
+              onClick={() => aller('paiement', commande.id)}
+            >
+              <IconCash size={18} /> Encaisser
+            </button>
+            <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+              <button type="button" className="btn-blanc text-[13px]" onClick={() => envoyerCuisine.mutate()} disabled={itemsActifs.length === 0}>
+                <IconSend size={16} /> Envoyer en cuisine
               </button>
-              <button type="button" className="btn-blanc" onClick={() => setRemiseOuverte(true)} disabled={itemsActifs.length === 0}>
+              <button type="button" className="btn-blanc text-[13px]" onClick={() => setRemiseOuverte(true)} disabled={itemsActifs.length === 0}>
                 Remise
-              </button>
-              <button
-                type="button"
-                className="btn-ok col-span-2 py-4 text-xl"
-                disabled={commande.total <= 0}
-                onClick={() => aller('paiement', commande.id)}
-              >
-                Payer {formatFCFA(commande.total)}
               </button>
             </div>
           </div>
         </aside>
       </div>
+
+      {/* Navigation 4 tuiles (maquette) */}
+      <nav className="grid grid-cols-4 gap-2.5">
+        <NavTuile principal libelle="Nouvelle commande" onClick={() => aller('accueil')}><IconPlus size={19} /></NavTuile>
+        <NavTuile libelle="Tables" onClick={() => aller('tables')}><IconLayoutGrid size={19} /></NavTuile>
+        <NavTuile libelle="Mes ventes" onClick={() => aller('mes-ventes')}><IconList size={19} /></NavTuile>
+        <NavTuile libelle="J’ai fini" onClick={() => aller('cloture')}><IconFlagCheck size={19} /></NavTuile>
+      </nav>
 
       {articleOuvert && (
         <ModaleArticle
@@ -300,6 +309,31 @@ export function Commande() {
         />
       )}
     </div>
+  );
+}
+
+function NavTuile({
+  libelle,
+  principal,
+  onClick,
+  children,
+}: {
+  libelle: string;
+  principal?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex flex-col items-center gap-0.5 rounded-[10px] px-3 py-3 text-[13px] font-medium transition active:scale-[0.98] ${
+        principal ? 'bg-marque text-[#412402] shadow-[var(--ombre-marque)]' : 'carte text-fort'
+      }`}
+    >
+      {children}
+      {libelle}
+    </button>
   );
 }
 

@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { IconFlagCheck, IconLayoutGrid, IconList, IconPlus } from '@tabler/icons-react';
 import type { CommandeVue, TableVue } from '@pos/shared';
 import { PARTENAIRES } from '@pos/shared';
 import { api } from '../api';
 import { Modale } from '../components/Modale';
 import { useNbAdditionsEnAttente } from '../components/BandeauAdditions';
-import { PastilleSync } from '../components/SanteSync';
+import { PiluleSync } from '../components/SanteSync';
 import { useCaisse } from '../stores/session';
 
 /** Accueil caissier : exactement 4 boutons (§15). */
@@ -50,7 +51,7 @@ export function Accueil() {
           <div className="text-sm text-doux">{session?.utilisateur.nom_complet}</div>
         </div>
         <div className="ml-auto flex items-center gap-4">
-          <PastilleSync />
+          <PiluleSync />
           <button type="button" className="btn-blanc" onClick={seDeconnecter}>
             Se déconnecter
           </button>
@@ -63,6 +64,7 @@ export function Accueil() {
           className="btn-accent flex-col items-start gap-1 rounded-[var(--rayon)] px-7 py-10 text-left"
           onClick={() => setChoixType(true)}
         >
+          <IconPlus size={26} />
           <span className="text-2xl font-black">Nouvelle commande</span>
           <span className="text-sm font-medium opacity-90">Sur place · à emporter · livraison</span>
         </button>
@@ -71,6 +73,7 @@ export function Accueil() {
           className="carte relative flex flex-col items-start gap-1 px-7 py-10 text-left"
           onClick={() => aller('tables')}
         >
+          <IconLayoutGrid size={26} className="text-marque-fonce" />
           <span className="text-2xl font-black">Tables</span>
           <span className="text-sm text-doux">Plan de salle & additions</span>
           {nbAdditions > 0 && (
@@ -84,6 +87,7 @@ export function Accueil() {
           className="carte flex flex-col items-start gap-1 px-7 py-10 text-left"
           onClick={() => aller('mes-ventes')}
         >
+          <IconList size={26} className="text-marque-fonce" />
           <span className="text-2xl font-black">Mes ventes</span>
           <span className="text-sm text-doux">Rapports & suivi du service</span>
         </button>
@@ -92,6 +96,7 @@ export function Accueil() {
           className="btn-alerte flex-col items-start gap-1 rounded-[var(--rayon)] px-7 py-10 text-left"
           onClick={() => aller('cloture')}
         >
+          <IconFlagCheck size={26} />
           <span className="text-2xl font-black">J’ai fini</span>
           <span className="text-sm font-medium opacity-90">Clôture & rapport Z</span>
         </button>

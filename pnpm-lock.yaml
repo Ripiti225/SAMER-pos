@@ -19,6 +19,9 @@ importers:
       '@pos/theme':
         specifier: workspace:*
         version: link:../../packages/theme
+      '@tabler/icons-react':
+        specifier: ^3.44.0
+        version: 3.44.0(react@18.3.1)
       '@tanstack/react-query':
         specifier: ^5.80.7
         version: 5.101.2(react@18.3.1)
@@ -1534,6 +1537,14 @@ packages:
     resolution: {integrity: sha512-BfzEnDJOt9T8M989/lA37EcJgat01wLRnoi5dQf3QzOH7jzpqTAzdDbVfRljVr5r+jzKqpbHeyOfAaXxAd0PAA==}
     cpu: [x64]
     os: [win32]
+
+  '@tabler/icons-react@3.44.0':
+    resolution: {integrity: sha512-8+rvzBbVm/1Z3sG3x7GUNAaxIKxwgz8xaMhRs23nrCnMTKRFAhEC+82zAIFeAA0seXdrAGX5HFCkaLpGK2rVHg==}
+    peerDependencies:
+      react: '>= 16'
+
+  '@tabler/icons@3.44.0':
+    resolution: {integrity: sha512-Wn0AOZG9sg0L+bjfMqq4eNhC6pQjIrk94LvvWYNYkY8KH8wC3YILRzQlrnVJc4FUeMxH/AK97QsYCX35H3LndA==}
 
   '@tanstack/query-core@5.101.2':
     resolution: {integrity: sha512-hH5MLoJhF7KaIGd7q3xTXGXvslI+GYlM1Z/35aSHHWaCJWB7XvTSHYuV3eM7tw+aE0mT/xMro4M4Q9rCGHT0lw==}
@@ -4417,6 +4428,13 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.62.2':
     optional: true
+
+  '@tabler/icons-react@3.44.0(react@18.3.1)':
+    dependencies:
+      '@tabler/icons': 3.44.0
+      react: 18.3.1
+
+  '@tabler/icons@3.44.0': {}
 
   '@tanstack/query-core@5.101.2': {}
 
