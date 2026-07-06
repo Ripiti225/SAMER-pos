@@ -57,23 +57,43 @@ export function Accueil() {
         </div>
       </header>
 
-      <div className="grid flex-1 grid-cols-1 content-center gap-4 sm:grid-cols-2 max-w-3xl mx-auto w-full">
-        <button type="button" className="btn-accent py-12 text-2xl" onClick={() => setChoixType(true)}>
-          Nouvelle commande
+      <div className="mx-auto grid w-full max-w-3xl flex-1 grid-cols-1 content-center gap-5 sm:grid-cols-2">
+        <button
+          type="button"
+          className="btn-accent flex-col items-start gap-1 rounded-[var(--rayon)] px-7 py-10 text-left"
+          onClick={() => setChoixType(true)}
+        >
+          <span className="text-2xl font-black">Nouvelle commande</span>
+          <span className="text-sm font-medium opacity-90">Sur place · à emporter · livraison</span>
         </button>
-        <button type="button" className="btn-blanc relative py-12 text-2xl" onClick={() => aller('tables')}>
-          Tables
+        <button
+          type="button"
+          className="carte relative flex flex-col items-start gap-1 px-7 py-10 text-left"
+          onClick={() => aller('tables')}
+        >
+          <span className="text-2xl font-black">Tables</span>
+          <span className="text-sm text-doux">Plan de salle & additions</span>
           {nbAdditions > 0 && (
-            <span className="absolute right-4 top-4 flex min-h-[36px] min-w-[36px] items-center justify-center rounded-full bg-info px-2 text-lg font-black text-white">
+            <span className="absolute right-4 top-4 flex min-h-[36px] min-w-[36px] items-center justify-center rounded-full bg-info px-2 text-lg font-black text-white shadow-[var(--ombre-1)]">
               {nbAdditions}
             </span>
           )}
         </button>
-        <button type="button" className="btn-blanc py-12 text-2xl" onClick={() => aller('mes-ventes')}>
-          Mes ventes
+        <button
+          type="button"
+          className="carte flex flex-col items-start gap-1 px-7 py-10 text-left"
+          onClick={() => aller('mes-ventes')}
+        >
+          <span className="text-2xl font-black">Mes ventes</span>
+          <span className="text-sm text-doux">Rapports & suivi du service</span>
         </button>
-        <button type="button" className="btn-alerte py-12 text-2xl" onClick={() => aller('cloture')}>
-          J’ai fini
+        <button
+          type="button"
+          className="btn-alerte flex-col items-start gap-1 rounded-[var(--rayon)] px-7 py-10 text-left"
+          onClick={() => aller('cloture')}
+        >
+          <span className="text-2xl font-black">J’ai fini</span>
+          <span className="text-sm font-medium opacity-90">Clôture & rapport Z</span>
         </button>
       </div>
 

@@ -97,30 +97,32 @@ export function Commande() {
   };
 
   return (
-    <div className="flex h-screen flex-col">
-      <header className="flex items-center gap-3 border-b border-bordure p-3">
+    <div className="flex h-screen flex-col bg-fond">
+      <header className="z-10 flex items-center gap-3 border-b border-bordure bg-surface px-4 py-3 shadow-[var(--ombre-1)]">
         <button type="button" className="btn-blanc" onClick={() => aller('accueil')}>
           ← Accueil
         </button>
         <div className="flex-1">
-          <span className="font-bold">Ticket n° {commande.numero_ticket}</span>
-          <span className="ml-3 text-sm text-doux">
+          <div className="text-lg font-black text-marque-fonce">Ticket n° {commande.numero_ticket}</div>
+          <div className="text-sm text-doux">
             {LIBELLES_TYPES_COMMANDE[commande.type]}
             {commande.table_numero ? ` — Table ${commande.table_numero}` : ''}
             {commande.partenaire ? ` — ${commande.partenaire}` : ''}
-          </span>
+          </div>
         </div>
-        <span className="rounded-full border border-bordure bg-surface px-3 py-1 text-sm">{LIBELLES_STATUTS_COMMANDE[commande.statut]}</span>
+        <span className="rounded-full bg-marque-tint px-3 py-1 text-sm font-semibold text-marque-fonce">
+          {LIBELLES_STATUTS_COMMANDE[commande.statut]}
+        </span>
       </header>
 
       {/* Layout §15 : catégories à gauche, articles au centre, addition à droite */}
       <div className="flex flex-1 overflow-hidden">
-        <nav className="w-40 shrink-0 space-y-2 overflow-y-auto border-r border-bordure p-2">
+        <nav className="w-44 shrink-0 space-y-1.5 overflow-y-auto border-r border-bordure bg-[var(--surface-douce)] p-2.5">
           {categories.map((c) => (
             <button
               key={c.id}
               type="button"
-              className={`btn w-full ${c.id === categorieActive ? 'bg-marque text-white' : 'border border-bordure bg-surface'}`}
+              className={`btn w-full justify-start ${c.id === categorieActive ? 'bg-marque text-white shadow-[var(--ombre-marque)]' : 'bg-transparent hover:bg-marque-tint'}`}
               onClick={() => setCategorieId(c.id)}
             >
               {c.nom}
@@ -181,10 +183,13 @@ export function Commande() {
           ))}
         </main>
 
-        <aside className="flex w-96 shrink-0 flex-col border-l border-bordure">
+        <aside className="flex w-96 shrink-0 flex-col border-l border-bordure bg-surface">
+          <div className="border-b border-bordure px-4 py-2.5 text-sm font-bold uppercase tracking-wide text-doux">
+            Addition
+          </div>
           <div className="flex-1 space-y-2 overflow-y-auto p-3">
             {itemsActifs.length === 0 && (
-              <div className="pt-8 text-center text-doux">Addition vide — touchez un article</div>
+              <div className="pt-10 text-center text-doux">Addition vide — touchez un article</div>
             )}
             {itemsActifs.map((item) => (
               <div key={item.id} className="carte p-3">
@@ -229,8 +234,8 @@ export function Commande() {
             ))}
           </div>
 
-          <div className="space-y-1 border-t border-bordure p-3 text-sm">
-            <div className="flex justify-between"><span>Sous-total</span><span>{formatFCFA(commande.sous_total)}</span></div>
+          <div className="space-y-1 border-t border-bordure bg-[var(--surface-douce)] p-4 text-sm">
+            <div className="flex justify-between text-doux"><span>Sous-total</span><span>{formatFCFA(commande.sous_total)}</span></div>
             {commande.promo_montant > 0 && (
               <div className="flex justify-between text-ok">
                 <span>Promo {commande.promo_nom}</span><span>−{formatFCFA(commande.promo_montant)}</span>
@@ -241,8 +246,9 @@ export function Commande() {
                 <span>Remise</span><span>−{formatFCFA(commande.remise_montant)}</span>
               </div>
             )}
-            <div className="flex justify-between pt-1 text-2xl font-black">
-              <span>Total</span><span className="text-marque-fonce">{formatFCFA(commande.total)}</span>
+            <div className="mt-1 flex items-baseline justify-between border-t border-bordure pt-2">
+              <span className="text-base font-bold">Total</span>
+              <span className="text-3xl font-black text-marque-fonce">{formatFCFA(commande.total)}</span>
             </div>
             <div className="grid grid-cols-2 gap-2 pt-2">
               <button type="button" className="btn-blanc" onClick={() => envoyerCuisine.mutate()} disabled={itemsActifs.length === 0}>

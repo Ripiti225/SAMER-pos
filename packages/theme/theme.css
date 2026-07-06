@@ -1,182 +1,183 @@
 /* ===========================================================================
-   THÈME CLAIR PARTAGÉ — caisse / KDS / serveur (correction 5, retours terrain)
-   Le rebranding Samer ↔ Al Kayan se fait en une variable :
-   les apps posent data-marque="SAMER|AL_KAYAN" sur <html> (et peuvent
-   surcharger --marque avec restaurant.couleur_hex).
+   THÈME CLAIR PARTAGÉ — caisse / KDS / serveur / client.
+   Direction : clair, chaud, vivant, avec de la profondeur (élévation douce),
+   des coins généreux et un accent de marque affirmé. Rebranding Samer ↔
+   Al Kayan en une variable (data-marque + --marque).
    =========================================================================== */
 
 :root {
   /* Base claire et chaude — jamais de blanc pur, jamais de sombre */
-  --fond-page: #f7f5f0;
+  --fond-page: #f5f2ea;
   --surface-carte: #ffffff;
-  --bordure: #e5e2da;
-  --texte-fort: #2c2c2a;
-  --texte-doux: #5f5e5a;
+  --surface-douce: #faf8f3;
+  --bordure: #ece8df;
+  --texte-fort: #23211d;
+  --texte-doux: #6c6a62;
 
   /* Accent de marque (défaut : Chez Samer) */
   --marque: #ef9f27;
-  --marque-foncee: #ba7517;
-  --marque-tint: #faeeda;
+  --marque-foncee: #b06f12;
+  --marque-tint: #fbeed6;
+  --marque-vif: #f7912a;
 
-  /* Couleurs FONCTIONNELLES, identiques pour les deux marques :
-     reconnaissables sans lire, même en plein rush */
-  --ok: #2d7d46;
-  --ok-tint: #eaf3de;
-  --alerte: #d85a30;
-  --alerte-tint: #faece7;
-  --info: #378add;
+  /* Couleurs FONCTIONNELLES, identiques pour les deux marques */
+  --ok: #2f8a4c;
+  --ok-tint: #e7f3e5;
+  --alerte: #d8542a;
+  --alerte-tint: #fbe9e1;
+  --info: #2f86dc;
   --info-tint: #e6f1fb;
 
-  /* Compatibilité : l'ancien alias --accent suit la marque */
+  /* Élévation (ombres douces, chaudes) */
+  --ombre-1: 0 1px 2px rgba(35, 33, 29, 0.05), 0 2px 8px rgba(35, 33, 29, 0.05);
+  --ombre-2: 0 4px 14px rgba(35, 33, 29, 0.09), 0 2px 6px rgba(35, 33, 29, 0.06);
+  --ombre-marque: 0 6px 16px rgba(176, 111, 18, 0.28);
+
+  --rayon: 16px;
+  --rayon-btn: 13px;
+
   --accent: var(--marque);
 }
 
 :root[data-marque='AL_KAYAN'] {
   --marque: #2d7d46;
-  --marque-foncee: #1b5e33;
-  --marque-tint: #e3f0e7;
+  --marque-foncee: #175230;
+  --marque-tint: #e2f0e7;
+  --marque-vif: #2f8a4c;
+  --ombre-marque: 0 6px 16px rgba(23, 82, 48, 0.26);
 }
 
+html {
+  -webkit-tap-highlight-color: transparent;
+}
 body {
   background: var(--fond-page);
   color: var(--texte-fort);
+  font-feature-settings: 'ss01', 'cv01';
 }
 
 /* ---------------------------------------------------------------------------
-   Composants communs — boutons tactiles ≥ 48 px, texte 15 px, coins 10 px.
-   Le bouton principal de chaque écran est plein couleur ; les secondaires
-   sont blancs bordés. Pas d'ombre lourde.
+   Boutons — tactiles ≥ 48 px, coins généreux, présence et profondeur.
    --------------------------------------------------------------------------- */
-.btn {
+.btn,
+.btn-accent,
+.btn-ok,
+.btn-blanc,
+.btn-alerte {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   min-height: 48px;
-  border-radius: 10px;
-  padding: 0 16px;
+  border-radius: var(--rayon-btn);
+  padding: 0 18px;
   font-size: 15px;
-  font-weight: 600;
-  transition: transform 0.08s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  font-weight: 700;
+  line-height: 1.1;
+  transition: transform 0.09s ease, box-shadow 0.18s ease, filter 0.18s ease, background-color 0.18s ease;
 }
-.btn:active {
-  transform: scale(0.97);
+.btn { font-weight: 600; }
+.btn:active,
+.btn-accent:active,
+.btn-ok:active,
+.btn-blanc:active,
+.btn-alerte:active {
+  transform: translateY(1px) scale(0.99);
 }
-.btn:disabled {
-  opacity: 0.45;
+.btn:disabled,
+.btn-accent:disabled,
+.btn-ok:disabled,
+.btn-blanc:disabled,
+.btn-alerte:disabled {
+  opacity: 0.4;
   transform: none;
+  box-shadow: none;
+  filter: none;
 }
 
 /* Action de marque (nouvelle commande, continuer…) */
 .btn-accent {
-  min-height: 48px;
-  border-radius: 10px;
-  padding: 0 16px;
-  font-size: 15px;
-  font-weight: 700;
-  background: var(--marque);
-  color: #ffffff;
-  transition: transform 0.08s ease, filter 0.15s ease;
+  background: linear-gradient(180deg, var(--marque-vif), var(--marque));
+  color: #fff;
+  box-shadow: var(--ombre-marque);
 }
 .btn-accent:hover {
-  filter: brightness(1.05);
-}
-.btn-accent:active {
-  transform: scale(0.97);
-}
-.btn-accent:disabled {
-  opacity: 0.45;
-  transform: none;
+  filter: brightness(1.04);
+  box-shadow: 0 8px 20px rgba(176, 111, 18, 0.34);
 }
 
 /* Valider / encaisser / prêt */
 .btn-ok {
-  min-height: 48px;
-  border-radius: 10px;
-  padding: 0 16px;
-  font-size: 15px;
-  font-weight: 700;
   background: var(--ok);
-  color: #ffffff;
-  transition: transform 0.08s ease, filter 0.15s ease;
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(47, 138, 76, 0.26);
 }
 .btn-ok:hover {
-  filter: brightness(1.06);
-}
-.btn-ok:active {
-  transform: scale(0.97);
-}
-.btn-ok:disabled {
-  opacity: 0.45;
-  transform: none;
-}
-
-/* Secondaire : blanc bordé */
-.btn-blanc {
-  min-height: 48px;
-  border-radius: 10px;
-  padding: 0 16px;
-  font-size: 15px;
-  font-weight: 600;
-  background: var(--surface-carte);
-  color: var(--texte-fort);
-  border: 1px solid var(--bordure);
-  transition: transform 0.08s ease, background-color 0.15s ease;
-}
-.btn-blanc:hover {
-  background: var(--marque-tint);
-}
-.btn-blanc:active {
-  transform: scale(0.97);
-}
-.btn-blanc:disabled {
-  opacity: 0.45;
-  transform: none;
+  filter: brightness(1.05);
 }
 
 /* Urgent / destructif */
 .btn-alerte {
-  min-height: 48px;
-  border-radius: 10px;
-  padding: 0 16px;
-  font-size: 15px;
-  font-weight: 700;
   background: var(--alerte);
-  color: #ffffff;
-  transition: transform 0.08s ease, filter 0.15s ease;
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(216, 84, 42, 0.24);
 }
 .btn-alerte:hover {
-  filter: brightness(1.05);
-}
-.btn-alerte:active {
-  transform: scale(0.97);
-}
-.btn-alerte:disabled {
-  opacity: 0.45;
-  transform: none;
+  filter: brightness(1.04);
 }
 
-/* Cartes : blanches, coins 12 px, bordure hairline, ombre légère au survol */
+/* Base neutre : le fond est fourni par les écrans (bg-marque, bg-surface…). */
+.btn {
+  color: var(--texte-fort);
+}
+
+/* Secondaire : blanc, bordé, ombre légère */
+.btn-blanc {
+  background: var(--surface-carte);
+  color: var(--texte-fort);
+  border: 1px solid var(--bordure);
+  box-shadow: var(--ombre-1);
+}
+.btn-blanc:hover {
+  border-color: var(--marque);
+  background: var(--marque-tint);
+}
+
+/* ---------------------------------------------------------------------------
+   Cartes — blanches, coins généreux, élévation douce.
+   --------------------------------------------------------------------------- */
 .carte {
   background: var(--surface-carte);
   border: 1px solid var(--bordure);
-  border-radius: 12px;
+  border-radius: var(--rayon);
+  box-shadow: var(--ombre-1);
+}
+button.carte {
+  transition: transform 0.14s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
 button.carte:hover {
-  box-shadow: 0 2px 10px rgba(44, 44, 42, 0.07);
+  box-shadow: var(--ombre-2);
+  border-color: color-mix(in srgb, var(--marque) 45%, var(--bordure));
 }
 
 /* Champs de saisie */
 .champ {
   min-height: 48px;
   width: 100%;
-  border-radius: 10px;
+  border-radius: var(--rayon-btn);
   background: var(--surface-carte);
   border: 1px solid var(--bordure);
+  box-shadow: var(--ombre-1);
   padding: 0 16px;
   font-size: 17px;
   color: var(--texte-fort);
   outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .champ:focus,
 .champ:focus-within {
   border-color: var(--marque);
+  box-shadow: 0 0 0 3px var(--marque-tint);
 }
 .champ::placeholder {
   color: var(--texte-doux);
@@ -185,5 +186,6 @@ button.carte:hover {
 /* Prix : toujours en marque foncée, jamais en gris pâle */
 .prix {
   color: var(--marque-foncee);
-  font-weight: 500;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
