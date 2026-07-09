@@ -64,6 +64,13 @@
       "when": 1752120000000,
       "tag": "0008_table_actif",
       "breakpoints": false
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1752180000000,
+      "tag": "0009_disponibilite_locale",
+      "breakpoints": false
     }
   ]
 }

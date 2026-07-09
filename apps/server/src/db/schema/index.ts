@@ -136,6 +136,13 @@ export const articles = pgTable('articles', {
   updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [check('articles_prix_base_check', sql`${t.prix_base} >= 0`)]);
 
+// Disponibilité LOCALE (sprint 4C, 2.3) : jamais écrasée par une descente.
+export const disponibiliteLocale = pgTable('disponibilite_locale', {
+  article_id: uuid('article_id').primaryKey().references(() => articles.id, { onDelete: 'cascade' }),
+  disponible: boolean('disponible').notNull().default(true),
+  updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const prixCanaux = pgTable('prix_canaux', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   article_id: uuid('article_id').notNull().references(() => articles.id, { onDelete: 'cascade' }),

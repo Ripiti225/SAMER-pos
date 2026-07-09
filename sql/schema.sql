@@ -99,9 +99,17 @@ CREATE TABLE articles (
   description   TEXT,
   prix_base     INTEGER NOT NULL CHECK (prix_base >= 0),  -- prix sur place, FCFA
   image_url     TEXT,
-  disponible    BOOLEAN NOT NULL DEFAULT TRUE,            -- FALSE => grisé
+  disponible    BOOLEAN NOT NULL DEFAULT TRUE,            -- legacy (source = disponibilite_locale)
   actif         BOOLEAN NOT NULL DEFAULT TRUE,
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Disponibilité LOCALE (sprint 4C §2.3) : posée sur place, jamais écrasée par
+-- une descente de catalogue (source de vérité pour « épuisé »).
+CREATE TABLE disponibilite_locale (
+  article_id  UUID PRIMARY KEY REFERENCES articles(id) ON DELETE CASCADE,
+  disponible  BOOLEAN NOT NULL DEFAULT TRUE,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Surcharge de prix par canal/partenaire (§5.2) : ex chawarma 3000 Yango, 3500 Glovo

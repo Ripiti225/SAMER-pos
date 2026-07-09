@@ -13,9 +13,11 @@ import {
   supplements,
 } from '../../db/schema/index.js';
 import { promotionActive } from './promos.js';
+import { lireDisponibilites } from './disponibilite.js';
 
 /** Charge le catalogue complet (partagé caisse / tablette / client). */
 export async function chargerCatalogue(): Promise<CatalogueVue> {
+  const dispo = await lireDisponibilites(db);
   const [cats, arts, canaux, groupes, opts, suppls, cbs, cbArts, promos] = await Promise.all([
     db.select().from(categories).where(eq(categories.actif, true)).orderBy(asc(categories.ordre)),
     db.select().from(articles).where(eq(articles.actif, true)).orderBy(asc(articles.nom)),
@@ -44,7 +46,8 @@ export async function chargerCatalogue(): Promise<CatalogueVue> {
     description: a.description,
     prix_base: a.prix_base,
     image_url: a.image_url,
-    disponible: a.disponible,
+    // Source de vérité : disponibilite_locale (TRUE par défaut, 2.3).
+    disponible: dispo.get(a.id) ?? true,
     prix_canaux: Object.fromEntries(
       canaux.filter((c) => c.article_id === a.id).map((c) => [c.canal, c.prix]),
     ),

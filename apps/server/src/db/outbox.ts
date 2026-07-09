@@ -20,7 +20,9 @@ export type TableSynchronisee =
   // Sprint 4B/4C : rôles, permissions et employés (administration).
   | 'roles'
   | 'role_permissions'
-  | 'utilisateurs';
+  | 'utilisateurs'
+  // Sprint 4C : disponibilité locale (remonte au cloud à titre d'information).
+  | 'disponibilite_locale';
 
 export async function ecrireOutbox(
   tx: DbOuTx,
