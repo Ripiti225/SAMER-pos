@@ -436,25 +436,9 @@ CREATE TABLE notations (
 );
 
 -- ============================================================================
--- 10. POINTAGE (§7) — sprint 2+
+-- 10. (Pointage retiré — allègement. Présence gérée par l'équipe du jour,
+--     voir la table equipe_service ci-dessus.)
 -- ============================================================================
-
-CREATE TABLE pointages (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id     UUID NOT NULL REFERENCES utilisateurs(id),
-  methode     TEXT NOT NULL CHECK (methode IN ('GEOFENCING','SMS_MDP','PIN_POS')),
-  arrivee     TIMESTAMPTZ NOT NULL DEFAULT now(),
-  depart      TIMESTAMPTZ,
-  depart_oublie BOOLEAN NOT NULL DEFAULT FALSE  -- alerte manager (§7.3)
-);
-
-CREATE TABLE codes_pointage (            -- codes SMS à usage unique (§14.5)
-  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id    UUID NOT NULL REFERENCES utilisateurs(id),
-  code_hash  TEXT NOT NULL,
-  expire_a   TIMESTAMPTZ NOT NULL,       -- now() + 10 min
-  utilise_a  TIMESTAMPTZ                 -- anti-rejeu
-);
 
 -- ============================================================================
 -- 11. FIDÉLITÉ (§9) — sprint 2+, identifiant client partagé avec SAMER DELIV

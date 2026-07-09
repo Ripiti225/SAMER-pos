@@ -13,11 +13,10 @@ export type TableSynchronisee =
   | 'services_caisse'
   | 'audit_log'
   | 'notes_split'
-  // Sprint 4 : présences et fidélité remontent aussi vers le cloud (SamerTrackly).
-  | 'pointages'
+  // Sprint 4 : fidélité remonte aussi vers le cloud (SamerTrackly).
   | 'clients_fidelite'
   | 'points_fidelite'
-  // Allègement : équipe du jour (remplace à terme la remontée des pointages).
+  // Allègement : équipe du jour (remplace la remontée des pointages).
   | 'equipe_service'
   // Sprint 4B/4C : rôles, permissions et employés (administration).
   | 'roles'

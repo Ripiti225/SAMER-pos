@@ -4,21 +4,24 @@
  * Un plat est attribué aux employés dont le poste_cuisine correspond à la
  * catégorie de l'article (table mapping_poste_categorie, défaut CUISINIER)
  * ET qui sont « en poste » au moment de la préparation :
- *  - en poste = pointage d'arrivée ouvert aujourd'hui (module pointage) ;
- *  - tant que le pointage n'existe pas (sprint ultérieur) : si AUCUN pointage
- *    ouvert n'existe, tous les employés cuisine actifs sont considérés en
- *    poste, pour ne jamais bloquer.
+ *  - en poste = membre de l'« équipe du jour » d'un service ouvert (allègement,
+ *    remplace le pointage) ;
+ *  - si AUCUNE équipe n'est enregistrée sur un service ouvert, tous les employés
+ *    cuisine actifs sont considérés en poste, pour ne jamais bloquer.
+ * Le regroupement reste sur poste_cuisine (permanent) : le poste du jour est une
+ * info et ne change pas le routage KDS.
  * Si plusieurs personnes du même poste sont en poste, l'attribution est
  * collective. Si personne : attribution vide, le service continue.
  * Le KDS n'a aucune notion d'identité : tout est calculé ici, côté serveur.
  */
-import { and, eq, gte, isNull } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { DbOuTx } from '../../db/client.js';
 import {
   articles,
   commandeItems,
+  equipeService,
   mappingPosteCategorie,
-  pointages,
+  servicesCaisse,
   utilisateurs,
 } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
@@ -33,18 +36,16 @@ async function enPosteParPoste(tx: DbOuTx): Promise<Map<Poste, string[]>> {
     .from(utilisateurs)
     .where(and(eq(utilisateurs.role, 'CUISINE'), eq(utilisateurs.actif, true)));
 
-  const debutJour = new Date();
-  debutJour.setHours(0, 0, 0, 0);
-  const pointes = await tx
-    .select({ user_id: pointages.user_id })
-    .from(pointages)
-    .where(and(gte(pointages.arrivee, debutJour), isNull(pointages.depart)));
+  // Présents = équipe du jour des services encore ouverts.
+  const presents = await tx
+    .select({ user_id: equipeService.utilisateur_id })
+    .from(equipeService)
+    .innerJoin(servicesCaisse, eq(servicesCaisse.id, equipeService.service_id))
+    .where(eq(servicesCaisse.statut, 'OUVERT'));
+  const idsPresents = new Set(presents.map((p) => p.user_id));
 
-  // Sprint 4 A4 : attribution RÉELLE — seuls les employés effectivement
-  // POINTÉS (pointage d'arrivée ouvert aujourd'hui) sont « en poste ». Si
-  // personne du poste n'est pointé, l'attribution reste vide (à rattacher).
-  const idsPointes = new Set(pointes.map((p) => p.user_id));
-  const enPoste = cuisine.filter((u) => idsPointes.has(u.id));
+  // Aucune équipe enregistrée → on ne bloque jamais : tous les cuisiniers actifs.
+  const enPoste = idsPresents.size > 0 ? cuisine.filter((u) => idsPresents.has(u.id)) : cuisine;
 
   const parPoste = new Map<Poste, string[]>();
   for (const u of enPoste) {

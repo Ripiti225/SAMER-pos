@@ -80,7 +80,7 @@ interface Employe {
   telephone: string | null;
   actif: boolean;
   doit_definir_pin: boolean;
-  dernier_pointage: string | null;
+  derniere_presence: string | null;
 }
 interface RoleAdmin {
   id: string;

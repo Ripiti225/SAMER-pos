@@ -33,8 +33,8 @@ export async function seed(): Promise<void> {
   // Remise à zéro complète (TRUNCATE n'est pas bloqué par le trigger append-only,
   // qui ne vise que UPDATE/DELETE ligne à ligne — acceptable pour un seed de démo).
   await db.execute(sql`
-    TRUNCATE TABLE appels_table, actions_recues, points_fidelite, clients_fidelite, codes_pointage, pointages,
-      notations, sync_etat, sync_outbox, audit_log, paiements, notes_split,
+    TRUNCATE TABLE appels_table, actions_recues, points_fidelite, clients_fidelite,
+      notations, sync_etat, sync_outbox, audit_log, paiements, notes_split, equipe_service,
       commande_items, commandes, services_caisse, tables_salle, zones,
       promotions, mapping_poste_categorie, combo_articles, combos, supplements,
       options, groupes_options, prix_canaux, articles, categories,
@@ -63,12 +63,6 @@ export async function seed(): Promise<void> {
     // Correction 3 : le KDS s'identifie par un jeton d'appareil, pas par PIN.
     // À changer à l'installation de chaque site.
     { cle: 'kds_jeton_appareil', valeur: 'SAMER-ANGRE7E-KDS-1' },
-    // Sprint 4 A2 : géolocalisation du pointage (Angré 7e, Abidjan)
-    { cle: 'pointage_lat', valeur: 5.395 },
-    { cle: 'pointage_lng', valeur: -3.984 },
-    { cle: 'pointage_rayon_metres', valeur: 150 },
-    // Sprint 4 A3 : plafond mensuel de SMS + seuil d'alerte (§14.5)
-    { cle: 'sms_plafond_mensuel', valeur: 2000 },
     // Sprint 4 B : barème fidélité (descendu du siège en production)
     { cle: 'fidelite_points_par_tranche', valeur: { tranche_fcfa: 1000, points: 1 } },
     { cle: 'fidelite_valeur_point_fcfa', valeur: 10 },

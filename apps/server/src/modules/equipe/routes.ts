@@ -9,7 +9,7 @@ import type { FastifyInstance } from 'fastify';
 import { desc, eq, sql } from 'drizzle-orm';
 import { CreerEmployeSchema, ModifierEmployeSchema } from '@pos/shared';
 import { db } from '../../db/client.js';
-import { pointages, roles, utilisateurs } from '../../db/schema/index.js';
+import { equipeService, roles, utilisateurs } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
@@ -76,14 +76,14 @@ export function routesEquipe(app: FastifyInstance): void {
       .leftJoin(roles, eq(roles.id, utilisateurs.role_id))
       .orderBy(utilisateurs.nom_complet);
 
-    // Dernier pointage par employé
+    // Dernière présence connue (équipe du jour) par employé
     const derniers = await db
-      .select({ user_id: pointages.user_id, dernier: sql<string>`MAX(${pointages.arrivee})` })
-      .from(pointages)
-      .groupBy(pointages.user_id);
+      .select({ user_id: equipeService.utilisateur_id, dernier: sql<string>`MAX(${equipeService.created_at})` })
+      .from(equipeService)
+      .groupBy(equipeService.utilisateur_id);
     const parUser = new Map(derniers.map((d) => [d.user_id, d.dernier]));
 
-    return lignes.map((l) => ({ ...l, dernier_pointage: parUser.get(l.id) ?? null }));
+    return lignes.map((l) => ({ ...l, derniere_presence: parUser.get(l.id) ?? null }));
   });
 
   // Créer un employé (le PIN est posé ensuite par l'employé)

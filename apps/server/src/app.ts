@@ -14,7 +14,6 @@ import { routesServeur } from './modules/serveur/routes.js';
 import { routesClient } from './modules/client/routes.js';
 import { routesSalle } from './modules/salle/routes.js';
 import { routesSante } from './modules/sante/routes.js';
-import { routesPointage } from './modules/pointage/routes.js';
 import { routesFidelite } from './modules/fidelite/routes.js';
 import { routesRoles } from './modules/roles/routes.js';
 import { routesEquipe } from './modules/equipe/routes.js';
@@ -52,7 +51,6 @@ export async function construireApp(options: { logger?: boolean } = {}): Promise
   routesSalle(app);
   routesClient(app);
   routesSante(app);
-  routesPointage(app);
   routesFidelite(app);
   routesRoles(app);
   routesEquipe(app);

@@ -421,23 +421,6 @@ export const notations = pgTable('notations', {
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const pointages = pgTable('pointages', {
-  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  user_id: uuid('user_id').notNull().references(() => utilisateurs.id),
-  methode: text('methode').notNull(),
-  arrivee: timestamp('arrivee', { withTimezone: true }).notNull().defaultNow(),
-  depart: timestamp('depart', { withTimezone: true }),
-  depart_oublie: boolean('depart_oublie').notNull().default(false),
-});
-
-export const codesPointage = pgTable('codes_pointage', {
-  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  user_id: uuid('user_id').notNull().references(() => utilisateurs.id),
-  code_hash: text('code_hash').notNull(),
-  expire_a: timestamp('expire_a', { withTimezone: true }).notNull(),
-  utilise_a: timestamp('utilise_a', { withTimezone: true }),
-});
-
 export const clientsFidelite = pgTable('clients_fidelite', {
   id: uuid('id').primaryKey(),
   telephone: text('telephone').unique(),

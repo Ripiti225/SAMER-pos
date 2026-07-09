@@ -57,8 +57,8 @@ export interface Donnees {
 /** Vide la base de test et insère le strict nécessaire (sans promotions). */
 export async function resetDonnees(): Promise<Donnees> {
   await db.execute(sql`
-    TRUNCATE TABLE appels_table, actions_recues, points_fidelite, clients_fidelite, codes_pointage, pointages,
-      notations, sync_etat, sync_outbox, audit_log, paiements, notes_split,
+    TRUNCATE TABLE appels_table, actions_recues, points_fidelite, clients_fidelite,
+      notations, sync_etat, sync_outbox, audit_log, paiements, notes_split, equipe_service,
       commande_items, commandes, services_caisse, tables_salle, zones,
       promotions, mapping_poste_categorie, combo_articles, combos, supplements,
       options, groupes_options, prix_canaux, articles, categories,
@@ -77,11 +77,7 @@ export async function resetDonnees(): Promise<Donnees> {
   await db.insert(parametresLocaux).values([
     { cle: 'seuil_alerte_ecart_caisse', valeur: 2000 },
     { cle: 'kds_jeton_appareil', valeur: 'JETON-KDS-TEST' },
-    // Sprint 4 : pointage géoloc + fidélité
-    { cle: 'pointage_lat', valeur: 5.395 },
-    { cle: 'pointage_lng', valeur: -3.984 },
-    { cle: 'pointage_rayon_metres', valeur: 150 },
-    { cle: 'sms_plafond_mensuel', valeur: 2000 },
+    // Sprint 4 : fidélité
     { cle: 'fidelite_points_par_tranche', valeur: { tranche_fcfa: 1000, points: 1 } },
     { cle: 'fidelite_valeur_point_fcfa', valeur: 10 },
     { cle: 'fidelite_seuil_utilisation', valeur: 50 },

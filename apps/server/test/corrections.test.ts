@@ -8,7 +8,7 @@ import type { FastifyInstance } from 'fastify';
 import { WebSocket } from 'ws';
 import { construireApp } from '../src/app.js';
 import { db, fermerDb } from '../src/db/client.js';
-import { commandeItems, parametresLocaux, pointages } from '../src/db/schema/index.js';
+import { commandeItems, equipeService, parametresLocaux, servicesCaisse } from '../src/db/schema/index.js';
 import { JETON_KDS, PIN_CAISSIER, PIN_SERVEUR, resetDonnees, seConnecter, type Donnees } from './aide.js';
 
 let app: FastifyInstance;
@@ -183,11 +183,15 @@ describe('correction 4 — attribution automatique des plats par poste (mapping)
   let itemChawarmaId: string;
   let itemPizzaId: string;
 
-  it('au passage « Prêt », chaque plat est attribué au bon poste (employés pointés)', async () => {
-    // Sprint 4 A4 : attribution réelle — le cuisinier ET le pizzaiolo pointent
-    await db.insert(pointages).values([
-      { user_id: donnees.cuisine_id, methode: 'PIN_POS' },
-      { user_id: donnees.pizzaiolo_id, methode: 'PIN_POS' },
+  it('au passage « Prêt », chaque plat est attribué au bon poste (équipe du jour)', async () => {
+    // Allègement : la présence vient de l'équipe du jour du service ouvert.
+    const [service] = await db
+      .select()
+      .from(servicesCaisse)
+      .where(eq(servicesCaisse.statut, 'OUVERT'));
+    await db.insert(equipeService).values([
+      { service_id: service!.id, utilisateur_id: donnees.cuisine_id, poste_jour: 'CUISINIER' },
+      { service_id: service!.id, utilisateur_id: donnees.pizzaiolo_id, poste_jour: 'PIZZAIOLO' },
     ]);
 
     // Envoi tablette : 1 chawarma (CUISINIER) + 1 pizza (PIZZAIOLO)
@@ -220,17 +224,16 @@ describe('correction 4 — attribution automatique des plats par poste (mapping)
     itemChawarmaId = chawarma.id;
     itemPizzaId = pizza.id;
 
-    // Aucun pointage → tous les employés cuisine actifs sont « en poste »
+    // Cuisinier et pizzaïolo présents → chacun reçoit son poste
     expect(chawarma.attribue_a).toEqual([donnees.cuisine_id]);
     expect(pizza.attribue_a).toEqual([donnees.pizzaiolo_id]);
   });
 
-  it('avec le pointage : seuls les employés pointés sont attribués, vide sinon (ne bloque jamais)', async () => {
-    // Le pizzaiolo termine (son pointage se ferme) → il n'est plus « en poste »
+  it('équipe du jour : seuls les présents sont attribués, vide sinon (ne bloque jamais)', async () => {
+    // Le pizzaïolo n'est plus dans l'équipe du jour → il n'est plus « en poste »
     await db
-      .update(pointages)
-      .set({ depart: new Date() })
-      .where(eq(pointages.user_id, donnees.pizzaiolo_id));
+      .delete(equipeService)
+      .where(eq(equipeService.utilisateur_id, donnees.pizzaiolo_id));
 
     // Reprendre puis re-Prêt → l'attribution est recalculée au moment de la préparation
     await app.inject({ method: 'POST', url: `/api/kds/commandes/${commandeId}/reprendre`, headers: jeton });
@@ -243,7 +246,7 @@ describe('correction 4 — attribution automatique des plats par poste (mapping)
 
     const items = await db.select().from(commandeItems).where(eq(commandeItems.commande_id, commandeId));
     expect(items.find((i) => i.id === itemChawarmaId)!.attribue_a).toEqual([donnees.cuisine_id]);
-    // Personne du poste PIZZAIOLO n'est pointé → attribution vide, à rattacher plus tard
+    // Personne du poste PIZZAIOLO présent → attribution vide, à rattacher plus tard
     expect(items.find((i) => i.id === itemPizzaId)!.attribue_a).toEqual([]);
   });
 });

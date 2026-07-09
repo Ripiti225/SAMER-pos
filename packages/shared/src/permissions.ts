@@ -64,7 +64,6 @@ export const SECTIONS_PERMISSIONS: SectionPermissions[] = [
       { cle: 'reglages.catalogue', libelle: 'Catalogue' },
       { cle: 'reglages.fidelite', libelle: 'Fidélité' },
       { cle: 'reglages.parametres', libelle: 'Paramètres' },
-      { cle: 'reglages.pointage', libelle: 'Corrections de pointage' },
       { cle: 'reglages.audit', libelle: "Journal d'audit" },
       { cle: 'reglages.sante', libelle: 'Santé du système' },
     ],
@@ -114,7 +113,7 @@ export const PERMISSIONS_DEFAUT: Record<RoleSysteme, string[]> = {
     'rapports.x', 'rapports.z', 'rapports.notation',
     // Réglages (2.2 : tout sauf catalogue, fidélité, rôles)
     'reglages.equipe', 'reglages.salle', 'reglages.disponibilite', 'reglages.parametres',
-    'reglages.pointage', 'reglages.audit', 'reglages.sante',
+    'reglages.audit', 'reglages.sante',
   ],
 
   CAISSIER: [
@@ -161,11 +160,7 @@ export const PARAMETRES_EDITABLES: ParametreEditable[] = [
   { cle: 'seuil_alerte_ecart_caisse', libelle: "Seuil d'alerte écart de caisse", type: 'entier', unite: 'FCFA', defaut: 2000 },
   { cle: 'kds_seuil_vert_minutes', libelle: 'Chrono KDS — seuil vert', type: 'entier', unite: 'min', defaut: 5 },
   { cle: 'kds_seuil_orange_minutes', libelle: 'Chrono KDS — seuil orange', type: 'entier', unite: 'min', defaut: 10 },
-  { cle: 'pointage_rayon_metres', libelle: 'Rayon de pointage autorisé', type: 'entier', unite: 'm', defaut: 150 },
-  { cle: 'pointage_lat', libelle: 'Latitude du restaurant', type: 'position', defaut: 0 },
-  { cle: 'pointage_lng', libelle: 'Longitude du restaurant', type: 'position', defaut: 0 },
   { cle: 'commande_client_expiration_minutes', libelle: "Expiration des commandes client (QR)", type: 'entier', unite: 'min', defaut: 15 },
-  { cle: 'sms_plafond_mensuel', libelle: 'Plafond SMS mensuel', type: 'entier', unite: 'SMS', defaut: 2000 },
   { cle: 'ticket_entete', libelle: 'En-tête du ticket', type: 'texte', defaut: '' },
   { cle: 'ticket_pied', libelle: 'Pied du ticket', type: 'texte', defaut: '' },
   { cle: 'url_base_client', libelle: 'Adresse web des QR clients', type: 'texte', defaut: '' },
