@@ -13,7 +13,7 @@ export function LoginServeur({ onConnecte }: { onConnecte: (s: SessionInfo) => v
   useEffect(() => {
     api<UtilisateurPublic[]>('/api/auth/utilisateurs')
       .then((tous) =>
-        setUtilisateurs(tous.filter((u) => ['SERVEUR', 'MANAGER', 'PROPRIETAIRE'].includes(u.role))),
+        setUtilisateurs(tous.filter((u) => ['SERVEUR', 'MANAGER', 'PROPRIETAIRE'].includes(u.role_nom ?? u.role ?? ''))),
       )
       .catch(() => setErreur('Serveur injoignable — vérifiez le réseau'));
   }, []);
