@@ -208,6 +208,7 @@ export const tablesSalle = pgTable('tables_salle', {
   statut: text('statut').notNull().default('LIBRE'),
   qr_token: text('qr_token').unique(),
   ouverte_par: uuid('ouverte_par').references(() => utilisateurs.id),
+  actif: boolean('actif').notNull().default(true),
 }, (t) => [
   uniqueIndex('tables_salle_zone_id_numero_key').on(t.zone_id, t.numero),
   check('tables_salle_statut_check', sql`${t.statut} IN ('LIBRE','OCCUPEE','ADDITION_DEMANDEE')`),

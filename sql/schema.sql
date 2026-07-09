@@ -195,6 +195,7 @@ CREATE TABLE tables_salle (
   qr_token    TEXT UNIQUE,             -- token du QR de notation collé sur la table
   -- CORRECTIONS3 point 3 : serveur propriétaire (à l'ouverture, NULL si LIBRE)
   ouverte_par UUID REFERENCES utilisateurs(id),
+  actif       BOOLEAN NOT NULL DEFAULT TRUE,   -- sprint 4C : désactivation (2.2)
   UNIQUE (zone_id, numero)
 );
 
