@@ -1,5 +1,8 @@
 import type { QueryClient } from '@tanstack/react-query';
+import type { SessionInfo } from '@pos/shared';
+import { api } from './api';
 import { sons } from './sons';
+import { useCaisse } from './stores/session';
 
 /** WebSocket LAN : invalide les requêtes quand le serveur pousse un changement. */
 export function connecterTempsReel(queryClient: QueryClient): () => void {
@@ -30,7 +33,18 @@ export function connecterTempsReel(queryClient: QueryClient): () => void {
           void queryClient.invalidateQueries({ queryKey: ['mes-ventes'] });
         }
         if (type.startsWith('table')) void queryClient.invalidateQueries({ queryKey: ['tables'] });
-        if (type === 'catalogue') void queryClient.invalidateQueries({ queryKey: ['catalogue'] });
+        if (type === 'catalogue') {
+          void queryClient.invalidateQueries({ queryKey: ['catalogue'] });
+          void queryClient.invalidateQueries({ queryKey: ['admin', 'disponibilite'] });
+        }
+        // Sprint 4C : un rôle a changé → on rafraîchit les permissions en direct
+        // (les sections retirées disparaissent sans reconnexion).
+        if (type === 'permissions') {
+          void api<SessionInfo>('/api/auth/moi')
+            .then((s) => useCaisse.getState().majPermissions(s))
+            .catch(() => {});
+          void queryClient.invalidateQueries({ queryKey: ['admin'] });
+        }
       } catch {
         /* message ignoré */
       }

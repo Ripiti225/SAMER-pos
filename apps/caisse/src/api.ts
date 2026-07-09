@@ -10,7 +10,7 @@ export class ErreurApi extends Error {
 
 export async function api<T>(
   chemin: string,
-  options: { method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; corps?: unknown } = {},
+  options: { method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; corps?: unknown } = {},
 ): Promise<T> {
   const rep = await fetch(chemin, {
     method: options.method ?? 'GET',

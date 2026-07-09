@@ -12,6 +12,7 @@ import { Login } from './screens/Login';
 import { MesVentes } from './screens/MesVentes';
 import { OuvertureService } from './screens/OuvertureService';
 import { Paiement } from './screens/Paiement';
+import { Reglages } from './screens/Reglages';
 import { Tables } from './screens/Tables';
 import { useCaisse } from './stores/session';
 import { connecterTempsReel } from './temps-reel';
@@ -42,8 +43,8 @@ export function App() {
   let contenu: JSX.Element;
   if (!session) {
     contenu = <Login />;
-  } else if (!session.service_ouvert && ecran !== 'cloture') {
-    // Pas de vente possible sans fond de caisse saisi
+  } else if (!session.service_ouvert && ecran !== 'cloture' && ecran !== 'reglages') {
+    // Pas de vente possible sans fond de caisse saisi (mais Réglages reste ouvert)
     contenu = <OuvertureService />;
   } else {
     contenu = {
@@ -53,6 +54,7 @@ export function App() {
       tables: <Tables />,
       'mes-ventes': <MesVentes />,
       cloture: <Cloture />,
+      reglages: <Reglages />,
     }[ecran];
   }
 

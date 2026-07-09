@@ -68,7 +68,7 @@ export function Login() {
             {(utilisateurs ?? []).map((u) => (
               <button key={u.id} type="button" className="carte min-h-[80px] p-4 text-left hover:border-marque" onClick={() => setChoisi(u)}>
                 <div className="font-bold">{u.nom_complet}</div>
-                <div className="text-sm text-doux">{LIBELLES_ROLES[u.role] ?? u.role}</div>
+                <div className="text-sm text-doux">{u.role_nom ?? (u.role ? LIBELLES_ROLES[u.role] : '')}</div>
               </button>
             ))}
           </div>

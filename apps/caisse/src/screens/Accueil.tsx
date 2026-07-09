@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { IconFlagCheck, IconLayoutGrid, IconList, IconPlus } from '@tabler/icons-react';
+import { IconFlagCheck, IconLayoutGrid, IconList, IconPlus, IconSettings } from '@tabler/icons-react';
 import type { CommandeVue, TableVue } from '@pos/shared';
-import { PARTENAIRES } from '@pos/shared';
+import { PARTENAIRES, PERMISSIONS_ADMIN } from '@pos/shared';
 import { api } from '../api';
 import { Modale } from '../components/Modale';
 import { useNbAdditionsEnAttente } from '../components/BandeauAdditions';
@@ -52,6 +52,12 @@ export function Accueil() {
         </div>
         <div className="ml-auto flex items-center gap-4">
           <PiluleSync />
+          {session && PERMISSIONS_ADMIN.some((p) => session.permissions.includes(p)) && (
+            <button type="button" className="btn-blanc flex items-center gap-2" onClick={() => aller('reglages')}>
+              <IconSettings size={20} />
+              Réglages
+            </button>
+          )}
           <button type="button" className="btn-blanc" onClick={seDeconnecter}>
             Se déconnecter
           </button>

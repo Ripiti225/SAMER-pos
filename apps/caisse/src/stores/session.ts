@@ -7,7 +7,8 @@ export type Ecran =
   | 'paiement'
   | 'tables'
   | 'mes-ventes'
-  | 'cloture';
+  | 'cloture'
+  | 'reglages';
 
 interface EtatCaisse {
   session: SessionInfo | null;
@@ -19,6 +20,8 @@ interface EtatCaisse {
   tablesVues: string[];
 
   poserSession: (s: SessionInfo | null) => void;
+  /** Met à jour permissions/utilisateur en direct (WebSocket) sans changer d'écran. */
+  majPermissions: (s: SessionInfo) => void;
   poserServiceOuvert: (service: SessionInfo['service_ouvert']) => void;
   verrouiller: (v: boolean) => void;
   aller: (ecran: Ecran, commandeId?: string | null) => void;
@@ -42,6 +45,16 @@ export const useCaisse = create<EtatCaisse>((set, get) => ({
       document.documentElement.style.setProperty('--marque', session.restaurant.couleur_hex);
     }
     set({ session, ecran: 'accueil', commandeId: null, verrouille: false });
+  },
+  majPermissions: (fraiche) => {
+    const s = get().session;
+    if (!s) return;
+    // Si l'utilisateur perd l'accès Réglages en direct, on le renvoie à l'accueil.
+    const perdAcces = get().ecran === 'reglages' && fraiche.permissions.length === 0;
+    set({
+      session: { ...s, utilisateur: fraiche.utilisateur, permissions: fraiche.permissions },
+      ...(perdAcces ? { ecran: 'accueil' as Ecran } : {}),
+    });
   },
   poserServiceOuvert: (service) => {
     const s = get().session;
