@@ -52,6 +52,25 @@ export class MagasinSessions {
       if (s.utilisateur_id === utilisateurId) this.sessions.delete(id);
     }
   }
+
+  /**
+   * Met à jour le rôle porté par les sessions ouvertes d'un utilisateur
+   * (changement de rôle par un encadrant) : ses permissions suivent sans
+   * reconnexion — les permissions sont résolues en direct depuis role_id.
+   */
+  majRoleUtilisateur(
+    utilisateurId: string,
+    r: Pick<SessionUtilisateur, 'role_id' | 'role_nom' | 'est_proprietaire' | 'est_superviseur'>,
+  ): void {
+    for (const s of this.sessions.values()) {
+      if (s.utilisateur_id === utilisateurId) {
+        s.role_id = r.role_id;
+        s.role_nom = r.role_nom;
+        s.est_proprietaire = r.est_proprietaire;
+        s.est_superviseur = r.est_superviseur;
+      }
+    }
+  }
 }
 
 /**

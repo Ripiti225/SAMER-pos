@@ -72,6 +72,10 @@ CREATE TABLE utilisateurs (
   -- anti-force brute (§14.1)
   tentatives_pin  SMALLINT NOT NULL DEFAULT 0,
   verrou_jusqua   TIMESTAMPTZ,
+  -- sprint 4C : PIN posé par l'employé (code temporaire à usage unique)
+  doit_definir_pin      BOOLEAN NOT NULL DEFAULT FALSE,
+  pin_temporaire_hash   TEXT,
+  pin_temporaire_expire TIMESTAMPTZ,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );

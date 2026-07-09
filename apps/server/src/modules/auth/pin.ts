@@ -40,6 +40,10 @@ export async function verifierPinUtilisateur(utilisateurId: string, pin: string)
     .where(and(eq(utilisateurs.id, utilisateurId), eq(utilisateurs.actif, true)));
   if (!u) throw new ErreurMetier('Utilisateur inconnu ou désactivé', 404);
 
+  if (u.doit_definir_pin) {
+    throw new ErreurMetier('Ce compte doit d’abord définir son PIN', 409);
+  }
+
   if (u.verrou_jusqua && u.verrou_jusqua.getTime() > Date.now()) {
     const restant = Math.ceil((u.verrou_jusqua.getTime() - Date.now()) / 1000);
     throw new ErreurMetier(`Ce PIN est bloqué ${restant} seconde${restant > 1 ? 's' : ''}`, 423);

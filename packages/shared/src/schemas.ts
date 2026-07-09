@@ -248,7 +248,7 @@ export const DupliquerRoleSchema = z.object({ nom: NomRoleSchema });
 
 const NomCompletSchema = z.string().trim().min(2, 'Nom trop court').max(80, 'Nom trop long');
 const TelephoneSchema = z.string().trim().regex(/^[+0-9][0-9 ]{5,19}$/, 'Numéro de téléphone invalide').optional();
-const PosteCuisineSchema = z.enum(['CUISINIER', 'PIZZAIOLO', 'GRILLADE', 'FROID']).optional();
+const PosteCuisineSchema = z.enum(['CUISINIER', 'PIZZAIOLO', 'COMPTOIRISTE']).nullish();
 
 /** Création d'un employé (le PIN est posé ensuite par l'employé lui-même). */
 export const CreerEmployeSchema = z.object({

@@ -105,6 +105,10 @@ export const utilisateurs = pgTable('utilisateurs', {
   actif: boolean('actif').notNull().default(true),
   tentatives_pin: smallint('tentatives_pin').notNull().default(0),
   verrou_jusqua: timestamp('verrou_jusqua', { withTimezone: true }),
+  // Sprint 4C : PIN posé par l'employé (code temporaire à usage unique).
+  doit_definir_pin: boolean('doit_definir_pin').notNull().default(false),
+  pin_temporaire_hash: text('pin_temporaire_hash'),
+  pin_temporaire_expire: timestamp('pin_temporaire_expire', { withTimezone: true }),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

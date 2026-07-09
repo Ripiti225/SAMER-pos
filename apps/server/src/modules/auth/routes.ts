@@ -1,9 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { and, eq } from 'drizzle-orm';
-import { DeverrouillerSchema, LoginSchema } from '@pos/shared';
+import argon2 from 'argon2';
+import { DeverrouillerSchema, LoginSchema, PoserPinSchema } from '@pos/shared';
 import type { SessionInfo } from '@pos/shared';
 import { db } from '../../db/client.js';
 import { parametresLocaux, restaurant, roles, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
+import { ecrireOutbox } from '../../db/outbox.js';
 import { valider } from '../../lib/valider.js';
 import { ErreurMetier } from '../../lib/erreurs.js';
 import { effacerCookieSession, poserCookieSession, NOM_COOKIE, type SessionUtilisateur } from '../../plugins/sessions.js';
@@ -81,6 +83,7 @@ export function routesAuth(app: FastifyInstance): void {
         role: utilisateurs.role,
         role_id: utilisateurs.role_id,
         role_nom: roles.nom,
+        doit_definir_pin: utilisateurs.doit_definir_pin,
       })
       .from(utilisateurs)
       .leftJoin(roles, eq(roles.id, utilisateurs.role_id))
@@ -126,6 +129,45 @@ export function routesAuth(app: FastifyInstance): void {
   app.post('/api/auth/deverrouiller', { preHandler: app.exigerAuth }, async (req) => {
     const { pin } = valider(DeverrouillerSchema, req.body);
     await verifierPinUtilisateur(req.session!.utilisateur_id, pin);
+    return { ok: true };
+  });
+
+  /**
+   * Pose du PIN par l'employé lui-même (2.1) : code temporaire à usage unique
+   * + PIN choisi deux fois. Aucune session requise (l'employé n'a pas encore de
+   * PIN utilisable). Le code est consommé, le compte devient utilisable.
+   */
+  app.post('/api/auth/poser-pin', async (req) => {
+    const corps = valider(PoserPinSchema, req.body);
+    const [u] = await db
+      .select()
+      .from(utilisateurs)
+      .where(and(eq(utilisateurs.id, corps.utilisateur_id), eq(utilisateurs.actif, true)));
+    if (!u || !u.doit_definir_pin || !u.pin_temporaire_hash) {
+      throw new ErreurMetier('Aucune définition de PIN en attente pour ce compte', 400);
+    }
+    if (u.pin_temporaire_expire && u.pin_temporaire_expire.getTime() < Date.now()) {
+      throw new ErreurMetier('Le code temporaire a expiré — demandez-en un nouveau', 400);
+    }
+    if (!(await argon2.verify(u.pin_temporaire_hash, corps.code_temporaire))) {
+      throw new ErreurMetier('Code temporaire incorrect', 403);
+    }
+    await db.transaction(async (tx) => {
+      const [maj] = await tx
+        .update(utilisateurs)
+        .set({
+          pin_hash: await argon2.hash(corps.pin, { type: argon2.argon2id }),
+          doit_definir_pin: false,
+          pin_temporaire_hash: null,
+          pin_temporaire_expire: null,
+          tentatives_pin: 0,
+          verrou_jusqua: null,
+          updated_at: new Date(),
+        })
+        .where(eq(utilisateurs.id, u.id))
+        .returning();
+      await ecrireOutbox(tx, 'utilisateurs', 'UPDATE', u.id, maj as unknown as Record<string, unknown>);
+    });
     return { ok: true };
   });
 }
