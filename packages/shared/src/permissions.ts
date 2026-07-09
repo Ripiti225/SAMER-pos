@@ -143,6 +143,37 @@ export function estPermissionConnue(cle: string): boolean {
 }
 
 /**
+ * Catalogue des paramètres locaux éditables depuis Réglages (2.6), avec libellé
+ * français, type d'entrée et valeur par défaut. La route serveur n'accepte QUE
+ * ces clés (liste blanche). Les paramètres de fidélité sont gérés à part (2.5).
+ */
+export interface ParametreEditable {
+  cle: string;
+  libelle: string;
+  type: 'entier' | 'texte' | 'booleen' | 'position';
+  unite?: string;
+  defaut: number | string | boolean;
+}
+
+export const PARAMETRES_EDITABLES: ParametreEditable[] = [
+  { cle: 'verrou_inactivite_caisse_secondes', libelle: 'Verrouillage caisse après inactivité', type: 'entier', unite: 's', defaut: 600 },
+  { cle: 'verrouillage_inactivite_serveur_secondes', libelle: 'Verrouillage tablette serveur', type: 'entier', unite: 's', defaut: 120 },
+  { cle: 'seuil_alerte_ecart_caisse', libelle: "Seuil d'alerte écart de caisse", type: 'entier', unite: 'FCFA', defaut: 2000 },
+  { cle: 'kds_seuil_vert_minutes', libelle: 'Chrono KDS — seuil vert', type: 'entier', unite: 'min', defaut: 5 },
+  { cle: 'kds_seuil_orange_minutes', libelle: 'Chrono KDS — seuil orange', type: 'entier', unite: 'min', defaut: 10 },
+  { cle: 'pointage_rayon_metres', libelle: 'Rayon de pointage autorisé', type: 'entier', unite: 'm', defaut: 150 },
+  { cle: 'pointage_lat', libelle: 'Latitude du restaurant', type: 'position', defaut: 0 },
+  { cle: 'pointage_lng', libelle: 'Longitude du restaurant', type: 'position', defaut: 0 },
+  { cle: 'commande_client_expiration_minutes', libelle: "Expiration des commandes client (QR)", type: 'entier', unite: 'min', defaut: 15 },
+  { cle: 'sms_plafond_mensuel', libelle: 'Plafond SMS mensuel', type: 'entier', unite: 'SMS', defaut: 2000 },
+  { cle: 'ticket_entete', libelle: 'En-tête du ticket', type: 'texte', defaut: '' },
+  { cle: 'ticket_pied', libelle: 'Pied du ticket', type: 'texte', defaut: '' },
+  { cle: 'url_base_client', libelle: 'Adresse web des QR clients', type: 'texte', defaut: '' },
+];
+
+export const CLES_PARAMETRES_EDITABLES: string[] = PARAMETRES_EDITABLES.map((p) => p.cle);
+
+/**
  * Nettoie une liste de permissions demandée pour un rôle NON verrouillé :
  * ne garde que les permissions connues et retire la permission protégée (1.4).
  * Retourne aussi si la permission protégée avait été demandée (pour auditer/refuser).
