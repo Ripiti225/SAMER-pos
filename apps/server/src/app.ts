@@ -21,6 +21,7 @@ import { routesEquipe } from './modules/equipe/routes.js';
 import { routesSalleAdmin } from './modules/salle/admin.js';
 import { routesDisponibilite } from './modules/catalogue/admin-disponibilite.js';
 import { routesReglages } from './modules/reglages/routes.js';
+import { routesCatalogueAdmin } from './modules/catalogue/admin-catalogue.js';
 import { ConsolePrinter } from './printer/ConsolePrinter.js';
 import type { PrinterService } from './printer/PrinterService.js';
 
@@ -58,6 +59,7 @@ export async function construireApp(options: { logger?: boolean } = {}): Promise
   routesSalleAdmin(app);
   routesDisponibilite(app);
   routesReglages(app);
+  routesCatalogueAdmin(app);
 
   return app;
 }

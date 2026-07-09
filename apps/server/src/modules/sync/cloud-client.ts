@@ -92,4 +92,13 @@ export class ClientCloud {
   reconcile(jour: string, local: { nb_payees: number; total_ventes: number; par_mode: Record<string, number> }): Promise<ReponseReconcile> {
     return this.appeler<ReponseReconcile>('sync-reconcile', { jour, local });
   }
+
+  /**
+   * Édition d'administration (catalogue, barème fidélité) : écrit dans le CLOUD
+   * (source siège). La version est incrémentée côté cloud ; la modification
+   * redescend par la synchro normale (< 5 min).
+   */
+  adminCatalogue(op: string, entite: string, valeurs: Record<string, unknown>): Promise<{ ok: true; version?: number }> {
+    return this.appeler('admin-catalogue', { op, entite, valeurs });
+  }
 }

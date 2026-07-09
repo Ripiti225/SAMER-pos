@@ -7,9 +7,9 @@
 import { pool } from '../../db/client.js';
 import type { ClientCloud, LigneDescente } from './cloud-client.js';
 
-const FLUX = ['CATALOGUE', 'PROMOTIONS', 'UTILISATEURS'] as const;
+const FLUX = ['CATALOGUE', 'PROMOTIONS', 'UTILISATEURS', 'PARAMETRES'] as const;
 
-/** Cible de conflit par table (id sauf combo_articles). */
+/** Cible de conflit par table (id sauf combo_articles et parametres_locaux). */
 const CONFLIT: Record<string, string[]> = {
   categories: ['id'],
   articles: ['id'],
@@ -21,6 +21,8 @@ const CONFLIT: Record<string, string[]> = {
   combo_articles: ['combo_id', 'article_id'],
   promotions: ['id'],
   utilisateurs: ['id'],
+  // Barème fidélité (2.5) : le siège est maître, clé = cle.
+  parametres_locaux: ['cle'],
 };
 
 // Colonnes propres au cloud, à retirer avant l'écriture locale.

@@ -34,6 +34,25 @@ export const FLUX_DESCENTE: Record<string, string[]> = {
   ],
   PROMOTIONS: ['promotions'],
   UTILISATEURS: ['utilisateurs'],
+  // Sprint 4C : barème fidélité (2.5) — édité au siège, redescend comme le catalogue.
+  PARAMETRES: ['parametres_locaux'],
+};
+
+/**
+ * Édition d'administration (sprint 4C, 2.4/2.5) : entité éditable → table cloud
+ * + colonnes autorisées (anti-injection). L'écriture bump la version (trigger).
+ */
+export const CATALOGUE_ADMIN: Record<string, { table: string; colonnes: string[] }> = {
+  categorie: { table: 'categories', colonnes: ['id', 'parent_id', 'nom', 'ordre', 'actif'] },
+  article: { table: 'articles', colonnes: ['id', 'categorie_id', 'nom', 'description', 'prix_base', 'image_url', 'actif', 'updated_at'] },
+  prix_canal: { table: 'prix_canaux', colonnes: ['id', 'article_id', 'canal', 'prix'] },
+  groupe_option: { table: 'groupes_options', colonnes: ['id', 'article_id', 'nom', 'choix_min', 'choix_max'] },
+  option: { table: 'options', colonnes: ['id', 'groupe_id', 'nom'] },
+  supplement: { table: 'supplements', colonnes: ['id', 'article_id', 'nom', 'prix'] },
+  combo: { table: 'combos', colonnes: ['id', 'nom', 'prix', 'actif'] },
+  combo_article: { table: 'combo_articles', colonnes: ['id', 'combo_id', 'article_id', 'quantite'] },
+  promotion: { table: 'promotions', colonnes: ['id', 'nom', 'type', 'valeur', 'heure_debut', 'heure_fin', 'jours', 'article_id', 'actif'] },
+  bareme_fidelite: { table: 'parametres_locaux', colonnes: ['cle', 'valeur'] },
 };
 
 /** Filtre un payload aux seules colonnes autorisées + restaurant_id + id. */

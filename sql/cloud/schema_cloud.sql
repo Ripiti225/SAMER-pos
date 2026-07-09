@@ -308,12 +308,23 @@ CREATE TABLE IF NOT EXISTS utilisateurs (
   version        BIGINT NOT NULL DEFAULT 0
 );
 
+-- Barème fidélité & autres paramètres édités au siège (sprint 4C §2.5) :
+-- descendent comme le catalogue (clé = restaurant_id + cle).
+CREATE TABLE IF NOT EXISTS parametres_locaux (
+  restaurant_id UUID NOT NULL,
+  cle           TEXT NOT NULL,
+  valeur        JSONB,
+  version       BIGINT NOT NULL DEFAULT 0,
+  PRIMARY KEY (restaurant_id, cle)
+);
+
 -- Triggers de version sur chaque table descente
 DO $$
 DECLARE t TEXT;
 BEGIN
   FOREACH t IN ARRAY ARRAY['categories','articles','prix_canaux','groupes_options',
-    'options','supplements','combos','combo_articles','promotions','utilisateurs']
+    'options','supplements','combos','combo_articles','promotions','utilisateurs',
+    'parametres_locaux']
   LOOP
     EXECUTE format('DROP TRIGGER IF EXISTS trg_version ON %I', t);
     EXECUTE format('CREATE TRIGGER trg_version BEFORE INSERT OR UPDATE ON %I
