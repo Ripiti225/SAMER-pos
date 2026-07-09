@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MODES_PAIEMENT, PINS_INTERDITS, TYPES_COMMANDE } from './constantes.js';
+import { MODES_PAIEMENT, PINS_INTERDITS, POSTES_JOUR, TYPES_COMMANDE } from './constantes.js';
 
 /** PIN 4 à 6 chiffres, hors liste interdite (§14.1). */
 export const PinSchema = z
@@ -17,11 +17,19 @@ export const LoginSchema = z.object({
 
 export const DeverrouillerSchema = z.object({ pin: PinSaisiSchema });
 
+/** Un membre de l'équipe du jour : qui + son poste pour la journée. */
+export const MembreEquipeSchema = z.object({
+  utilisateur_id: z.string().uuid(),
+  poste_jour: z.enum(POSTES_JOUR),
+});
+
 export const OuvrirServiceSchema = z.object({
   fond_de_caisse: z
     .number({ invalid_type_error: 'Le fond de caisse doit être un montant en FCFA' })
     .int('Le fond de caisse doit être un montant entier en FCFA')
     .min(0, 'Le fond de caisse ne peut pas être négatif'),
+  // Équipe du jour (allègement) : présents + poste du jour. Optionnelle.
+  equipe: z.array(MembreEquipeSchema).max(50).optional(),
 });
 
 /**

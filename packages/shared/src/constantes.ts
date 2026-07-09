@@ -54,6 +54,35 @@ export const LIBELLES_STATUTS_COMMANDE: Record<StatutCommande, string> = {
 export const PARTENAIRES = ['YANGO', 'GLOVO', 'SAMER_DELIV'] as const;
 export type Partenaire = (typeof PARTENAIRES)[number];
 
+/**
+ * Postes prédéfinis pour l'« équipe du jour » (remplace le pointage) : à
+ * l'ouverture de service, on coche les présents et on ajuste leur poste du jour.
+ */
+export const POSTES_JOUR = [
+  'CAISSIER',
+  'SERVEUR',
+  'BARMAN',
+  'COMPTOIRISTE',
+  'CUISINIER',
+  'PIZZAIOLO',
+  'GRILLADE',
+  'PLONGE',
+  'MANAGER',
+] as const;
+export type PosteJour = (typeof POSTES_JOUR)[number];
+
+export const LIBELLES_POSTES: Record<PosteJour, string> = {
+  CAISSIER: 'Caissier',
+  SERVEUR: 'Serveur',
+  BARMAN: 'Barman',
+  COMPTOIRISTE: 'Comptoiriste',
+  CUISINIER: 'Cuisinier',
+  PIZZAIOLO: 'Pizzaïolo',
+  GRILLADE: 'Grillade',
+  PLONGE: 'Plonge',
+  MANAGER: 'Manager',
+};
+
 // ---------------------------------------------------------------------------
 // CORRECTIONS3 — circuit client ↔ serveur
 // ---------------------------------------------------------------------------

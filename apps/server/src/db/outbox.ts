@@ -17,6 +17,8 @@ export type TableSynchronisee =
   | 'pointages'
   | 'clients_fidelite'
   | 'points_fidelite'
+  // Allègement : équipe du jour (remplace à terme la remontée des pointages).
+  | 'equipe_service'
   // Sprint 4B/4C : rôles, permissions et employés (administration).
   | 'roles'
   | 'role_permissions'

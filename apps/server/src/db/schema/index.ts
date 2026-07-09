@@ -242,6 +242,16 @@ export const servicesCaisse = pgTable('services_caisse', {
   check('services_caisse_statut_check', sql`${t.statut} IN ('OUVERT','CLOTURE')`),
 ]);
 
+// Équipe du jour (allègement — remplace le pointage) : présents d'un service
+// + leur poste du jour. Info + remontée back-office.
+export const equipeService = pgTable('equipe_service', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  service_id: uuid('service_id').notNull().references(() => servicesCaisse.id, { onDelete: 'cascade' }),
+  utilisateur_id: uuid('utilisateur_id').notNull().references(() => utilisateurs.id),
+  poste_jour: text('poste_jour').notNull(),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('equipe_service_service_utilisateur_key').on(t.service_id, t.utilisateur_id)]);
+
 // ---------------------------------------------------------------------------
 // 5. Commandes (§5.1) — cœur du sprint 1
 // ---------------------------------------------------------------------------

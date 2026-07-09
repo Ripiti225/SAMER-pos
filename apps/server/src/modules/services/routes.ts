@@ -3,7 +3,7 @@ import { and, eq, isNull, notInArray } from 'drizzle-orm';
 import { CloturerServiceSchema, OuvrirServiceSchema, TransfererServiceSchema } from '@pos/shared';
 import type { RapportZ } from '@pos/shared';
 import { db } from '../../db/client.js';
-import { commandes, parametresLocaux, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
+import { commandes, equipeService, parametresLocaux, roles, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
@@ -26,6 +26,27 @@ function vueService(s: typeof servicesCaisse.$inferSelect) {
 
 export function routesServices(app: FastifyInstance): void {
   const gardeCaisse = app.exigePermission('caisse.service.ouvrir');
+
+  // Employés actifs proposés pour l'équipe du jour, avec un poste par défaut.
+  app.get('/api/services/equipe-proposee', { preHandler: gardeCaisse }, async () => {
+    const lignes = await db
+      .select({
+        utilisateur_id: utilisateurs.id,
+        nom_complet: utilisateurs.nom_complet,
+        poste_cuisine: utilisateurs.poste_cuisine,
+        role_nom: roles.nom,
+      })
+      .from(utilisateurs)
+      .leftJoin(roles, eq(roles.id, utilisateurs.role_id))
+      .where(eq(utilisateurs.actif, true))
+      .orderBy(utilisateurs.nom_complet);
+    const parRole: Record<string, string> = { CAISSIER: 'CAISSIER', SERVEUR: 'SERVEUR', MANAGER: 'MANAGER' };
+    return lignes.map((l) => ({
+      utilisateur_id: l.utilisateur_id,
+      nom_complet: l.nom_complet,
+      poste_defaut: l.poste_cuisine ?? parRole[l.role_nom ?? ''] ?? 'CAISSIER',
+    }));
+  });
 
   // Ouverture de service : saisie du fond de caisse
   app.post('/api/services/ouvrir', { preHandler: gardeCaisse }, async (req) => {
@@ -53,6 +74,16 @@ export function routesServices(app: FastifyInstance): void {
         entite_id: s!.id,
         montant: corps.fond_de_caisse,
       });
+
+      // Équipe du jour : présents + poste du jour (remonte au back-office).
+      for (const m of corps.equipe ?? []) {
+        const [membre] = await tx
+          .insert(equipeService)
+          .values({ service_id: s!.id, utilisateur_id: m.utilisateur_id, poste_jour: m.poste_jour })
+          .onConflictDoNothing()
+          .returning();
+        if (membre) await ecrireOutbox(tx, 'equipe_service', 'INSERT', membre.id, membre as unknown as Record<string, unknown>);
+      }
 
       // Rattache au nouveau service les commandes reçues par transfert
       // pendant que ce caissier n'avait pas encore de service ouvert.

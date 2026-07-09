@@ -244,6 +244,17 @@ CREATE TABLE services_caisse (
 CREATE UNIQUE INDEX un_service_ouvert_par_caissier
   ON services_caisse (caissier_id) WHERE statut = 'OUVERT';
 
+-- Équipe du jour (allègement — remplace le pointage) : présents d'un service
+-- + leur poste du jour (info + remontée back-office, pas de chronométrage).
+CREATE TABLE equipe_service (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  service_id     UUID NOT NULL REFERENCES services_caisse(id) ON DELETE CASCADE,
+  utilisateur_id UUID NOT NULL REFERENCES utilisateurs(id),
+  poste_jour     TEXT NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (service_id, utilisateur_id)
+);
+
 -- ============================================================================
 -- 5. COMMANDES (§5.1) — cœur du sprint 1
 -- ============================================================================
