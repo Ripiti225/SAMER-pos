@@ -9,6 +9,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { ROLES_SYSTEME, PERMISSIONS_DEFAUT, type RoleSysteme } from '@pos/shared';
 import type { DbOuTx } from '../../db/client.js';
 import { db } from '../../db/client.js';
+import { ecrireOutbox } from '../../db/outbox.js';
 import { rolePermissions, roles } from '../../db/schema/index.js';
 
 /** Crée les rôles système et (re)pose leurs permissions par défaut. */
@@ -53,6 +54,23 @@ export async function permissionsDuRole(roleId: string | null): Promise<Set<stri
   const set = new Set(lignes.map((l) => l.permission_cle));
   cache.set(roleId, set);
   return set;
+}
+
+/**
+ * Remplace l'intégralité des permissions d'un rôle (dans la transaction
+ * appelante) et écrit UNE ligne outbox (clé = role_id, jeu complet en payload).
+ * N'invalide PAS le cache : l'appelant le fait APRÈS le commit (voir routes).
+ */
+export async function remplacerPermissionsRole(
+  tx: DbOuTx,
+  roleId: string,
+  permissions: string[],
+): Promise<void> {
+  await tx.delete(rolePermissions).where(eq(rolePermissions.role_id, roleId));
+  if (permissions.length > 0) {
+    await tx.insert(rolePermissions).values(permissions.map((permission_cle) => ({ role_id: roleId, permission_cle })));
+  }
+  await ecrireOutbox(tx, 'role_permissions', 'UPDATE', roleId, { role_id: roleId, permissions });
 }
 
 export interface RoleResolu {

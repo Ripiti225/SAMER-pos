@@ -127,3 +127,34 @@ export const PERMISSIONS_DEFAUT: Record<RoleSysteme, string[]> = {
 
   CUISINE: ['cuisine.avancer'],
 };
+
+/** Rôles système dont les permissions sont VERROUILLÉES (toujours tout, 1.3/2.8). */
+export const ROLES_VERROUILLES: string[] = ['PROPRIETAIRE', 'SUPERVISEUR'];
+
+/** Clés du groupe Réglages (+ Rôles & accès) : ouvrent l'onglet Administration. */
+export const PERMISSIONS_ADMIN: string[] = [
+  ...(SECTIONS_PERMISSIONS.find((s) => s.cle === 'reglages')?.permissions.map((p) => p.cle) ?? []),
+  PERMISSION_PROTEGEE,
+];
+
+/** true si `cle` fait partie du catalogue (aucune permission inventée). */
+export function estPermissionConnue(cle: string): boolean {
+  return TOUTES_PERMISSIONS.includes(cle);
+}
+
+/**
+ * Nettoie une liste de permissions demandée pour un rôle NON verrouillé :
+ * ne garde que les permissions connues et retire la permission protégée (1.4).
+ * Retourne aussi si la permission protégée avait été demandée (pour auditer/refuser).
+ */
+export function filtrerPermissionsRole(demandees: string[]): {
+  permissions: string[];
+  protegeeDemandee: boolean;
+  inconnues: string[];
+} {
+  const uniques = [...new Set(demandees)];
+  const inconnues = uniques.filter((c) => !estPermissionConnue(c));
+  const protegeeDemandee = uniques.includes(PERMISSION_PROTEGEE);
+  const permissions = uniques.filter((c) => estPermissionConnue(c) && c !== PERMISSION_PROTEGEE);
+  return { permissions, protegeeDemandee, inconnues };
+}

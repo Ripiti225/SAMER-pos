@@ -224,7 +224,88 @@ export const TelephoneFideliteSchema = z
   .trim()
   .regex(/^[+0-9][0-9 ]{5,19}$/, 'Numéro de téléphone invalide');
 
+// ---------------------------------------------------------------------------
+// SPRINT 4B/4C — Administration (Réglages)
+// ---------------------------------------------------------------------------
+
+const NomRoleSchema = z.string().trim().min(2, 'Nom de rôle trop court').max(40, 'Nom de rôle trop long');
+const PermissionsSchema = z.array(z.string().min(1)).max(64);
+
+/** Création d'un rôle personnalisé. */
+export const CreerRoleSchema = z.object({
+  nom: NomRoleSchema,
+  permissions: PermissionsSchema,
+});
+
+/** Modification d'un rôle (nom optionnel, permissions remplacées). */
+export const ModifierRoleSchema = z.object({
+  nom: NomRoleSchema.optional(),
+  permissions: PermissionsSchema,
+});
+
+/** Duplication d'un rôle existant sous un nouveau nom. */
+export const DupliquerRoleSchema = z.object({ nom: NomRoleSchema });
+
+const NomCompletSchema = z.string().trim().min(2, 'Nom trop court').max(80, 'Nom trop long');
+const TelephoneSchema = z.string().trim().regex(/^[+0-9][0-9 ]{5,19}$/, 'Numéro de téléphone invalide').optional();
+const PosteCuisineSchema = z.enum(['CUISINIER', 'PIZZAIOLO', 'GRILLADE', 'FROID']).optional();
+
+/** Création d'un employé (le PIN est posé ensuite par l'employé lui-même). */
+export const CreerEmployeSchema = z.object({
+  nom_complet: NomCompletSchema,
+  role_id: z.string().uuid('Rôle invalide'),
+  poste_cuisine: PosteCuisineSchema,
+  telephone: TelephoneSchema,
+});
+
+/** Modification d'un employé (rôle, poste, téléphone). */
+export const ModifierEmployeSchema = z.object({
+  nom_complet: NomCompletSchema.optional(),
+  role_id: z.string().uuid('Rôle invalide').optional(),
+  poste_cuisine: PosteCuisineSchema,
+  telephone: TelephoneSchema,
+});
+
+/** Pose du PIN par l'employé (code temporaire à usage unique + PIN choisi deux fois). */
+export const PoserPinSchema = z
+  .object({
+    utilisateur_id: z.string().uuid('Employé invalide'),
+    code_temporaire: z.string().regex(/^\d{6}$/, 'Code temporaire à 6 chiffres'),
+    pin: PinSchema,
+    pin_confirmation: PinSchema,
+  })
+  .refine((v) => v.pin === v.pin_confirmation, {
+    message: 'Les deux PIN saisis ne correspondent pas',
+    path: ['pin_confirmation'],
+  });
+
+// Salle (zones & tables)
+export const CreerZoneSchema = z.object({ nom: z.string().trim().min(1).max(40), ordre: z.number().int().optional() });
+export const ModifierZoneSchema = z.object({ nom: z.string().trim().min(1).max(40).optional(), ordre: z.number().int().optional() });
+export const CreerTableSchema = z.object({
+  zone_id: z.string().uuid('Zone invalide'),
+  numero: z.string().trim().min(1).max(20),
+  partenaire: z.string().trim().max(40).nullish(),
+});
+export const ModifierTableSchema = z.object({
+  numero: z.string().trim().min(1).max(20).optional(),
+  zone_id: z.string().uuid().optional(),
+  actif: z.boolean().optional(),
+});
+
+/** Disponibilité locale d'un article (2.3). */
+export const DisponibiliteSchema = z.object({ disponible: z.boolean() });
+
+/** Modification d'un paramètre local (2.6). */
+export const ModifierParametreSchema = z.object({
+  cle: z.string().trim().min(1),
+  valeur: z.union([z.number(), z.string(), z.boolean(), z.record(z.unknown())]),
+});
+
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type CreerCommandeInput = z.infer<typeof CreerCommandeSchema>;
 export type AjouterItemInput = z.infer<typeof AjouterItemSchema>;
 export type PaiementInput = z.infer<typeof PaiementSchema>;
+export type CreerRoleInput = z.infer<typeof CreerRoleSchema>;
+export type ModifierRoleInput = z.infer<typeof ModifierRoleSchema>;
+export type CreerEmployeInput = z.infer<typeof CreerEmployeSchema>;

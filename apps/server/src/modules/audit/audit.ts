@@ -23,7 +23,23 @@ export type ActionAudit =
   | 'TRANSFERT_TABLE'
   | 'ECART_RECONCILIATION'
   | 'CORRECTION_POINTAGE'
-  | 'UTILISATION_POINTS';
+  | 'UTILISATION_POINTS'
+  // Sprint 4B/4C — administration (Réglages)
+  | 'CREATION_ROLE'
+  | 'MODIF_ROLE'
+  | 'DESACTIVATION_ROLE'
+  | 'CREATION_EMPLOYE'
+  | 'MODIF_EMPLOYE'
+  | 'REINIT_PIN'
+  | 'DESACTIVATION_EMPLOYE'
+  | 'MODIF_ZONE'
+  | 'MODIF_TABLE'
+  | 'REGEN_QR'
+  | 'MODIF_DISPONIBILITE'
+  | 'MODIF_PARAMETRE'
+  | 'MODIF_CATALOGUE'
+  | 'MODIF_FIDELITE'
+  | 'ACCES_PROTEGE_REFUSE';
 
 export interface EntreeAudit {
   user_id?: string | null;

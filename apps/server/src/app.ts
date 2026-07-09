@@ -16,6 +16,7 @@ import { routesSalle } from './modules/salle/routes.js';
 import { routesSante } from './modules/sante/routes.js';
 import { routesPointage } from './modules/pointage/routes.js';
 import { routesFidelite } from './modules/fidelite/routes.js';
+import { routesRoles } from './modules/roles/routes.js';
 import { ConsolePrinter } from './printer/ConsolePrinter.js';
 import type { PrinterService } from './printer/PrinterService.js';
 
@@ -48,6 +49,7 @@ export async function construireApp(options: { logger?: boolean } = {}): Promise
   routesSante(app);
   routesPointage(app);
   routesFidelite(app);
+  routesRoles(app);
 
   return app;
 }
