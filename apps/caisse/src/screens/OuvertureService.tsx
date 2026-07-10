@@ -14,7 +14,8 @@ interface MembrePropose {
 
 /** Ouverture de service : fond de caisse, puis équipe du jour (allègement). */
 export function OuvertureService() {
-  const { session, poserServiceOuvert, poserSession, afficherToast } = useCaisse();
+  const { session, poserServiceOuvert, poserSession, afficherToast, rentrer } = useCaisse();
+  const estSuperviseur = !!session && (session.utilisateur.est_proprietaire || session.utilisateur.est_superviseur);
   const [etape, setEtape] = useState<'fond' | 'equipe'>('fond');
   const [montant, setMontant] = useState('');
   const [enCours, setEnCours] = useState(false);
@@ -81,9 +82,15 @@ export function OuvertureService() {
             libelleValider="Continuer"
             validerDesactive={montant === ''}
           />
-          <button type="button" className="btn-blanc w-full" onClick={seDeconnecter}>
-            Se déconnecter
-          </button>
+          {estSuperviseur ? (
+            <button type="button" className="btn-blanc w-full" onClick={rentrer}>
+              ← Retour à la supervision
+            </button>
+          ) : (
+            <button type="button" className="btn-blanc w-full" onClick={seDeconnecter}>
+              Se déconnecter
+            </button>
+          )}
         </div>
       </div>
     );
