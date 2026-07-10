@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+
 interface Props {
   valeur: string;
   onChange: (v: string) => void;
@@ -7,12 +9,33 @@ interface Props {
   validerDesactive?: boolean;
 }
 
-/** Pavé numérique tactile (boutons ≥ 48 px). */
+/** Pavé numérique tactile (boutons ≥ 48 px) + clavier physique en dev. */
 export function Numpad({ valeur, onChange, longueurMax = 9, onValider, libelleValider = 'Valider', validerDesactive }: Props) {
   const taper = (c: string) => {
     if (valeur.length >= longueurMax) return;
     onChange(valeur === '0' ? c : valeur + c);
   };
+
+  // Support clavier (dev) : 0-9, Backspace, Enter/Return, Escape (clear)
+  useEffect(() => {
+    const gererClavier = (evt: KeyboardEvent) => {
+      if (/^\d$/.test(evt.key)) {
+        evt.preventDefault();
+        taper(evt.key);
+      } else if (evt.key === 'Backspace') {
+        evt.preventDefault();
+        onChange(valeur.slice(0, -1));
+      } else if (evt.key === 'Escape') {
+        evt.preventDefault();
+        onChange('');
+      } else if ((evt.key === 'Enter' || evt.key === ' ') && onValider && !validerDesactive) {
+        evt.preventDefault();
+        onValider();
+      }
+    };
+    window.addEventListener('keydown', gererClavier);
+    return () => window.removeEventListener('keydown', gererClavier);
+  }, [valeur, onChange, onValider, validerDesactive]);
   return (
     <div className="grid grid-cols-3 gap-2">
       {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((c) => (
