@@ -92,4 +92,11 @@ describe('désactivation d’une table', () => {
     expect(rep.statusCode).toBe(200);
     expect(rep.json().actif).toBe(false);
   });
+
+  it('réactive une table désactivée', async () => {
+    const [t] = await db.select().from(tablesSalle).where(eq(tablesSalle.numero, 'E3'));
+    const rep = await app.inject({ method: 'PATCH', url: `/api/admin/tables/${t!.id}`, cookies: cookiesProprio, payload: { actif: true } });
+    expect(rep.statusCode).toBe(200);
+    expect(rep.json().actif).toBe(true);
+  });
 });

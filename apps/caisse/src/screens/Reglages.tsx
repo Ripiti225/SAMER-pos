@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconArrowLeft, IconLock } from '@tabler/icons-react';
 import { SECTIONS_PERMISSIONS, PERMISSION_PROTEGEE } from '@pos/shared';
 import { api } from '../api';
+import { Modale } from '../components/Modale';
 import { useCaisse } from '../stores/session';
 
 /** Espace Administration (sprint 4C). Sections visibles selon les permissions. */
@@ -195,17 +196,20 @@ interface ZoneAdmin {
   tables: { id: string; numero: string; partenaire: string | null; statut: string; actif: boolean; qr_token: string | null }[];
 }
 
+interface TableAdmin { id: string; numero: string; partenaire: string | null; statut: string; actif: boolean; qr_token: string | null }
+
 function Salle() {
   const qc = useQueryClient();
   const [msg, setMsg] = useState<string | null>(null);
   const { data: zones } = useQuery({ queryKey: ['admin', 'salle'], queryFn: () => api<ZoneAdmin[]>('/api/admin/salle') });
   const [nomZone, setNomZone] = useState('');
+  const [qrTable, setQrTable] = useState<TableAdmin | null>(null);
 
   const invalider = () => void qc.invalidateQueries({ queryKey: ['admin', 'salle'] });
   const creerZone = useMutation({ mutationFn: () => api('/api/admin/zones', { method: 'POST', corps: { nom: nomZone } }), onSuccess: () => { setNomZone(''); invalider(); }, onError: (e: Error) => setMsg(e.message) });
   const creerTable = useMutation({ mutationFn: (v: { zone_id: string; numero: string }) => api('/api/admin/tables', { method: 'POST', corps: v }), onSuccess: invalider, onError: (e: Error) => setMsg(e.message) });
-  const regen = useMutation({ mutationFn: (id: string) => api(`/api/admin/tables/${id}/regenerer-qr`, { method: 'POST' }), onSuccess: invalider, onError: (e: Error) => setMsg(e.message) });
   const desactiver = useMutation({ mutationFn: (id: string) => api(`/api/admin/tables/${id}`, { method: 'PATCH', corps: { actif: false } }), onSuccess: invalider, onError: (e: Error) => setMsg(e.message) });
+  const reactiver = useMutation({ mutationFn: (id: string) => api(`/api/admin/tables/${id}`, { method: 'PATCH', corps: { actif: true } }), onSuccess: invalider, onError: (e: Error) => setMsg(e.message) });
 
   return (
     <section>
@@ -225,10 +229,14 @@ function Salle() {
             <div className="flex flex-wrap gap-2">
               {z.tables.map((t) => (
                 <div key={t.id} className={`rounded-lg border border-bordure px-3 py-2 ${t.actif ? '' : 'opacity-50'}`}>
-                  <div className="font-semibold">{t.numero}</div>
-                  <div className="flex gap-1">
-                    <button type="button" className="text-xs underline" onClick={() => regen.mutate(t.id)}>QR</button>
-                    {t.actif && <button type="button" className="text-xs text-red-700 underline" onClick={() => desactiver.mutate(t.id)}>Désactiver</button>}
+                  <div className="font-semibold">{t.numero}{!t.actif && <span className="ml-1 text-xs font-normal text-red-700">· désactivée</span>}</div>
+                  <div className="flex gap-2">
+                    <button type="button" className="text-xs underline" onClick={() => setQrTable(t)}>QR</button>
+                    {t.actif ? (
+                      <button type="button" className="text-xs text-red-700 underline" onClick={() => desactiver.mutate(t.id)}>Désactiver</button>
+                    ) : (
+                      <button type="button" className="text-xs text-marque-fonce underline" onClick={() => reactiver.mutate(t.id)}>Réactiver</button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -237,7 +245,43 @@ function Salle() {
           </div>
         ))}
       </div>
+      {qrTable && <QrModale table={qrTable} onFermer={() => setQrTable(null)} onRegenere={invalider} />}
     </section>
+  );
+}
+
+/** Menu QR d'une table : affiche le code, l'adresse encodée, permet de régénérer. */
+function QrModale({ table, onFermer, onRegenere }: { table: TableAdmin; onFermer: () => void; onRegenere: () => void }) {
+  const [msg, setMsg] = useState<string | null>(null);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['admin', 'table-qr', table.id],
+    queryFn: () => api<{ qr_token: string; contenu: string; image: string }>(`/api/admin/tables/${table.id}/qr`),
+  });
+  const regen = useMutation({
+    mutationFn: () => api<{ qr_token: string; contenu: string; image: string }>(`/api/admin/tables/${table.id}/regenerer-qr`, { method: 'POST' }),
+    onSuccess: () => { setMsg('Nouveau QR généré — l’ancien code ne fonctionne plus.'); void refetch(); onRegenere(); },
+    onError: (e: Error) => setMsg(e.message),
+  });
+
+  return (
+    <Modale titre={`QR — Table ${table.numero}`} onFermer={onFermer} enfants={
+      <div className="space-y-3 text-center">
+        <Message texte={msg} />
+        {isLoading && <p className="text-doux">Chargement du QR…</p>}
+        {data && (
+          <>
+            <img src={data.image} alt={`QR de la table ${table.numero}`} className="mx-auto h-56 w-56 rounded-lg border border-bordure bg-white p-2" />
+            <p className="break-all text-xs text-doux">{data.contenu}</p>
+          </>
+        )}
+        <div className="flex gap-2">
+          <a className="btn-blanc flex-1" href={`/api/admin/tables/qr.pdf`} target="_blank" rel="noreferrer">Imprimer (PDF)</a>
+          <button type="button" className="btn-accent flex-1" disabled={regen.isPending} onClick={() => regen.mutate()}>
+            {regen.isPending ? 'Génération…' : 'Régénérer le QR'}
+          </button>
+        </div>
+      </div>
+    } />
   );
 }
 function AjoutTable({ onAjouter }: { onAjouter: (numero: string) => void }) {
