@@ -2,19 +2,40 @@
 
 > Fichier de reprise, **actualisé à chaque compaction** de la conversation.
 > Il résume l'état courant pour repartir sans relire tout l'historique.
-> Dernière mise à jour : 2026-07-09.
+> Dernière mise à jour : 2026-07-10.
 
 ## Où on en est
 
-Le **cœur caisse** (sprints 1→4) est en place. Les derniers chantiers livrés :
+Le **cœur caisse** (sprints 1→4) est en place + **hiérarchie des rôles** finalisée
+(proprio/superviseur ≠ caissiers). Les derniers chantiers livrés :
 
-- **Sprint 4B/4C — Administration & rôles** : système de permissions composable
-  + module Réglages complet (voir `docs/SPRINT4BC_ADMIN_ROLES.md`).
-- **Allègement en cours** : le pointage chronométré a été retiré, remplacé par
-  l'**équipe du jour**.
+- **Aiguillage par rôle** : proprio/superviseur → tableau de bord Supervision
+  (rapports, réglages, basculer caisse optionnel) ; caissier/manager → accueil
+  caissier ; serveur → accueil réduit (prise de commande + tables seulement).
+  La cuisine ne se connecte jamais à la caisse (garde-fou serveur).
+- **Corrections régressions** : proprio non forcé en ouverture service ; retour
+  supervision possible ; flux de définition du PIN complété (code temporaire).
+- **Salle & QR** : réactivation de tables + vraie modale QR (affichage/impression).
+- **Dev-UX** : numpad supporte clavier (0-9, Backspace, Escape, Enter).
 
-État technique : **151 tests verts**, tous les apps compilent (`pnpm -r build`).
+État technique : **155 tests verts**, tous les apps compilent (`pnpm -r build`).
 Développement directement sur `main` (convention du dépôt), un commit par étape.
+
+## Session 2026-07-10 — Hiérarchie des rôles + UX
+
+**6 commits, 4 tests ajoutés** :
+
+1. **Blocage cuisine** — La cuisine ne se connecte jamais à la caisse
+   (refus login + exclusion liste, côté serveur).
+2. **Aiguillage par rôle** — Proprio/superviseur → Supervision (rapports, réglages,
+   bascule caisse optionnelle) ; serveur → accueil réduit (seulement commandes/tables).
+3. **Corrections régressions** — Proprio non forcé en ouverture service en consultant
+   les rapports ; retour supervision disponible ; flux PIN définition au login complet.
+4. **Salle & QR** — Bouton réactivation table ; vraie modale QR (image, adresse,
+   imprimer, régénérer).
+5. **Init url_base_client** — QR générait URL vide, maintenant defaults à
+   `http://localhost:5173` en dev.
+6. **Numpad clavier** — Support 0-9, Backspace, Escape, Enter/Espace en dev.
 
 ## Modules livrés récemment
 
