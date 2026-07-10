@@ -67,6 +67,9 @@ export async function seed(): Promise<void> {
     { cle: 'fidelite_points_par_tranche', valeur: { tranche_fcfa: 1000, points: 1 } },
     { cle: 'fidelite_valeur_point_fcfa', valeur: 10 },
     { cle: 'fidelite_seuil_utilisation', valeur: 50 },
+    // Sprint 4 C : QR de table — adresse web du client (pour l'URL encodée).
+    // En dev : http://localhost:5173 ; en prod : https://client.restaurant.com
+    { cle: 'url_base_client', valeur: 'http://localhost:5173' },
   ]);
 
   // --- Rôles système (sprint 4B+4C) puis utilisateurs raccordés ---
