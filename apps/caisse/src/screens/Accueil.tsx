@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { IconFlagCheck, IconLayoutGrid, IconList, IconPlus, IconSettings } from '@tabler/icons-react';
+import { IconArrowLeft, IconFlagCheck, IconLayoutGrid, IconList, IconPlus, IconSettings } from '@tabler/icons-react';
 import type { CommandeVue, TableVue } from '@pos/shared';
 import { PARTENAIRES, PERMISSIONS_ADMIN } from '@pos/shared';
 import { api } from '../api';
@@ -17,6 +17,15 @@ export function Accueil() {
   const [choixLivraison, setChoixLivraison] = useState(false);
   // Correction 2 : compteur d'additions en attente, visible en permanence
   const nbAdditions = useNbAdditionsEnAttente();
+
+  // Boutons pilotés par les permissions (§ rôles distincts) : un serveur ne voit
+  // que la prise de commande et les tables ; jamais Mes ventes ni la clôture.
+  const perms = session?.permissions ?? [];
+  const peutCommander = perms.includes('salle.commande');
+  const peutTables = perms.includes('salle.commande') || perms.includes('salle.voir_toutes_tables');
+  const peutMesVentes = perms.includes('caisse.encaisser') || perms.includes('rapports.x');
+  const peutCloturer = perms.includes('caisse.cloturer');
+  const estSuperviseur = !!session && (session.utilisateur.est_proprietaire || session.utilisateur.est_superviseur);
 
   const { data: tables } = useQuery({
     queryKey: ['tables'],
@@ -52,6 +61,12 @@ export function Accueil() {
         </div>
         <div className="ml-auto flex items-center gap-4">
           <PiluleSync />
+          {estSuperviseur && (
+            <button type="button" className="btn-blanc flex items-center gap-2" onClick={() => aller('supervision')}>
+              <IconArrowLeft size={20} />
+              Supervision
+            </button>
+          )}
           {session && PERMISSIONS_ADMIN.some((p) => session.permissions.includes(p)) && (
             <button type="button" className="btn-blanc flex items-center gap-2" onClick={() => aller('reglages')}>
               <IconSettings size={20} />
@@ -65,47 +80,55 @@ export function Accueil() {
       </header>
 
       <div className="mx-auto grid w-full max-w-3xl flex-1 grid-cols-1 content-center gap-5 sm:grid-cols-2">
-        <button
-          type="button"
-          className="btn-accent flex-col items-start gap-1 rounded-[var(--rayon)] px-7 py-10 text-left"
-          onClick={() => setChoixType(true)}
-        >
-          <IconPlus size={26} />
-          <span className="text-2xl font-black">Nouvelle commande</span>
-          <span className="text-sm font-medium opacity-90">Sur place · à emporter · livraison</span>
-        </button>
-        <button
-          type="button"
-          className="carte relative flex flex-col items-start gap-1 px-7 py-10 text-left"
-          onClick={() => aller('tables')}
-        >
-          <IconLayoutGrid size={26} className="text-marque-fonce" />
-          <span className="text-2xl font-black">Tables</span>
-          <span className="text-sm text-doux">Plan de salle & additions</span>
-          {nbAdditions > 0 && (
-            <span className="absolute right-4 top-4 flex min-h-[36px] min-w-[36px] items-center justify-center rounded-full bg-info px-2 text-lg font-black text-white shadow-[var(--ombre-1)]">
-              {nbAdditions}
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          className="carte flex flex-col items-start gap-1 px-7 py-10 text-left"
-          onClick={() => aller('mes-ventes')}
-        >
-          <IconList size={26} className="text-marque-fonce" />
-          <span className="text-2xl font-black">Mes ventes</span>
-          <span className="text-sm text-doux">Rapports & suivi du service</span>
-        </button>
-        <button
-          type="button"
-          className="btn-alerte flex-col items-start gap-1 rounded-[var(--rayon)] px-7 py-10 text-left"
-          onClick={() => aller('cloture')}
-        >
-          <IconFlagCheck size={26} />
-          <span className="text-2xl font-black">J’ai fini</span>
-          <span className="text-sm font-medium opacity-90">Clôture & rapport Z</span>
-        </button>
+        {peutCommander && (
+          <button
+            type="button"
+            className="btn-accent flex-col items-start gap-1 rounded-[var(--rayon)] px-7 py-10 text-left"
+            onClick={() => setChoixType(true)}
+          >
+            <IconPlus size={26} />
+            <span className="text-2xl font-black">Nouvelle commande</span>
+            <span className="text-sm font-medium opacity-90">Sur place · à emporter · livraison</span>
+          </button>
+        )}
+        {peutTables && (
+          <button
+            type="button"
+            className="carte relative flex flex-col items-start gap-1 px-7 py-10 text-left"
+            onClick={() => aller('tables')}
+          >
+            <IconLayoutGrid size={26} className="text-marque-fonce" />
+            <span className="text-2xl font-black">Tables</span>
+            <span className="text-sm text-doux">Plan de salle & additions</span>
+            {nbAdditions > 0 && (
+              <span className="absolute right-4 top-4 flex min-h-[36px] min-w-[36px] items-center justify-center rounded-full bg-info px-2 text-lg font-black text-white shadow-[var(--ombre-1)]">
+                {nbAdditions}
+              </span>
+            )}
+          </button>
+        )}
+        {peutMesVentes && (
+          <button
+            type="button"
+            className="carte flex flex-col items-start gap-1 px-7 py-10 text-left"
+            onClick={() => aller('mes-ventes')}
+          >
+            <IconList size={26} className="text-marque-fonce" />
+            <span className="text-2xl font-black">Mes ventes</span>
+            <span className="text-sm text-doux">Rapports & suivi du service</span>
+          </button>
+        )}
+        {peutCloturer && (
+          <button
+            type="button"
+            className="btn-alerte flex-col items-start gap-1 rounded-[var(--rayon)] px-7 py-10 text-left"
+            onClick={() => aller('cloture')}
+          >
+            <IconFlagCheck size={26} />
+            <span className="text-2xl font-black">J’ai fini</span>
+            <span className="text-sm font-medium opacity-90">Clôture & rapport Z</span>
+          </button>
+        )}
       </div>
 
       {choixType && (

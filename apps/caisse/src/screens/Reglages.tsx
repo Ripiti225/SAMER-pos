@@ -7,7 +7,7 @@ import { useCaisse } from '../stores/session';
 
 /** Espace Administration (sprint 4C). Sections visibles selon les permissions. */
 export function Reglages() {
-  const { session, aller } = useCaisse();
+  const { session, rentrer } = useCaisse();
   const perms = session?.permissions ?? [];
   const a = (cle: string) => perms.includes(cle);
 
@@ -32,7 +32,7 @@ export function Reglages() {
   return (
     <div className="flex min-h-full flex-col p-6">
       <header className="mb-6 flex items-center gap-4">
-        <button type="button" className="btn-blanc flex items-center gap-2" onClick={() => aller('accueil')}>
+        <button type="button" className="btn-blanc flex items-center gap-2" onClick={rentrer}>
           <IconArrowLeft size={20} /> Accueil
         </button>
         <h1 className="text-2xl font-black text-marque-fonce">Réglages</h1>

@@ -26,7 +26,7 @@ const COULEURS_STATUT: Record<string, string> = {
 
 /** « Mes ventes » : les commandes du service en cours du caissier connecté. */
 export function MesVentes() {
-  const { aller, session } = useCaisse();
+  const { aller, rentrer, session } = useCaisse();
   const estManager = session?.utilisateur.role === 'MANAGER' || session?.utilisateur.role === 'PROPRIETAIRE';
 
   const { data } = useQuery({
@@ -52,7 +52,7 @@ export function MesVentes() {
   return (
     <div className="min-h-full p-6">
       <header className="mb-6 flex items-center gap-4">
-        <button type="button" className="btn-blanc" onClick={() => aller('accueil')}>
+        <button type="button" className="btn-blanc" onClick={rentrer}>
           ← Accueil
         </button>
         <h1 className="text-2xl font-bold">Mes ventes</h1>

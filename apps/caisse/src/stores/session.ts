@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { SessionInfo } from '@pos/shared';
 
 export type Ecran =
+  | 'supervision'
   | 'accueil'
   | 'commande'
   | 'paiement'
@@ -9,6 +10,18 @@ export type Ecran =
   | 'mes-ventes'
   | 'cloture'
   | 'reglages';
+
+/**
+ * Écran d'atterrissage selon le rôle : le propriétaire et le superviseur ne sont
+ * pas des caissiers, ils arrivent sur le tableau de bord Supervision (d'où ils
+ * peuvent basculer en mode caisse). Les autres arrivent sur l'accueil caissier.
+ */
+export function ecranInitial(session: SessionInfo | null): Ecran {
+  if (session && (session.utilisateur.est_proprietaire || session.utilisateur.est_superviseur)) {
+    return 'supervision';
+  }
+  return 'accueil';
+}
 
 interface EtatCaisse {
   session: SessionInfo | null;
@@ -25,6 +38,8 @@ interface EtatCaisse {
   poserServiceOuvert: (service: SessionInfo['service_ouvert']) => void;
   verrouiller: (v: boolean) => void;
   aller: (ecran: Ecran, commandeId?: string | null) => void;
+  /** Retour à l'écran d'accueil propre au rôle (Supervision ou Accueil caissier). */
+  rentrer: () => void;
   afficherToast: (message: string) => void;
   effacerToast: () => void;
   marquerTableVue: (tableId: string) => void;
@@ -44,7 +59,7 @@ export const useCaisse = create<EtatCaisse>((set, get) => ({
       document.documentElement.dataset.marque = session.restaurant.marque;
       document.documentElement.style.setProperty('--marque', session.restaurant.couleur_hex);
     }
-    set({ session, ecran: 'accueil', commandeId: null, verrouille: false });
+    set({ session, ecran: ecranInitial(session), commandeId: null, verrouille: false });
   },
   majPermissions: (fraiche) => {
     const s = get().session;
@@ -62,6 +77,7 @@ export const useCaisse = create<EtatCaisse>((set, get) => ({
   },
   verrouiller: (verrouille) => set({ verrouille }),
   aller: (ecran, commandeId = null) => set({ ecran, commandeId }),
+  rentrer: () => set({ ecran: ecranInitial(get().session), commandeId: null }),
   afficherToast: (toast) => {
     set({ toast });
     setTimeout(() => {

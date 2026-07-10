@@ -13,8 +13,9 @@ import { MesVentes } from './screens/MesVentes';
 import { OuvertureService } from './screens/OuvertureService';
 import { Paiement } from './screens/Paiement';
 import { Reglages } from './screens/Reglages';
+import { Supervision } from './screens/Supervision';
 import { Tables } from './screens/Tables';
-import { useCaisse } from './stores/session';
+import { useCaisse, type Ecran } from './stores/session';
 import { connecterTempsReel } from './temps-reel';
 
 export function App() {
@@ -40,14 +41,21 @@ export function App() {
     return <div className="flex h-screen items-center justify-center text-doux">Démarrage de la caisse…</div>;
   }
 
+  // Seuls les encaisseurs (permission caisse.encaisser) ont besoin d'un fond de
+  // caisse : le superviseur sur son tableau de bord et le serveur qui prend des
+  // commandes ne sont jamais bloqués par l'écran d'ouverture de service.
+  const doitEncaisser = !!session?.permissions.includes('caisse.encaisser');
+  const ecransSansService: Ecran[] = ['supervision', 'cloture', 'reglages'];
+
   let contenu: JSX.Element;
   if (!session) {
     contenu = <Login />;
-  } else if (!session.service_ouvert && ecran !== 'cloture' && ecran !== 'reglages') {
-    // Pas de vente possible sans fond de caisse saisi (mais Réglages reste ouvert)
+  } else if (doitEncaisser && !session.service_ouvert && !ecransSansService.includes(ecran)) {
+    // Pas de vente possible sans fond de caisse saisi (mais Supervision/Réglages restent ouverts)
     contenu = <OuvertureService />;
   } else {
     contenu = {
+      supervision: <Supervision />,
       accueil: <Accueil />,
       commande: <Commande />,
       paiement: <Paiement />,
