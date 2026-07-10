@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { and, eq } from 'drizzle-orm';
 import argon2 from 'argon2';
-import { DeverrouillerSchema, LoginSchema, PoserPinSchema } from '@pos/shared';
+import { DeverrouillerSchema, LoginSchema, PoserPinSchema, TOUTES_PERMISSIONS, peutAccederCaisse } from '@pos/shared';
 import type { SessionInfo } from '@pos/shared';
 import { db } from '../../db/client.js';
 import { parametresLocaux, restaurant, roles, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
@@ -29,9 +29,7 @@ async function construireSessionInfo(session: SessionUtilisateur): Promise<Sessi
     .where(and(eq(servicesCaisse.caissier_id, session.utilisateur_id), eq(servicesCaisse.statut, 'OUVERT')));
 
   // Permissions effectives (le propriétaire a tout, invariant 1.5)
-  const perms = session.est_proprietaire
-    ? (await import('@pos/shared')).TOUTES_PERMISSIONS
-    : [...(await permissionsDuRole(session.role_id))];
+  const perms = await permissionsEffectives(session.est_proprietaire, session.role_id);
 
   return {
     utilisateur: {
@@ -63,6 +61,11 @@ async function construireSessionInfo(session: SessionUtilisateur): Promise<Sessi
   };
 }
 
+/** Permissions effectives d'un utilisateur (le propriétaire a tout, invariant 1.5). */
+async function permissionsEffectives(estProprietaire: boolean, roleId: string | null): Promise<string[]> {
+  return estProprietaire ? [...TOUTES_PERMISSIONS] : [...(await permissionsDuRole(roleId))];
+}
+
 /** Résout le rôle (nom, propriétaire/superviseur) d'un utilisateur. */
 async function infoRole(roleId: string | null, fallbackEnum: string | null) {
   let nom = fallbackEnum ?? '';
@@ -88,13 +91,28 @@ export function routesAuth(app: FastifyInstance): void {
       .from(utilisateurs)
       .leftJoin(roles, eq(roles.id, utilisateurs.role_id))
       .where(eq(utilisateurs.actif, true));
-    return lignes;
+
+    // On n'affiche pas les comptes réservés à la cuisine (KDS) : ils ne se
+    // connectent pas au POS caisse (même règle que le login, appliquée serveur).
+    const avecAcces = await Promise.all(
+      lignes.map(async (l) => ({
+        ligne: l,
+        acces: peutAccederCaisse(await permissionsEffectives(l.role_nom === 'PROPRIETAIRE', l.role_id)),
+      })),
+    );
+    return avecAcces.filter((x) => x.acces).map((x) => x.ligne);
   });
 
   app.post('/api/auth/login', async (req, reply) => {
     const { utilisateur_id, pin } = valider(LoginSchema, req.body);
     const u = await verifierPinUtilisateur(utilisateur_id, pin);
     const ir = await infoRole(u.role_id, u.role);
+
+    // La cuisine ne se connecte pas au POS caisse (elle travaille sur le KDS).
+    const perms = await permissionsEffectives(ir.est_proprietaire, ir.role_id);
+    if (!peutAccederCaisse(perms)) {
+      throw new ErreurMetier('Ce compte est réservé à la cuisine, il ne se connecte pas à la caisse', 403);
+    }
 
     const session = app.sessions.creer({
       utilisateur_id: u.id,

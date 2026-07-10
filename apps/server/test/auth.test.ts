@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { construireApp } from '../src/app.js';
 import { db, fermerDb } from '../src/db/client.js';
 import { auditLog, utilisateurs } from '../src/db/schema/index.js';
-import { PIN_CAISSIER, resetDonnees, type Donnees } from './aide.js';
+import { PIN_CAISSIER, PIN_CUISINE, PIN_SERVEUR, resetDonnees, type Donnees } from './aide.js';
 
 let app: FastifyInstance;
 let donnees: Donnees;
@@ -91,5 +91,37 @@ describe('verrouillage PIN (§14.1)', () => {
     });
     expect(rep.statusCode).toBe(423);
     expect(rep.json().erreur).toBe('Ce PIN est bloqué 60 secondes');
+  });
+});
+
+describe('la cuisine ne se connecte pas au POS caisse', () => {
+  it('refuse la connexion d’un compte cuisine avec un message en français', async () => {
+    const rep = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { utilisateur_id: donnees.cuisine_id, pin: PIN_CUISINE },
+    });
+    expect(rep.statusCode).toBe(403);
+    expect(rep.json().erreur).toBe('Ce compte est réservé à la cuisine, il ne se connecte pas à la caisse');
+  });
+
+  it('exclut les comptes cuisine de la liste de connexion', async () => {
+    const rep = await app.inject({ method: 'GET', url: '/api/auth/utilisateurs' });
+    expect(rep.statusCode).toBe(200);
+    const ids = (rep.json() as Array<{ id: string; role_nom: string | null }>).map((u) => u.id);
+    expect(ids).not.toContain(donnees.cuisine_id);
+    expect(ids).not.toContain(donnees.pizzaiolo_id);
+    expect(ids).toContain(donnees.proprio_id);
+    expect(ids).toContain(donnees.serveur_id);
+  });
+
+  it('laisse un serveur (non-cuisine) se connecter normalement', async () => {
+    const rep = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { utilisateur_id: donnees.serveur_id, pin: PIN_SERVEUR },
+    });
+    expect(rep.statusCode).toBe(200);
+    expect(rep.json().utilisateur.role).toBe('SERVEUR');
   });
 });

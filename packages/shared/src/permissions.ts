@@ -142,6 +142,21 @@ export function estPermissionConnue(cle: string): boolean {
 }
 
 /**
+ * Permissions purement KDS (cuisine) : un compte qui n'a QUE celles-ci ne se
+ * connecte pas au POS caisse (il travaille sur le KDS, par jeton d'appareil).
+ */
+export const PERMISSIONS_CUISINE_SEULE: string[] = ['cuisine.avancer'];
+
+/**
+ * true si l'utilisateur peut se connecter au POS caisse : il possède au moins
+ * une permission qui n'est pas purement cuisine. Appliqué CÔTÉ SERVEUR au login
+ * (le rôle CUISINE, dont la seule permission est `cuisine.avancer`, est refusé).
+ */
+export function peutAccederCaisse(permissions: string[]): boolean {
+  return permissions.some((p) => !PERMISSIONS_CUISINE_SEULE.includes(p));
+}
+
+/**
  * Catalogue des paramètres locaux éditables depuis Réglages (2.6), avec libellé
  * français, type d'entrée et valeur par défaut. La route serveur n'accepte QUE
  * ces clés (liste blanche). Les paramètres de fidélité sont gérés à part (2.5).
