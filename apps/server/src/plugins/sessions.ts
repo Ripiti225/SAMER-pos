@@ -122,6 +122,10 @@ export function poserCookieSession(reply: FastifyReply, sessionId: string): void
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
+    // Cookie PERSISTANT (pas seulement « de session ») : survit à la fermeture
+    // de l'onglet, à la mise en veille et au rechargement, sur toute la durée
+    // de vie de la session serveur. Évite les reconnexions intempestives.
+    maxAge: DUREE_SESSION_MS / 1000,
   });
 }
 

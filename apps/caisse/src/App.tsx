@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import type { SessionInfo } from '@pos/shared';
-import { api, ErreurApi } from './api';
+import { api, ErreurApi, surNonAutorise } from './api';
 import { BandeauAdditions } from './components/BandeauAdditions';
 import { NotificationsCaisse } from './components/NotificationsCaisse';
 import { VerrouInactivite } from './components/VerrouInactivite';
@@ -36,6 +36,19 @@ export function App() {
   }, [poserSession]);
 
   useEffect(() => connecterTempsReel(queryClient), [queryClient]);
+
+  // Session perdue côté serveur (redémarrage du serveur, expiration) : au lieu
+  // de laisser l'écran figé avec des erreurs « Connectez-vous » à répétition,
+  // on revient proprement au Login (une seule fois, si on était connecté).
+  useEffect(() => {
+    surNonAutorise(() => {
+      const etat = useCaisse.getState();
+      if (etat.session) {
+        etat.afficherToast('Session expirée — reconnectez-vous');
+        etat.poserSession(null);
+      }
+    });
+  }, []);
 
   if (chargement) {
     return <div className="flex h-screen items-center justify-center text-doux">Démarrage de la caisse…</div>;
