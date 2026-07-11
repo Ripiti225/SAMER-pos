@@ -21,7 +21,7 @@ import { routesSalleAdmin } from './modules/salle/admin.js';
 import { routesDisponibilite } from './modules/catalogue/admin-disponibilite.js';
 import { routesReglages } from './modules/reglages/routes.js';
 import { routesCatalogueAdmin } from './modules/catalogue/admin-catalogue.js';
-import { ConsolePrinter } from './printer/ConsolePrinter.js';
+import { EscposPrinter } from './printer/escpos.js';
 import type { PrinterService } from './printer/PrinterService.js';
 
 declare module 'fastify' {
@@ -38,7 +38,8 @@ export async function construireApp(options: { logger?: boolean } = {}): Promise
   enregistrerSessions(app);
   await enregistrerWs(app);
 
-  app.decorate('imprimante', new ConsolePrinter());
+  // ESC/POS si une file d'impression est configurée (Réglages), sinon console.
+  app.decorate('imprimante', new EscposPrinter());
 
   routesAuth(app);
   routesCatalogue(app);

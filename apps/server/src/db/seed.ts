@@ -76,6 +76,9 @@ export async function seed(): Promise<void> {
     // Facture : contact sous le logo + message de pied (éditables dans Réglages).
     { cle: 'ticket_entete', valeur: 'Angré 7e Tranche, Abidjan' },
     { cle: 'ticket_pied', valeur: 'Merci de votre visite — à bientôt chez Samer !' },
+    // Imprimante thermique ESC/POS : nom de la file CUPS (spécifique à la
+    // machine, modifiable dans Réglages). Vide = repli console.
+    { cle: 'imprimante_thermique_queue', valeur: 'Xprinter_USB_Printer_P_2' },
   ]);
 
   // --- Rôles système (sprint 4B+4C) puis utilisateurs raccordés ---

@@ -179,6 +179,7 @@ export const PARAMETRES_EDITABLES: ParametreEditable[] = [
   { cle: 'ticket_entete', libelle: 'En-tête du ticket', type: 'texte', defaut: '' },
   { cle: 'ticket_pied', libelle: 'Pied du ticket', type: 'texte', defaut: '' },
   { cle: 'url_base_client', libelle: 'Adresse web des QR clients', type: 'texte', defaut: '' },
+  { cle: 'imprimante_thermique_queue', libelle: 'Imprimante thermique (file CUPS)', type: 'texte', defaut: '' },
 ];
 
 export const CLES_PARAMETRES_EDITABLES: string[] = PARAMETRES_EDITABLES.map((p) => p.cle);

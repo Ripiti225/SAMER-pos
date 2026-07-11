@@ -14,7 +14,6 @@ import {
 import type { ArticleVue, CatalogueVue, CommandeItemVue, CommandeVue } from '@pos/shared';
 import { formatFCFA, LIBELLES_STATUTS_COMMANDE, LIBELLES_TYPES_COMMANDE } from '@pos/shared';
 import { api } from '../api';
-import { imprimerFactureNavigateur } from '../facture';
 import { Modale } from '../components/Modale';
 import { ModalePinManager } from '../components/ModalePinManager';
 import { PiluleSync } from '../components/SanteSync';
@@ -81,10 +80,10 @@ export function Commande() {
     },
     onError: surErreur,
   });
-  // POST serveur = trace l'impression (audit) + ConsolePrinter/ESC/POS futur.
+  // Le serveur imprime la facture (ESC/POS thermique) et trace l'impression.
   const imprimerFacture = useMutation({
     mutationFn: () => api<CommandeVue>(`/api/commandes/${commandeId}/facture`, { method: 'POST', corps: {} }),
-    onSuccess: (vue) => rafraichir(vue),
+    onSuccess: (vue) => { rafraichir(vue); afficherToast('Facture envoyée à l’imprimante'); },
     onError: surErreur,
   });
   const appliquerRemise = useMutation({
@@ -284,14 +283,10 @@ export function Commande() {
             <button
               type="button"
               className="btn-blanc mb-1.5 w-full py-2.5"
-              disabled={itemsActifs.length === 0}
-              onClick={() => {
-                // Impression DANS le geste utilisateur (le dialogue s'ouvre).
-                if (session) imprimerFactureNavigateur(commande, session.restaurant);
-                imprimerFacture.mutate(); // audit serveur en parallèle
-              }}
+              disabled={itemsActifs.length === 0 || imprimerFacture.isPending}
+              onClick={() => imprimerFacture.mutate()}
             >
-              <IconPrinter size={17} /> Imprimer la facture
+              <IconPrinter size={17} /> {imprimerFacture.isPending ? 'Impression…' : 'Imprimer la facture'}
             </button>
             <button
               type="button"

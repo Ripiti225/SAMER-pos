@@ -6,11 +6,10 @@ import { api } from '../api';
 import { Modale } from '../components/Modale';
 import { Numpad } from '../components/Numpad';
 import { Fidelite } from '../components/Fidelite';
-import { imprimerRecuNavigateur } from '../facture';
 import { useCaisse } from '../stores/session';
 
 export function Paiement() {
-  const { commandeId, aller, afficherToast, session } = useCaisse();
+  const { commandeId, aller, afficherToast } = useCaisse();
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<ModePaiement>('ESPECES');
   const [montant, setMontant] = useState('');
@@ -33,11 +32,8 @@ export function Paiement() {
       rafraichir(vue);
       setMontant('');
       setEspecesDonnees('');
-      if (vue.statut === 'PAYEE') {
-        afficherToast(`Ticket n° ${vue.numero_ticket} encaissé ✔`);
-        // Reçu thermique automatique à l'encaissement complet.
-        if (session) imprimerRecuNavigateur(vue, session.restaurant, 'RECU');
-      }
+      // Le reçu thermique sort automatiquement côté serveur (route paiement).
+      if (vue.statut === 'PAYEE') afficherToast(`Ticket n° ${vue.numero_ticket} encaissé ✔ — reçu imprimé`);
     },
     onError: (e: Error) => afficherToast(e.message),
   });
