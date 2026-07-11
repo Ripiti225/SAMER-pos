@@ -65,13 +65,16 @@ export function Grille({ onJetonRefuse }: { onJetonRefuse: () => void }) {
     return () => { arrete = true; socket?.close(); };
   }, [queryClient]);
 
-  // Sons : nouvelle carte → son selon type ; passage en rouge → alerte unique (§A3)
+  // Sons : nouvelle carte → son selon type + énoncé vocal ; passage en rouge → alerte unique (§A3)
   useEffect(() => {
     if (!data) return;
     const actuels = new Set(data.en_cuisine.map((c) => c.id));
     if (idsConnus.current !== null) {
       for (const carte of data.en_cuisine) {
-        if (!idsConnus.current.has(carte.id)) sons.nouvelleCommande(carte.type);
+        if (!idsConnus.current.has(carte.id)) {
+          sons.nouvelleCommande(carte.type);
+          sons.enoncerCommande(carte);
+        }
       }
     }
     idsConnus.current = actuels;

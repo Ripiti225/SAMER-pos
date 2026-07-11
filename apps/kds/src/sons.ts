@@ -1,4 +1,4 @@
-import type { TypeCommande } from '@pos/shared';
+import type { TypeCommande, CarteKds } from '@pos/shared';
 
 /**
  * Sons différenciés (§A3) : un fichier par type de commande + une alerte
@@ -30,6 +30,41 @@ class GestionnaireSons {
 
   alerteRetard(): void {
     this.jouer('/sons/alerte.wav');
+  }
+
+  /**
+   * Énonce la commande à haute voix : "Commande 925 - un demi braisé, une
+   * pizza royale grande, un nems". Utilise Web Speech API (navigateur).
+   */
+  enoncerCommande(carte: CarteKds): void {
+    if (this.muet) return;
+    try {
+      const texte = this.construireTexteCommande(carte);
+      const utterance = new SpeechSynthesisUtterance(texte);
+      utterance.lang = 'fr-FR';
+      utterance.rate = 0.95; // légèrement plus lent pour clarté
+      speechSynthesis.cancel(); // annule annonces précédentes (ne pas empiler)
+      speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn('Énoncé commande impossible', e);
+    }
+  }
+
+  private construireTexteCommande(carte: CarteKds): string {
+    const plats = carte.items
+      .filter((i) => i.statut_cuisine !== 'ANNULE')
+      .map((i) => `${this.pluraliser(i.quantite, i.nom_snapshot.toLowerCase())}`)
+      .join(', ');
+    return `Commande ${carte.numero_ticket} : ${plats}`;
+  }
+
+  /** Pluralise un nom : 1 → "un nems", 2+ → "deux nems". */
+  private pluraliser(quantite: number, nom: string): string {
+    if (quantite === 1) {
+      const article = 'aeiouyàâäéèêëïîôöœuù'.includes(nom[0]!) ? "un'" : 'un';
+      return `${article} ${nom}`;
+    }
+    return `${quantite} ${nom}${nom.endsWith('s') ? '' : 's'}`;
   }
 
   private jouer(src: string): void {
