@@ -67,6 +67,7 @@ async function construireCartes(lignes: LigneCommande[]): Promise<CarteKds[]> {
         table_numero: c.table_numero,
         statut: c.statut,
         envoyee_le: (premierEnvoi ?? c.updated_at).toISOString(),
+        heure_commande: c.created_at.toISOString(),
         items: siens.map((i) => ({
           id: i.id,
           nom_snapshot: i.nom_snapshot,

@@ -1,14 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import type { CarteKds, KdsVue } from '@pos/shared';
 import { LIBELLES_TYPES_COMMANDE } from '@pos/shared';
 import { apiKds, ErreurApi } from '../api';
 import { sons } from '../sons';
 
+/** Une carte est « en cours » dès qu'un de ses plats a été démarré. */
+function enPreparation(carte: CarteKds): boolean {
+  return carte.items.some((i) => i.statut_cuisine === 'EN_COURS');
+}
+
+/** Heure « HH:MM » à partir d'une date ISO. */
+function heure(iso: string): string {
+  return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
+
 export function Grille({ onJetonRefuse }: { onJetonRefuse: () => void }) {
   const queryClient = useQueryClient();
   const [connecte, setConnecte] = useState(true);
   const [muet, setMuet] = useState(sons.muet);
+  const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
   const [, forcerTic] = useState(0);
   const idsConnus = useRef<Set<string> | null>(null);
   const idsAlertes = useRef(new Set<string>());
@@ -104,6 +116,9 @@ export function Grille({ onJetonRefuse }: { onJetonRefuse: () => void }) {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['kds'] }),
   });
 
+  const cartesAttente = (data?.en_cuisine ?? []).filter((c) => !enPreparation(c));
+  const cartesEnCours = (data?.en_cuisine ?? []).filter((c) => enPreparation(c));
+
   return (
     <div className="flex h-screen flex-col">
       <header className="flex items-center gap-4 border-b border-bordure px-4 py-2">
@@ -116,6 +131,13 @@ export function Grille({ onJetonRefuse }: { onJetonRefuse: () => void }) {
         <div className="ml-auto flex gap-2">
           <button
             type="button"
+            className="btn border border-bordure bg-surface"
+            onClick={() => setHistoriqueOuvert(true)}
+          >
+            Historique{data?.pretes.length ? ` (${data.pretes.length})` : ''}
+          </button>
+          <button
+            type="button"
             className={`btn ${muet ? 'bg-alerte text-white' : 'border border-bordure bg-surface'}`}
             onClick={() => { sons.basculerMute(); setMuet(sons.muet); }}
           >
@@ -125,9 +147,9 @@ export function Grille({ onJetonRefuse }: { onJetonRefuse: () => void }) {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Grille : plus ancienne → plus récente (§A1) */}
-        <main className="grid flex-1 auto-rows-min grid-cols-1 gap-4 overflow-y-auto p-4 md:grid-cols-2 xl:grid-cols-3">
-          {(data?.en_cuisine ?? []).map((carte) => (
+        {/* Colonne 1 : EN ATTENTE (nouvelles commandes, pas encore démarrées) */}
+        <Colonne titre="En attente" nombre={cartesAttente.length} accent="attente">
+          {cartesAttente.map((carte) => (
             <Carte
               key={carte.id}
               carte={carte}
@@ -136,28 +158,104 @@ export function Grille({ onJetonRefuse }: { onJetonRefuse: () => void }) {
               onPret={() => pret.mutate(carte.id)}
             />
           ))}
-          {data?.en_cuisine.length === 0 && (
-            <div className="col-span-full pt-20 text-center text-3xl text-doux">
-              Aucune commande en attente
-            </div>
-          )}
-        </main>
+        </Colonne>
 
-        {/* Colonne « Prêtes » : 10 dernières, rappelables (§A2) */}
-        <aside className="w-64 shrink-0 space-y-2 overflow-y-auto border-l border-bordure p-3">
-          <h2 className="text-lg font-bold text-ok">Prêtes ✔</h2>
-          {(data?.pretes ?? []).map((carte) => (
+        {/* Colonne 2 : EN COURS (préparation démarrée) */}
+        <Colonne titre="En cours" nombre={cartesEnCours.length} accent="cours">
+          {cartesEnCours.map((carte) => (
+            <Carte
+              key={carte.id}
+              carte={carte}
+              seuils={data!.seuils}
+              onCommencer={() => commencer.mutate(carte.id)}
+              onPret={() => pret.mutate(carte.id)}
+            />
+          ))}
+        </Colonne>
+      </div>
+
+      {historiqueOuvert && (
+        <Historique
+          cartes={data?.pretes ?? []}
+          onFermer={() => setHistoriqueOuvert(false)}
+          onReprendre={(id) => reprendre.mutate(id)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Une colonne de la grille (en-tête + zone défilante des cartes). */
+function Colonne({
+  titre,
+  nombre,
+  accent,
+  children,
+}: {
+  titre: string;
+  nombre: number;
+  accent: 'attente' | 'cours';
+  children: ReactNode;
+}) {
+  const couleur = accent === 'attente' ? 'text-marque-fonce' : 'text-info';
+  return (
+    <section className={`flex flex-1 flex-col overflow-hidden ${accent === 'attente' ? 'border-r border-bordure' : ''}`}>
+      <div className="flex items-center gap-2 border-b border-bordure px-4 py-2">
+        <h2 className={`text-xl font-black ${couleur}`}>{titre}</h2>
+        <span className="rounded-full bg-surface px-3 py-0.5 text-lg font-bold text-doux">{nombre}</span>
+      </div>
+      <div className="grid flex-1 auto-rows-min grid-cols-1 gap-4 overflow-y-auto p-4 xl:grid-cols-2">
+        {nombre === 0 ? (
+          <div className="col-span-full pt-16 text-center text-2xl text-doux">Aucune commande</div>
+        ) : (
+          children
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** Panneau Historique : les commandes prêtes (rappelables). */
+function Historique({
+  cartes,
+  onFermer,
+  onReprendre,
+}: {
+  cartes: CarteKds[];
+  onFermer: () => void;
+  onReprendre: (id: string) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-40 flex justify-end bg-black/40" onClick={onFermer}>
+      <div className="flex h-full w-full max-w-md flex-col bg-fond shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-bordure px-4 py-3">
+          <h2 className="text-2xl font-black text-ok">Historique — Prêtes ✔</h2>
+          <button type="button" className="btn-blanc px-3" onClick={onFermer}>✕</button>
+        </div>
+        <div className="flex-1 space-y-3 overflow-y-auto p-4">
+          {cartes.length === 0 && <p className="pt-10 text-center text-doux">Aucune commande prête pour l’instant.</p>}
+          {cartes.map((carte) => (
             <div key={carte.id} className="carte border-ok p-3">
-              <div className="text-2xl font-black">N° {carte.numero_ticket}</div>
-              <div className="text-sm text-doux">
-                {carte.table_numero ? `Table ${carte.table_numero}` : LIBELLES_TYPES_COMMANDE[carte.type]}
+              <div className="flex items-start justify-between">
+                <div className="text-3xl font-black">N° {carte.numero_ticket}</div>
+                <div className="text-right text-sm text-doux">
+                  <div>{carte.table_numero ? `Table ${carte.table_numero}` : LIBELLES_TYPES_COMMANDE[carte.type]}</div>
+                  <div>Commandé à {heure(carte.heure_commande)}</div>
+                </div>
               </div>
-              <button type="button" className="btn-blanc mt-2 w-full min-h-[48px] text-base" onClick={() => reprendre.mutate(carte.id)}>
-                ↩ Reprendre
+              <ul className="my-2 space-y-1">
+                {carte.items
+                  .filter((i) => i.statut_cuisine !== 'ANNULE')
+                  .map((item) => (
+                    <li key={item.id} className="text-lg font-semibold">{item.quantite} × {item.nom_snapshot}</li>
+                  ))}
+              </ul>
+              <button type="button" className="btn-blanc w-full min-h-[48px]" onClick={() => onReprendre(carte.id)}>
+                ↩ Reprendre (renvoyer en cuisine)
               </button>
             </div>
           ))}
-        </aside>
+        </div>
       </div>
     </div>
   );
@@ -201,9 +299,7 @@ function Carte({
             {carte.partenaire ? ` — ${carte.partenaire}` : ''}
             {carte.table_numero ? ` — Table ${carte.table_numero}` : ''}
           </div>
-          <div className="text-sm text-doux">
-            Envoyée à {new Date(carte.envoyee_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-          </div>
+          <div className="text-sm text-doux">🕐 Commandé à {heure(carte.heure_commande)}</div>
         </div>
         <div className={`rounded-xl px-3 py-2 text-2xl font-black tabular-nums ${couleurChrono}`}>
           {mm}:{ss}

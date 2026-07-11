@@ -232,6 +232,8 @@ export interface CarteKds {
   statut: StatutCommande;
   /** Heure du premier envoi en cuisine (base du chronomètre). */
   envoyee_le: string;
+  /** Heure de passage de la commande (création côté caisse/serveur). */
+  heure_commande: string;
   items: CarteKdsItem[];
 }
 
