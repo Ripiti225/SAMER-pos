@@ -2,6 +2,9 @@
  * Seed de démonstration (voir CLAUDE.md).
  * Réinitialise les données puis insère le restaurant SAMER_ANGRE7E complet.
  */
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import argon2 from 'argon2';
 import { sql } from 'drizzle-orm';
 import { db, fermerDb } from './client.js';
@@ -89,52 +92,49 @@ export async function seed(): Promise<void> {
     { nom_complet: 'Aminata Touré', role: 'CUISINE', role_id: rid('CUISINE'), poste_cuisine: 'COMPTOIRISTE', pin_hash: await hacherPin('4652'), telephone: '+2250700000009' },
   ]);
 
-  // --- Catalogue ---
-  const [catChawarmas, catPizzas, catGrillades, catBoissons] = await db
-    .insert(categories)
-    .values([
-      { nom: 'Chawarmas', ordre: 1 },
-      { nom: 'Pizzas', ordre: 2 },
-      { nom: 'Grillades', ordre: 3 },
-      { nom: 'Boissons', ordre: 4 },
-    ])
-    .returning();
+  // --- Catalogue RÉEL (export Supabase mobmgbedyyqeggxjpbrk) ---
+  // Le catalogue de démo a été remplacé par le vrai menu (15 catégories,
+  // 128 produits). On réutilise les UUID de l'export (cohérence local ↔ cloud).
+  // Champs ignorés (hors schéma) : allergenes, populaire, temps_preparation_min.
+  const cheminCatalogue = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..', 'docs/menu_export.json');
+  const exportCatalogue = JSON.parse(readFileSync(cheminCatalogue, 'utf8')) as {
+    categories: {
+      id: string; nom: string; ordre: number; active: boolean;
+      produits: { id: string; nom: string; description: string | null; prix: number; photo_url: string | null; disponible: boolean }[];
+    }[];
+  };
 
-  const lignesArticles = await db
-    .insert(articles)
-    .values([
-      { categorie_id: catChawarmas!.id, nom: 'Chawarma Poulet', prix_base: 3000, description: 'Poulet mariné, crudités, sauce à l’ail' },
-      { categorie_id: catChawarmas!.id, nom: 'Chawarma Viande', prix_base: 3500 },
-      { categorie_id: catChawarmas!.id, nom: 'Chawarma Mixte', prix_base: 4000 },
-      { categorie_id: catChawarmas!.id, nom: 'Chawarma Spécial Fromage', prix_base: 4500 },
-      { categorie_id: catPizzas!.id, nom: 'Pizza Margherita', prix_base: 6500 },
-      { categorie_id: catPizzas!.id, nom: 'Pizza Poulet', prix_base: 7500 },
-      { categorie_id: catPizzas!.id, nom: 'Pizza Viande Hachée', prix_base: 8000 },
-      { categorie_id: catPizzas!.id, nom: 'Pizza 4 Fromages', prix_base: 8500 },
-      { categorie_id: catGrillades!.id, nom: 'Poulet Braisé (entier)', prix_base: 9000 },
-      { categorie_id: catGrillades!.id, nom: 'Demi Poulet Braisé', prix_base: 5000 },
-      { categorie_id: catGrillades!.id, nom: 'Brochettes de Bœuf (x3)', prix_base: 4000 },
-      { categorie_id: catBoissons!.id, nom: 'Jus d’Ananas Frais', prix_base: 1500 },
-      { categorie_id: catBoissons!.id, nom: 'Jus de Gingembre', prix_base: 1500 },
-      { categorie_id: catBoissons!.id, nom: 'Coca-Cola 33cl', prix_base: 1000 },
-      { categorie_id: catBoissons!.id, nom: 'Eau Minérale 50cl', prix_base: 500 },
-    ])
+  const lignesCategories = await db
+    .insert(categories)
+    .values(exportCatalogue.categories.map((c) => ({ id: c.id, nom: c.nom, ordre: c.ordre, actif: c.active })))
     .returning();
+  const catParNom = new Map(lignesCategories.map((c) => [c.nom, c]));
+
+  const aInserer = exportCatalogue.categories.flatMap((c) =>
+    c.produits.map((p) => ({
+      id: p.id,
+      categorie_id: c.id,
+      nom: p.nom,
+      description: p.description,
+      prix_base: p.prix,
+      image_url: p.photo_url,
+      disponible: p.disponible,
+    })),
+  );
+  const lignesArticles = aInserer.length ? await db.insert(articles).values(aInserer).returning() : [];
 
   const parNom = new Map(lignesArticles.map((a) => [a.nom, a]));
+  // Articles réels servant d'exemples aux extras de démo (options, combo, canaux)
   const chawarmaPoulet = parNom.get('Chawarma Poulet')!;
-  const chawarmaViande = parNom.get('Chawarma Viande')!;
-  const pizzaMargherita = parNom.get('Pizza Margherita')!;
-  const coca = parNom.get('Coca-Cola 33cl')!;
+  const boissonCombo = parNom.get('Boisson')!;
+  const pizzaCanal = parNom.get('Pizza 4 Saisons (M)')!;
 
-  // Surcharges de prix par canal (§5.2)
+  // Surcharges de prix par canal (§5.2) — exemple sur 2 vrais articles
   await db.insert(prixCanaux).values([
-    { article_id: chawarmaPoulet.id, canal: 'YANGO', prix: 3500 },
-    { article_id: chawarmaPoulet.id, canal: 'GLOVO', prix: 3800 },
-    { article_id: chawarmaViande.id, canal: 'YANGO', prix: 4000 },
-    { article_id: chawarmaViande.id, canal: 'GLOVO', prix: 4300 },
-    { article_id: pizzaMargherita.id, canal: 'YANGO', prix: 7000 },
-    { article_id: pizzaMargherita.id, canal: 'GLOVO', prix: 7500 },
+    { article_id: chawarmaPoulet.id, canal: 'YANGO', prix: 3000 },
+    { article_id: chawarmaPoulet.id, canal: 'GLOVO', prix: 3300 },
+    { article_id: pizzaCanal.id, canal: 'YANGO', prix: 6500 },
+    { article_id: pizzaCanal.id, canal: 'GLOVO', prix: 7000 },
   ]);
 
   // Groupe d'options « Sauce » sur le Chawarma Poulet
@@ -161,16 +161,15 @@ export async function seed(): Promise<void> {
     .returning();
   await db.insert(comboArticles).values([
     { combo_id: combo!.id, article_id: chawarmaPoulet.id, quantite: 1 },
-    { combo_id: combo!.id, article_id: coca.id, quantite: 1 },
+    { combo_id: combo!.id, article_id: boissonCombo.id, quantite: 1 },
   ]);
 
   // Correction 4 : attribution automatique — poste de cuisine par catégorie
   // (les catégories absentes du mapping vont au CUISINIER par défaut)
   await db.insert(mappingPosteCategorie).values([
-    { poste_cuisine: 'CUISINIER', categorie_id: catChawarmas!.id },
-    { poste_cuisine: 'PIZZAIOLO', categorie_id: catPizzas!.id },
-    { poste_cuisine: 'CUISINIER', categorie_id: catGrillades!.id },
-    { poste_cuisine: 'COMPTOIRISTE', categorie_id: catBoissons!.id },
+    { poste_cuisine: 'PIZZAIOLO', categorie_id: catParNom.get('Pizzas')!.id },
+    { poste_cuisine: 'COMPTOIRISTE', categorie_id: catParNom.get('Boissons')!.id },
+    { poste_cuisine: 'COMPTOIRISTE', categorie_id: catParNom.get('Jus Naturels')!.id },
   ]);
 
   // Happy hour −20 % sur tout le menu, 17 h à 19 h, tous les jours
