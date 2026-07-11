@@ -73,6 +73,9 @@ export async function seed(): Promise<void> {
     // Sprint 4 C : QR de table — adresse web du client (pour l'URL encodée).
     // En dev : http://localhost:5173 ; en prod : https://client.restaurant.com
     { cle: 'url_base_client', valeur: 'http://localhost:5173' },
+    // Facture : contact sous le logo + message de pied (éditables dans Réglages).
+    { cle: 'ticket_entete', valeur: 'Angré 7e Tranche, Abidjan' },
+    { cle: 'ticket_pied', valeur: 'Merci de votre visite — à bientôt chez Samer !' },
   ]);
 
   // --- Rôles système (sprint 4B+4C) puis utilisateurs raccordés ---

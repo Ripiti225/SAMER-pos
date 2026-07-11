@@ -22,6 +22,10 @@ async function construireSessionInfo(session: SessionUtilisateur): Promise<Sessi
     const p = params.find((x) => x.cle === cle);
     return typeof p?.valeur === 'number' ? p.valeur : defaut;
   };
+  const lireTexte = (cle: string): string => {
+    const p = params.find((x) => x.cle === cle);
+    return typeof p?.valeur === 'string' ? p.valeur : '';
+  };
 
   const [service] = await db
     .select()
@@ -47,6 +51,8 @@ async function construireSessionInfo(session: SessionUtilisateur): Promise<Sessi
       nom: resto.nom,
       marque: resto.marque as 'SAMER' | 'AL_KAYAN',
       couleur_hex: resto.couleur_hex,
+      entete: lireTexte('ticket_entete'),
+      pied: lireTexte('ticket_pied'),
     },
     verrouillage_inactivite_secondes: lireParam('verrou_inactivite_caisse_secondes', 600),
     verrouillage_inactivite_serveur_secondes: lireParam('verrouillage_inactivite_serveur_secondes', 120),

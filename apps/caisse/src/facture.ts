@@ -10,7 +10,17 @@ const echap = (s: string): string =>
  * déclenche la boîte d'impression du système, qui envoie à l'imprimante par
  * défaut du terminal (l'imprimante thermique).
  */
-export function imprimerFactureNavigateur(commande: CommandeVue, restaurantNom: string): void {
+interface InfosResto {
+  nom: string;
+  marque: 'SAMER' | 'AL_KAYAN';
+  entete?: string;
+  pied?: string;
+}
+
+/** Convertit un texte multi-lignes en HTML (échappé, sauts de ligne conservés). */
+const multiligne = (s: string): string => echap(s).replace(/\n/g, '<br>');
+
+export function imprimerFactureNavigateur(commande: CommandeVue, resto: InfosResto): void {
   const items = commande.items.filter((i) => i.statut_cuisine !== 'ANNULE');
   const lignesItems = items
     .map((item) => {
@@ -39,6 +49,10 @@ export function imprimerFactureNavigateur(commande: CommandeVue, restaurantNom: 
     commande.fidelite_montant > 0 ? `<div class="ligne petit"><span>Fidélité</span><span>−${formatFCFA(commande.fidelite_montant)}</span></div>` : '',
   ].join('');
 
+  const logo = resto.marque === 'AL_KAYAN' ? '/logo-alkayan.png' : '/logo-samer.png';
+  const blocEntete = resto.entete ? `<div class="centre petit contact">${multiligne(resto.entete)}</div>` : '';
+  const blocPied = resto.pied ? `<div class="pied">${multiligne(resto.pied)}</div>` : '';
+
   const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Facture</title>
     <style>
       @page { size: 80mm auto; margin: 0; }
@@ -46,7 +60,9 @@ export function imprimerFactureNavigateur(commande: CommandeVue, restaurantNom: 
       body { width: 80mm; padding: 4mm 3mm; font-family: 'Courier New', monospace; font-size: 12px; color: #000; }
       .centre { text-align: center; }
       .gras { font-weight: bold; }
-      .titre { font-size: 15px; font-weight: bold; }
+      .nom { font-size: 14px; font-weight: bold; }
+      .logo { display: block; margin: 0 auto 4px; max-width: 58mm; max-height: 22mm; object-fit: contain; }
+      .contact { margin: 2px 0; }
       hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
       .ligne { display: flex; justify-content: space-between; gap: 6px; margin: 2px 0; }
       .sous { padding-left: 10px; font-size: 11px; }
@@ -54,7 +70,10 @@ export function imprimerFactureNavigateur(commande: CommandeVue, restaurantNom: 
       .total { font-size: 15px; font-weight: bold; }
       .pied { margin-top: 8px; text-align: center; font-size: 11px; }
     </style></head><body>
-      <div class="centre titre">${echap(restaurantNom)}</div>
+      <img class="logo" src="${logo}" alt="" onerror="this.style.display='none'">
+      <div class="centre nom">${echap(resto.nom)}</div>
+      ${blocEntete}
+      <hr>
       <div class="centre gras">FACTURE</div>
       <div class="centre petit">${entete} · ${echap(LIBELLES_TYPES_COMMANDE[commande.type])}${commande.partenaire ? ' · ' + echap(commande.partenaire) : ''}</div>
       <div class="centre petit">${new Date().toLocaleString('fr-FR')}</div>
@@ -65,7 +84,8 @@ export function imprimerFactureNavigateur(commande: CommandeVue, restaurantNom: 
       ${remises}
       <div class="ligne total"><span>TOTAL</span><span>${formatFCFA(commande.total)}</span></div>
       <hr>
-      <div class="pied">Facture non acquittée — à régler en caisse<br>Merci de votre visite !</div>
+      <div class="pied">Facture non acquittée — à régler en caisse</div>
+      ${blocPied}
     </body></html>`;
 
   const iframe = document.createElement('iframe');

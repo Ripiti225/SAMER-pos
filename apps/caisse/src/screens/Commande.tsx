@@ -86,7 +86,7 @@ export function Commande() {
     onSuccess: (vue) => {
       rafraichir(vue);
       // Impression navigateur (80 mm) vers l'imprimante par défaut du terminal.
-      imprimerFactureNavigateur(vue, session?.restaurant.nom ?? '');
+      if (session) imprimerFactureNavigateur(vue, session.restaurant);
     },
     onError: surErreur,
   });

@@ -25,7 +25,16 @@ export interface SessionInfo {
   };
   /** Sprint 4B+4C : permissions effectives de l'utilisateur (guards UI). */
   permissions: string[];
-  restaurant: { code: string; nom: string; marque: 'SAMER' | 'AL_KAYAN'; couleur_hex: string };
+  restaurant: {
+    code: string;
+    nom: string;
+    marque: 'SAMER' | 'AL_KAYAN';
+    couleur_hex: string;
+    /** Contact + message sous le logo de la facture (param ticket_entete). */
+    entete?: string;
+    /** Message de pied de facture (param ticket_pied). */
+    pied?: string;
+  };
   verrouillage_inactivite_secondes: number;
   /** Sprint 2 : verrouillage plus long pour l'app serveur tablette (§B5). */
   verrouillage_inactivite_serveur_secondes: number;
