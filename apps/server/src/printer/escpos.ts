@@ -14,6 +14,7 @@ import { db } from '../db/client.js';
 import { parametresLocaux, restaurant } from '../db/schema/index.js';
 import type { PrinterService } from './PrinterService.js';
 import { ConsolePrinter } from './ConsolePrinter.js';
+import { rasterLogo } from './logo.js';
 
 const LARGEUR = 48;
 
@@ -45,6 +46,8 @@ class Ruban {
   taille(grande: boolean): this { this.push(0x1d, 0x21, grande ? 0x11 : 0x00); return this; }
   texte(s: string): this { this.push(s); return this; }
   ligne(s = ''): this { this.push(s, 0x0a); return this; }
+  /** Insère des octets ESC/POS bruts (ex. logo raster). */
+  brut(b: Buffer): this { for (const x of b) this.o.push(x); return this; }
   /** Ligne à deux colonnes (gauche + droite) alignée sur 48 caractères. */
   duo(g: string, d: string): this {
     const gauche = ascii(g), droite = ascii(d);
@@ -67,9 +70,12 @@ function envoyerRaw(queue: string, data: Buffer): Promise<void> {
   });
 }
 
-/** En-tête commun (nom + contact + type/table/ticket). */
-function entete(r: Ruban, resto: { nom: string; entete: string }, c: CommandeVue, titre: string): void {
-  r.init().centre().taille(true).gras(true).ligne(resto.nom).taille(false).gras(false);
+/** En-tête commun (logo + nom + contact + type/table/ticket). */
+function entete(r: Ruban, resto: { nom: string; entete: string; marque: 'SAMER' | 'AL_KAYAN' }, c: CommandeVue, titre: string): void {
+  r.init().centre();
+  const logo = rasterLogo(resto.marque);
+  if (logo) r.brut(logo).ligne();
+  r.taille(true).gras(true).ligne(resto.nom).taille(false).gras(false);
   if (resto.entete) for (const l of resto.entete.split('\n')) r.ligne(l);
   r.ligne().gras(true).ligne(titre).gras(false);
   const sous = `${LIBELLES_TYPES_COMMANDE[c.type]}${c.table_numero ? ` - Table ${c.table_numero}` : ''}${c.partenaire ? ` - ${c.partenaire}` : ''}`;
@@ -120,14 +126,19 @@ export class EscposPrinter implements PrinterService {
     }
   }
 
-  private async infosResto(): Promise<{ nom: string; entete: string; pied: string }> {
+  private async infosResto(): Promise<{ nom: string; entete: string; pied: string; marque: 'SAMER' | 'AL_KAYAN' }> {
     const params = await db.select().from(parametresLocaux);
     const val = (cle: string): string => {
       const p = params.find((x) => x.cle === cle);
       return typeof p?.valeur === 'string' ? p.valeur : '';
     };
     const [resto] = await db.select().from(restaurant).limit(1);
-    return { nom: resto?.nom ?? 'Chez Samer', entete: val('ticket_entete'), pied: val('ticket_pied') };
+    return {
+      nom: resto?.nom ?? 'Chez Samer',
+      entete: val('ticket_entete'),
+      pied: val('ticket_pied'),
+      marque: (resto?.marque as 'SAMER' | 'AL_KAYAN') ?? 'SAMER',
+    };
   }
 
   async imprimerFacture(c: CommandeVue): Promise<void> {
