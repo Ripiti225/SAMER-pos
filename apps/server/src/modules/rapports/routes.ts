@@ -3,6 +3,7 @@ import { and, desc, eq, gte, lte, ne, sql } from 'drizzle-orm';
 import { MODES_PAIEMENT, type ModePaiement } from '@pos/shared';
 import { db } from '../../db/client.js';
 import { commandeItems, commandes, notations, paiements, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
+import { aPermission } from '../../plugins/sessions.js';
 
 function debutDuJour(): Date {
   const d = new Date();
@@ -121,15 +122,40 @@ export function routesRapports(app: FastifyInstance): void {
       .where(eq(commandes.service_id, service.id))
       .orderBy(desc(commandes.created_at));
 
+    // Produits vendus du service (quantités, SANS montant) : pour l'inventaire
+    // par le caissier, qui ne voit pas le chiffre d'affaires.
+    const produits = await db
+      .select({
+        nom: commandeItems.nom_snapshot,
+        quantite: sql<string>`SUM(${commandeItems.quantite})`,
+      })
+      .from(commandeItems)
+      .innerJoin(commandes, eq(commandes.id, commandeItems.commande_id))
+      .where(
+        and(
+          eq(commandes.service_id, service.id),
+          eq(commandes.statut, 'PAYEE'),
+          ne(commandeItems.statut_cuisine, 'ANNULE'),
+        ),
+      )
+      .groupBy(commandeItems.nom_snapshot)
+      .orderBy(commandeItems.nom_snapshot);
+
+    // Les montants (CA) ne sont envoyés QU'À qui a le Rapport X (manager/proprio).
+    // Un caissier reçoit la liste des produits pour l'inventaire, sans argent.
+    const voitMontants = await aPermission(req.session!, 'rapports.x');
+
     return {
       service: { id: service.id, ouvert_le: service.ouvert_le.toISOString() },
       commandes: lignes.map((l) => ({
         ...l,
         numero_ticket: Number(l.numero_ticket),
         created_at: l.created_at.toISOString(),
+        total: voitMontants ? l.total : 0,
       })),
+      produits: produits.map((p) => ({ nom: p.nom, quantite: Number(p.quantite) })),
       nb_payees: lignes.filter((l) => l.statut === 'PAYEE').length,
-      total_payees: lignes.filter((l) => l.statut === 'PAYEE').reduce((s, l) => s + l.total, 0),
+      total_payees: voitMontants ? lignes.filter((l) => l.statut === 'PAYEE').reduce((s, l) => s + l.total, 0) : undefined,
     };
   });
 

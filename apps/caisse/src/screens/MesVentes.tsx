@@ -15,6 +15,7 @@ interface MesVentesVue {
     total: number;
     created_at: string;
   }[];
+  produits?: { nom: string; quantite: number }[];
   nb_payees?: number;
   total_payees?: number;
 }
@@ -28,6 +29,9 @@ const COULEURS_STATUT: Record<string, string> = {
 export function MesVentes() {
   const { aller, rentrer, session } = useCaisse();
   const estManager = session?.utilisateur.role === 'MANAGER' || session?.utilisateur.role === 'PROPRIETAIRE';
+  // Voir les montants (CA) = permission Rapport X (manager/propriétaire). Un
+  // caissier ne voit PAS l'argent, mais la liste des produits vendus (inventaire).
+  const voitMontants = session?.permissions.includes('rapports.x') ?? false;
 
   const { data } = useQuery({
     queryKey: ['mes-ventes'],
@@ -58,7 +62,8 @@ export function MesVentes() {
         <h1 className="text-2xl font-bold">Mes ventes</h1>
         {data?.nb_payees !== undefined && (
           <span className="ml-auto text-doux">
-            {data.nb_payees} encaissées — <span className="font-bold text-marque-fonce">{formatFCFA(data.total_payees ?? 0)}</span>
+            {data.nb_payees} encaissées
+            {voitMontants && <> — <span className="font-bold text-marque-fonce">{formatFCFA(data.total_payees ?? 0)}</span></>}
           </span>
         )}
       </header>
@@ -80,12 +85,27 @@ export function MesVentes() {
               </span>
             </div>
             <div className="text-right">
-              <div className="font-bold">{formatFCFA(c.total)}</div>
+              {voitMontants && <div className="font-bold">{formatFCFA(c.total)}</div>}
               <div className={`text-sm ${COULEURS_STATUT[c.statut] ?? 'text-doux'}`}>{LIBELLES_STATUTS_COMMANDE[c.statut]}</div>
             </div>
           </button>
         ))}
       </div>
+
+      {/* Produits vendus du service — pour l'inventaire (quantités, sans montant) */}
+      {(data?.produits?.length ?? 0) > 0 && (
+        <section className="mt-8">
+          <h2 className="mb-2 text-lg font-bold">Produits vendus — inventaire</h2>
+          <div className="carte divide-y divide-bordure p-0">
+            {(data?.produits ?? []).map((p) => (
+              <div key={p.nom} className="flex items-center justify-between px-4 py-2.5">
+                <span>{p.nom}</span>
+                <span className="text-lg font-bold tabular-nums">×{p.quantite}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {estManager && (
         <section className="mt-8 grid gap-4 lg:grid-cols-3">
