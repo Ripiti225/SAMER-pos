@@ -16,6 +16,7 @@ export class MoteurSync {
   private timers: ReturnType<typeof setTimeout>[] = [];
   private tacheReconcile: ScheduledTask | null = null;
   private arrete = false;
+  private monteeEnCours = false;
 
   async demarrer(): Promise<void> {
     const cfg = await chargerConfigSync();
@@ -52,12 +53,39 @@ export class MoteurSync {
 
   /** Vide la file par lots jusqu'à épuisement ou premier échec. */
   private async cycleMontee(): Promise<void> {
-    for (;;) {
-      const r = await pousserUnLot(this.client!);
-      if (r.fini) break;
-      // Pas de progrès (ligne bloquante en tête) → on stoppe pour ne pas boucler.
-      if (r.acquitte_jusqua_seq === 0) break;
+    // Garde anti-chevauchement : le déclenchement manuel ne double pas la boucle.
+    if (this.monteeEnCours) return;
+    this.monteeEnCours = true;
+    try {
+      for (;;) {
+        const r = await pousserUnLot(this.client!);
+        if (r.fini) break;
+        // Pas de progrès (ligne bloquante en tête) → on stoppe pour ne pas boucler.
+        if (r.acquitte_jusqua_seq === 0) break;
+      }
+    } finally {
+      this.monteeEnCours = false;
     }
+  }
+
+  /**
+   * Déclenchement MANUEL d'une montée (bouton « Synchroniser maintenant »).
+   * Ne fait rien si la synchro cloud est désactivée. Ne bloque jamais : les
+   * erreurs sont enregistrées dans l'état de santé, pas propagées.
+   */
+  async synchroniserMaintenant(): Promise<{ actif: boolean; en_attente: number }> {
+    if (!this.client) {
+      const attente = await compterEnAttente().catch(() => etatSync.lignes_en_attente);
+      return { actif: false, en_attente: attente };
+    }
+    try {
+      await this.cycleMontee();
+      etatSync.majEnAttente(await compterEnAttente().catch(() => 0));
+    } catch (e) {
+      const err = e instanceof ErreurSync ? e : new ErreurSync(String(e), 0);
+      etatSync.echecMontee(err.message, err.estRevocation);
+    }
+    return { actif: true, en_attente: etatSync.lignes_en_attente };
   }
 
   private boucleMontee(base: number): void {

@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
-import { IconWifi } from '@tabler/icons-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { IconRefresh, IconWifi } from '@tabler/icons-react';
 import { api } from '../api';
 import { useCaisse } from '../stores/session';
 
@@ -47,21 +47,46 @@ const PILULE: Record<string, string> = {
   rouge: 'bg-alerte-tint text-alerte',
 };
 
-/** Pastille « Synchronisé » avec libellé (en-tête caisse rush). */
+/** Pastille « Synchronisé » cliquable : force une montée immédiate. */
 export function PiluleSync() {
   const { data } = useSante();
+  const queryClient = useQueryClient();
+  const { afficherToast } = useCaisse();
+
+  const forcer = useMutation({
+    mutationFn: () => api<EtatSante & { synchro_active: boolean }>('/api/sante/synchro/forcer', { method: 'POST', corps: {} }),
+    onSuccess: (frais) => {
+      queryClient.setQueryData(['sante-synchro'], frais);
+      if (!frais.synchro_active) {
+        afficherToast('Synchronisation cloud non configurée sur ce poste');
+      } else if (frais.lignes_en_attente === 0) {
+        afficherToast('Tout est synchronisé');
+      } else {
+        afficherToast(`${frais.lignes_en_attente} vente(s) encore en attente`);
+      }
+    },
+    onError: (e: Error) => afficherToast(e.message),
+  });
+
   const couleur = data?.voyant.couleur ?? 'vert';
-  const libelle =
-    couleur === 'vert'
+  const libelle = forcer.isPending
+    ? 'Envoi…'
+    : couleur === 'vert'
       ? 'Synchronisé'
       : couleur === 'orange'
         ? `${data?.lignes_en_attente ?? 0} en attente`
         : 'Hors ligne';
   return (
-    <span className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${PILULE[couleur]}`} title={data?.voyant.message}>
-      <IconWifi size={14} />
+    <button
+      type="button"
+      onClick={() => forcer.mutate()}
+      disabled={forcer.isPending}
+      className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition hover:brightness-95 ${PILULE[couleur]}`}
+      title="Synchroniser maintenant"
+    >
+      {forcer.isPending ? <IconRefresh size={14} className="animate-spin" /> : <IconWifi size={14} />}
       {libelle}
-    </span>
+    </button>
   );
 }
 

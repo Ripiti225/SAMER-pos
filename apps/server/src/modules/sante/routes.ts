@@ -5,24 +5,32 @@
 import type { FastifyInstance } from 'fastify';
 import { etatSync } from '../sync/etat.js';
 import { compterEnAttente } from '../sync/montee.js';
+import { moteurSync } from '../sync/moteur.js';
+
+/** État de synchro renvoyé à la caisse (source unique). */
+async function etatSynchro() {
+  const enAttente = await compterEnAttente().catch(() => etatSync.lignes_en_attente);
+  etatSync.majEnAttente(enAttente);
+  return {
+    voyant: etatSync.voyant(),
+    lignes_en_attente: enAttente,
+    dernier_acquittement: etatSync.dernier_acquittement?.toISOString() ?? null,
+    derniere_erreur: etatSync.derniere_erreur,
+    derniere_reconciliation: etatSync.derniere_reconciliation,
+  };
+}
 
 export function routesSante(app: FastifyInstance): void {
   // Liveness simple (déjà utilisé par le harnais / les PWA)
   app.get('/api/sante', async () => ({ ok: true }));
 
   // État de synchronisation détaillé (tout utilisateur connecté)
-  app.get('/api/sante/synchro', { preHandler: app.exigerAuth }, async () => {
-    // Recompte les lignes en attente à la volée (juste même si le moteur dort).
-    const enAttente = await compterEnAttente().catch(() => etatSync.lignes_en_attente);
-    etatSync.majEnAttente(enAttente);
-    const voyant = etatSync.voyant();
+  app.get('/api/sante/synchro', { preHandler: app.exigerAuth }, async () => etatSynchro());
 
-    return {
-      voyant, // { couleur: 'vert'|'orange'|'rouge', message }
-      lignes_en_attente: enAttente,
-      dernier_acquittement: etatSync.dernier_acquittement?.toISOString() ?? null,
-      derniere_erreur: etatSync.derniere_erreur,
-      derniere_reconciliation: etatSync.derniere_reconciliation,
-    };
+  // Déclenchement MANUEL d'une montée (bouton « Synchroniser maintenant »).
+  // Ne bloque jamais une vente ; renvoie l'état de synchro rafraîchi.
+  app.post('/api/sante/synchro/forcer', { preHandler: app.exigerAuth }, async () => {
+    const r = await moteurSync.synchroniserMaintenant();
+    return { ...(await etatSynchro()), synchro_active: r.actif };
   });
 }
