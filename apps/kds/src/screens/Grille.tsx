@@ -111,10 +111,6 @@ export function Grille({ onJetonRefuse }: { onJetonRefuse: () => void }) {
     mutationFn: (id: string) => apiKds(`/api/kds/commandes/${id}/pret`, { method: 'POST', corps: {} }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['kds'] }),
   });
-  const reprendre = useMutation({
-    mutationFn: (id: string) => apiKds(`/api/kds/commandes/${id}/reprendre`, { method: 'POST', corps: {} }),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['kds'] }),
-  });
 
   const cartesAttente = (data?.en_cuisine ?? []).filter((c) => !enPreparation(c));
   const cartesEnCours = (data?.en_cuisine ?? []).filter((c) => enPreparation(c));
@@ -178,7 +174,6 @@ export function Grille({ onJetonRefuse }: { onJetonRefuse: () => void }) {
         <Historique
           cartes={data?.pretes ?? []}
           onFermer={() => setHistoriqueOuvert(false)}
-          onReprendre={(id) => reprendre.mutate(id)}
         />
       )}
     </div>
@@ -215,15 +210,13 @@ function Colonne({
   );
 }
 
-/** Panneau Historique : les commandes prêtes (rappelables). */
+/** Panneau Historique : les commandes prêtes (consultation seule). */
 function Historique({
   cartes,
   onFermer,
-  onReprendre,
 }: {
   cartes: CarteKds[];
   onFermer: () => void;
-  onReprendre: (id: string) => void;
 }) {
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-black/40" onClick={onFermer}>
@@ -250,9 +243,6 @@ function Historique({
                     <li key={item.id} className="text-lg font-semibold">{item.quantite} × {item.nom_snapshot}</li>
                   ))}
               </ul>
-              <button type="button" className="btn-blanc w-full min-h-[48px]" onClick={() => onReprendre(carte.id)}>
-                ↩ Reprendre (renvoyer en cuisine)
-              </button>
             </div>
           ))}
         </div>
