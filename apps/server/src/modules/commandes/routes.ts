@@ -92,10 +92,11 @@ export function routesCommandes(app: FastifyInstance): void {
     return vue;
   });
 
-  // Facture (addition) AVANT paiement : imprime côté serveur (ConsolePrinter /
-  // ESC/POS au déploiement), trace l'impression, et renvoie la vue pour que la
-  // caisse imprime aussi via le navigateur (80 mm).
-  app.post('/api/commandes/:id/facture', { preHandler: app.exigePermission('caisse.imprimer_note') }, async (req) => {
+  // Facture (addition) AVANT paiement : imprime côté serveur (ESC/POS) et trace
+  // l'impression. Le serveur ne tire PAS la facture (il la DEMANDE) : c'est
+  // l'encaisseur (caisse.encaisser) qui l'imprime — le serveur, qui n'encaisse
+  // pas, en est exclu.
+  app.post('/api/commandes/:id/facture', { preHandler: app.exigePermission('caisse.encaisser') }, async (req) => {
     const { id } = req.params as { id: string };
     const vue = await chargerCommandeVue(db, id);
     await exigerAccesTable(db, req.session!, vue.table_id);

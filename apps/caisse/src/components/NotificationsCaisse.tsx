@@ -47,6 +47,16 @@ export function NotificationsCaisse() {
     void queryClient.invalidateQueries({ queryKey: ['tables'] });
   };
 
+  // Alarme PERSISTANTE : tant qu'une demande de table (facture / appel serveur)
+  // attend à la caisse, le son se répète jusqu'à ce que le caissier la traite
+  // (« C'est fait » → ouvre la table). S'arrête dès que la file est vide.
+  useEffect(() => {
+    if (appelsCaisse.length === 0) return;
+    void sonAValider.play().catch(() => undefined);
+    const t = setInterval(() => void sonAValider.play().catch(() => undefined), 6000);
+    return () => clearInterval(t);
+  }, [appelsCaisse.length]);
+
   useEffect(() => {
     let socket: WebSocket | null = null;
     let arrete = false;
