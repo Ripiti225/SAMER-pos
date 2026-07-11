@@ -6,6 +6,8 @@ import type { CommandeVue, RapportZ } from '@pos/shared';
  * avec l'implémentation ConsolePrinter.
  */
 export interface PrinterService {
+  /** Facture / addition AVANT paiement (pas de lignes de règlement). */
+  imprimerFacture(commande: CommandeVue): Promise<void>;
   imprimerTicket(commande: CommandeVue): Promise<void>;
   imprimerRapportZ(rapport: RapportZ): Promise<void>;
 }

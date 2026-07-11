@@ -92,6 +92,29 @@ export function routesCommandes(app: FastifyInstance): void {
     return vue;
   });
 
+  // Facture (addition) AVANT paiement : imprime côté serveur (ConsolePrinter /
+  // ESC/POS au déploiement), trace l'impression, et renvoie la vue pour que la
+  // caisse imprime aussi via le navigateur (80 mm).
+  app.post('/api/commandes/:id/facture', { preHandler: app.exigePermission('caisse.imprimer_note') }, async (req) => {
+    const { id } = req.params as { id: string };
+    const vue = await chargerCommandeVue(db, id);
+    await exigerAccesTable(db, req.session!, vue.table_id);
+    if (vue.items.filter((i) => i.statut_cuisine !== 'ANNULE').length === 0) {
+      throw new ErreurMetier('Aucun article à facturer', 400);
+    }
+    await app.imprimante.imprimerFacture(vue);
+    await db.transaction(async (tx) => {
+      await journaliser(tx, {
+        user_id: req.session!.utilisateur_id,
+        action: 'FACTURE_IMPRIMEE',
+        entite: 'commandes',
+        entite_id: id,
+        montant: vue.total,
+      });
+    });
+    return vue;
+  });
+
   // Ajout d'un article ou d'un combo — prix et nom figés immédiatement
   app.post('/api/commandes/:id/items', { preHandler: app.exigePermission('salle.commande') }, async (req) => {
     const { id } = req.params as { id: string };

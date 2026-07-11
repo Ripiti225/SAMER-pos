@@ -7,12 +7,14 @@ import {
   IconLayoutGrid,
   IconList,
   IconPlus,
+  IconPrinter,
   IconReceipt,
   IconSend,
 } from '@tabler/icons-react';
 import type { ArticleVue, CatalogueVue, CommandeItemVue, CommandeVue } from '@pos/shared';
 import { formatFCFA, LIBELLES_STATUTS_COMMANDE, LIBELLES_TYPES_COMMANDE } from '@pos/shared';
 import { api } from '../api';
+import { imprimerFactureNavigateur } from '../facture';
 import { Modale } from '../components/Modale';
 import { ModalePinManager } from '../components/ModalePinManager';
 import { PiluleSync } from '../components/SanteSync';
@@ -79,6 +81,15 @@ export function Commande() {
     },
     onError: surErreur,
   });
+  const imprimerFacture = useMutation({
+    mutationFn: () => api<CommandeVue>(`/api/commandes/${commandeId}/facture`, { method: 'POST', corps: {} }),
+    onSuccess: (vue) => {
+      rafraichir(vue);
+      // Impression navigateur (80 mm) vers l'imprimante par défaut du terminal.
+      imprimerFactureNavigateur(vue, session?.restaurant.nom ?? '');
+    },
+    onError: surErreur,
+  });
   const appliquerRemise = useMutation({
     mutationFn: ({ montant, motif, pin }: { montant: number; motif: string; pin: string }) =>
       api<CommandeVue>(`/api/commandes/${commandeId}/remise`, {
@@ -139,28 +150,28 @@ export function Commande() {
         </div>
       </header>
 
-      {/* Catalogue (gauche) + addition (droite) */}
-      <div className="grid flex-1 grid-cols-[1.15fr_0.85fr] gap-3 overflow-hidden">
-        <div className="flex flex-col overflow-hidden">
-          {/* Catégories en chips horizontales */}
-          <div className="mb-2.5 flex flex-wrap gap-1.5">
-            {categories.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                className={`rounded-[9px] px-4 py-2 text-sm font-medium transition ${
-                  c.id === categorieActive
-                    ? 'bg-marque text-[#412402] shadow-[var(--ombre-marque)]'
-                    : 'border border-bordure bg-surface text-doux hover:bg-marque-tint'
-                }`}
-                onClick={() => setCategorieId(c.id)}
-              >
-                {c.nom}
-              </button>
-            ))}
-          </div>
+      {/* 3 zones : catégories (rail gauche) · produits (centre) · addition (droite) */}
+      <div className="grid flex-1 grid-cols-[150px_1fr_0.72fr] gap-3 overflow-hidden">
+        {/* Rail catégories vertical */}
+        <nav className="flex flex-col gap-1.5 overflow-y-auto pr-1">
+          {categories.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className={`rounded-[9px] px-3 py-3 text-left text-sm font-medium transition ${
+                c.id === categorieActive
+                  ? 'bg-marque text-[#412402] shadow-[var(--ombre-marque)]'
+                  : 'border border-bordure bg-surface text-doux hover:bg-marque-tint'
+              }`}
+              onClick={() => setCategorieId(c.id)}
+            >
+              {c.nom}
+            </button>
+          ))}
+        </nav>
 
-          {/* Grille produits (photo + nom + prix) */}
+        {/* Grille produits (photo + nom + prix) */}
+        <div className="flex flex-col overflow-hidden">
           <div className="grid auto-rows-min grid-cols-3 gap-2.5 overflow-y-auto pr-1 xl:grid-cols-4">
             {combosVisibles.map((combo) => (
               <button
@@ -273,6 +284,14 @@ export function Commande() {
               <span className="text-sm text-doux">Total</span>
               <span className="text-[23px] font-black text-marque-fonce">{formatFCFA(commande.total)}</span>
             </div>
+            <button
+              type="button"
+              className="btn-blanc mb-1.5 w-full py-2.5"
+              disabled={itemsActifs.length === 0 || imprimerFacture.isPending}
+              onClick={() => imprimerFacture.mutate()}
+            >
+              <IconPrinter size={17} /> {imprimerFacture.isPending ? 'Impression…' : 'Imprimer la facture'}
+            </button>
             <button
               type="button"
               className="btn-ok w-full py-3.5"

@@ -39,6 +39,7 @@ export type ActionAudit =
   | 'MODIF_PARAMETRE'
   | 'MODIF_CATALOGUE'
   | 'MODIF_FIDELITE'
+  | 'FACTURE_IMPRIMEE'
   | 'ACCES_PROTEGE_REFUSE';
 
 export interface EntreeAudit {
