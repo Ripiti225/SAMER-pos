@@ -85,6 +85,13 @@
       "when": 1752300000000,
       "tag": "0011_retrait_pointage",
       "breakpoints": false
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1752360000000,
+      "tag": "0012_sessions_persistees",
+      "breakpoints": false
     }
   ]
 }

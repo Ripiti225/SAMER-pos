@@ -252,6 +252,19 @@ export const equipeService = pgTable('equipe_service', {
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex('equipe_service_service_utilisateur_key').on(t.service_id, t.utilisateur_id)]);
 
+// Sessions serveur PERSISTÉES : survivent à un redémarrage du serveur/mini-PC
+// (le magasin les recharge au démarrage). Cookie httpOnly = id de session.
+export const sessions = pgTable('sessions', {
+  id: text('id').primaryKey(),
+  utilisateur_id: uuid('utilisateur_id').notNull().references(() => utilisateurs.id, { onDelete: 'cascade' }),
+  nom_complet: text('nom_complet').notNull(),
+  role_id: uuid('role_id'),
+  role_nom: text('role_nom').notNull(),
+  est_proprietaire: boolean('est_proprietaire').notNull().default(false),
+  est_superviseur: boolean('est_superviseur').notNull().default(false),
+  expire_a: timestamp('expire_a', { withTimezone: true }).notNull(),
+});
+
 // ---------------------------------------------------------------------------
 // 5. Commandes (§5.1) — cœur du sprint 1
 // ---------------------------------------------------------------------------
