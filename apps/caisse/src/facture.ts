@@ -17,12 +17,41 @@ interface InfosResto {
 /** FACTURE = addition avant paiement ; REÇU = ticket acquitté après paiement. */
 export type ModeRecu = 'FACTURE' | 'RECU';
 
-/**
- * Imprime un reçu 80 mm via le navigateur, vers l'imprimante par défaut du
- * terminal. Le document s'imprime LUI-MÊME une fois chargé (logo compris),
- * ce qui est bien plus fiable qu'un print() déclenché depuis la page.
- */
-export function imprimerRecuNavigateur(commande: CommandeVue, resto: InfosResto, mode: ModeRecu): void {
+// Précharge les logos pour qu'ils soient prêts à l'impression (cache navigateur).
+if (typeof window !== 'undefined') {
+  for (const s of ['/logo-samer.png', '/logo-alkayan.png']) {
+    const i = new Image();
+    i.src = s;
+  }
+}
+
+// Feuille de style d'impression : n'affiche QUE le reçu, en 80 mm.
+const CSS_IMPRESSION = `
+  #recu-impression { display: none; }
+  @media print {
+    @page { size: 80mm auto; margin: 0; }
+    html, body { width: 80mm; margin: 0; padding: 0; background: #fff; }
+    body > *:not(#recu-impression) { display: none !important; }
+    #recu-impression {
+      display: block !important;
+      width: 80mm; padding: 4mm 3mm;
+      font-family: 'Courier New', monospace; font-size: 12px; color: #000;
+    }
+    #recu-impression .centre { text-align: center; }
+    #recu-impression .gras { font-weight: bold; }
+    #recu-impression .nom { font-size: 14px; font-weight: bold; }
+    #recu-impression .logo { display: block; margin: 0 auto 4px; max-width: 58mm; max-height: 22mm; object-fit: contain; }
+    #recu-impression .contact { margin: 2px 0; }
+    #recu-impression hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
+    #recu-impression .ligne { display: flex; justify-content: space-between; gap: 6px; margin: 2px 0; }
+    #recu-impression .sous { padding-left: 10px; font-size: 11px; }
+    #recu-impression .petit { font-size: 11px; }
+    #recu-impression .total { font-size: 15px; font-weight: bold; }
+    #recu-impression .pied { margin-top: 8px; text-align: center; font-size: 11px; }
+  }
+`;
+
+function corpsRecu(commande: CommandeVue, resto: InfosResto, mode: ModeRecu): string {
   const items = commande.items.filter((i) => i.statut_cuisine !== 'ANNULE');
   const lignesItems = items
     .map((item) => {
@@ -33,11 +62,7 @@ export function imprimerRecuNavigateur(commande: CommandeVue, resto: InfosResto,
         .filter((o) => o.choix.length > 0)
         .map((o) => `<div class="sous">${echap(o.groupe)} : ${echap(o.choix.join(', '))}</div>`)
         .join('');
-      return `
-        <div class="ligne">
-          <span>${item.quantite}× ${echap(item.nom_snapshot)}</span>
-          <span>${formatFCFA(item.total_ligne)}</span>
-        </div>${supp}${opts}`;
+      return `<div class="ligne"><span>${item.quantite}× ${echap(item.nom_snapshot)}</span><span>${formatFCFA(item.total_ligne)}</span></div>${supp}${opts}`;
     })
     .join('');
 
@@ -51,7 +76,6 @@ export function imprimerRecuNavigateur(commande: CommandeVue, resto: InfosResto,
     commande.fidelite_montant > 0 ? `<div class="ligne petit"><span>Fidélité</span><span>−${formatFCFA(commande.fidelite_montant)}</span></div>` : '',
   ].join('');
 
-  // Reçu acquitté : lignes de règlement (mode + montant).
   const paiements =
     mode === 'RECU' && commande.paiements.length
       ? '<hr>' +
@@ -61,79 +85,60 @@ export function imprimerRecuNavigateur(commande: CommandeVue, resto: InfosResto,
       : '';
 
   const titre = mode === 'RECU' ? 'REÇU' : 'FACTURE';
-  const noteBas =
-    mode === 'RECU'
-      ? 'Payé — merci de votre visite !'
-      : 'Facture non acquittée — à régler en caisse';
-
+  const noteBas = mode === 'RECU' ? 'Payé — merci de votre visite !' : 'Facture non acquittée — à régler en caisse';
   const logo = resto.marque === 'AL_KAYAN' ? '/logo-alkayan.png' : '/logo-samer.png';
   const blocEntete = resto.entete ? `<div class="centre petit contact">${multiligne(resto.entete)}</div>` : '';
   const blocPied = resto.pied ? `<div class="pied">${multiligne(resto.pied)}</div>` : '';
 
-  const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${titre}</title>
-    <style>
-      @page { size: 80mm auto; margin: 0; }
-      * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { width: 80mm; padding: 4mm 3mm; font-family: 'Courier New', monospace; font-size: 12px; color: #000; }
-      .centre { text-align: center; }
-      .gras { font-weight: bold; }
-      .nom { font-size: 14px; font-weight: bold; }
-      .logo { display: block; margin: 0 auto 4px; max-width: 58mm; max-height: 22mm; object-fit: contain; }
-      .contact { margin: 2px 0; }
-      hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
-      .ligne { display: flex; justify-content: space-between; gap: 6px; margin: 2px 0; }
-      .sous { padding-left: 10px; font-size: 11px; }
-      .petit { font-size: 11px; }
-      .total { font-size: 15px; font-weight: bold; }
-      .pied { margin-top: 8px; text-align: center; font-size: 11px; }
-    </style>
-    <script>
-      // Auto-impression une fois la page (et le logo) chargée, puis nettoyage.
-      window.onload = function () {
-        window.focus();
-        window.print();
-        setTimeout(function () {
-          if (window.frameElement && window.frameElement.remove) window.frameElement.remove();
-        }, 2000);
-      };
-    </script></head><body>
-      <img class="logo" src="${logo}" alt="" onerror="this.style.display='none'">
-      <div class="centre nom">${echap(resto.nom)}</div>
-      ${blocEntete}
-      <hr>
-      <div class="centre gras">${titre}</div>
-      <div class="centre petit">${entete} · ${echap(LIBELLES_TYPES_COMMANDE[commande.type])}${commande.partenaire ? ' · ' + echap(commande.partenaire) : ''}</div>
-      <div class="centre petit">${new Date().toLocaleString('fr-FR')}</div>
-      <hr>
-      ${lignesItems}
-      <hr>
-      <div class="ligne petit"><span>Sous-total</span><span>${formatFCFA(commande.sous_total)}</span></div>
-      ${remises}
-      <div class="ligne total"><span>TOTAL</span><span>${formatFCFA(commande.total)}</span></div>
-      ${paiements}
-      <hr>
-      <div class="pied">${noteBas}</div>
-      ${blocPied}
-    </body></html>`;
+  return `
+    <img class="logo" src="${logo}" alt="" onerror="this.style.display='none'">
+    <div class="centre nom">${echap(resto.nom)}</div>
+    ${blocEntete}
+    <hr>
+    <div class="centre gras">${titre}</div>
+    <div class="centre petit">${entete} · ${echap(LIBELLES_TYPES_COMMANDE[commande.type])}${commande.partenaire ? ' · ' + echap(commande.partenaire) : ''}</div>
+    <div class="centre petit">${new Date().toLocaleString('fr-FR')}</div>
+    <hr>
+    ${lignesItems}
+    <hr>
+    <div class="ligne petit"><span>Sous-total</span><span>${formatFCFA(commande.sous_total)}</span></div>
+    ${remises}
+    <div class="ligne total"><span>TOTAL</span><span>${formatFCFA(commande.total)}</span></div>
+    ${paiements}
+    <hr>
+    <div class="pied">${noteBas}</div>
+    ${blocPied}`;
+}
 
-  const iframe = document.createElement('iframe');
-  iframe.setAttribute('aria-hidden', 'true');
-  iframe.style.position = 'fixed';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
-  iframe.style.border = '0';
-  iframe.style.right = '0';
-  iframe.style.bottom = '0';
-  document.body.appendChild(iframe);
+/**
+ * Imprime un reçu 80 mm via le navigateur. On imprime la PAGE elle-même (pas
+ * une iframe cachée, dont le dialogue d'impression ne s'ouvre pas de façon
+ * fiable) : une superposition masque tout sauf le reçu le temps de l'impression.
+ * À appeler dans le geste utilisateur (clic) pour que le dialogue s'ouvre.
+ */
+export function imprimerRecuNavigateur(commande: CommandeVue, resto: InfosResto, mode: ModeRecu): void {
+  document.getElementById('recu-impression')?.remove();
+  document.getElementById('recu-impression-style')?.remove();
 
-  const doc = iframe.contentWindow?.document;
-  if (!doc) {
-    iframe.remove();
-    return;
-  }
-  doc.open();
-  doc.write(html);
-  doc.close(); // déclenche le chargement → window.onload → impression
+  const style = document.createElement('style');
+  style.id = 'recu-impression-style';
+  style.textContent = CSS_IMPRESSION;
+  const div = document.createElement('div');
+  div.id = 'recu-impression';
+  div.innerHTML = corpsRecu(commande, resto, mode);
+  document.body.appendChild(style);
+  document.body.appendChild(div);
+
+  const nettoyer = () => {
+    div.remove();
+    style.remove();
+    window.removeEventListener('afterprint', nettoyer);
+  };
+  window.addEventListener('afterprint', nettoyer);
+  setTimeout(nettoyer, 60_000); // filet si afterprint ne se déclenche pas
+
+  // Laisse le navigateur peindre la superposition avant d'ouvrir le dialogue.
+  window.requestAnimationFrame(() => window.print());
 }
 
 /** Facture (addition) avant paiement. */

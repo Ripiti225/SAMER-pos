@@ -81,13 +81,10 @@ export function Commande() {
     },
     onError: surErreur,
   });
+  // POST serveur = trace l'impression (audit) + ConsolePrinter/ESC/POS futur.
   const imprimerFacture = useMutation({
     mutationFn: () => api<CommandeVue>(`/api/commandes/${commandeId}/facture`, { method: 'POST', corps: {} }),
-    onSuccess: (vue) => {
-      rafraichir(vue);
-      // Impression navigateur (80 mm) vers l'imprimante par défaut du terminal.
-      if (session) imprimerFactureNavigateur(vue, session.restaurant);
-    },
+    onSuccess: (vue) => rafraichir(vue),
     onError: surErreur,
   });
   const appliquerRemise = useMutation({
@@ -287,10 +284,14 @@ export function Commande() {
             <button
               type="button"
               className="btn-blanc mb-1.5 w-full py-2.5"
-              disabled={itemsActifs.length === 0 || imprimerFacture.isPending}
-              onClick={() => imprimerFacture.mutate()}
+              disabled={itemsActifs.length === 0}
+              onClick={() => {
+                // Impression DANS le geste utilisateur (le dialogue s'ouvre).
+                if (session) imprimerFactureNavigateur(commande, session.restaurant);
+                imprimerFacture.mutate(); // audit serveur en parallèle
+              }}
             >
-              <IconPrinter size={17} /> {imprimerFacture.isPending ? 'Impression…' : 'Imprimer la facture'}
+              <IconPrinter size={17} /> Imprimer la facture
             </button>
             <button
               type="button"
