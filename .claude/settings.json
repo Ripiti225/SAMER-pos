@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(artifact-design)",
+      "Skill(artifact-design:*)",
+      "Bash(pnpm -F @pos/caisse build)",
+      "Bash(pnpm -F @pos/serveur build)",
+      "Bash(pnpm -F @pos/kds build)"
+    ]
+  }
+}

@@ -15,5 +15,8 @@
   "packageManager": "pnpm@11.9.0",
   "engines": {
     "node": ">=22"
+  },
+  "dependencies": {
+    "@fontsource-variable/work-sans": "^5.2.8"
   }
 }

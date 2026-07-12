@@ -1,40 +1,51 @@
 /* ===========================================================================
-   THÈME CLAIR PARTAGÉ — caisse / KDS / serveur / client.
-   Direction : clair, chaud, vivant, avec de la profondeur (élévation douce),
-   des coins généreux et un accent de marque affirmé. Rebranding Samer ↔
-   Al Kayan en une variable (data-marque + --marque).
+   THÈME PARTAGÉ « Culinary Commerce » — caisse / KDS / serveur / client.
+   Warm Professional : fond papier chaud, hiérarchie de surfaces par tonalité,
+   élévation douce (ombres ambiantes), coins généreux, typo Work Sans.
+   Rebranding Samer ↔ Al Kayan en une variable (data-marque + --marque).
+   Réf. docs/DESIGN.md.
    =========================================================================== */
 
+@import '@fontsource-variable/work-sans/wght.css';
+
 :root {
-  /* Base claire et chaude — jamais de blanc pur, jamais de sombre */
-  --fond-page: #f5f2ea;
-  --surface-carte: #ffffff;
-  --surface-douce: #faf8f3;
-  --bordure: #ece8df;
-  --texte-fort: #23211d;
-  --texte-doux: #6c6a62;
+  /* --- Fond & surfaces (hiérarchie tonale, jamais de blanc pur en grande masse) */
+  --fond-page: #fff8f2;              /* background / surface */
+  --surface-carte: #ffffff;          /* container-lowest : cartes interactives */
+  --surface-douce: #f9f3ec;          /* container-low : zones secondaires */
+  --surface-moyenne: #f3ede6;        /* container : panneaux, barres latérales */
+  --surface-haute: #ede7e1;          /* container-high : survols, éléments actifs */
+  --surface-tres-haute: #e7e2db;     /* container-highest */
+  --bordure: #e7ddd0;                /* outline-variant, adouci */
+  --bordure-forte: #d7c3ae;          /* outline-variant net */
+  --texte-fort: #1d1b17;             /* on-surface */
+  --texte-doux: #524435;             /* on-surface-variant (chaud, contrasté) */
+  --texte-faible: #857462;           /* outline : métadonnées discrètes */
 
-  /* Accent de marque (défaut : Chez Samer) */
-  --marque: #ef9f27;
-  --marque-foncee: #b06f12;
-  --marque-tint: #fbeed6;
-  --marque-vif: #f7912a;
+  /* --- Accent de marque (défaut : Chez Samer) */
+  --marque: #ef9f27;                 /* primary-container : CTA, états actifs */
+  --marque-foncee: #855400;          /* primary : prix, texte d'emphase */
+  --marque-tint: #fbeed6;            /* fond secondaire tinté */
+  --marque-vif: #f7912a;             /* dégradé haut des CTA */
+  --sur-marque: #ffffff;             /* texte sur aplat de marque */
 
-  /* Couleurs FONCTIONNELLES, identiques pour les deux marques */
+  /* --- Couleurs FONCTIONNELLES, identiques pour les deux marques */
   --ok: #2f8a4c;
   --ok-tint: #e7f3e5;
-  --alerte: #d8542a;
-  --alerte-tint: #fbe9e1;
+  --alerte: #ba1a1a;
+  --alerte-tint: #ffdad6;
   --info: #2f86dc;
   --info-tint: #e6f1fb;
 
-  /* Élévation (ombres douces, chaudes) */
-  --ombre-1: 0 1px 2px rgba(35, 33, 29, 0.05), 0 2px 8px rgba(35, 33, 29, 0.05);
-  --ombre-2: 0 4px 14px rgba(35, 33, 29, 0.09), 0 2px 6px rgba(35, 33, 29, 0.06);
-  --ombre-marque: 0 6px 16px rgba(176, 111, 18, 0.28);
+  /* --- Élévation (ombres ambiantes chaudes, calibrées par niveau) */
+  --ombre-1: 0 1px 2px rgba(29, 27, 23, 0.04), 0 2px 6px rgba(29, 27, 23, 0.05);
+  --ombre-2: 0 4px 10px rgba(29, 27, 23, 0.08), 0 2px 6px rgba(29, 27, 23, 0.05);
+  --ombre-3: 0 16px 40px -12px rgba(101, 62, 0, 0.22), 0 4px 12px rgba(29, 27, 23, 0.08);
+  --ombre-marque: 0 6px 16px rgba(133, 84, 0, 0.28);
 
   --rayon: 16px;
   --rayon-btn: 13px;
+  --rayon-sm: 8px;
 
   --accent: var(--marque);
 }
@@ -49,11 +60,14 @@
 
 html {
   -webkit-tap-highlight-color: transparent;
+  font-family: 'Work Sans Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 body {
   background: var(--fond-page);
   color: var(--texte-fort);
-  font-feature-settings: 'ss01', 'cv01';
+  font-family: inherit;
+  font-synthesis-weight: none;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* ---------------------------------------------------------------------------
@@ -103,7 +117,7 @@ body {
 }
 .btn-accent:hover {
   filter: brightness(1.04);
-  box-shadow: 0 8px 20px rgba(176, 111, 18, 0.34);
+  box-shadow: 0 8px 20px rgba(133, 84, 0, 0.34);
 }
 
 /* Valider / encaisser / prêt */
@@ -120,7 +134,7 @@ body {
 .btn-alerte {
   background: var(--alerte);
   color: #fff;
-  box-shadow: 0 6px 16px rgba(216, 84, 42, 0.24);
+  box-shadow: 0 6px 16px rgba(186, 26, 26, 0.22);
 }
 .btn-alerte:hover {
   filter: brightness(1.04);
