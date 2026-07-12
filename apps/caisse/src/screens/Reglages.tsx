@@ -204,8 +204,17 @@ function Salle() {
   const { data: zones } = useQuery({ queryKey: ['admin', 'salle'], queryFn: () => api<ZoneAdmin[]>('/api/admin/salle') });
   const [nomZone, setNomZone] = useState('');
   const [qrTable, setQrTable] = useState<TableAdmin | null>(null);
+  const [confirmTout, setConfirmTout] = useState(false);
 
-  const invalider = () => void qc.invalidateQueries({ queryKey: ['admin', 'salle'] });
+  const invalider = () => {
+    void qc.invalidateQueries({ queryKey: ['admin', 'salle'] });
+    void qc.invalidateQueries({ queryKey: ['admin', 'table-qr'] });
+  };
+  const regenTout = useMutation({
+    mutationFn: () => api<{ nombre: number }>('/api/admin/tables/regenerer-qr', { method: 'POST' }),
+    onSuccess: (r) => { setConfirmTout(false); setMsg(`${r.nombre} QR régénérés — réimprimez-les, les anciens ne fonctionnent plus.`); invalider(); },
+    onError: (e: Error) => { setConfirmTout(false); setMsg(e.message); },
+  });
   const creerZone = useMutation({ mutationFn: () => api('/api/admin/zones', { method: 'POST', corps: { nom: nomZone } }), onSuccess: () => { setNomZone(''); invalider(); }, onError: (e: Error) => setMsg(e.message) });
   const creerTable = useMutation({ mutationFn: (v: { zone_id: string; numero: string }) => api('/api/admin/tables', { method: 'POST', corps: v }), onSuccess: invalider, onError: (e: Error) => setMsg(e.message) });
   const desactiver = useMutation({ mutationFn: (id: string) => api(`/api/admin/tables/${id}`, { method: 'PATCH', corps: { actif: false } }), onSuccess: invalider, onError: (e: Error) => setMsg(e.message) });
@@ -213,10 +222,27 @@ function Salle() {
 
   return (
     <section>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-xl font-bold">Salle & QR</h2>
-        <a className="btn-blanc" href="/api/admin/tables/qr.pdf" target="_blank" rel="noreferrer">Imprimer les QR</a>
+        <div className="flex flex-wrap gap-2">
+          {confirmTout ? (
+            <>
+              <button type="button" className="btn-accent" disabled={regenTout.isPending} onClick={() => regenTout.mutate()}>
+                {regenTout.isPending ? 'Régénération…' : 'Confirmer : tout régénérer'}
+              </button>
+              <button type="button" className="btn-blanc" disabled={regenTout.isPending} onClick={() => setConfirmTout(false)}>Annuler</button>
+            </>
+          ) : (
+            <button type="button" className="btn-blanc" onClick={() => { setMsg(null); setConfirmTout(true); }}>Régénérer tous les QR</button>
+          )}
+          <a className="btn-blanc" href="/api/admin/tables/qr.pdf" target="_blank" rel="noreferrer">Imprimer les QR</a>
+        </div>
       </div>
+      {confirmTout && (
+        <p className="mb-3 text-sm text-amber-600">
+          Tous les QR de toutes les tables vont changer. Les QR déjà imprimés et collés ne fonctionneront plus : il faudra les réimprimer.
+        </p>
+      )}
       <Message texte={msg} />
       <AdresseReseau />
       <div className="mb-4 flex gap-2">

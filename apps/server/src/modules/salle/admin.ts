@@ -159,6 +159,25 @@ export function routesSalleAdmin(app: FastifyInstance): void {
     return { qr_token: t.qr_token, contenu, image: await qrDataUrl(contenu) };
   });
 
+  // QR : tout régénérer d'un clic (invalide TOUS les anciens QR imprimés).
+  // Une seule transaction + une entrée d'audit récapitulative.
+  app.post('/api/admin/tables/regenerer-qr', { preHandler: garde }, async (req) => {
+    const ts = await db.select().from(tablesSalle).where(eq(tablesSalle.actif, true)).orderBy(asc(tablesSalle.numero));
+    await db.transaction(async (tx) => {
+      for (const t of ts) {
+        await tx.update(tablesSalle).set({ qr_token: genererQrToken() }).where(eq(tablesSalle.id, t.id));
+      }
+      await journaliser(tx, {
+        user_id: req.session!.utilisateur_id,
+        action: 'REGEN_QR',
+        entite: 'tables_salle',
+        meta: { toutes: true, nombre: ts.length },
+      });
+    });
+    app.diffuser('table:changee');
+    return { nombre: ts.length };
+  });
+
   // QR : régénérer (invalide l'ancien)
   app.post('/api/admin/tables/:id/regenerer-qr', { preHandler: garde }, async (req) => {
     const { id } = req.params as { id: string };

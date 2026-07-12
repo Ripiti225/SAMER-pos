@@ -68,6 +68,23 @@ describe('zones & tables (DdT 3)', () => {
     expect(apres!.qr_token).not.toBe(ancien);
   });
 
+  it('régénère TOUS les QR en un clic (chaque jeton change)', async () => {
+    const avant = await db.select().from(tablesSalle);
+    const jetonsAvant = new Map(avant.map((t) => [t.id, t.qr_token]));
+    const rep = await app.inject({ method: 'POST', url: '/api/admin/tables/regenerer-qr', cookies: cookiesProprio });
+    expect(rep.statusCode).toBe(200);
+    expect(rep.json().nombre).toBeGreaterThanOrEqual(avant.length);
+    const apres = await db.select().from(tablesSalle);
+    for (const t of apres) {
+      if (t.actif) expect(t.qr_token).not.toBe(jetonsAvant.get(t.id));
+    }
+  });
+
+  it('un caissier ne peut pas régénérer tous les QR (403)', async () => {
+    const rep = await app.inject({ method: 'POST', url: '/api/admin/tables/regenerer-qr', cookies: cookiesCaissier });
+    expect(rep.statusCode).toBe(403);
+  });
+
   it('imprime le PDF des QR (application/pdf non vide)', async () => {
     const rep = await app.inject({ method: 'GET', url: '/api/admin/tables/qr.pdf', cookies: cookiesProprio });
     expect(rep.statusCode).toBe(200);
