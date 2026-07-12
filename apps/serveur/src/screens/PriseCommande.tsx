@@ -157,14 +157,27 @@ export function PriseCommande({
               key={a.id}
               type="button"
               disabled={!a.disponible}
-              className="carte flex min-h-[88px] flex-col justify-between p-3 text-left hover:border-marque disabled:opacity-45"
+              className="carte flex flex-col overflow-hidden p-0 text-left hover:border-marque disabled:opacity-100"
               onClick={() => clicArticle(a)}
             >
-              <div>
-                <div className="font-semibold">{a.nom}</div>
-                {!a.disponible && <div className="text-xs font-semibold text-alerte">Épuisé</div>}
+              <div className="relative aspect-[4/3] w-full overflow-hidden bg-marque-tint">
+                {a.image_url ? (
+                  <img src={a.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-xl font-black text-marque-fonce/30">
+                    {a.nom.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                {!a.disponible && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-fort/45">
+                    <span className="rounded-full bg-alerte px-2.5 py-0.5 text-xs font-bold text-white">Épuisé</span>
+                  </div>
+                )}
               </div>
-              <div className="font-bold text-marque-fonce">{formatFCFA(a.prix_base)}</div>
+              <div className="flex flex-1 flex-col gap-0.5 p-2">
+                <div className="line-clamp-2 text-sm font-semibold leading-tight">{a.nom}</div>
+                <div className="font-bold text-marque-fonce">{formatFCFA(a.prix_base)}</div>
+              </div>
             </button>
           ))}
         </main>

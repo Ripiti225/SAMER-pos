@@ -19,7 +19,14 @@ export function routesDisponibilite(app: FastifyInstance): void {
   // Grille de tous les articles actifs avec leur disponibilité
   app.get('/api/admin/disponibilite', { preHandler: garde }, async () => {
     const arts = await db
-      .select({ id: articles.id, nom: articles.nom, categorie_id: articles.categorie_id, categorie: categories.nom })
+      .select({
+        id: articles.id,
+        nom: articles.nom,
+        categorie_id: articles.categorie_id,
+        categorie: categories.nom,
+        image_url: articles.image_url,
+        ordre: categories.ordre,
+      })
       .from(articles)
       .leftJoin(categories, eq(categories.id, articles.categorie_id))
       .where(eq(articles.actif, true))

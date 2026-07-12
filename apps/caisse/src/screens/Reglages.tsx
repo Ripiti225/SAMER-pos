@@ -297,30 +297,68 @@ function AjoutTable({ onAjouter }: { onAjouter: (numero: string) => void }) {
 // ---------------------------------------------------------------------------
 // Disponibilité (plats du jour)
 // ---------------------------------------------------------------------------
+interface ArticleDispo { id: string; nom: string; categorie: string | null; image_url: string | null; disponible: boolean }
+
 function Disponibilite() {
   const qc = useQueryClient();
   const { data: arts } = useQuery({
     queryKey: ['admin', 'disponibilite'],
-    queryFn: () => api<{ id: string; nom: string; categorie: string | null; disponible: boolean }[]>('/api/admin/disponibilite'),
+    queryFn: () => api<ArticleDispo[]>('/api/admin/disponibilite'),
   });
   const basculer = useMutation({
     mutationFn: (v: { id: string; disponible: boolean }) => api(`/api/admin/disponibilite/${v.id}`, { method: 'PATCH', corps: { disponible: v.disponible } }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin', 'disponibilite'] }),
   });
+
+  // Regroupé par catégorie (ordre serveur conservé), comme le menu.
+  const parCategorie: { categorie: string; articles: ArticleDispo[] }[] = [];
+  for (const a of arts ?? []) {
+    const nom = a.categorie ?? 'Autres';
+    let groupe = parCategorie.find((g) => g.categorie === nom);
+    if (!groupe) { groupe = { categorie: nom, articles: [] }; parCategorie.push(groupe); }
+    groupe.articles.push(a);
+  }
+
   return (
     <section>
-      <h2 className="mb-4 text-xl font-bold">Plats du jour</h2>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {(arts ?? []).map((a) => (
-          <button
-            key={a.id}
-            type="button"
-            className={`flex items-center justify-between rounded-xl border px-4 py-3 ${a.disponible ? 'border-bordure' : 'border-red-300 bg-red-50'}`}
-            onClick={() => basculer.mutate({ id: a.id, disponible: !a.disponible })}
-          >
-            <span><span className="font-semibold">{a.nom}</span> <span className="text-sm text-doux">{a.categorie}</span></span>
-            <span className={a.disponible ? 'text-emerald-700 font-bold' : 'text-red-700 font-bold'}>{a.disponible ? 'Disponible' : 'Épuisé'}</span>
-          </button>
+      <h2 className="mb-1 text-xl font-bold">Plats du jour</h2>
+      <p className="mb-4 text-sm text-doux">Touchez un plat pour le marquer épuisé ou de nouveau disponible.</p>
+      <div className="space-y-6">
+        {parCategorie.map((g) => (
+          <div key={g.categorie}>
+            <h3 className="mb-2 font-bold text-marque-fonce">{g.categorie}</h3>
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
+              {g.articles.map((a) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  className={`carte relative flex flex-col overflow-hidden p-0 text-left transition ${a.disponible ? '' : 'opacity-60'}`}
+                  onClick={() => basculer.mutate({ id: a.id, disponible: !a.disponible })}
+                >
+                  <div className="relative aspect-[4/3] w-full overflow-hidden bg-marque-tint">
+                    {a.image_url ? (
+                      <img src={a.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xl font-black text-marque-fonce/30">
+                        {a.nom.slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                    {!a.disponible && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-fort/45">
+                        <span className="rounded-full bg-alerte px-2.5 py-0.5 text-xs font-bold text-white">Épuisé</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-1 flex-col gap-0.5 p-2">
+                    <div className="line-clamp-2 text-sm font-semibold leading-tight">{a.nom}</div>
+                    <div className={`text-xs font-bold ${a.disponible ? 'text-emerald-700' : 'text-red-700'}`}>
+                      {a.disponible ? 'Disponible' : 'Épuisé'}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
     </section>
