@@ -1,6 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { IconArrowLeft, IconFlagCheck, IconLayoutGrid, IconList, IconPlus, IconSettings } from '@tabler/icons-react';
+import {
+  IconArrowLeft,
+  IconCashRegister,
+  IconChartBar,
+  IconCircleCheck,
+  IconCirclePlus,
+  IconHistory,
+  IconLayoutGrid,
+  IconLock,
+  IconLogout,
+  IconPrinter,
+  IconSettings,
+  IconToolsKitchen2,
+  IconWifi,
+} from '@tabler/icons-react';
 import type { CommandeVue, TableVue } from '@pos/shared';
 import { PARTENAIRES, PERMISSIONS_ADMIN } from '@pos/shared';
 import { api } from '../api';
@@ -9,23 +23,28 @@ import { useNbAdditionsEnAttente } from '../components/BandeauAdditions';
 import { PiluleSync } from '../components/SanteSync';
 import { useCaisse } from '../stores/session';
 
-/** Accueil caissier : exactement 4 boutons (§15). */
+function initiales(nom: string): string {
+  return nom.split(/\s+/).filter(Boolean).slice(0, 2).map((m) => m[0]!.toUpperCase()).join('');
+}
+
+/** Accueil caissier : exactement 4 boutons (§15), en grille bento. */
 export function Accueil() {
   const { session, aller, poserSession, afficherToast } = useCaisse();
   const [choixType, setChoixType] = useState(false);
   const [choixTable, setChoixTable] = useState(false);
   const [choixLivraison, setChoixLivraison] = useState(false);
-  // Correction 2 : compteur d'additions en attente, visible en permanence
   const nbAdditions = useNbAdditionsEnAttente();
+  const horloge = useHorloge();
 
-  // Boutons pilotés par les permissions (§ rôles distincts) : un serveur ne voit
-  // que la prise de commande et les tables ; jamais Mes ventes ni la clôture.
   const perms = session?.permissions ?? [];
   const peutCommander = perms.includes('salle.commande');
   const peutTables = perms.includes('salle.commande') || perms.includes('salle.voir_toutes_tables');
   const peutMesVentes = perms.includes('caisse.encaisser') || perms.includes('rapports.x');
   const peutCloturer = perms.includes('caisse.cloturer');
   const estSuperviseur = !!session && (session.utilisateur.est_proprietaire || session.utilisateur.est_superviseur);
+  const estAdmin = !!session && PERMISSIONS_ADMIN.some((p) => session.permissions.includes(p));
+  const prenom = session?.utilisateur.nom_complet.split(/\s+/)[0] ?? '';
+  const roleLabel = session?.utilisateur.role_nom ?? session?.utilisateur.role ?? '';
 
   const { data: tables } = useQuery({
     queryKey: ['tables'],
@@ -53,84 +72,125 @@ export function Accueil() {
   };
 
   return (
-    <div className="flex min-h-full flex-col p-6">
-      <header className="mb-8 flex items-center justify-between">
-        <div>
-          <div className="text-2xl font-black text-marque-fonce">{session?.restaurant.nom}</div>
-          <div className="text-sm text-doux">{session?.utilisateur.nom_complet}</div>
+    <div className="flex min-h-full flex-col bg-fond">
+      {/* ---------- Barre de navigation ---------- */}
+      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-bordure bg-surface px-4 shadow-e1 sm:px-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-marque text-sur-marque">
+            <IconToolsKitchen2 size={22} />
+          </div>
+          <span className="text-lg font-bold text-marque-fonce sm:text-xl">{session?.restaurant.nom}</span>
         </div>
-        <div className="ml-auto flex items-center gap-4">
+
+        <div className="flex items-center gap-2 sm:gap-3">
           <PiluleSync />
           {estSuperviseur && (
-            <button type="button" className="btn-blanc flex items-center gap-2" onClick={() => aller('supervision')}>
-              <IconArrowLeft size={20} />
+            <button type="button" className="btn-blanc hidden items-center gap-2 sm:flex" onClick={() => aller('supervision')}>
+              <IconArrowLeft size={18} />
               Supervision
             </button>
           )}
-          {session && PERMISSIONS_ADMIN.some((p) => session.permissions.includes(p)) && (
+          {estAdmin && (
             <button type="button" className="btn-blanc flex items-center gap-2" onClick={() => aller('reglages')}>
-              <IconSettings size={20} />
-              Réglages
+              <IconSettings size={18} />
+              <span className="hidden sm:inline">Réglages</span>
             </button>
           )}
-          <button type="button" className="btn-blanc" onClick={seDeconnecter}>
-            Se déconnecter
+          <div className="mx-1 hidden text-right sm:block">
+            <div className="text-sm font-bold leading-tight text-fort">{session?.utilisateur.nom_complet}</div>
+            <div className="text-[10px] uppercase tracking-wider text-doux">{roleLabel}</div>
+          </div>
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-marque-tint text-sm font-bold text-marque-fonce">
+            {initiales(session?.utilisateur.nom_complet ?? '')}
+          </div>
+          <button
+            type="button"
+            onClick={seDeconnecter}
+            className="flex items-center gap-2 rounded-[13px] bg-alerte/10 px-3 py-2 font-semibold text-alerte transition hover:bg-alerte/20 sm:px-4"
+          >
+            <IconLogout size={18} />
+            <span className="hidden md:inline">Déconnexion</span>
           </button>
         </div>
       </header>
 
-      <div className="mx-auto grid w-full max-w-3xl flex-1 grid-cols-1 content-center gap-5 sm:grid-cols-2">
-        {peutCommander && (
-          <button
-            type="button"
-            className="btn-accent flex-col items-start gap-1 rounded-[var(--rayon)] px-7 py-10 text-left"
-            onClick={() => setChoixType(true)}
-          >
-            <IconPlus size={26} />
-            <span className="text-2xl font-black">Nouvelle commande</span>
-            <span className="text-sm font-medium opacity-90">Sur place · à emporter · livraison</span>
-          </button>
-        )}
-        {peutTables && (
-          <button
-            type="button"
-            className="carte relative flex flex-col items-start gap-1 px-7 py-10 text-left"
-            onClick={() => aller('tables')}
-          >
-            <IconLayoutGrid size={26} className="text-marque-fonce" />
-            <span className="text-2xl font-black">Tables</span>
-            <span className="text-sm text-doux">Plan de salle & additions</span>
-            {nbAdditions > 0 && (
-              <span className="absolute right-4 top-4 flex min-h-[36px] min-w-[36px] items-center justify-center rounded-full bg-info px-2 text-lg font-black text-white shadow-[var(--ombre-1)]">
-                {nbAdditions}
-              </span>
-            )}
-          </button>
-        )}
-        {peutMesVentes && (
-          <button
-            type="button"
-            className="carte flex flex-col items-start gap-1 px-7 py-10 text-left"
-            onClick={() => aller('mes-ventes')}
-          >
-            <IconList size={26} className="text-marque-fonce" />
-            <span className="text-2xl font-black">Mes ventes</span>
-            <span className="text-sm text-doux">Rapports & suivi du service</span>
-          </button>
-        )}
-        {peutCloturer && (
-          <button
-            type="button"
-            className="btn-alerte flex-col items-start gap-1 rounded-[var(--rayon)] px-7 py-10 text-left"
-            onClick={() => aller('cloture')}
-          >
-            <IconFlagCheck size={26} />
-            <span className="text-2xl font-black">J’ai fini</span>
-            <span className="text-sm font-medium opacity-90">Clôture & rapport Z</span>
-          </button>
-        )}
-      </div>
+      {/* ---------- Canvas ---------- */}
+      <main className="relative flex flex-1 flex-col items-center justify-center overflow-hidden p-6">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-marque/5 blur-3xl" />
+          <div className="absolute -bottom-24 -left-24 h-96 w-96 rounded-full bg-marque-tint/40 blur-3xl" />
+        </div>
 
+        <div className="z-10 w-full max-w-5xl">
+          <div className="mb-10 text-center">
+            <h2 className="text-4xl font-bold tracking-tight text-fort sm:text-5xl">Bonjour, {prenom}</h2>
+            <p className="mt-2 text-lg text-doux">Que souhaitez-vous faire ?</p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            {peutCommander && (
+              <CarteAction
+                variante="primaire"
+                titre="Nouvelle commande"
+                sousTitre="Sur place · à emporter · livraison"
+                icone={<IconCashRegister size={34} />}
+                filigrane={<IconCirclePlus size={140} />}
+                onClick={() => setChoixType(true)}
+              />
+            )}
+            {peutTables && (
+              <CarteAction
+                variante="claire"
+                titre="Tables"
+                sousTitre="Plan de salle & additions"
+                icone={<IconLayoutGrid size={34} className="text-marque-fonce" />}
+                filigrane={<IconLayoutGrid size={140} />}
+                badge={nbAdditions > 0 ? nbAdditions : undefined}
+                onClick={() => aller('tables')}
+              />
+            )}
+            {peutMesVentes && (
+              <CarteAction
+                variante="claire"
+                titre="Mes ventes"
+                sousTitre="Rapports & suivi du service"
+                icone={<IconHistory size={34} className="text-marque-fonce" />}
+                filigrane={<IconChartBar size={140} />}
+                onClick={() => aller('mes-ventes')}
+              />
+            )}
+            {peutCloturer && (
+              <CarteAction
+                variante="sombre"
+                titre="J’ai fini"
+                sousTitre="Clôture & rapport Z"
+                icone={<IconLock size={34} />}
+                filigrane={<IconCircleCheck size={140} />}
+                onClick={() => aller('cloture')}
+              />
+            )}
+          </div>
+        </div>
+      </main>
+
+      {/* ---------- Pied contextuel ---------- */}
+      <footer className="flex h-14 items-center justify-between border-t border-bordure bg-surface-douce px-4 text-doux sm:px-6">
+        <div className="flex items-center gap-5">
+          <span className="flex items-center gap-2 text-xs font-medium">
+            <IconWifi size={16} /> Réseau local
+          </span>
+          <span className="hidden items-center gap-2 text-xs font-medium sm:flex">
+            <IconPrinter size={16} /> Imprimante configurée dans Réglages
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-base font-bold text-marque-fonce tabular-nums">{horloge.heure}</span>
+          <span className="h-4 w-px bg-bordure" />
+          <span className="text-xs font-medium capitalize">{horloge.date}</span>
+        </div>
+      </footer>
+
+      {/* ---------- Modals (inchangés) ---------- */}
       {choixType && (
         <Modale titre="Type de commande" onFermer={() => setChoixType(false)} enfants={
           <div className="grid gap-3">
@@ -181,4 +241,85 @@ export function Accueil() {
       )}
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Carte d'action bento (les 4 tuiles de l'accueil)
+// ---------------------------------------------------------------------------
+type Variante = 'primaire' | 'claire' | 'sombre';
+
+function CarteAction({
+  variante,
+  titre,
+  sousTitre,
+  icone,
+  filigrane,
+  badge,
+  onClick,
+}: {
+  variante: Variante;
+  titre: string;
+  sousTitre: string;
+  icone: React.ReactNode;
+  filigrane: React.ReactNode;
+  badge?: number;
+  onClick: () => void;
+}) {
+  const styles: Record<Variante, { carte: string; carreIcone: string; filigrane: string; sousTitre: string }> = {
+    primaire: {
+      carte: 'bg-marque text-sur-marque shadow-e2',
+      carreIcone: 'bg-white/20 text-sur-marque',
+      filigrane: 'text-white/20',
+      sousTitre: 'text-white/85',
+    },
+    claire: {
+      carte: 'bg-surface text-fort border border-bordure shadow-e1 hover:shadow-e2 hover:bg-surface-douce',
+      carreIcone: 'bg-marque-tint text-marque-fonce',
+      filigrane: 'text-marque/10',
+      sousTitre: 'text-doux',
+    },
+    sombre: {
+      carte: 'bg-fort text-fond shadow-e2 hover:opacity-95',
+      carreIcone: 'bg-white/10 text-fond',
+      filigrane: 'text-white/10',
+      sousTitre: 'text-fond/60',
+    },
+  };
+  const s = styles[variante];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group relative flex min-h-[200px] flex-col items-start justify-between overflow-hidden rounded-2xl p-7 text-left transition active:translate-y-px ${s.carte}`}
+    >
+      <div className={`pointer-events-none absolute -right-4 -top-4 transition-transform duration-300 group-hover:scale-110 ${s.filigrane}`}>
+        {filigrane}
+      </div>
+      {badge !== undefined && (
+        <span className="absolute right-5 top-5 flex min-h-[34px] min-w-[34px] items-center justify-center rounded-full bg-info px-2 text-base font-bold text-white shadow-e1">
+          {badge}
+        </span>
+      )}
+      <div className={`flex h-14 w-14 items-center justify-center rounded-[13px] ${s.carreIcone}`}>{icone}</div>
+      <div className="relative">
+        <h3 className="text-2xl font-bold">{titre}</h3>
+        <p className={`mt-1 text-sm font-medium ${s.sousTitre}`}>{sousTitre}</p>
+      </div>
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Horloge live (pied de page)
+// ---------------------------------------------------------------------------
+function useHorloge() {
+  const [maintenant, setMaintenant] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setMaintenant(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  return {
+    heure: maintenant.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+    date: maintenant.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' }),
+  };
 }
