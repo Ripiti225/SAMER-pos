@@ -71,9 +71,10 @@ export async function seed(): Promise<void> {
     { cle: 'fidelite_points_par_tranche', valeur: { tranche_fcfa: 1000, points: 1 } },
     { cle: 'fidelite_valeur_point_fcfa', valeur: 10 },
     { cle: 'fidelite_seuil_utilisation', valeur: 50 },
-    // Sprint 4 C : QR de table — adresse web de l'APP CLIENT (port 5176 en dev,
-    // PAS la caisse 5173). En prod : l'URL réelle du menu client.
-    { cle: 'url_base_client', valeur: 'http://localhost:5176' },
+    // Sprint 4 C : QR de table — adresse web de l'APP CLIENT (port 5176).
+    // Vide = le serveur détecte l'IP LAN automatiquement (joignable depuis un
+    // téléphone). On ne renseigne ici que pour figer un domaine/IP en prod.
+    { cle: 'url_base_client', valeur: '' },
     // Facture : contact sous le logo + message de pied (éditables dans Réglages).
     { cle: 'ticket_entete', valeur: 'Angré 7e Tranche, Abidjan' },
     { cle: 'ticket_pied', valeur: 'Merci de votre visite — à bientôt chez Samer !' },

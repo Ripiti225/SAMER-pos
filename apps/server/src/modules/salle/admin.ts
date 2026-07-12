@@ -16,12 +16,23 @@ import { db } from '../../db/client.js';
 import { commandes, parametresLocaux, restaurant, tablesSalle, zones } from '../../db/schema/index.js';
 import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
+import { adresseReseauLocale, PORT_CLIENT_DEFAUT, resoudreBaseClient } from '../../lib/reseau.js';
 import { journaliser } from '../audit/audit.js';
 import { genererQrToken, pdfQrTables, qrDataUrl, urlQr } from './qr.js';
 
-async function baseClient(): Promise<string> {
+/** Valeur brute du paramètre `url_base_client` (vide si non défini). */
+async function baseClientConfiguree(): Promise<string> {
   const [p] = await db.select().from(parametresLocaux).where(eq(parametresLocaux.cle, 'url_base_client'));
   return typeof p?.valeur === 'string' ? p.valeur : '';
+}
+
+/**
+ * Adresse réellement encodée dans les QR : le paramètre configuré, ou l'IP LAN
+ * détectée si le paramètre est vide/localhost (un `localhost` sur un QR n'est
+ * pas joignable depuis un téléphone).
+ */
+async function baseClient(): Promise<string> {
+  return resoudreBaseClient(await baseClientConfiguree());
 }
 
 /** true si la table porte une commande non terminée. */
@@ -36,6 +47,19 @@ async function tableOccupee(tableId: string): Promise<boolean> {
 
 export function routesSalleAdmin(app: FastifyInstance): void {
   const garde = app.exigePermission('reglages.salle');
+
+  // Adresse réseau des QR : IP LAN détectée + adresse effectivement encodée,
+  // pour que Réglages montre où pointe un QR et propose de figer cette adresse.
+  app.get('/api/admin/reseau', { preHandler: garde }, async () => {
+    const configuree = await baseClientConfiguree();
+    const ip = adresseReseauLocale();
+    return {
+      ip_detectee: ip,
+      adresse_detectee: ip ? `http://${ip}:${PORT_CLIENT_DEFAUT}` : null,
+      adresse_configuree: configuree,
+      base_effective: resoudreBaseClient(configuree),
+    };
+  });
 
   // Plan : zones + tables
   app.get('/api/admin/salle', { preHandler: garde }, async () => {

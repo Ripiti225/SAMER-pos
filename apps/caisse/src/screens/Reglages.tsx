@@ -218,6 +218,7 @@ function Salle() {
         <a className="btn-blanc" href="/api/admin/tables/qr.pdf" target="_blank" rel="noreferrer">Imprimer les QR</a>
       </div>
       <Message texte={msg} />
+      <AdresseReseau />
       <div className="mb-4 flex gap-2">
         <input className="champ" placeholder="Nouvelle zone" value={nomZone} onChange={(e) => setNomZone(e.target.value)} />
         <button type="button" className="btn-accent" disabled={!nomZone} onClick={() => creerZone.mutate()}>Ajouter la zone</button>
@@ -247,6 +248,40 @@ function Salle() {
       </div>
       {qrTable && <QrModale table={qrTable} onFermer={() => setQrTable(null)} onRegenere={invalider} />}
     </section>
+  );
+}
+
+/**
+ * Bandeau : adresse réseau que les QR encodent réellement. Un téléphone doit
+ * pouvoir l'atteindre sur le WiFi du restaurant — jamais `localhost`. L'IP LAN
+ * est détectée automatiquement ; on prévient si aucun réseau n'est joignable.
+ */
+interface ReseauVue { ip_detectee: string | null; adresse_detectee: string | null; adresse_configuree: string; base_effective: string }
+function AdresseReseau() {
+  const { data } = useQuery({ queryKey: ['admin', 'reseau'], queryFn: () => api<ReseauVue>('/api/admin/reseau') });
+  if (!data) return null;
+  const local = /\/\/(localhost|127\.0\.0\.1)/.test(data.base_effective);
+
+  if (local || !data.ip_detectee) {
+    return (
+      <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+        <div className="font-semibold text-amber-500">Les QR ne sont pas encore joignables depuis un téléphone</div>
+        <p className="mt-1 text-doux">
+          {data.ip_detectee
+            ? <>Ce poste est sur le réseau <b>{data.ip_detectee}</b>, mais l’adresse configurée reste locale. Renseignez « Adresse web des QR clients » dans <b>Paramètres</b> avec <b>{data.adresse_detectee}</b>.</>
+            : <>Aucun réseau local détecté : branchez le serveur au WiFi/réseau du restaurant pour que les QR fonctionnent sur les téléphones.</>}
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="mb-4 rounded-xl border border-marque-fonce/40 bg-marque-fonce/10 px-4 py-3 text-sm">
+      <div className="font-semibold text-marque-fonce">QR joignables sur le réseau local</div>
+      <p className="mt-1 text-doux">
+        Adresse encodée : <b className="break-all">{data.base_effective}</b>. Un téléphone connecté au même WiFi que le restaurant l’ouvrira en scannant le QR.
+      </p>
+      <p className="mt-1 text-xs text-doux">Astuce : pour que les QR imprimés restent valables, réservez une IP fixe pour ce poste sur la box (sinon l’adresse peut changer).</p>
+    </div>
   );
 }
 
