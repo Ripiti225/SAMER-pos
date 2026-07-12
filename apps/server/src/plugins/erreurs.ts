@@ -14,6 +14,14 @@ export function enregistrerGestionErreurs(app: FastifyInstance): void {
     if ((erreur as { code?: string }).code === '23505') {
       return reply.status(409).send({ erreur: 'Cette opération entre en conflit avec un enregistrement existant' });
     }
+    // Violation de clé étrangère (23503) : le plus souvent une référence devenue
+    // invalide — par ex. une action auditée par une session dont le compte a été
+    // supprimé/réinitialisé. On log et on demande de se reconnecter plutôt que
+    // d'afficher un « erreur interne » opaque.
+    if ((erreur as { code?: string }).code === '23503') {
+      app.log.error(erreur);
+      return reply.status(409).send({ erreur: 'Reconnectez-vous, puis réessayez cette action' });
+    }
     app.log.error(erreur);
     return reply.status(500).send({ erreur: 'Une erreur interne est survenue, réessayez' });
   });

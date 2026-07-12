@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { eq, gt, lt } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { db } from '../db/client.js';
-import { sessions as tableSessions } from '../db/schema/index.js';
+import { sessions as tableSessions, utilisateurs } from '../db/schema/index.js';
 import { ErreurMetier } from '../lib/erreurs.js';
 import { permissionsDuRole } from '../modules/roles/service.js';
 
@@ -15,7 +15,15 @@ export interface SessionUtilisateur {
   est_proprietaire: boolean;
   est_superviseur: boolean;
   expire_a: number;
+  /** Cache mémoire : l'utilisateur a été confirmé présent+actif jusqu'à cet instant. */
+  verifie_jusqua?: number;
 }
+
+// Re-vérification (base) de l'existence de l'utilisateur d'une session, au plus
+// une fois par intervalle : une session dont le compte a été supprimé (reseed)
+// ou désactivé est coupée proprement (401) au lieu de faire planter la 1re
+// écriture auditée (violation de clé étrangère → 500).
+const REVERIF_UTILISATEUR_MS = 30 * 1000;
 
 const DUREE_SESSION_MS = 12 * 60 * 60 * 1000; // 12 h (le service peut durer la journée)
 export const NOM_COOKIE = 'pos_session';
@@ -154,6 +162,27 @@ export async function aPermission(session: SessionUtilisateur, cle: string): Pro
   return perms.has(cle);
 }
 
+/**
+ * true si l'utilisateur de la session existe toujours et reste actif. Résultat
+ * mis en cache ~30 s sur l'objet session pour ne pas taper la base à chaque
+ * requête. Une session orpheline (compte supprimé au reseed, ou désactivé) est
+ * détruite → l'appelant renvoie 401 « Connectez-vous » et l'écran repasse au
+ * login, au lieu d'un 500 sur la première action auditée.
+ */
+async function utilisateurEncoreValide(app: FastifyInstance, session: SessionUtilisateur): Promise<boolean> {
+  if (session.verifie_jusqua && Date.now() < session.verifie_jusqua) return true;
+  const [u] = await db
+    .select({ id: utilisateurs.id, actif: utilisateurs.actif })
+    .from(utilisateurs)
+    .where(eq(utilisateurs.id, session.utilisateur_id));
+  if (!u || !u.actif) {
+    app.sessions.detruire(session.id);
+    return false;
+  }
+  session.verifie_jusqua = Date.now() + REVERIF_UTILISATEUR_MS;
+  return true;
+}
+
 declare module 'fastify' {
   interface FastifyInstance {
     sessions: MagasinSessions;
@@ -176,11 +205,19 @@ export function enregistrerSessions(app: FastifyInstance): void {
 
   app.decorate('exigerAuth', async (req: FastifyRequest) => {
     if (!req.session) throw new ErreurMetier('Connectez-vous pour continuer', 401);
+    if (!(await utilisateurEncoreValide(app, req.session))) {
+      req.session = null;
+      throw new ErreurMetier('Votre session a expiré, reconnectez-vous', 401);
+    }
   });
 
   app.decorate('exigePermission', (cle: string) => {
     return async (req: FastifyRequest) => {
       if (!req.session) throw new ErreurMetier('Connectez-vous pour continuer', 401);
+      if (!(await utilisateurEncoreValide(app, req.session))) {
+        req.session = null;
+        throw new ErreurMetier('Votre session a expiré, reconnectez-vous', 401);
+      }
       if (!(await aPermission(req.session, cle))) {
         throw new ErreurMetier('Vous n’avez pas le droit d’effectuer cette action', 403);
       }

@@ -7,8 +7,8 @@ import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { construireApp } from '../src/app.js';
 import { db, fermerDb } from '../src/db/client.js';
-import { tablesSalle } from '../src/db/schema/index.js';
-import { PIN_CAISSIER, PIN_PROPRIO, resetDonnees, seConnecter, type Donnees } from './aide.js';
+import { tablesSalle, utilisateurs } from '../src/db/schema/index.js';
+import { PIN_CAISSIER, PIN_MANAGER, PIN_PROPRIO, resetDonnees, seConnecter, type Donnees } from './aide.js';
 
 let app: FastifyInstance;
 let donnees: Donnees;
@@ -74,6 +74,25 @@ describe('zones & tables (DdT 3)', () => {
     expect(rep.headers['content-type']).toContain('application/pdf');
     expect(rep.rawPayload.length).toBeGreaterThan(1000);
     expect(rep.rawPayload.subarray(0, 4).toString()).toBe('%PDF');
+  });
+});
+
+describe('session dont le compte a disparu (reseed / désactivation)', () => {
+  // Régression : une action AUDITÉE (régénérer un QR écrit dans audit_log, dont
+  // user_id référence utilisateurs) menée par une session dont le compte n'existe
+  // plus faisait planter l'INSERT audit (violation de clé étrangère) → 500
+  // « erreur interne ». Elle doit désormais renvoyer 401 (retour au login).
+  it('renvoie 401 (et non 500) quand l’utilisateur de la session est désactivé', async () => {
+    const cookies = await seConnecter(app, donnees.manager_id, PIN_MANAGER);
+    // Le compte disparaît côté base APRÈS l'ouverture de session.
+    await db.update(utilisateurs).set({ actif: false }).where(eq(utilisateurs.id, donnees.manager_id));
+    try {
+      const [t] = await db.select().from(tablesSalle).where(eq(tablesSalle.numero, 'E1'));
+      const rep = await app.inject({ method: 'POST', url: `/api/admin/tables/${t!.id}/regenerer-qr`, cookies });
+      expect(rep.statusCode).toBe(401);
+    } finally {
+      await db.update(utilisateurs).set({ actif: true }).where(eq(utilisateurs.id, donnees.manager_id));
+    }
   });
 });
 
