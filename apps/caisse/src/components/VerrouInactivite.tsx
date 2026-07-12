@@ -21,6 +21,8 @@ export function VerrouInactivite() {
 
   useEffect(() => {
     if (!session) return;
+    // Délai ≤ 0 → verrouillage automatique DÉSACTIVÉ (déconnexion manuelle seule).
+    if (delaiMs <= 0) return;
     const relancer = () => {
       if (minuteur.current) clearTimeout(minuteur.current);
       minuteur.current = setTimeout(() => verrouiller(true), delaiMs);

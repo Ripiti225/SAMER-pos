@@ -170,8 +170,8 @@ export interface ParametreEditable {
 }
 
 export const PARAMETRES_EDITABLES: ParametreEditable[] = [
-  { cle: 'verrou_inactivite_caisse_secondes', libelle: 'Verrouillage caisse après inactivité', type: 'entier', unite: 's', defaut: 600 },
-  { cle: 'verrouillage_inactivite_serveur_secondes', libelle: 'Verrouillage tablette serveur', type: 'entier', unite: 's', defaut: 120 },
+  { cle: 'verrou_inactivite_caisse_secondes', libelle: 'Verrouillage caisse après inactivité (0 = désactivé)', type: 'entier', unite: 's', defaut: 0 },
+  { cle: 'verrouillage_inactivite_serveur_secondes', libelle: 'Verrouillage tablette serveur (0 = désactivé)', type: 'entier', unite: 's', defaut: 0 },
   { cle: 'seuil_alerte_ecart_caisse', libelle: "Seuil d'alerte écart de caisse", type: 'entier', unite: 'FCFA', defaut: 2000 },
   { cle: 'kds_seuil_vert_minutes', libelle: 'Chrono KDS — seuil vert', type: 'entier', unite: 'min', defaut: 5 },
   { cle: 'kds_seuil_orange_minutes', libelle: 'Chrono KDS — seuil orange', type: 'entier', unite: 'min', defaut: 10 },

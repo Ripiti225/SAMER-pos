@@ -56,10 +56,11 @@ export async function seed(): Promise<void> {
 
   await db.insert(parametresLocaux).values([
     { cle: 'seuil_alerte_ecart_caisse', valeur: 2000 },
-    // Correction 1 (retour terrain) : 10 min — un verrou trop court bloque le travail
-    { cle: 'verrou_inactivite_caisse_secondes', valeur: 600 },
-    // Sprint 2 : les serveurs bougent, verrouillage plus long sur tablette
-    { cle: 'verrouillage_inactivite_serveur_secondes', valeur: 120 },
+    // Verrouillage automatique après inactivité DÉSACTIVÉ (0) : un compte n'est
+    // déconnecté que par le bouton « Se déconnecter ». Remettre une valeur > 0
+    // dans Réglages pour réactiver le verrou par PIN.
+    { cle: 'verrou_inactivite_caisse_secondes', valeur: 0 },
+    { cle: 'verrouillage_inactivite_serveur_secondes', valeur: 0 },
     // Sprint 2 : seuils du chronomètre KDS (minutes)
     { cle: 'kds_seuil_orange_minutes', valeur: 10 },
     { cle: 'kds_seuil_rouge_minutes', valeur: 20 },
