@@ -39,9 +39,16 @@ bien notés). Non détecté automatiquement le 2026-07-12.
 3. Cloudflare **scanne et importe** automatiquement tes DNS. **Compare** la liste
    proposée avec le tableau ci-dessus : ajoute ce qui manque, corrige, et passe
    **tout en « DNS only » (gris)**.
-4. Cloudflare t'affiche **2 nameservers** (ex. `xxx.ns.cloudflare.com`). Va chez
-   ton registrar/hébergeur (celui qui gère `chezsamer.com`, actuellement
-   `dnshostservices.com`) et **remplace les nameservers** par ceux de Cloudflare.
+4. Cloudflare t'affiche **2 nameservers** (ex. `xxx.ns.cloudflare.com`). Le
+   domaine est enregistré chez **GoDaddy** → c'est **là** qu'on les change
+   (l'hébergement site+email reste chez LWS, il ne bouge pas) :
+   - Connecte-toi sur **godaddy.com** → **My Products** → **Domains** →
+     `chezsamer.com` → **Domain Settings**.
+   - Section **Nameservers** → **Change** → **« I'll use my own nameservers »**
+     (ou « Enter my own nameservers / Advanced »).
+   - **Supprime** les 4 `NS?.DNSHOSTSERVICES.COM` et **saisis les 2 nameservers
+     Cloudflare**. Enregistre.
+   - Propagation : souvent < 1 h, parfois jusqu'à 48 h.
 5. Attends l'activation (email de Cloudflare « chezsamer.com is now active »,
    de quelques minutes à quelques heures).
 6. **Vérifie que l'email marche toujours** : envoie/reçois un mail, ouvre le
