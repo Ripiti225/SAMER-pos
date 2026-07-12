@@ -1,0 +1,16 @@
+# Cloudflare Tunnel — app CLIENT (menu QR) joignable en 4G, sans WiFi public.
+# Copier ce fichier vers ~/.cloudflared/config.yml puis remplacer :
+#   <TUNNEL_ID>       par l'ID affiché à la création du tunnel
+#   table.MON-DOMAINE par le sous-domaine choisi (celui de la route DNS)
+#
+# On ne publie QUE le port 4176 (vite preview de l'app client compilée), qui ne
+# relaie que /api/client — la caisse/admin/auth du serveur (3001) reste privée.
+
+tunnel: <TUNNEL_ID>
+credentials-file: /Users/macbookpro/.cloudflared/<TUNNEL_ID>.json
+
+ingress:
+  - hostname: table.MON-DOMAINE
+    service: http://localhost:4176
+  # Tout autre hôte/chemin : refusé.
+  - service: http_status:404

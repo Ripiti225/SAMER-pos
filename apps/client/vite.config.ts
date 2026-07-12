@@ -31,4 +31,15 @@ export default defineConfig({
       '/api': { target: 'http://localhost:3001', changeOrigin: false },
     },
   },
+  // Mode « exposé sur internet » via Cloudflare Tunnel (accès 4G) : on sert le
+  // build compilé (pas les sources) et on ne relaie QUE /api/client — les routes
+  // caisse/admin/auth du serveur restent physiquement injoignables par le tunnel.
+  preview: {
+    port: 4176,
+    host: true,
+    allowedHosts: true,
+    proxy: {
+      '/api/client': { target: 'http://localhost:3001', changeOrigin: false },
+    },
+  },
 });
