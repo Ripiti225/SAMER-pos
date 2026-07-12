@@ -5,7 +5,9 @@
       "Skill(artifact-design:*)",
       "Bash(pnpm -F @pos/caisse build)",
       "Bash(pnpm -F @pos/serveur build)",
-      "Bash(pnpm -F @pos/kds build)"
+      "Bash(pnpm -F @pos/kds build)",
+      "Bash(npx --no -w tsc -p apps/caisse/tsconfig.json --noEmit)",
+      "Bash(echo \"tsc exit \\($?\\)\")"
     ]
   }
 }

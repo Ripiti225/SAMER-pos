@@ -203,3 +203,24 @@ button.carte:hover {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
+
+/* Touche de pavé numérique tactile (PIN, montants) : grande, blanche, tactile. */
+.touche {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
+  border-radius: var(--rayon-btn);
+  background: var(--surface-carte);
+  color: var(--texte-fort);
+  font-size: 24px;
+  font-weight: 600;
+  box-shadow: var(--ombre-1);
+  transition: transform 0.09s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+.touche:hover {
+  background: color-mix(in srgb, var(--marque) 7%, var(--surface-carte));
+}
+.touche:active {
+  transform: translateY(1px) scale(0.98);
+}
