@@ -29,8 +29,17 @@ interface TravailleurST {
 
 type RolePos = 'MANAGER' | 'CAISSIER' | 'SERVEUR' | 'CUISINE';
 type PosteCuisine = 'CUISINIER' | 'PIZZAIOLO' | null;
+type Disponibilite = 'PRESENT' | 'MALADE' | 'CONGE' | 'PERMISSION';
 
 const CODE_VALIDE_JOURS = 30;
+
+/** Type d'absence SamerTrackly → disponibilité POS. */
+function mapTypeConge(type: string | null): Disponibilite {
+  const t = (type ?? '').toLowerCase();
+  if (/malad|maladie|repos.?med/.test(t)) return 'MALADE';
+  if (/permission/.test(t)) return 'PERMISSION';
+  return 'CONGE'; // congé (défaut pour toute absence planifiée)
+}
 
 /** Déduit le rôle POS + poste cuisine à partir de l'intitulé RH SamerTrackly. */
 export function mapPosteRole(poste: string | null): { role: RolePos; posteCuisine: PosteCuisine } {
@@ -55,6 +64,7 @@ export interface ResultatSync {
   crees: number;
   maj: number;
   desactives: number;
+  absents: number;
   total: number;
 }
 
@@ -71,16 +81,15 @@ export async function synchroniserEquipe(userId: string | null): Promise<Resulta
   const url = process.env.SAMTRACKLY_URL;
   const key = process.env.SAMTRACKLY_KEY;
   const restaurantId = await restaurantConfigure();
-  const vide: ResultatSync = { crees: 0, maj: 0, desactives: 0, total: 0 };
+  const vide: ResultatSync = { crees: 0, maj: 0, desactives: 0, absents: 0, total: 0 };
   if (!url || !key) return { ...vide, saute: true, raison: 'Clé SamerTrackly non configurée (apps/server/.env)' };
   if (!restaurantId) return { ...vide, saute: true, raison: 'Restaurant SamerTrackly non défini (paramètre samtrackly_restaurant_id)' };
 
+  const entetes = { apikey: key, Authorization: `Bearer ${key}` };
   const requete =
     `travailleurs?restaurant_id=eq.${restaurantId}&archived_at=is.null` +
     `&select=id,nom,poste,photo_url,contact,actif`;
-  const rep = await fetch(`${url}/rest/v1/${requete}`, {
-    headers: { apikey: key, Authorization: `Bearer ${key}` },
-  }).catch(() => null);
+  const rep = await fetch(`${url}/rest/v1/${requete}`, { headers: entetes }).catch(() => null);
   if (!rep) throw new ErreurMetier('SamerTrackly injoignable (pas d’internet ?)', 503);
   if (!rep.ok) throw new ErreurMetier(`SamerTrackly a répondu ${rep.status}`, 502);
   const liste = (await rep.json()) as TravailleurST[];
@@ -181,5 +190,41 @@ export async function synchroniserEquipe(userId: string | null): Promise<Resulta
     }
   }
 
-  return { crees, maj, desactives, total: liste.length };
+  // --- Congés / permissions : SamerTrackly pilote la disponibilité PLANIFIÉE.
+  // Un « Malade » posé à la main dans le POS n'est PAS écrasé (ad hoc local).
+  let absents = 0;
+  const aujourdhui = new Date().toISOString().slice(0, 10);
+  const reqConges =
+    `permissions_conges?restaurant_id=eq.${restaurantId}` +
+    `&date_debut=lte.${aujourdhui}&date_fin=gte.${aujourdhui}&select=travailleur_id,type`;
+  const repC = await fetch(`${url}/rest/v1/${reqConges}`, { headers: entetes }).catch(() => null);
+  if (repC?.ok) {
+    const absences = (await repC.json()) as { travailleur_id: string; type: string | null }[];
+    const dispoParExterne = new Map<string, Disponibilite>();
+    for (const a of absences) dispoParExterne.set(a.travailleur_id, mapTypeConge(a.type));
+
+    const lies = await db
+      .select({ id: utilisateurs.id, externe_id: utilisateurs.externe_id, disponibilite: utilisateurs.disponibilite })
+      .from(utilisateurs)
+      .where(isNotNull(utilisateurs.externe_id));
+    for (const e of lies) {
+      const cible = e.externe_id ? dispoParExterne.get(e.externe_id) : undefined;
+      let nouvelle: Disponibilite | null = null;
+      if (cible) {
+        if (e.disponibilite !== cible) nouvelle = cible;
+      } else if (e.disponibilite === 'CONGE' || e.disponibilite === 'PERMISSION') {
+        // Congé/permission terminé côté RH → retour PRESENT (MALADE manuel gardé).
+        nouvelle = 'PRESENT';
+      }
+      if (cible) absents++;
+      if (nouvelle) {
+        await db.transaction(async (tx) => {
+          const [u] = await tx.update(utilisateurs).set({ disponibilite: nouvelle!, updated_at: new Date() }).where(eq(utilisateurs.id, e.id)).returning();
+          await ecrireOutbox(tx, 'utilisateurs', 'UPDATE', e.id, u as unknown as Record<string, unknown>);
+        });
+      }
+    }
+  }
+
+  return { crees, maj, desactives, absents, total: liste.length };
 }

@@ -163,9 +163,9 @@ function Equipe() {
     onError: (e: Error) => setMsg({ texte: e.message }),
   });
   const sync = useMutation({
-    mutationFn: () => api<{ crees: number; maj: number; desactives: number; total: number }>('/api/admin/equipe/synchroniser', { method: 'POST' }),
+    mutationFn: () => api<{ crees: number; maj: number; desactives: number; absents: number; total: number }>('/api/admin/equipe/synchroniser', { method: 'POST' }),
     onSuccess: (r) => {
-      setMsg({ texte: `SamerTrackly : ${r.crees} ajouté(s) · ${r.maj} à jour · ${r.desactives} parti(s) (sur ${r.total}).`, ok: true });
+      setMsg({ texte: `SamerTrackly : ${r.crees} ajouté(s) · ${r.maj} à jour · ${r.absents} en congé/absence · ${r.desactives} parti(s) (sur ${r.total}).`, ok: true });
       void qc.invalidateQueries({ queryKey: ['admin', 'equipe'] });
     },
     onError: (e: Error) => setMsg({ texte: e.message }),

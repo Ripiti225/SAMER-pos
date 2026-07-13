@@ -13,7 +13,13 @@
       "Bash(node -e \"const p=require\\('./apps/server/package.json'\\);console.log\\(Object.keys\\({...p.dependencies,...p.devDependencies}\\).filter\\(d=>/dotenv|supabase|env/.test\\(d\\)\\).join\\(', '\\)||'\\(aucune\\)'\\)\")",
       "Bash(git check-ignore *)",
       "Bash(node --env-file=apps/server/.env -e 'const k=process.env.SAMTRACKLY_KEY||\"\"; console.log\\(\"len\", k.length, \"| prefix\", k.slice\\(0,10\\), \"| suffix\", k.slice\\(-4\\)\\)')",
-      "Bash(node --env-file=apps/server/.env -e 'const u=process.env.SAMTRACKLY_URL,k=process.env.SAMTRACKLY_KEY; const r=await fetch\\(u+\"/rest/v1/restaurants?select=id,nom&limit=1\",{headers:{apikey:k,Authorization:\"Bearer \"+k}}\\); console.log\\(\"HTTP\",r.status, \\(await r.text\\(\\)\\).slice\\(0,120\\)\\)')"
+      "Bash(node --env-file=apps/server/.env -e 'const u=process.env.SAMTRACKLY_URL,k=process.env.SAMTRACKLY_KEY; const r=await fetch\\(u+\"/rest/v1/restaurants?select=id,nom&limit=1\",{headers:{apikey:k,Authorization:\"Bearer \"+k}}\\); console.log\\(\"HTTP\",r.status, \\(await r.text\\(\\)\\).slice\\(0,120\\)\\)')",
+      "Bash(node --env-file=apps/server/.env -e 'const k=process.env.SAMTRACKLY_KEY||\"\"; console.log\\(\"len\", k.length, \"| prefix\", k.slice\\(0,12\\), \"| suffix\", k.slice\\(-4\\)\\)')",
+      "Bash(node --env-file=apps/server/.env -e 'console.log\\(process.env.SAMTRACKLY_URL\\)')",
+      "Bash(node --env-file=apps/server/.env -e ' *)",
+      "Bash(pnpm --filter @pos/server exec tsx src/_test_sync.ts)",
+      "Bash(psql \"postgres://localhost:5432/pos_samer\" -tAc \"SELECT count\\(*\\) total, count\\(externe_id\\) avec_externe_id FROM utilisateurs WHERE poste IS NOT NULL OR externe_id IS NOT NULL\")",
+      "Bash(psql \"postgres://localhost:5432/pos_samer\" -tAc \"SELECT nom_complet, count\\(*\\) FROM utilisateurs GROUP BY nom_complet HAVING count\\(*\\)>1\")"
     ]
   }
 }
