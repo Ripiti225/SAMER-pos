@@ -75,6 +75,8 @@ export async function seed(): Promise<void> {
     // Vide = le serveur détecte l'IP LAN automatiquement (joignable depuis un
     // téléphone). On ne renseigne ici que pour figer un domaine/IP en prod.
     { cle: 'url_base_client', valeur: '' },
+    // SamerTrackly : id du restaurant « Samer Angré 7E » pour la synchro équipe.
+    { cle: 'samtrackly_restaurant_id', valeur: '2f09688d-a4b9-4b14-8c45-943543953379' },
     // Facture : contact sous le logo + message de pied (éditables dans Réglages).
     { cle: 'ticket_entete', valeur: 'Angré 7e Tranche, Abidjan' },
     { cle: 'ticket_pied', valeur: 'Merci de votre visite — à bientôt chez Samer !' },

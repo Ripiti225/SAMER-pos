@@ -162,6 +162,14 @@ function Equipe() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin', 'equipe'] }),
     onError: (e: Error) => setMsg({ texte: e.message }),
   });
+  const sync = useMutation({
+    mutationFn: () => api<{ crees: number; maj: number; desactives: number; total: number }>('/api/admin/equipe/synchroniser', { method: 'POST' }),
+    onSuccess: (r) => {
+      setMsg({ texte: `SamerTrackly : ${r.crees} ajouté(s) · ${r.maj} à jour · ${r.desactives} parti(s) (sur ${r.total}).`, ok: true });
+      void qc.invalidateQueries({ queryKey: ['admin', 'equipe'] });
+    },
+    onError: (e: Error) => setMsg({ texte: e.message }),
+  });
   const [edition, setEdition] = useState<Employe | null>(null);
   const modif = useMutation({
     mutationFn: ({ id, corps }: { id: string; corps: Record<string, unknown> }) =>
@@ -176,11 +184,16 @@ function Equipe() {
 
   return (
     <section>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-xl font-bold">Équipe</h2>
-        <button type="button" className="btn-accent" onClick={() => setNouveau({ nom_complet: '', role_id: rolesActifs[0]?.id ?? '', telephone: '' })}>
-          + Ajouter un employé
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="btn-blanc" disabled={sync.isPending} onClick={() => sync.mutate()}>
+            {sync.isPending ? 'Synchronisation…' : 'Synchroniser (SamerTrackly)'}
+          </button>
+          <button type="button" className="btn-accent" onClick={() => setNouveau({ nom_complet: '', role_id: rolesActifs[0]?.id ?? '', telephone: '' })}>
+            + Ajouter un employé
+          </button>
+        </div>
       </div>
       <Message texte={msg?.texte ?? null} ok={msg?.ok} />
       {code && (

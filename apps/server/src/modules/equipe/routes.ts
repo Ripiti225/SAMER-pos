@@ -22,6 +22,7 @@ import {
   hacher,
   nomDuRole,
 } from './service.js';
+import { synchroniserEquipe } from './sync-samtrackly.js';
 
 const MSG_PROTEGE = 'Le compte propriétaire est protégé';
 const CODE_VALIDE_JOURS = 7;
@@ -211,6 +212,13 @@ export function routesEquipe(app: FastifyInstance): void {
     });
     app.sessions.detruirePourUtilisateur(id); // il devra reposer son PIN
     return { code_temporaire: code, expire_le: expire.toISOString() };
+  });
+
+  // Synchroniser l'équipe depuis SamerTrackly (import/actualisation manuelle).
+  app.post('/api/admin/equipe/synchroniser', { preHandler: garde }, async (req) => {
+    const r = await synchroniserEquipe(req.session!.utilisateur_id);
+    if (r.saute) throw new ErreurMetier(r.raison ?? 'Synchronisation non configurée', 400);
+    return r;
   });
 
   // Disponibilité RH : présent / malade / congé / permission. Informatif — ne
