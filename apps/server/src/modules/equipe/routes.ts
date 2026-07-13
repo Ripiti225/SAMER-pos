@@ -22,7 +22,7 @@ import {
   hacher,
   nomDuRole,
 } from './service.js';
-import { synchroniserEquipe } from './sync-samtrackly.js';
+import { postesSamtrackly, synchroniserEquipe } from './sync-samtrackly.js';
 
 const MSG_PROTEGE = 'Le compte propriétaire est protégé';
 const CODE_VALIDE_JOURS = 7;
@@ -212,6 +212,18 @@ export function routesEquipe(app: FastifyInstance): void {
     });
     app.sessions.detruirePourUtilisateur(id); // il devra reposer son PIN
     return { code_temporaire: code, expire_le: expire.toISOString() };
+  });
+
+  // Liste des postes proposés (SamerTrackly + ceux déjà utilisés localement).
+  app.get('/api/admin/postes', { preHandler: garde }, async () => {
+    const distant = await postesSamtrackly();
+    const locaux = await db.select({ poste: utilisateurs.poste }).from(utilisateurs);
+    const set = new Set<string>(distant);
+    for (const l of locaux) {
+      const p = (l.poste ?? '').trim();
+      if (p) set.add(p);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, 'fr'));
   });
 
   // Synchroniser l'équipe depuis SamerTrackly (import/actualisation manuelle).

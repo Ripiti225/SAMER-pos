@@ -58,6 +58,24 @@ export function samtracklyConfigure(): boolean {
   return !!(process.env.SAMTRACKLY_URL && process.env.SAMTRACKLY_KEY);
 }
 
+/** Postes distincts existant dans SamerTrackly (tout le groupe). [] si hors ligne. */
+export async function postesSamtrackly(): Promise<string[]> {
+  const url = process.env.SAMTRACKLY_URL;
+  const key = process.env.SAMTRACKLY_KEY;
+  if (!url || !key) return [];
+  const rep = await fetch(`${url}/rest/v1/travailleurs?select=poste&archived_at=is.null`, {
+    headers: { apikey: key, Authorization: `Bearer ${key}` },
+  }).catch(() => null);
+  if (!rep?.ok) return [];
+  const rows = (await rep.json()) as { poste: string | null }[];
+  const set = new Set<string>();
+  for (const r of rows) {
+    const p = (r.poste ?? '').trim();
+    if (p) set.add(p);
+  }
+  return [...set];
+}
+
 export interface ResultatSync {
   saute?: boolean;
   raison?: string;

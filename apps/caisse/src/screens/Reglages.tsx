@@ -303,6 +303,7 @@ function EditionEmploye({
   const [poste, setPoste] = useState(employe.poste ?? '');
   const [tel, setTel] = useState(employe.telephone ?? '');
   const [photo, setPhoto] = useState(employe.photo_url ?? '');
+  const { data: postes } = useQuery({ queryKey: ['admin', 'postes'], queryFn: () => api<string[]>('/api/admin/postes') });
 
   return (
     <Modale titre={`Modifier ${employe.nom_complet}`} onFermer={onFermer} enfants={
@@ -320,7 +321,11 @@ function EditionEmploye({
           </select>
         </label>
         <label className="block text-sm text-doux">Intitulé de poste
-          <input className="champ mt-1" value={poste} onChange={(e) => setPoste(e.target.value)} placeholder="ex : Comptoiriste" />
+          <input className="champ mt-1" list="postes-suggestions" value={poste} onChange={(e) => setPoste(e.target.value)} placeholder="ex : Comptoiriste, Chef cuisinier…" />
+          <datalist id="postes-suggestions">
+            {(postes ?? []).map((p) => <option key={p} value={p} />)}
+          </datalist>
+          <span className="mt-1 block text-xs text-doux">Choisir un poste existant (SamerTrackly) ou en saisir un nouveau.</span>
         </label>
         <label className="block text-sm text-doux">Téléphone
           <input className="champ mt-1" value={tel} onChange={(e) => setTel(e.target.value)} placeholder="ex : 0700000000" />
