@@ -26,6 +26,7 @@ export const SECTIONS_PERMISSIONS: SectionPermissions[] = [
       { cle: 'caisse.annuler_envoye', libelle: 'Annuler un article envoyé' },
       { cle: 'caisse.rouvrir', libelle: 'Rouvrir une commande payée' },
       { cle: 'caisse.cloturer', libelle: 'Clôturer le service' },
+      { cle: 'caisse.fermer_sequence', libelle: 'Fermer la séquence (journée)' },
       { cle: 'caisse.imprimer_note', libelle: 'Imprimer la note' },
     ],
   },
@@ -104,9 +105,9 @@ export const PERMISSIONS_DEFAUT: Record<RoleSysteme, string[]> = {
   SUPERVISEUR: [...TOUTES_PERMISSIONS],
 
   MANAGER: [
-    // Caisse (comme avant)
+    // Caisse (comme avant) + fermeture de séquence (le proprio peut la retirer)
     'caisse.service.ouvrir', 'caisse.encaisser', 'caisse.remise', 'caisse.annuler_envoye',
-    'caisse.rouvrir', 'caisse.cloturer', 'caisse.imprimer_note',
+    'caisse.rouvrir', 'caisse.cloturer', 'caisse.fermer_sequence', 'caisse.imprimer_note',
     // Salle
     'salle.commande', 'salle.envoyer_cuisine', 'salle.transferer_table', 'salle.voir_toutes_tables',
     // Rapports (sauf tableau de bord propriétaire)

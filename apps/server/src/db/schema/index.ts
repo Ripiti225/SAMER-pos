@@ -54,6 +54,7 @@ export const modePaiement = pgEnum('mode_paiement', [
   'MTN_MOMO',
   'MOOV_MONEY',
   'CARTE',
+  'DJAMO',
 ]);
 
 // Numérotation séquentielle CONTINUE des tickets (§14.2)
@@ -235,9 +236,28 @@ export const tablesSalle = pgTable('tables_salle', {
 // ---------------------------------------------------------------------------
 // 4. Services caisse / shifts (§5.7, §14.3)
 // ---------------------------------------------------------------------------
+/**
+ * Séquence de caisse (journée) : regroupe TOUS les shifts (services) faits
+ * depuis la dernière fermeture. Seul un porteur de `caisse.fermer_sequence`
+ * (gérant par défaut) la « rase » en fin de journée. Une seule OUVERTE à la fois.
+ */
+export const sequencesCaisse = pgTable('sequences_caisse', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  ouverte_le: timestamp('ouverte_le', { withTimezone: true }).notNull().defaultNow(),
+  cloturee_le: timestamp('cloturee_le', { withTimezone: true }),
+  cloturee_par: uuid('cloturee_par').references(() => utilisateurs.id),
+  statut: text('statut').notNull().default('OUVERTE'),
+  rapport: jsonb('rapport'),
+}, (t) => [
+  // Au plus une séquence OUVERTE : index unique partiel sur la valeur du statut.
+  uniqueIndex('un_sequence_ouverte').on(t.statut).where(sql`statut = 'OUVERTE'`),
+  check('sequences_caisse_statut_check', sql`${t.statut} IN ('OUVERTE','CLOTUREE')`),
+]);
+
 export const servicesCaisse = pgTable('services_caisse', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   caissier_id: uuid('caissier_id').notNull().references(() => utilisateurs.id),
+  sequence_id: uuid('sequence_id').references(() => sequencesCaisse.id),
   fond_de_caisse: integer('fond_de_caisse').notNull(),
   ouvert_le: timestamp('ouvert_le', { withTimezone: true }).notNull().defaultNow(),
   cloture_le: timestamp('cloture_le', { withTimezone: true }),
@@ -245,6 +265,11 @@ export const servicesCaisse = pgTable('services_caisse', {
   especes_comptees: integer('especes_comptees'),
   especes_theorique: integer('especes_theorique'),
   ecart: integer('ecart'),
+  // Réconciliation de fermeture (§ brief) : dépenses + détail des sources.
+  depenses: integer('depenses').notNull().default(0),
+  reconciliation: jsonb('reconciliation'),
+  vente_totale: integer('vente_totale'),
+  total_systeme: integer('total_systeme'),
   rapport_z: jsonb('rapport_z'),
 }, (t) => [
   uniqueIndex('un_service_ouvert_par_caissier')

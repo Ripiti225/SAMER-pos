@@ -19,7 +19,12 @@
       "Bash(node --env-file=apps/server/.env -e ' *)",
       "Bash(pnpm --filter @pos/server exec tsx src/_test_sync.ts)",
       "Bash(psql \"postgres://localhost:5432/pos_samer\" -tAc \"SELECT count\\(*\\) total, count\\(externe_id\\) avec_externe_id FROM utilisateurs WHERE poste IS NOT NULL OR externe_id IS NOT NULL\")",
-      "Bash(psql \"postgres://localhost:5432/pos_samer\" -tAc \"SELECT nom_complet, count\\(*\\) FROM utilisateurs GROUP BY nom_complet HAVING count\\(*\\)>1\")"
+      "Bash(psql \"postgres://localhost:5432/pos_samer\" -tAc \"SELECT nom_complet, count\\(*\\) FROM utilisateurs GROUP BY nom_complet HAVING count\\(*\\)>1\")",
+      "Bash(sed -n '/services_caisse = pgTable/,/^}\\);/p' apps/server/src/db/schema/index.ts)",
+      "Bash(sed -n '/paiements = pgTable/,/^}\\);/p' apps/server/src/db/schema/index.ts)",
+      "Bash(psql \"postgres://localhost:5432/pos_samer\" -tAc \"SELECT enumlabel FROM pg_enum e JOIN pg_type t ON t.oid=e.enumtypid WHERE t.typname='mode_paiement' ORDER BY e.enumsortorder\")",
+      "Bash(psql \"postgres://localhost:5432/pos_samer\" -tAc \"SELECT to_regclass\\('sequences_caisse'\\)\")",
+      "Bash(psql \"postgres://localhost:5432/pos_samer\" -tAc \"SELECT string_agg\\(column_name,', '\\) FROM information_schema.columns WHERE table_name='services_caisse' AND column_name IN \\('sequence_id','depenses','reconciliation','vente_totale','total_systeme'\\)\")"
     ]
   }
 }

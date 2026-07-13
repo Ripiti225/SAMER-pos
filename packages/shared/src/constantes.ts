@@ -21,6 +21,7 @@ export const MODES_PAIEMENT = [
   'MTN_MOMO',
   'MOOV_MONEY',
   'CARTE',
+  'DJAMO',
 ] as const;
 export type ModePaiement = (typeof MODES_PAIEMENT)[number];
 
@@ -31,6 +32,7 @@ export const LIBELLES_MODES: Record<ModePaiement, string> = {
   MTN_MOMO: 'MTN MoMo',
   MOOV_MONEY: 'Moov Money',
   CARTE: 'Carte',
+  DJAMO: 'Djamo',
 };
 
 export const TYPES_COMMANDE = ['SUR_PLACE', 'EMPORTER', 'LIVRAISON'] as const;
