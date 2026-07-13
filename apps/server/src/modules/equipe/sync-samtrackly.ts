@@ -150,9 +150,21 @@ export async function synchroniserEquipe(userId: string | null): Promise<Resulta
         .limit(1))[0];
 
     if (existant) {
+      // Champs verrouillés (modifiés à la main dans le POS) : jamais écrasés.
+      const verrous = new Set<string>(Array.isArray(existant.champs_manuels) ? (existant.champs_manuels as string[]) : []);
+      const set: Record<string, unknown> = { externe_id: t.id, actif: t.actif ?? true, updated_at: new Date() };
+      if (!verrous.has('nom_complet')) set.nom_complet = nom;
+      if (!verrous.has('poste')) set.poste = t.poste?.trim() || null;
+      if (!verrous.has('photo_url')) set.photo_url = t.photo_url || null;
+      if (!verrous.has('telephone')) set.telephone = t.contact || null;
+      if (!verrous.has('role')) {
+        set.role_id = rid;
+        set.role = role;
+        set.poste_cuisine = posteCuisine;
+      }
       await db.transaction(async (tx) => {
-        // On NE touche PAS : pin_hash, doit_definir_pin, disponibilite.
-        const [u] = await tx.update(utilisateurs).set(champs).where(eq(utilisateurs.id, existant.id)).returning();
+        // On NE touche PAS : pin_hash, doit_definir_pin, disponibilite, ni les champs verrouillés.
+        const [u] = await tx.update(utilisateurs).set(set).where(eq(utilisateurs.id, existant.id)).returning();
         await ecrireOutbox(tx, 'utilisateurs', 'UPDATE', existant.id, u as unknown as Record<string, unknown>);
       });
       maj++;

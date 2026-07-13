@@ -138,6 +138,18 @@ export function routesEquipe(app: FastifyInstance): void {
     if (corps.role_id && !nouveauNom) throw new ErreurMetier('Rôle inconnu', 400);
     await exigerDroitCompte(req.session!, cibleNom, nouveauNom, `Modification employé ${id}`);
 
+    // Verrouille les champs RÉELLEMENT modifiés : la synchro SamerTrackly ne les
+    // écrasera plus (le choix fait dans le POS reste).
+    const nouveauPoste = corps.poste === undefined ? cible.poste : (corps.poste || null);
+    const nouvellePhoto = corps.photo_url === undefined ? cible.photo_url : (corps.photo_url || null);
+    const nouveauTel = corps.telephone === undefined ? cible.telephone : (corps.telephone ?? null);
+    const verrous = new Set<string>(Array.isArray(cible.champs_manuels) ? (cible.champs_manuels as string[]) : []);
+    if (corps.nom_complet !== undefined && corps.nom_complet !== cible.nom_complet) verrous.add('nom_complet');
+    if (corps.role_id !== undefined && corps.role_id !== cible.role_id) verrous.add('role');
+    if (nouveauPoste !== cible.poste) verrous.add('poste');
+    if (nouvellePhoto !== cible.photo_url) verrous.add('photo_url');
+    if (nouveauTel !== cible.telephone) verrous.add('telephone');
+
     const maj = await db.transaction(async (tx) => {
       const [u] = await tx
         .update(utilisateurs)
@@ -145,9 +157,10 @@ export function routesEquipe(app: FastifyInstance): void {
           nom_complet: corps.nom_complet ?? cible.nom_complet,
           role_id: corps.role_id ?? cible.role_id,
           poste_cuisine: corps.poste_cuisine === undefined ? cible.poste_cuisine : corps.poste_cuisine,
-          poste: corps.poste === undefined ? cible.poste : (corps.poste || null),
-          photo_url: corps.photo_url === undefined ? cible.photo_url : (corps.photo_url || null),
-          telephone: corps.telephone === undefined ? cible.telephone : corps.telephone,
+          poste: nouveauPoste,
+          photo_url: nouvellePhoto,
+          telephone: nouveauTel,
+          champs_manuels: [...verrous],
           // Le changement de rôle système efface l'ancien enum (source = role_id).
           role: corps.role_id ? null : cible.role,
           updated_at: new Date(),

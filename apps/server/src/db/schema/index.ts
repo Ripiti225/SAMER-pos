@@ -110,6 +110,9 @@ export const utilisateurs = pgTable('utilisateurs', {
   // Identifiant du même employé dans SamerTrackly (RH) — pour la synchro
   // automatique (upsert sans doublon). NULL = employé créé localement.
   externe_id: text('externe_id'),
+  // Champs modifiés MANUELLEMENT dans le POS (nom_complet, poste, photo_url,
+  // telephone, role…) : la synchro SamerTrackly ne les écrase plus.
+  champs_manuels: jsonb('champs_manuels').notNull().default(sql`'[]'::jsonb`),
   // Présence / absence RH (ne bloque pas la connexion, informatif pour l'équipe).
   disponibilite: disponibiliteEmploye('disponibilite').notNull().default('PRESENT'),
   pin_hash: text('pin_hash').notNull(),
