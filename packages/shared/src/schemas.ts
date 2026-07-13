@@ -233,6 +233,11 @@ export const ModifierEmployeSchema = z.object({
   telephone: TelephoneSchema,
 });
 
+/** Changement de disponibilité RH d'un employé (présent / malade / congé / permission). */
+export const MajDisponibiliteSchema = z.object({
+  disponibilite: z.enum(['PRESENT', 'MALADE', 'CONGE', 'PERMISSION']),
+});
+
 /** Pose du PIN par l'employé (code temporaire à usage unique + PIN choisi deux fois). */
 export const PoserPinSchema = z
   .object({

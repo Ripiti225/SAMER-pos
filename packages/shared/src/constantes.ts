@@ -3,6 +3,17 @@
 export const ROLES = ['PROPRIETAIRE', 'MANAGER', 'CAISSIER', 'SERVEUR', 'CUISINE'] as const;
 export type Role = (typeof ROLES)[number];
 
+/** Disponibilité RH d'un employé (Réglages › Équipe). */
+export const DISPONIBILITES = ['PRESENT', 'MALADE', 'CONGE', 'PERMISSION'] as const;
+export type Disponibilite = (typeof DISPONIBILITES)[number];
+
+export const LIBELLES_DISPONIBILITE: Record<Disponibilite, string> = {
+  PRESENT: 'Présent',
+  MALADE: 'Malade',
+  CONGE: 'En congé',
+  PERMISSION: 'Permissionnaire',
+};
+
 export const MODES_PAIEMENT = [
   'ESPECES',
   'WAVE',

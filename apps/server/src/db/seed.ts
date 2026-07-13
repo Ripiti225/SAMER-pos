@@ -2,6 +2,7 @@
  * Seed de démonstration (voir CLAUDE.md).
  * Réinitialise les données puis insère le restaurant SAMER_ANGRE7E complet.
  */
+import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -99,6 +100,53 @@ export async function seed(): Promise<void> {
     { nom_complet: 'Luigi Kouassi', role: 'CUISINE', role_id: rid('CUISINE'), poste_cuisine: 'PIZZAIOLO', pin_hash: await hacherPin('8024'), telephone: '+2250700000008' },
     { nom_complet: 'Aminata Touré', role: 'CUISINE', role_id: rid('CUISINE'), poste_cuisine: 'COMPTOIRISTE', pin_hash: await hacherPin('4652'), telephone: '+2250700000009' },
   ]);
+
+  // --- Équipe RÉELLE « Samer Angré 7E » (source : docs/effectifs-par-restaurant.md)
+  // Photos Supabase, intitulé de poste conservé. Chaque employé doit poser son
+  // PIN (code temporaire) — les codes seront réattribués par l'encadrant.
+  const PHOTO = 'https://wlwotzxnzowbkbfcpnyi.supabase.co/storage/v1/object/public/photos';
+  type Recrue = {
+    nom: string;
+    role: 'MANAGER' | 'CAISSIER' | 'SERVEUR' | 'CUISINE';
+    pc: 'CUISINIER' | 'PIZZAIOLO' | null;
+    poste: string;
+    tel: string | null;
+    photo: string;
+  };
+  const equipe7E: Recrue[] = [
+    { nom: 'BAZIE Jean Marc', role: 'CUISINE', pc: 'CUISINIER', poste: 'Cuisinier', tel: '0545104508', photo: `${PHOTO}/travailleurs/1778112607127_v9qppaeqfhh.heic` },
+    { nom: 'DIE YANNICK', role: 'SERVEUR', pc: null, poste: 'Serveur/se', tel: '0173163855', photo: `${PHOTO}/travailleurs/1779381741835_5rm8criwdqi.jpeg` },
+    { nom: 'DJE ANGE WILFRIED DORGELEX', role: 'MANAGER', pc: null, poste: 'Gérant / manager général', tel: '0778565312', photo: `${PHOTO}/photos/1778793969237_ijbhx85eq6e.jpg` },
+    { nom: 'GNOLEBA ZEKALO FULGENCE', role: 'CUISINE', pc: null, poste: 'Technicien de surface', tel: null, photo: `${PHOTO}/travailleurs/1778151645338_p385sou25z.jpg` },
+    { nom: 'GROGUHE ZRAGA MEDARD', role: 'CAISSIER', pc: null, poste: 'Comptoiriste', tel: '0101042021', photo: `${PHOTO}/travailleurs/1778151303984_b6nakqvyf5p.jpg` },
+    { nom: 'Hilary Sea', role: 'CAISSIER', pc: null, poste: 'Caissière', tel: '0777497272', photo: `${PHOTO}/travailleurs/1778151245288_dzcbagocd2f.jpg` },
+    { nom: 'KONE DJENEBA', role: 'SERVEUR', pc: null, poste: 'Serveur/se', tel: '0576360142', photo: `${PHOTO}/travailleurs/1778151460294_lq8en88d5af.jpg` },
+    { nom: 'Marie-Paule Gnepa', role: 'CAISSIER', pc: null, poste: 'Caissière', tel: null, photo: `${PHOTO}/travailleurs/1779381800359_5dotqfeume.jpeg` },
+    { nom: 'N’GUESSAN FLORA', role: 'CAISSIER', pc: null, poste: 'Caissière', tel: '0718901301', photo: `${PHOTO}/travailleurs/1778112557214_p83hfr9j86.jpg` },
+    { nom: 'N’ZI KONAN SERAPHIN', role: 'CAISSIER', pc: null, poste: 'Caissier/re', tel: '0701841311', photo: `${PHOTO}/travailleurs/1778151386842_t72lqo48h0l.jpg` },
+    { nom: 'SINGO BEUH VINCENT', role: 'CUISINE', pc: 'CUISINIER', poste: 'Cuisinier', tel: '0586627024', photo: `${PHOTO}/travailleurs/1778167391514_slwz99h3uok.jpg` },
+    { nom: 'TRAORÉ ZAWELA MICHAEL', role: 'CAISSIER', pc: null, poste: 'Caissier/re', tel: '0565121801', photo: `${PHOTO}/travailleurs/1778514165178_olleere5s6i.jpg` },
+    { nom: 'YAO KOUAME JULSON DARIN', role: 'CUISINE', pc: 'CUISINIER', poste: 'Cuisinier', tel: '0105340894', photo: `${PHOTO}/travailleurs/1778514338713_zz8cwrxohk.jpg` },
+  ];
+  const expireCode = new Date(Date.now() + 30 * 24 * 3600 * 1000);
+  await db.insert(utilisateurs).values(
+    await Promise.all(
+      equipe7E.map(async (e) => ({
+        nom_complet: e.nom,
+        role: e.role,
+        role_id: rid(e.role),
+        poste_cuisine: e.pc,
+        poste: e.poste,
+        photo_url: e.photo,
+        telephone: e.tel,
+        // Compte non connectable tant que le PIN n'est pas posé (code temporaire).
+        pin_hash: await hacherPin(randomBytes(12).toString('hex')),
+        doit_definir_pin: true,
+        pin_temporaire_hash: await hacherPin(String(100000 + Math.floor(Math.random() * 900000))),
+        pin_temporaire_expire: expireCode,
+      })),
+    ),
+  );
 
   // --- Catalogue RÉEL (export Supabase mobmgbedyyqeggxjpbrk) ---
   // Le catalogue de démo a été remplacé par le vrai menu (15 catégories,

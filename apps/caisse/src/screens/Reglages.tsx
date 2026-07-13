@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconArrowLeft, IconLock } from '@tabler/icons-react';
-import { SECTIONS_PERMISSIONS, PERMISSION_PROTEGEE } from '@pos/shared';
+import { DISPONIBILITES, type Disponibilite, LIBELLES_DISPONIBILITE, SECTIONS_PERMISSIONS, PERMISSION_PROTEGEE } from '@pos/shared';
 import { api } from '../api';
 import { Modale } from '../components/Modale';
 import { useCaisse } from '../stores/session';
@@ -78,10 +78,43 @@ interface Employe {
   nom_complet: string;
   role_id: string | null;
   role_nom: string | null;
+  poste: string | null;
+  photo_url: string | null;
+  disponibilite: Disponibilite;
   telephone: string | null;
   actif: boolean;
   doit_definir_pin: boolean;
   derniere_presence: string | null;
+}
+
+/** Pastille de couleur par disponibilité. */
+const COULEUR_DISPO: Record<Disponibilite, string> = {
+  PRESENT: 'bg-ok-tint text-ok',
+  MALADE: 'bg-alerte-tint text-alerte',
+  CONGE: 'bg-info-tint text-info',
+  PERMISSION: 'bg-marque-tint text-marque-fonce',
+};
+
+/** Avatar employé : photo si disponible, sinon initiales (repli si l'URL casse). */
+function AvatarEmploye({ nom, photo }: { nom: string; photo: string | null }) {
+  const [casse, setCasse] = useState(false);
+  const initiales = nom.split(/\s+/).filter(Boolean).slice(0, 2).map((m) => m[0]!.toUpperCase()).join('');
+  if (photo && !casse) {
+    return (
+      <img
+        src={photo}
+        alt=""
+        loading="lazy"
+        onError={() => setCasse(true)}
+        className="h-12 w-12 flex-none rounded-xl border border-bordure object-cover"
+      />
+    );
+  }
+  return (
+    <div className="flex h-12 w-12 flex-none items-center justify-center rounded-xl bg-marque-tint text-sm font-bold text-marque-fonce">
+      {initiales}
+    </div>
+  );
 }
 interface RoleAdmin {
   id: string;
@@ -123,6 +156,12 @@ function Equipe() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin', 'equipe'] }),
     onError: (e: Error) => setMsg({ texte: e.message }),
   });
+  const dispo = useMutation({
+    mutationFn: ({ id, disponibilite }: { id: string; disponibilite: Disponibilite }) =>
+      api(`/api/admin/equipe/${id}/disponibilite`, { method: 'POST', corps: { disponibilite } }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin', 'equipe'] }),
+    onError: (e: Error) => setMsg({ texte: e.message }),
+  });
 
   return (
     <section>
@@ -140,17 +179,41 @@ function Equipe() {
         </div>
       )}
       <div className="overflow-x-auto">
-        <table className="w-full text-left">
-          <thead className="text-doux">
-            <tr><th className="py-2">Nom</th><th>Rôle</th><th>Téléphone</th><th>État</th><th></th></tr>
+        <table className="w-full text-left align-middle">
+          <thead className="text-sm text-doux">
+            <tr><th className="py-2">Employé</th><th>Rôle</th><th>Disponibilité</th><th>État</th><th></th></tr>
           </thead>
           <tbody>
             {(employes ?? []).map((e) => (
               <tr key={e.id} className="border-t border-bordure">
-                <td className="py-2 font-semibold">{e.nom_complet}</td>
-                <td>{e.role_nom ?? '—'}</td>
-                <td>{e.telephone ?? '—'}</td>
-                <td>{!e.actif ? <span className="text-red-700">Désactivé</span> : e.doit_definir_pin ? <span className="text-amber-700">PIN à définir</span> : 'Actif'}</td>
+                <td className="py-3">
+                  <div className="flex items-center gap-3">
+                    <AvatarEmploye nom={e.nom_complet} photo={e.photo_url} />
+                    <div className="min-w-0">
+                      <div className="font-semibold">{e.nom_complet}</div>
+                      <div className="truncate text-xs text-doux">{[e.poste, e.telephone].filter(Boolean).join(' · ') || '—'}</div>
+                    </div>
+                  </div>
+                </td>
+                <td className="text-sm">{e.role_nom ?? '—'}</td>
+                <td>
+                  <div className="flex items-center gap-2">
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${COULEUR_DISPO[e.disponibilite]}`}>
+                      {LIBELLES_DISPONIBILITE[e.disponibilite]}
+                    </span>
+                    <select
+                      className="rounded-lg border border-bordure bg-surface px-2 py-1.5 text-sm"
+                      value={e.disponibilite}
+                      disabled={!e.actif}
+                      onChange={(ev) => dispo.mutate({ id: e.id, disponibilite: ev.target.value as Disponibilite })}
+                    >
+                      {DISPONIBILITES.map((d) => <option key={d} value={d}>{LIBELLES_DISPONIBILITE[d]}</option>)}
+                    </select>
+                  </div>
+                </td>
+                <td className="text-sm">
+                  {!e.actif ? <span className="text-alerte">Désactivé</span> : e.doit_definir_pin ? <span className="text-marque-fonce">PIN à définir</span> : <span className="text-ok">Actif</span>}
+                </td>
                 <td className="text-right">
                   {e.actif && (
                     <>

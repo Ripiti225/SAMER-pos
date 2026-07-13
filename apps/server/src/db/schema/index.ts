@@ -36,6 +36,8 @@ export const rolePos = pgEnum('role_pos', [
   'CUISINE',
 ]);
 export const posteCuisine = pgEnum('poste_cuisine', ['CUISINIER', 'PIZZAIOLO', 'COMPTOIRISTE']);
+// Disponibilité d'un employé (RH légère, gérée depuis Réglages › Équipe).
+export const disponibiliteEmploye = pgEnum('disponibilite_employe', ['PRESENT', 'MALADE', 'CONGE', 'PERMISSION']);
 export const typeCommande = pgEnum('type_commande', ['SUR_PLACE', 'EMPORTER', 'LIVRAISON']);
 export const statutCommande = pgEnum('statut_commande', [
   'OUVERTE',
@@ -100,6 +102,12 @@ export const utilisateurs = pgTable('utilisateurs', {
   role: rolePos('role'),
   role_id: uuid('role_id').references(() => roles.id),
   poste_cuisine: posteCuisine('poste_cuisine'),
+  // Intitulé de poste réel (RH) : « Cuisinier », « Comptoiriste », « Serveur/se »…
+  poste: text('poste'),
+  // Photo de l'employé (URL) — affichée dans Réglages › Équipe.
+  photo_url: text('photo_url'),
+  // Présence / absence RH (ne bloque pas la connexion, informatif pour l'équipe).
+  disponibilite: disponibiliteEmploye('disponibilite').notNull().default('PRESENT'),
   pin_hash: text('pin_hash').notNull(),
   telephone: text('telephone'),
   actif: boolean('actif').notNull().default(true),

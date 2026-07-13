@@ -7,7 +7,7 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { desc, eq, sql } from 'drizzle-orm';
-import { CreerEmployeSchema, ModifierEmployeSchema } from '@pos/shared';
+import { CreerEmployeSchema, MajDisponibiliteSchema, ModifierEmployeSchema } from '@pos/shared';
 import { db } from '../../db/client.js';
 import { equipeService, roles, utilisateurs } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
@@ -68,6 +68,9 @@ export function routesEquipe(app: FastifyInstance): void {
         role_id: utilisateurs.role_id,
         role_nom: roles.nom,
         poste_cuisine: utilisateurs.poste_cuisine,
+        poste: utilisateurs.poste,
+        photo_url: utilisateurs.photo_url,
+        disponibilite: utilisateurs.disponibilite,
         telephone: utilisateurs.telephone,
         actif: utilisateurs.actif,
         doit_definir_pin: utilisateurs.doit_definir_pin,
@@ -206,6 +209,32 @@ export function routesEquipe(app: FastifyInstance): void {
     });
     app.sessions.detruirePourUtilisateur(id); // il devra reposer son PIN
     return { code_temporaire: code, expire_le: expire.toISOString() };
+  });
+
+  // Disponibilité RH : présent / malade / congé / permission. Informatif — ne
+  // coupe pas la session, ne touche pas au compte (pas d'opération sensible).
+  app.post('/api/admin/equipe/:id/disponibilite', { preHandler: garde }, async (req) => {
+    const { id } = req.params as { id: string };
+    const corps = valider(MajDisponibiliteSchema, req.body);
+    const [cible] = await db.select().from(utilisateurs).where(eq(utilisateurs.id, id));
+    if (!cible) throw introuvable('Employé');
+
+    await db.transaction(async (tx) => {
+      const [u] = await tx
+        .update(utilisateurs)
+        .set({ disponibilite: corps.disponibilite, updated_at: new Date() })
+        .where(eq(utilisateurs.id, id))
+        .returning();
+      await ecrireOutbox(tx, 'utilisateurs', 'UPDATE', id, u as unknown as Record<string, unknown>);
+      await journaliser(tx, {
+        user_id: req.session!.utilisateur_id,
+        action: 'MODIF_EMPLOYE',
+        entite: 'utilisateurs',
+        entite_id: id,
+        meta: { cible: cible.nom_complet, disponibilite: corps.disponibilite },
+      });
+    });
+    return { id, disponibilite: corps.disponibilite };
   });
 
   // Désactiver (départ) : immédiat, sessions coupées, jamais de suppression
