@@ -129,7 +129,7 @@ export function Login() {
 
       <main className="relative z-10 grid h-auto w-full max-w-6xl grid-cols-1 overflow-hidden rounded-[32px] bg-surface-douce shadow-e3 md:h-[86vh] md:grid-cols-12">
         {/* ------- Gauche : marque + choix du profil ------- */}
-        <section className="flex flex-col border-bordure/60 p-8 md:col-span-7 md:border-r lg:p-12">
+        <section className="flex min-h-0 flex-col overflow-hidden border-bordure/60 p-8 md:col-span-7 md:border-r lg:p-12">
           <header className="mb-8 lg:mb-10">
             <h1 className="text-3xl font-bold tracking-tight text-marque-fonce lg:text-4xl">{nomResto}</h1>
             <p className="mt-2 text-base text-doux">
@@ -137,7 +137,7 @@ export function Login() {
             </p>
           </header>
 
-          <div className="-mr-2 flex-1 overflow-y-auto pr-2">
+          <div className="-mr-2 min-h-0 flex-1 overflow-y-auto pr-2">
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               {(utilisateurs ?? []).map((u) => {
                 const actif = choisi?.id === u.id;
@@ -181,8 +181,8 @@ export function Login() {
         </section>
 
         {/* ------- Droite : PIN / pavé ------- */}
-        <section className="overflow-y-auto bg-surface-haute md:col-span-5">
-          <div className="flex min-h-full flex-col items-center justify-center p-6 lg:p-8">
+        <section className="min-h-0 overflow-y-auto bg-surface-haute md:col-span-5">
+          <div className="flex min-h-full flex-col items-center p-8 lg:p-12">
           {!choisi ? (
             <div className="max-w-[300px] text-center text-doux">
               <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-surface-tres-haute text-faible">
