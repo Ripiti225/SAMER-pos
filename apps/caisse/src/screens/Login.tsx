@@ -183,7 +183,7 @@ export function Login() {
         </section>
 
         {/* ------- Droite : PIN / pavé ------- */}
-        <section className="flex flex-col items-center justify-center bg-surface-haute p-8 md:col-span-5 lg:p-12">
+        <section className="flex flex-col items-center justify-center overflow-y-auto bg-surface-haute p-6 md:col-span-5 lg:p-8">
           {!choisi ? (
             <div className="max-w-[300px] text-center text-doux">
               <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-surface-tres-haute text-faible">
@@ -307,10 +307,10 @@ function PavePin({ titre, sousTitre, valeur, onChange, minLongueur, longueurMax,
 
   return (
     <div className="flex w-full max-w-[320px] flex-col items-center">
-      <div className="mb-8 text-center">
+      <div className="mb-5 text-center">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-marque-fonce">{sousTitre}</p>
         <h2 className="mt-1 text-2xl font-semibold text-fort">{titre}</h2>
-        <div className="mt-6 flex justify-center gap-3">
+        <div className="mt-4 flex justify-center gap-3">
           {Array.from({ length: nbPoints }).map((_, i) => (
             <span
               key={i}
@@ -322,7 +322,7 @@ function PavePin({ titre, sousTitre, valeur, onChange, minLongueur, longueurMax,
         </div>
       </div>
 
-      <div className="grid w-full grid-cols-3 gap-3">
+      <div className="grid w-full grid-cols-3 gap-2.5 [&>button]:min-h-[52px]">
         {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((c) => (
           <button key={c} type="button" onClick={() => taper(c)} className="touche">
             {c}
@@ -343,7 +343,7 @@ function PavePin({ titre, sousTitre, valeur, onChange, minLongueur, longueurMax,
         type="button"
         onClick={onValider}
         disabled={!pret}
-        className={`mt-8 h-14 w-full rounded-[13px] text-lg font-semibold transition ${
+        className={`mt-5 h-14 w-full rounded-[13px] text-lg font-semibold transition ${
           pret
             ? 'bg-marque text-sur-marque shadow-e2 active:translate-y-px'
             : 'cursor-not-allowed bg-surface-tres-haute text-faible'
@@ -351,7 +351,7 @@ function PavePin({ titre, sousTitre, valeur, onChange, minLongueur, longueurMax,
       >
         {libelle}
       </button>
-      <button type="button" onClick={onAnnuler} className="mt-4 text-sm font-medium text-doux hover:text-fort">
+      <button type="button" onClick={onAnnuler} className="mt-3 text-sm font-medium text-doux hover:text-fort">
         ← Changer d’utilisateur
       </button>
     </div>

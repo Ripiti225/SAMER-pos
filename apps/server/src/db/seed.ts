@@ -2,7 +2,6 @@
  * Seed de démonstration (voir CLAUDE.md).
  * Réinitialise les données puis insère le restaurant SAMER_ANGRE7E complet.
  */
-import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -88,17 +87,9 @@ export async function seed(): Promise<void> {
   const roleIdParNom = await etablirRolesSysteme(db);
   const rid = (nom: string) => roleIdParNom.get(nom)!;
 
-  // --- Utilisateurs (PIN de démo — à changer en production) ---
+  // --- Seul le compte propriétaire est conservé (à modifier/supprimer ensuite).
   await db.insert(utilisateurs).values([
     { nom_complet: 'Samer El Khoury', role: 'PROPRIETAIRE', role_id: rid('PROPRIETAIRE'), pin_hash: await hacherPin('852741'), telephone: '+2250700000001' },
-    { nom_complet: 'Awa Koné', role: 'MANAGER', role_id: rid('MANAGER'), pin_hash: await hacherPin('963852'), telephone: '+2250700000002' },
-    { nom_complet: 'Mariam Diabaté', role: 'CAISSIER', role_id: rid('CAISSIER'), pin_hash: await hacherPin('2580'), telephone: '+2250700000003' },
-    { nom_complet: 'Ibrahim Traoré', role: 'CAISSIER', role_id: rid('CAISSIER'), pin_hash: await hacherPin('4826'), telephone: '+2250700000004' },
-    { nom_complet: 'Fatou Bamba', role: 'SERVEUR', role_id: rid('SERVEUR'), pin_hash: await hacherPin('1357'), telephone: '+2250700000005' },
-    { nom_complet: 'Moussa Cissé', role: 'SERVEUR', role_id: rid('SERVEUR'), pin_hash: await hacherPin('2468'), telephone: '+2250700000006' },
-    { nom_complet: 'Kouadio Yao', role: 'CUISINE', role_id: rid('CUISINE'), poste_cuisine: 'CUISINIER', pin_hash: await hacherPin('7913'), telephone: '+2250700000007' },
-    { nom_complet: 'Luigi Kouassi', role: 'CUISINE', role_id: rid('CUISINE'), poste_cuisine: 'PIZZAIOLO', pin_hash: await hacherPin('8024'), telephone: '+2250700000008' },
-    { nom_complet: 'Aminata Touré', role: 'CUISINE', role_id: rid('CUISINE'), poste_cuisine: 'COMPTOIRISTE', pin_hash: await hacherPin('4652'), telephone: '+2250700000009' },
   ]);
 
   // --- Équipe RÉELLE « Samer Angré 7E » (source : docs/effectifs-par-restaurant.md)
@@ -112,23 +103,23 @@ export async function seed(): Promise<void> {
     poste: string;
     tel: string | null;
     photo: string;
+    code: string; // PIN connu (à réattribuer par l'encadrant ensuite)
   };
   const equipe7E: Recrue[] = [
-    { nom: 'BAZIE Jean Marc', role: 'CUISINE', pc: 'CUISINIER', poste: 'Cuisinier', tel: '0545104508', photo: `${PHOTO}/travailleurs/1778112607127_v9qppaeqfhh.heic` },
-    { nom: 'DIE YANNICK', role: 'SERVEUR', pc: null, poste: 'Serveur/se', tel: '0173163855', photo: `${PHOTO}/travailleurs/1779381741835_5rm8criwdqi.jpeg` },
-    { nom: 'DJE ANGE WILFRIED DORGELEX', role: 'MANAGER', pc: null, poste: 'Gérant / manager général', tel: '0778565312', photo: `${PHOTO}/photos/1778793969237_ijbhx85eq6e.jpg` },
-    { nom: 'GNOLEBA ZEKALO FULGENCE', role: 'CUISINE', pc: null, poste: 'Technicien de surface', tel: null, photo: `${PHOTO}/travailleurs/1778151645338_p385sou25z.jpg` },
-    { nom: 'GROGUHE ZRAGA MEDARD', role: 'CAISSIER', pc: null, poste: 'Comptoiriste', tel: '0101042021', photo: `${PHOTO}/travailleurs/1778151303984_b6nakqvyf5p.jpg` },
-    { nom: 'Hilary Sea', role: 'CAISSIER', pc: null, poste: 'Caissière', tel: '0777497272', photo: `${PHOTO}/travailleurs/1778151245288_dzcbagocd2f.jpg` },
-    { nom: 'KONE DJENEBA', role: 'SERVEUR', pc: null, poste: 'Serveur/se', tel: '0576360142', photo: `${PHOTO}/travailleurs/1778151460294_lq8en88d5af.jpg` },
-    { nom: 'Marie-Paule Gnepa', role: 'CAISSIER', pc: null, poste: 'Caissière', tel: null, photo: `${PHOTO}/travailleurs/1779381800359_5dotqfeume.jpeg` },
-    { nom: 'N’GUESSAN FLORA', role: 'CAISSIER', pc: null, poste: 'Caissière', tel: '0718901301', photo: `${PHOTO}/travailleurs/1778112557214_p83hfr9j86.jpg` },
-    { nom: 'N’ZI KONAN SERAPHIN', role: 'CAISSIER', pc: null, poste: 'Caissier/re', tel: '0701841311', photo: `${PHOTO}/travailleurs/1778151386842_t72lqo48h0l.jpg` },
-    { nom: 'SINGO BEUH VINCENT', role: 'CUISINE', pc: 'CUISINIER', poste: 'Cuisinier', tel: '0586627024', photo: `${PHOTO}/travailleurs/1778167391514_slwz99h3uok.jpg` },
-    { nom: 'TRAORÉ ZAWELA MICHAEL', role: 'CAISSIER', pc: null, poste: 'Caissier/re', tel: '0565121801', photo: `${PHOTO}/travailleurs/1778514165178_olleere5s6i.jpg` },
-    { nom: 'YAO KOUAME JULSON DARIN', role: 'CUISINE', pc: 'CUISINIER', poste: 'Cuisinier', tel: '0105340894', photo: `${PHOTO}/travailleurs/1778514338713_zz8cwrxohk.jpg` },
+    { nom: 'BAZIE Jean Marc', role: 'CUISINE', pc: 'CUISINIER', poste: 'Cuisinier', tel: '0545104508', photo: `${PHOTO}/travailleurs/1778112607127_v9qppaeqfhh.heic`, code: '240101' },
+    { nom: 'DIE YANNICK', role: 'SERVEUR', pc: null, poste: 'Serveur/se', tel: '0173163855', photo: `${PHOTO}/travailleurs/1779381741835_5rm8criwdqi.jpeg`, code: '240102' },
+    { nom: 'DJE ANGE WILFRIED DORGELEX', role: 'MANAGER', pc: null, poste: 'Gérant / manager général', tel: '0778565312', photo: `${PHOTO}/photos/1778793969237_ijbhx85eq6e.jpg`, code: '240103' },
+    { nom: 'GNOLEBA ZEKALO FULGENCE', role: 'CUISINE', pc: null, poste: 'Technicien de surface', tel: null, photo: `${PHOTO}/travailleurs/1778151645338_p385sou25z.jpg`, code: '240104' },
+    { nom: 'GROGUHE ZRAGA MEDARD', role: 'CAISSIER', pc: null, poste: 'Comptoiriste', tel: '0101042021', photo: `${PHOTO}/travailleurs/1778151303984_b6nakqvyf5p.jpg`, code: '240105' },
+    { nom: 'Hilary Sea', role: 'CAISSIER', pc: null, poste: 'Caissière', tel: '0777497272', photo: `${PHOTO}/travailleurs/1778151245288_dzcbagocd2f.jpg`, code: '240106' },
+    { nom: 'KONE DJENEBA', role: 'SERVEUR', pc: null, poste: 'Serveur/se', tel: '0576360142', photo: `${PHOTO}/travailleurs/1778151460294_lq8en88d5af.jpg`, code: '240107' },
+    { nom: 'Marie-Paule Gnepa', role: 'CAISSIER', pc: null, poste: 'Caissière', tel: null, photo: `${PHOTO}/travailleurs/1779381800359_5dotqfeume.jpeg`, code: '240108' },
+    { nom: 'N’GUESSAN FLORA', role: 'CAISSIER', pc: null, poste: 'Caissière', tel: '0718901301', photo: `${PHOTO}/travailleurs/1778112557214_p83hfr9j86.jpg`, code: '240109' },
+    { nom: 'N’ZI KONAN SERAPHIN', role: 'CAISSIER', pc: null, poste: 'Caissier/re', tel: '0701841311', photo: `${PHOTO}/travailleurs/1778151386842_t72lqo48h0l.jpg`, code: '240110' },
+    { nom: 'SINGO BEUH VINCENT', role: 'CUISINE', pc: 'CUISINIER', poste: 'Cuisinier', tel: '0586627024', photo: `${PHOTO}/travailleurs/1778167391514_slwz99h3uok.jpg`, code: '240111' },
+    { nom: 'TRAORÉ ZAWELA MICHAEL', role: 'CAISSIER', pc: null, poste: 'Caissier/re', tel: '0565121801', photo: `${PHOTO}/travailleurs/1778514165178_olleere5s6i.jpg`, code: '240112' },
+    { nom: 'YAO KOUAME JULSON DARIN', role: 'CUISINE', pc: 'CUISINIER', poste: 'Cuisinier', tel: '0105340894', photo: `${PHOTO}/travailleurs/1778514338713_zz8cwrxohk.jpg`, code: '240113' },
   ];
-  const expireCode = new Date(Date.now() + 30 * 24 * 3600 * 1000);
   await db.insert(utilisateurs).values(
     await Promise.all(
       equipe7E.map(async (e) => ({
@@ -139,11 +130,9 @@ export async function seed(): Promise<void> {
         poste: e.poste,
         photo_url: e.photo,
         telephone: e.tel,
-        // Compte non connectable tant que le PIN n'est pas posé (code temporaire).
-        pin_hash: await hacherPin(randomBytes(12).toString('hex')),
-        doit_definir_pin: true,
-        pin_temporaire_hash: await hacherPin(String(100000 + Math.floor(Math.random() * 900000))),
-        pin_temporaire_expire: expireCode,
+        // Code de connexion connu (le compte est directement utilisable).
+        pin_hash: await hacherPin(e.code),
+        doit_definir_pin: false,
       })),
     ),
   );
@@ -264,7 +253,8 @@ export async function seed(): Promise<void> {
 const lanceEnScript = process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;
 if (lanceEnScript) {
   await seed();
-  console.log('Seed de démonstration inséré ✔');
-  console.log('PIN de démo — Propriétaire: 852741, Manager: 963852, Caissiers: 2580 / 4826');
+  console.log('Seed inséré ✔');
+  console.log('Propriétaire : PIN 852741 (seul compte de base — à modifier/supprimer ensuite).');
+  console.log('Équipe 7E : PIN 240101 → 240113 dans l’ordre de la liste (cf. seed.ts / Réglages › Équipe).');
   await fermerDb();
 }
