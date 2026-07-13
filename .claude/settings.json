@@ -9,7 +9,8 @@
       "Bash(npx --no -w tsc -p apps/caisse/tsconfig.json --noEmit)",
       "Bash(echo \"tsc exit \\($?\\)\")",
       "Bash(echo \"tsc \\($?\\)\")",
-      "Bash(bash -c ' *)"
+      "Bash(bash -c ' *)",
+      "Bash(node -e \"const p=require\\('./apps/server/package.json'\\);console.log\\(Object.keys\\({...p.dependencies,...p.devDependencies}\\).filter\\(d=>/dotenv|supabase|env/.test\\(d\\)\\).join\\(', '\\)||'\\(aucune\\)'\\)\")"
     ]
   }
 }

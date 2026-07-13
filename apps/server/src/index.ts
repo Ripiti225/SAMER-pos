@@ -1,3 +1,4 @@
+import './env.js'; // charge apps/server/.env AVANT tout (imports hoistés)
 import { construireApp } from './app.js';
 import { moteurSync } from './modules/sync/moteur.js';
 

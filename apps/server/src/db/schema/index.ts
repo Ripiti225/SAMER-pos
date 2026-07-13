@@ -106,6 +106,9 @@ export const utilisateurs = pgTable('utilisateurs', {
   poste: text('poste'),
   // Photo de l'employé (URL) — affichée dans Réglages › Équipe.
   photo_url: text('photo_url'),
+  // Identifiant du même employé dans SamerTrackly (RH) — pour la synchro
+  // automatique (upsert sans doublon). NULL = employé créé localement.
+  externe_id: text('externe_id'),
   // Présence / absence RH (ne bloque pas la connexion, informatif pour l'équipe).
   disponibilite: disponibiliteEmploye('disponibilite').notNull().default('PRESENT'),
   pin_hash: text('pin_hash').notNull(),

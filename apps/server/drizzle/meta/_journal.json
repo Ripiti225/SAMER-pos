@@ -99,6 +99,13 @@
       "when": 1752420000000,
       "tag": "0013_equipe_photo_dispo",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1752480000000,
+      "tag": "0014_externe_id",
+      "breakpoints": true
     }
   ]
 }
