@@ -120,7 +120,7 @@ export function Login() {
   };
 
   return (
-    <div className="relative flex min-h-full items-center justify-center overflow-hidden p-4 md:p-6">
+    <div className="relative flex min-h-full items-start justify-center overflow-y-auto p-4 md:items-center md:p-6">
       {/* Atmosphère : halos chauds diffus */}
       <div className="pointer-events-none fixed inset-0 z-0 opacity-25">
         <div className="absolute -left-[8%] -top-[10%] h-[45%] w-[45%] rounded-full bg-marque-tint blur-[120px]" />
@@ -147,25 +147,23 @@ export function Login() {
                     key={u.id}
                     type="button"
                     onClick={() => choisirUtilisateur(u)}
-                    className={`flex flex-col items-center rounded-[18px] border-2 bg-surface p-5 text-center transition active:scale-[0.97] ${
+                    className={`flex min-h-[152px] flex-col items-center justify-between gap-2 rounded-[18px] border-2 bg-surface p-4 text-center transition active:scale-[0.97] ${
                       actif ? 'border-marque shadow-e2' : 'border-transparent shadow-e1 hover:shadow-e2'
                     }`}
                   >
-                    <div
-                      className={`mb-3 flex h-16 w-16 items-center justify-center rounded-full text-xl font-bold ${
-                        accent ? 'bg-marque-tint text-marque-fonce' : 'bg-surface-tres-haute text-doux'
-                      }`}
-                    >
-                      {initiales(u.nom_complet)}
+                    <div className="flex flex-col items-center gap-2">
+                      <div
+                        className={`flex h-14 w-14 items-center justify-center rounded-full text-lg font-bold ${
+                          accent ? 'bg-marque-tint text-marque-fonce' : 'bg-surface-tres-haute text-doux'
+                        }`}
+                      >
+                        {initiales(u.nom_complet)}
+                      </div>
+                      <span className="line-clamp-2 text-sm font-semibold leading-tight text-fort">{u.nom_complet}</span>
                     </div>
-                    <span className="font-semibold leading-tight text-fort">{u.nom_complet}</span>
                     <span
-                      className={`mt-2 rounded-full px-3 py-1 text-xs font-medium ${
-                        u.doit_definir_pin
-                          ? 'bg-marque/10 text-marque-fonce'
-                          : accent
-                            ? 'bg-marque/10 text-marque-fonce'
-                            : 'bg-surface-tres-haute text-doux'
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                        u.doit_definir_pin || accent ? 'bg-marque/10 text-marque-fonce' : 'bg-surface-tres-haute text-doux'
                       }`}
                     >
                       {u.doit_definir_pin ? 'PIN à définir' : libelleRole(u)}
@@ -183,7 +181,8 @@ export function Login() {
         </section>
 
         {/* ------- Droite : PIN / pavé ------- */}
-        <section className="flex flex-col items-center justify-center overflow-y-auto bg-surface-haute p-6 md:col-span-5 lg:p-8">
+        <section className="overflow-y-auto bg-surface-haute md:col-span-5">
+          <div className="flex min-h-full flex-col items-center justify-center p-6 lg:p-8">
           {!choisi ? (
             <div className="max-w-[300px] text-center text-doux">
               <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-surface-tres-haute text-faible">
@@ -252,6 +251,7 @@ export function Login() {
               onAnnuler={deselectionner}
             />
           )}
+          </div>
         </section>
       </main>
     </div>

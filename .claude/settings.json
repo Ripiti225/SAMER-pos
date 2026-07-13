@@ -7,7 +7,8 @@
       "Bash(pnpm -F @pos/serveur build)",
       "Bash(pnpm -F @pos/kds build)",
       "Bash(npx --no -w tsc -p apps/caisse/tsconfig.json --noEmit)",
-      "Bash(echo \"tsc exit \\($?\\)\")"
+      "Bash(echo \"tsc exit \\($?\\)\")",
+      "Bash(echo \"tsc \\($?\\)\")"
     ]
   }
 }
