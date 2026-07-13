@@ -9,6 +9,7 @@ export type Ecran =
   | 'tables'
   | 'mes-ventes'
   | 'cloture'
+  | 'sequence'
   | 'reglages';
 
 /**

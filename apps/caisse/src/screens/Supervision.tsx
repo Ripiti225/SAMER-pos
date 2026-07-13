@@ -1,4 +1,4 @@
-import { IconCashRegister, IconClipboardList, IconSettings } from '@tabler/icons-react';
+import { IconCashRegister, IconClipboardList, IconReportMoney, IconSettings } from '@tabler/icons-react';
 import { PERMISSIONS_ADMIN } from '@pos/shared';
 import { Modale } from '../components/Modale';
 import { PiluleSync } from '../components/SanteSync';
@@ -18,6 +18,7 @@ export function Supervision() {
 
   const peutRapports = !!session && session.permissions.includes('rapports.x');
   const peutReglages = !!session && PERMISSIONS_ADMIN.some((p) => session.permissions.includes(p));
+  const peutSequence = !!session && session.permissions.includes('caisse.fermer_sequence');
 
   const seDeconnecter = async () => {
     try {
@@ -64,6 +65,17 @@ export function Supervision() {
             <IconSettings size={26} className="text-marque-fonce" />
             <span className="text-2xl font-black">Réglages</span>
             <span className="text-sm text-doux">Rôles &amp; accès, équipe, salle, journal d’audit</span>
+          </button>
+        )}
+        {peutSequence && (
+          <button
+            type="button"
+            className="carte flex flex-col items-start gap-1 px-7 py-10 text-left"
+            onClick={() => aller('sequence')}
+          >
+            <IconReportMoney size={26} className="text-marque-fonce" />
+            <span className="text-2xl font-black">Fermeture de séquence</span>
+            <span className="text-sm text-doux">Total de la journée, détail par caissier, rasage</span>
           </button>
         )}
         <button

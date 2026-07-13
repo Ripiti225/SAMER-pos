@@ -24,7 +24,8 @@
       "Bash(sed -n '/paiements = pgTable/,/^}\\);/p' apps/server/src/db/schema/index.ts)",
       "Bash(psql \"postgres://localhost:5432/pos_samer\" -tAc \"SELECT enumlabel FROM pg_enum e JOIN pg_type t ON t.oid=e.enumtypid WHERE t.typname='mode_paiement' ORDER BY e.enumsortorder\")",
       "Bash(psql \"postgres://localhost:5432/pos_samer\" -tAc \"SELECT to_regclass\\('sequences_caisse'\\)\")",
-      "Bash(psql \"postgres://localhost:5432/pos_samer\" -tAc \"SELECT string_agg\\(column_name,', '\\) FROM information_schema.columns WHERE table_name='services_caisse' AND column_name IN \\('sequence_id','depenses','reconciliation','vente_totale','total_systeme'\\)\")"
+      "Bash(psql \"postgres://localhost:5432/pos_samer\" -tAc \"SELECT string_agg\\(column_name,', '\\) FROM information_schema.columns WHERE table_name='services_caisse' AND column_name IN \\('sequence_id','depenses','reconciliation','vente_totale','total_systeme'\\)\")",
+      "Bash(echo \"exit $?\")"
     ]
   }
 }

@@ -11,6 +11,7 @@ import {
   IconLock,
   IconLogout,
   IconPrinter,
+  IconReportMoney,
   IconSettings,
   IconToolsKitchen2,
   IconWifi,
@@ -43,6 +44,7 @@ export function Accueil() {
   const peutCloturer = perms.includes('caisse.cloturer');
   const estSuperviseur = !!session && (session.utilisateur.est_proprietaire || session.utilisateur.est_superviseur);
   const estAdmin = !!session && PERMISSIONS_ADMIN.some((p) => session.permissions.includes(p));
+  const peutSequence = perms.includes('caisse.fermer_sequence');
   const prenom = session?.utilisateur.nom_complet.split(/\s+/)[0] ?? '';
   const roleLabel = session?.utilisateur.role_nom ?? session?.utilisateur.role ?? '';
 
@@ -88,6 +90,12 @@ export function Accueil() {
             <button type="button" className="btn-blanc hidden items-center gap-2 sm:flex" onClick={() => aller('supervision')}>
               <IconArrowLeft size={18} />
               Supervision
+            </button>
+          )}
+          {peutSequence && (
+            <button type="button" className="btn-blanc flex items-center gap-2" onClick={() => aller('sequence')}>
+              <IconReportMoney size={18} />
+              <span className="hidden sm:inline">Séquence</span>
             </button>
           )}
           {estAdmin && (

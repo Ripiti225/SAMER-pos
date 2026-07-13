@@ -13,6 +13,7 @@ import { MesVentes } from './screens/MesVentes';
 import { OuvertureService } from './screens/OuvertureService';
 import { Paiement } from './screens/Paiement';
 import { Reglages } from './screens/Reglages';
+import { Sequence } from './screens/Sequence';
 import { Supervision } from './screens/Supervision';
 import { Tables } from './screens/Tables';
 import { useCaisse, type Ecran } from './stores/session';
@@ -76,6 +77,7 @@ export function App() {
       tables: <Tables />,
       'mes-ventes': <MesVentes />,
       cloture: <Cloture />,
+      sequence: <Sequence />,
       reglages: <Reglages />,
     }[ecran];
   }
