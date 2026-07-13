@@ -225,12 +225,15 @@ export const CreerEmployeSchema = z.object({
   telephone: TelephoneSchema,
 });
 
-/** Modification d'un employé (rôle, poste, téléphone). */
+/** Modification d'un employé (rôle, poste, téléphone, intitulé, photo). */
 export const ModifierEmployeSchema = z.object({
   nom_complet: NomCompletSchema.optional(),
   role_id: z.string().uuid('Rôle invalide').optional(),
   poste_cuisine: PosteCuisineSchema,
   telephone: TelephoneSchema,
+  // Intitulé de poste RH (libre) et photo (URL) — chaîne vide = effacer.
+  poste: z.string().trim().max(60, 'Intitulé trop long').nullish(),
+  photo_url: z.string().trim().max(500, 'URL trop longue').nullish(),
 });
 
 /** Changement de disponibilité RH d'un employé (présent / malade / congé / permission). */

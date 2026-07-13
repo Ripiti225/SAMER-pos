@@ -152,13 +152,7 @@ export function Login() {
                     }`}
                   >
                     <div className="flex flex-col items-center gap-2">
-                      <div
-                        className={`flex h-14 w-14 items-center justify-center rounded-full text-lg font-bold ${
-                          accent ? 'bg-marque-tint text-marque-fonce' : 'bg-surface-tres-haute text-doux'
-                        }`}
-                      >
-                        {initiales(u.nom_complet)}
-                      </div>
+                      <AvatarProfil nom={u.nom_complet} photo={u.photo_url ?? null} accent={accent} />
                       <span className="line-clamp-2 text-sm font-semibold leading-tight text-fort">{u.nom_complet}</span>
                     </div>
                     <span
@@ -354,6 +348,31 @@ function PavePin({ titre, sousTitre, valeur, onChange, minLongueur, longueurMax,
       <button type="button" onClick={onAnnuler} className="mt-3 text-sm font-medium text-doux hover:text-fort">
         ← Changer d’utilisateur
       </button>
+    </div>
+  );
+}
+
+/** Avatar de profil : photo de l'employé si dispo, sinon initiales (repli si l'URL casse). */
+function AvatarProfil({ nom, photo, accent }: { nom: string; photo: string | null; accent: boolean }) {
+  const [casse, setCasse] = useState(false);
+  if (photo && !casse) {
+    return (
+      <img
+        src={photo}
+        alt=""
+        loading="lazy"
+        onError={() => setCasse(true)}
+        className="h-14 w-14 rounded-full border border-bordure object-cover"
+      />
+    );
+  }
+  return (
+    <div
+      className={`flex h-14 w-14 items-center justify-center rounded-full text-lg font-bold ${
+        accent ? 'bg-marque-tint text-marque-fonce' : 'bg-surface-tres-haute text-doux'
+      }`}
+    >
+      {initiales(nom)}
     </div>
   );
 }

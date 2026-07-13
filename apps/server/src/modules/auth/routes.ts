@@ -92,6 +92,7 @@ export function routesAuth(app: FastifyInstance): void {
         role: utilisateurs.role,
         role_id: utilisateurs.role_id,
         role_nom: roles.nom,
+        photo_url: utilisateurs.photo_url,
         doit_definir_pin: utilisateurs.doit_definir_pin,
       })
       .from(utilisateurs)

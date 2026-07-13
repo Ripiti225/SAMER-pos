@@ -8,6 +8,7 @@ export interface UtilisateurPublic {
   role: Role | null;
   role_nom?: string;
   role_id?: string | null;
+  photo_url?: string | null;
   /** true si l'employé doit encore poser son PIN via un code temporaire. */
   doit_definir_pin?: boolean;
 }

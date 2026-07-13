@@ -144,6 +144,8 @@ export function routesEquipe(app: FastifyInstance): void {
           nom_complet: corps.nom_complet ?? cible.nom_complet,
           role_id: corps.role_id ?? cible.role_id,
           poste_cuisine: corps.poste_cuisine === undefined ? cible.poste_cuisine : corps.poste_cuisine,
+          poste: corps.poste === undefined ? cible.poste : (corps.poste || null),
+          photo_url: corps.photo_url === undefined ? cible.photo_url : (corps.photo_url || null),
           telephone: corps.telephone === undefined ? cible.telephone : corps.telephone,
           // Le changement de rôle système efface l'ancien enum (source = role_id).
           role: corps.role_id ? null : cible.role,

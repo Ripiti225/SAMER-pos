@@ -162,6 +162,17 @@ function Equipe() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin', 'equipe'] }),
     onError: (e: Error) => setMsg({ texte: e.message }),
   });
+  const [edition, setEdition] = useState<Employe | null>(null);
+  const modif = useMutation({
+    mutationFn: ({ id, corps }: { id: string; corps: Record<string, unknown> }) =>
+      api(`/api/admin/equipe/${id}`, { method: 'PATCH', corps }),
+    onSuccess: () => {
+      setEdition(null);
+      setMsg({ texte: 'Fiche employé mise à jour', ok: true });
+      void qc.invalidateQueries({ queryKey: ['admin', 'equipe'] });
+    },
+    onError: (e: Error) => setMsg({ texte: e.message }),
+  });
 
   return (
     <section>
@@ -216,10 +227,11 @@ function Equipe() {
                 </td>
                 <td className="text-right">
                   {e.actif && (
-                    <>
-                      <button type="button" className="btn-blanc mr-2" onClick={() => reinit.mutate(e.id)}>Réinit. PIN</button>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <button type="button" className="btn-blanc" onClick={() => setEdition(e)}>Modifier</button>
+                      <button type="button" className="btn-blanc" onClick={() => reinit.mutate(e.id)}>Réinit. PIN</button>
                       <button type="button" className="btn-blanc" onClick={() => desactiver.mutate(e.id)}>Désactiver</button>
-                    </>
+                    </div>
                   )}
                 </td>
               </tr>
@@ -245,7 +257,83 @@ function Equipe() {
           <p className="mt-2 text-sm text-doux">L’employé saisira lui-même son PIN avec le code temporaire.</p>
         </div>
       )}
+
+      {edition && (
+        <EditionEmploye
+          employe={edition}
+          roles={rolesActifs}
+          enCours={modif.isPending}
+          onFermer={() => setEdition(null)}
+          onEnregistrer={(corps) => modif.mutate({ id: edition.id, corps })}
+        />
+      )}
     </section>
+  );
+}
+
+/** Formulaire de modification d'un employé (nom, rôle, poste, téléphone, photo). */
+function EditionEmploye({
+  employe,
+  roles,
+  enCours,
+  onFermer,
+  onEnregistrer,
+}: {
+  employe: Employe;
+  roles: RoleAdmin[];
+  enCours: boolean;
+  onFermer: () => void;
+  onEnregistrer: (corps: Record<string, unknown>) => void;
+}) {
+  const [nom, setNom] = useState(employe.nom_complet);
+  const [roleId, setRoleId] = useState(employe.role_id ?? '');
+  const [poste, setPoste] = useState(employe.poste ?? '');
+  const [tel, setTel] = useState(employe.telephone ?? '');
+  const [photo, setPhoto] = useState(employe.photo_url ?? '');
+
+  return (
+    <Modale titre={`Modifier ${employe.nom_complet}`} onFermer={onFermer} enfants={
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <AvatarEmploye nom={nom || employe.nom_complet} photo={photo || null} />
+          <div className="text-sm text-doux">Aperçu de la photo</div>
+        </div>
+        <label className="block text-sm text-doux">Nom complet
+          <input className="champ mt-1" value={nom} onChange={(e) => setNom(e.target.value)} />
+        </label>
+        <label className="block text-sm text-doux">Rôle
+          <select className="champ mt-1" value={roleId} onChange={(e) => setRoleId(e.target.value)}>
+            {roles.map((r) => <option key={r.id} value={r.id}>{r.nom}</option>)}
+          </select>
+        </label>
+        <label className="block text-sm text-doux">Intitulé de poste
+          <input className="champ mt-1" value={poste} onChange={(e) => setPoste(e.target.value)} placeholder="ex : Comptoiriste" />
+        </label>
+        <label className="block text-sm text-doux">Téléphone
+          <input className="champ mt-1" value={tel} onChange={(e) => setTel(e.target.value)} placeholder="ex : 0700000000" />
+        </label>
+        <label className="block text-sm text-doux">Photo (URL)
+          <input className="champ mt-1" value={photo} onChange={(e) => setPhoto(e.target.value)} placeholder="https://…" />
+        </label>
+        <div className="flex gap-2 pt-1">
+          <button
+            type="button"
+            className="btn-accent flex-1"
+            disabled={enCours || nom.trim().length < 2 || !roleId}
+            onClick={() => onEnregistrer({
+              nom_complet: nom.trim(),
+              role_id: roleId,
+              poste: poste.trim(),
+              telephone: tel.trim() || undefined,
+              photo_url: photo.trim(),
+            })}
+          >
+            {enCours ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+          <button type="button" className="btn-blanc" onClick={onFermer}>Annuler</button>
+        </div>
+      </div>
+    } />
   );
 }
 
