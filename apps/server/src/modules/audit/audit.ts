@@ -12,6 +12,7 @@ export type ActionAudit =
   | 'ECHEC_PIN'
   | 'OUVERTURE_SERVICE'
   | 'CLOTURE_SERVICE'
+  | 'CLOTURE_SEQUENCE'
   | 'TRANSFERT_COMMANDES'
   | 'ECART_CAISSE'
   | 'REMISE'

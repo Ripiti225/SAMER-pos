@@ -41,11 +41,22 @@ export const TransfererServiceSchema = z.object({
   pin_receveur: PinSaisiSchema,
 });
 
+const MontantPositif = z.number().int().min(0);
+
+/**
+ * Fermeture de shift avec réconciliation (§ brief). Le comptage aveugle est
+ * préservé : `especes_comptees` est saisi sans que l'écart soit révélé avant.
+ * `livraisons` (Yango/Glovo/Samer Deliv) et `modes` (électroniques) sont des
+ * dictionnaires — toute clé absente vaut 0.
+ */
 export const CloturerServiceSchema = z.object({
   especes_comptees: z
     .number({ invalid_type_error: 'Le montant compté doit être un nombre' })
     .int('Le montant compté doit être un montant entier en FCFA')
     .min(0, 'Le montant compté ne peut pas être négatif'),
+  depenses: MontantPositif.default(0),
+  livraisons: z.record(z.string(), MontantPositif).default({}),
+  modes: z.record(z.string(), MontantPositif).default({}),
 });
 
 export const CreerCommandeSchema = z

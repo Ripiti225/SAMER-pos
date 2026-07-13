@@ -1,5 +1,5 @@
 /** Statistiques d'un service caisse — utilisées par le rapport Z (figé) et le rapport X (live). */
-import { and, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import type { ModePaiement, TypeCommande } from '@pos/shared';
 import { MODES_PAIEMENT, TYPES_COMMANDE } from '@pos/shared';
 import type { DbOuTx } from '../../db/client.js';
@@ -31,6 +31,37 @@ export interface StatsService {
   top_articles: { nom: string; quantite: number; total: number }[];
   remises_detail: RemiseDetail[];
   annulations_detail: AnnulationDetail[];
+}
+
+/**
+ * Valeurs auto de réconciliation d'un shift :
+ * - `modes` : somme des paiements par mode, HORS commandes de livraison
+ *   (les livraisons sont comptées à part → pas de double comptage).
+ * - `livraisons` : total des commandes payées par partenaire (Yango/Glovo/Deliv).
+ * `modes.ESPECES` sert au théorique côté serveur (jamais exposé avant comptage).
+ */
+export async function reconciliationAuto(
+  dbx: DbOuTx,
+  serviceId: string,
+): Promise<{ modes: Record<ModePaiement, number>; livraisons: Record<string, number> }> {
+  const lignesModes = await dbx
+    .select({ mode: paiements.mode, total: sql<string>`SUM(${paiements.montant})` })
+    .from(paiements)
+    .innerJoin(commandes, eq(commandes.id, paiements.commande_id))
+    .where(and(eq(paiements.service_id, serviceId), isNull(commandes.partenaire)))
+    .groupBy(paiements.mode);
+  const modes = Object.fromEntries(MODES_PAIEMENT.map((m) => [m, 0])) as Record<ModePaiement, number>;
+  for (const l of lignesModes) modes[l.mode] = Number(l.total);
+
+  const lignesPart = await dbx
+    .select({ partenaire: commandes.partenaire, total: sql<string>`SUM(${commandes.total})` })
+    .from(commandes)
+    .where(and(eq(commandes.service_id, serviceId), eq(commandes.statut, 'PAYEE'), isNotNull(commandes.partenaire)))
+    .groupBy(commandes.partenaire);
+  const livraisons: Record<string, number> = {};
+  for (const l of lignesPart) if (l.partenaire) livraisons[l.partenaire] = Number(l.total);
+
+  return { modes, livraisons };
 }
 
 export async function calculerStatsService(dbx: DbOuTx, serviceId: string): Promise<StatsService> {

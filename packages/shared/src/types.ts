@@ -278,4 +278,70 @@ export interface RapportZ {
   top_articles: { nom: string; quantite: number; total: number }[];
   remises_detail: { numero_ticket: number; montant: number; motif: string | null; par_nom: string | null }[];
   annulations_detail: { numero_ticket: number; total: number }[];
+  // Réconciliation de fermeture (déclarés par le caissier + calculés).
+  depenses: number;
+  livraisons: Record<string, number>;
+  modes_declares: Record<string, number>;
+  vente_totale: number;
+  total_systeme: number;
+  diff: number;
+}
+
+/**
+ * Valeurs auto pour le formulaire de fermeture — SANS l'écart ni le total
+ * système ni les espèces (comptage aveugle préservé). Le caissier confirme/
+ * édite les modes électroniques et les livraisons.
+ */
+export interface ReconciliationPreview {
+  fond_de_caisse: number;
+  livraisons: Record<string, number>;
+  modes: Record<ModePaiement, number>;
+}
+
+/** Détail d'un shift dans une séquence (vue gérant). */
+export interface ShiftSequence {
+  service_id: string;
+  caissier: string;
+  ouvert_le: string;
+  cloture_le: string | null;
+  statut: 'OUVERT' | 'CLOTURE';
+  fond_de_caisse: number;
+  especes_comptees: number | null;
+  ecart: number | null;
+  vente_totale: number | null;
+  total_systeme: number | null;
+  depenses: number;
+  livraisons: Record<string, number>;
+  modes_declares: Record<string, number>;
+}
+
+/** Séquence courante (ouverte) avec le détail par caissier. */
+export interface SequenceCourante {
+  id: string;
+  ouverte_le: string;
+  shifts: ShiftSequence[];
+  nb_shifts_ouverts: number;
+  totaux: RecapSequence;
+}
+
+/** Récap agrégé d'une séquence. */
+export interface RecapSequence {
+  vente_totale: number;
+  total_systeme: number;
+  diff: number;
+  especes_comptees: number;
+  depenses: number;
+  ecart_especes: number;
+  livraisons: Record<string, number>;
+  modes: Record<string, number>;
+}
+
+/** Rapport figé d'une séquence clôturée. */
+export interface RapportSequence extends RecapSequence {
+  sequence_id: string;
+  ouverte_le: string;
+  cloturee_le: string;
+  cloturee_par: string;
+  nb_shifts: number;
+  shifts: ShiftSequence[];
 }

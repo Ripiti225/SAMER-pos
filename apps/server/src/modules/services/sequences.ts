@@ -1,0 +1,169 @@
+/**
+ * Séquence de caisse (journée) : regroupe tous les shifts (services) depuis la
+ * dernière fermeture. Détail par caissier, agrégation, et « rasage » par un
+ * porteur de la permission `caisse.fermer_sequence` (le gérant par défaut).
+ */
+import type { FastifyInstance } from 'fastify';
+import { and, asc, eq, ne, sql } from 'drizzle-orm';
+import type { RapportSequence, RecapSequence, SequenceCourante, ShiftSequence } from '@pos/shared';
+import type { DbOuTx } from '../../db/client.js';
+import { db } from '../../db/client.js';
+import { sequencesCaisse, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
+import { ecrireOutbox } from '../../db/outbox.js';
+import { ErreurMetier } from '../../lib/erreurs.js';
+import { journaliser } from '../audit/audit.js';
+
+/** Id de la séquence OUVERTE (créée à la volée si aucune). */
+export async function sequenceOuverte(tx: DbOuTx): Promise<string> {
+  const [existante] = await tx
+    .select({ id: sequencesCaisse.id })
+    .from(sequencesCaisse)
+    .where(eq(sequencesCaisse.statut, 'OUVERTE'))
+    .limit(1);
+  if (existante) return existante.id;
+  const [creee] = await tx.insert(sequencesCaisse).values({}).returning({ id: sequencesCaisse.id });
+  return creee!.id;
+}
+
+function recAdditif(): Record<string, number> {
+  return {};
+}
+function ajoute(acc: Record<string, number>, src: Record<string, number> | null | undefined): void {
+  for (const [k, v] of Object.entries(src ?? {})) acc[k] = (acc[k] ?? 0) + (Number(v) || 0);
+}
+
+/** Détail des shifts d'une séquence (un par caissier / relève). */
+async function detailShifts(dbx: DbOuTx, sequenceId: string): Promise<ShiftSequence[]> {
+  const rows = await dbx
+    .select({
+      id: servicesCaisse.id,
+      caissier: utilisateurs.nom_complet,
+      ouvert_le: servicesCaisse.ouvert_le,
+      cloture_le: servicesCaisse.cloture_le,
+      statut: servicesCaisse.statut,
+      fond_de_caisse: servicesCaisse.fond_de_caisse,
+      especes_comptees: servicesCaisse.especes_comptees,
+      ecart: servicesCaisse.ecart,
+      vente_totale: servicesCaisse.vente_totale,
+      total_systeme: servicesCaisse.total_systeme,
+      depenses: servicesCaisse.depenses,
+      reconciliation: servicesCaisse.reconciliation,
+    })
+    .from(servicesCaisse)
+    .leftJoin(utilisateurs, eq(utilisateurs.id, servicesCaisse.caissier_id))
+    .where(eq(servicesCaisse.sequence_id, sequenceId))
+    .orderBy(asc(servicesCaisse.ouvert_le));
+
+  return rows.map((r) => {
+    const rec = (r.reconciliation ?? {}) as { livraisons?: Record<string, number>; modes?: Record<string, number> };
+    return {
+      service_id: r.id,
+      caissier: r.caissier ?? '—',
+      ouvert_le: r.ouvert_le.toISOString(),
+      cloture_le: r.cloture_le ? r.cloture_le.toISOString() : null,
+      statut: r.statut as 'OUVERT' | 'CLOTURE',
+      fond_de_caisse: r.fond_de_caisse,
+      especes_comptees: r.especes_comptees,
+      ecart: r.ecart,
+      vente_totale: r.vente_totale,
+      total_systeme: r.total_systeme,
+      depenses: r.depenses,
+      livraisons: rec.livraisons ?? {},
+      modes_declares: rec.modes ?? {},
+    };
+  });
+}
+
+/** Agrège les shifts CLÔTURÉS d'une séquence en un récap. */
+function agreger(shifts: ShiftSequence[]): RecapSequence {
+  const livraisons = recAdditif();
+  const modes = recAdditif();
+  let vente_totale = 0;
+  let total_systeme = 0;
+  let especes_comptees = 0;
+  let depenses = 0;
+  let ecart_especes = 0;
+  for (const s of shifts) {
+    if (s.statut !== 'CLOTURE') continue;
+    vente_totale += s.vente_totale ?? 0;
+    total_systeme += s.total_systeme ?? 0;
+    especes_comptees += s.especes_comptees ?? 0;
+    depenses += s.depenses ?? 0;
+    ecart_especes += s.ecart ?? 0;
+    ajoute(livraisons, s.livraisons);
+    ajoute(modes, s.modes_declares);
+  }
+  return { vente_totale, total_systeme, diff: vente_totale - total_systeme, especes_comptees, depenses, ecart_especes, livraisons, modes };
+}
+
+export function routesSequences(app: FastifyInstance): void {
+  const garde = app.exigePermission('caisse.fermer_sequence');
+
+  // Séquence courante (ouverte) avec le détail par caissier — vue gérant.
+  app.get('/api/sequences/courante', { preHandler: garde }, async (): Promise<SequenceCourante | null> => {
+    const [seq] = await db.select().from(sequencesCaisse).where(eq(sequencesCaisse.statut, 'OUVERTE')).limit(1);
+    if (!seq) return null;
+    const shifts = await detailShifts(db, seq.id);
+    return {
+      id: seq.id,
+      ouverte_le: seq.ouverte_le.toISOString(),
+      shifts,
+      nb_shifts_ouverts: shifts.filter((s) => s.statut === 'OUVERT').length,
+      totaux: agreger(shifts),
+    };
+  });
+
+  // Fermer (raser) la séquence : agrège tous les shifts clôturés, fige le
+  // rapport, ouvre implicitement la suivante au prochain shift.
+  app.post('/api/sequences/cloturer', { preHandler: garde }, async (req): Promise<RapportSequence> => {
+    const rapport = await db.transaction(async (tx) => {
+      const [seq] = await tx
+        .select()
+        .from(sequencesCaisse)
+        .where(eq(sequencesCaisse.statut, 'OUVERTE'))
+        .limit(1)
+        .for('update');
+      if (!seq) throw new ErreurMetier('Aucune séquence ouverte à fermer', 409);
+
+      const ouverts = await tx
+        .select({ n: sql<string>`COUNT(*)` })
+        .from(servicesCaisse)
+        .where(and(eq(servicesCaisse.sequence_id, seq.id), ne(servicesCaisse.statut, 'CLOTURE')));
+      if (Number(ouverts[0]?.n ?? 0) > 0) {
+        throw new ErreurMetier('Des shifts sont encore ouverts — fermez-les avant de raser la séquence', 409);
+      }
+
+      const shifts = await detailShifts(tx, seq.id);
+      const recap = agreger(shifts);
+      const clotureeLe = new Date();
+      const rapportSeq: RapportSequence = {
+        ...recap,
+        sequence_id: seq.id,
+        ouverte_le: seq.ouverte_le.toISOString(),
+        cloturee_le: clotureeLe.toISOString(),
+        cloturee_par: req.session!.nom_complet,
+        nb_shifts: shifts.length,
+        shifts,
+      };
+
+      const [maj] = await tx
+        .update(sequencesCaisse)
+        .set({ statut: 'CLOTUREE', cloturee_le: clotureeLe, cloturee_par: req.session!.utilisateur_id, rapport: rapportSeq })
+        .where(eq(sequencesCaisse.id, seq.id))
+        .returning();
+      await ecrireOutbox(tx, 'sequences_caisse', 'UPDATE', seq.id, maj as unknown as Record<string, unknown>);
+      await journaliser(tx, {
+        user_id: req.session!.utilisateur_id,
+        action: 'CLOTURE_SEQUENCE',
+        entite: 'sequences_caisse',
+        entite_id: seq.id,
+        montant: recap.vente_totale,
+        meta: { nb_shifts: shifts.length, diff: recap.diff },
+      });
+      return rapportSeq;
+    });
+
+    app.diffuser('service', rapport.sequence_id);
+    return rapport;
+  });
+}

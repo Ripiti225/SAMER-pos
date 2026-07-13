@@ -9,9 +9,11 @@ import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
 import { verifierPinUtilisateur } from '../auth/pin.js';
-import { calculerStatsService } from './rapport.js';
+import { calculerStatsService, reconciliationAuto } from './rapport.js';
+import { sequenceOuverte } from './sequences.js';
 import { aPermission } from '../../plugins/sessions.js';
 import { permissionsDuRole } from '../roles/service.js';
+import type { ReconciliationPreview } from '@pos/shared';
 
 /** Vue publique d'un service : ne contient JAMAIS especes_theorique tant que non clôturé. */
 function vueService(s: typeof servicesCaisse.$inferSelect) {
@@ -61,9 +63,11 @@ export function routesServices(app: FastifyInstance): void {
     }
 
     const service = await db.transaction(async (tx) => {
+      // Rattache le shift à la séquence ouverte (créée à la volée si aucune).
+      const sequenceId = await sequenceOuverte(tx);
       const [s] = await tx
         .insert(servicesCaisse)
-        .values({ caissier_id: caissierId, fond_de_caisse: corps.fond_de_caisse })
+        .values({ caissier_id: caissierId, fond_de_caisse: corps.fond_de_caisse, sequence_id: sequenceId })
         .returning();
       await ecrireOutbox(tx, 'services_caisse', 'INSERT', s!.id, s as unknown as Record<string, unknown>);
       await journaliser(tx, {
@@ -119,6 +123,23 @@ export function routesServices(app: FastifyInstance): void {
         and(eq(servicesCaisse.caissier_id, req.session!.utilisateur_id), eq(servicesCaisse.statut, 'OUVERT')),
       );
     return service ? vueService(service) : null;
+  });
+
+  /**
+   * Valeurs auto du formulaire de fermeture : fond, livraisons et modes
+   * ÉLECTRONIQUES (Wave/OM/MTN/Moov/Carte/Djamo). N'expose NI les espèces
+   * système NI le total (comptage à l'aveugle préservé — §14.3).
+   */
+  app.get('/api/services/reconciliation-preview', { preHandler: gardeCaisse }, async (req): Promise<ReconciliationPreview> => {
+    const [service] = await db
+      .select()
+      .from(servicesCaisse)
+      .where(and(eq(servicesCaisse.caissier_id, req.session!.utilisateur_id), eq(servicesCaisse.statut, 'OUVERT')));
+    if (!service) throw new ErreurMetier('Aucun service ouvert', 409);
+    const auto = await reconciliationAuto(db, service.id);
+    const modes = { ...auto.modes };
+    delete (modes as Record<string, number>).ESPECES; // jamais révélé avant comptage
+    return { fond_de_caisse: service.fond_de_caisse, livraisons: auto.livraisons, modes };
   });
 
   /**
@@ -242,9 +263,21 @@ export function routesServices(app: FastifyInstance): void {
       }
 
       const stats = await calculerStatsService(tx, service.id);
-      const especesTheorique = service.fond_de_caisse + stats.par_mode.ESPECES;
+      const auto = await reconciliationAuto(tx, service.id);
+      // Théorique = fond + espèces système HORS livraison (comptage aveugle).
+      const especesTheorique = service.fond_de_caisse + auto.modes.ESPECES;
       const ecart = corps.especes_comptees - especesTheorique;
       const clotureLe = new Date();
+
+      // Réconciliation : livraisons + modes électroniques déclarés (clé absente = 0).
+      const livraisons = corps.livraisons ?? {};
+      const modesDeclares = corps.modes ?? {};
+      const somme = (o: Record<string, number>) => Object.values(o).reduce((s, v) => s + (Number(v) || 0), 0);
+      const venteTotale =
+        corps.depenses + somme(livraisons) + somme(modesDeclares) + corps.especes_comptees - service.fond_de_caisse;
+      const totalSysteme = stats.total_ventes;
+      const diff = venteTotale - totalSysteme;
+      const sequenceId = service.sequence_id ?? (await sequenceOuverte(tx));
 
       const rapportZ: RapportZ = {
         service_id: service.id,
@@ -255,6 +288,12 @@ export function routesServices(app: FastifyInstance): void {
         especes_comptees: corps.especes_comptees,
         especes_theorique: especesTheorique,
         ecart,
+        depenses: corps.depenses,
+        livraisons,
+        modes_declares: modesDeclares,
+        vente_totale: venteTotale,
+        total_systeme: totalSysteme,
+        diff,
         ...stats,
       };
 
@@ -263,9 +302,14 @@ export function routesServices(app: FastifyInstance): void {
         .set({
           statut: 'CLOTURE',
           cloture_le: clotureLe,
+          sequence_id: sequenceId,
           especes_comptees: corps.especes_comptees,
           especes_theorique: especesTheorique,
           ecart,
+          depenses: corps.depenses,
+          reconciliation: { livraisons, modes: modesDeclares },
+          vente_totale: venteTotale,
+          total_systeme: totalSysteme,
           rapport_z: rapportZ,
         })
         .where(eq(servicesCaisse.id, service.id))

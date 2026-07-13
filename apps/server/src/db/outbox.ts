@@ -11,6 +11,7 @@ export type TableSynchronisee =
   | 'commande_items'
   | 'paiements'
   | 'services_caisse'
+  | 'sequences_caisse'
   | 'audit_log'
   | 'notes_split'
   // Sprint 4 : fidélité remonte aussi vers le cloud (SamerTrackly).

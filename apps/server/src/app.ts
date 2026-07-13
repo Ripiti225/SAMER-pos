@@ -8,6 +8,7 @@ import { routesCatalogue } from './modules/catalogue/routes.js';
 import { routesCommandes } from './modules/commandes/routes.js';
 import { routesPaiements } from './modules/paiements/routes.js';
 import { routesServices } from './modules/services/routes.js';
+import { routesSequences } from './modules/services/sequences.js';
 import { routesRapports } from './modules/rapports/routes.js';
 import { routesKds } from './modules/kds/routes.js';
 import { routesServeur } from './modules/serveur/routes.js';
@@ -46,6 +47,7 @@ export async function construireApp(options: { logger?: boolean } = {}): Promise
   routesCommandes(app);
   routesPaiements(app);
   routesServices(app);
+  routesSequences(app);
   routesRapports(app);
   routesKds(app);
   routesServeur(app);
