@@ -142,6 +142,22 @@ export function routesServices(app: FastifyInstance): void {
     return { fond_de_caisse: service.fond_de_caisse, livraisons: auto.livraisons, modes };
   });
 
+  // Accusé de fin : le caissier valide son ticket (bouton « Terminer »). Le shift
+  // clôturé n'est plus un « point à valider » et ne le renvoie plus au ticket.
+  app.post('/api/services/remettre-cloture', { preHandler: app.exigerAuth }, async (req) => {
+    await db
+      .update(servicesCaisse)
+      .set({ remis_le: new Date() })
+      .where(
+        and(
+          eq(servicesCaisse.caissier_id, req.session!.utilisateur_id),
+          eq(servicesCaisse.statut, 'CLOTURE'),
+          isNull(servicesCaisse.remis_le),
+        ),
+      );
+    return { ok: true };
+  });
+
   /**
    * Relève de caisse : transfère TOUTES les commandes en cours du service
    * du caissier connecté vers le caissier suivant. Le receveur accepte le

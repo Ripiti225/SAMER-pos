@@ -120,6 +120,13 @@
       "when": 1752600000000,
       "tag": "0016_champs_manuels",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1752660000000,
+      "tag": "0017_remis_le",
+      "breakpoints": true
     }
   ]
 }

@@ -40,6 +40,8 @@ export interface SessionInfo {
   /** Sprint 2 : verrouillage plus long pour l'app serveur tablette (§B5). */
   verrouillage_inactivite_serveur_secondes: number;
   service_ouvert: ServiceOuvertVue | null;
+  /** Shift clôturé non encore « remis » : le caissier doit terminer (ticket). */
+  cloture_en_attente?: RapportZ | null;
 }
 
 /** Vue du service en cours — ne contient JAMAIS le théorique (§14.3). */

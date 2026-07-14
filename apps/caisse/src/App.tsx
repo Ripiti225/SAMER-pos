@@ -65,6 +65,10 @@ export function App() {
   let contenu: JSX.Element;
   if (!session) {
     contenu = <Login />;
+  } else if (session.cloture_en_attente) {
+    // Point à valider : un shift clôturé non « remis » verrouille tout — le
+    // caissier est renvoyé au ticket et doit terminer (rien d'autre possible).
+    contenu = <Cloture />;
   } else if (doitEncaisser && !session.service_ouvert && ecransDeVente.includes(ecran)) {
     // Pas de vente possible sans fond de caisse saisi (mais Supervision/rapports/réglages restent ouverts)
     contenu = <OuvertureService />;

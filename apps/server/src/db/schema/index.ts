@@ -264,6 +264,9 @@ export const servicesCaisse = pgTable('services_caisse', {
   fond_de_caisse: integer('fond_de_caisse').notNull(),
   ouvert_le: timestamp('ouvert_le', { withTimezone: true }).notNull().defaultNow(),
   cloture_le: timestamp('cloture_le', { withTimezone: true }),
+  // Accusé de fin par le caissier (bouton « Terminer »). NULL après clôture =
+  // « point à valider » : au retour, le caissier est renvoyé au ticket.
+  remis_le: timestamp('remis_le', { withTimezone: true }),
   statut: text('statut').notNull().default('OUVERT'),
   especes_comptees: integer('especes_comptees'),
   especes_theorique: integer('especes_theorique'),

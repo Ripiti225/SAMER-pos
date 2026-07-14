@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import argon2 from 'argon2';
 import { DeverrouillerSchema, LoginSchema, PoserPinSchema, TOUTES_PERMISSIONS, peutAccederCaisse } from '@pos/shared';
-import type { SessionInfo } from '@pos/shared';
+import type { RapportZ, SessionInfo } from '@pos/shared';
 import { db } from '../../db/client.js';
 import { parametresLocaux, restaurant, roles, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
@@ -31,6 +31,21 @@ async function construireSessionInfo(session: SessionUtilisateur): Promise<Sessi
     .select()
     .from(servicesCaisse)
     .where(and(eq(servicesCaisse.caissier_id, session.utilisateur_id), eq(servicesCaisse.statut, 'OUVERT')));
+
+  // Shift clôturé mais non « remis » (accusé de fin) → point à valider : au
+  // retour, le caissier est renvoyé au ticket et doit terminer.
+  const [enAttente] = await db
+    .select({ rapport_z: servicesCaisse.rapport_z })
+    .from(servicesCaisse)
+    .where(
+      and(
+        eq(servicesCaisse.caissier_id, session.utilisateur_id),
+        eq(servicesCaisse.statut, 'CLOTURE'),
+        isNull(servicesCaisse.remis_le),
+      ),
+    )
+    .orderBy(desc(servicesCaisse.cloture_le))
+    .limit(1);
 
   // Permissions effectives (le propriétaire a tout, invariant 1.5)
   const perms = await permissionsEffectives(session.est_proprietaire, session.role_id);
@@ -64,6 +79,7 @@ async function construireSessionInfo(session: SessionUtilisateur): Promise<Sessi
           statut: 'OUVERT',
         }
       : null,
+    cloture_en_attente: (enAttente?.rapport_z as RapportZ | undefined) ?? null,
   };
 }
 

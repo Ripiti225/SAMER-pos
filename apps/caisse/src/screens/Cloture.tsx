@@ -32,8 +32,11 @@ const nombre = (s: string) => Number(s || '0');
 export function Cloture() {
   const { aller, poserSession, afficherToast, session } = useCaisse();
   const queryClient = useQueryClient();
-  const [etape, setEtape] = useState<Etape>('compter');
-  const [rapport, setRapport] = useState<RapportZ | null>(null);
+  // « Point à valider » : shift déjà clôturé (machine coupée, reconnexion…) →
+  // on démarre directement sur le ticket, sans retour possible.
+  const enAttente = session?.cloture_en_attente ?? null;
+  const [etape, setEtape] = useState<Etape>(enAttente ? 'rapport' : 'compter');
+  const [rapport, setRapport] = useState<RapportZ | null>(enAttente);
   const [enCours, setEnCours] = useState(false);
   const [transfertOuvert, setTransfertOuvert] = useState(false);
 
@@ -92,6 +95,10 @@ export function Cloture() {
   };
 
   const terminer = async () => {
+    // Accuse la fin du shift (le « point à valider » disparaît) puis déconnecte.
+    try {
+      await api('/api/services/remettre-cloture', { method: 'POST' });
+    } catch { /* ignore */ }
     try {
       await api('/api/auth/logout', { method: 'POST' });
     } catch { /* ignore */ }
@@ -215,8 +222,8 @@ export function Cloture() {
               </div>
             </div>
 
-            <button type="button" className="btn-accent w-full py-4 text-lg" onClick={terminer}>Terminer — se déconnecter</button>
-            <button type="button" className="btn-blanc w-full" onClick={() => aller('accueil')}>Retour à l’accueil</button>
+            <p className="text-center text-xs text-doux">Vente validée — vous devez terminer pour clôturer le point.</p>
+            <button type="button" className="btn-accent w-full py-4 text-lg" onClick={terminer}>Valider & terminer — se déconnecter</button>
           </div>
         )}
       </div>
