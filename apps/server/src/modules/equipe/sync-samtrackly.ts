@@ -58,6 +58,38 @@ export function samtracklyConfigure(): boolean {
   return !!(process.env.SAMTRACKLY_URL && process.env.SAMTRACKLY_KEY);
 }
 
+interface ChampsSync {
+  nom: string;
+  poste: string | null;
+  photo_url: string | null;
+  telephone: string | null;
+  actif: boolean;
+  externe_id: string;
+  role: RolePos;
+  roleId: string | null;
+  posteCuisine: PosteCuisine;
+}
+
+/**
+ * Construit l'UPDATE d'un employé existant en SAUTANT les champs verrouillés
+ * (modifiés à la main dans le POS → présents dans `champs_manuels`). Le rôle est
+ * protégé au même titre que nom/poste/photo/téléphone. Fonction pure (testable).
+ */
+export function champsSynchro(champsManuels: unknown, d: ChampsSync): Record<string, unknown> {
+  const verrous = new Set<string>(Array.isArray(champsManuels) ? (champsManuels as string[]) : []);
+  const set: Record<string, unknown> = { externe_id: d.externe_id, actif: d.actif };
+  if (!verrous.has('nom_complet')) set.nom_complet = d.nom;
+  if (!verrous.has('poste')) set.poste = d.poste;
+  if (!verrous.has('photo_url')) set.photo_url = d.photo_url;
+  if (!verrous.has('telephone')) set.telephone = d.telephone;
+  if (!verrous.has('role')) {
+    set.role_id = d.roleId;
+    set.role = d.role;
+    set.poste_cuisine = d.posteCuisine;
+  }
+  return set;
+}
+
 /** Postes distincts existant dans SamerTrackly (tout le groupe). [] si hors ligne. */
 export async function postesSamtrackly(): Promise<string[]> {
   const url = process.env.SAMTRACKLY_URL;
@@ -151,17 +183,20 @@ export async function synchroniserEquipe(userId: string | null): Promise<Resulta
 
     if (existant) {
       // Champs verrouillés (modifiés à la main dans le POS) : jamais écrasés.
-      const verrous = new Set<string>(Array.isArray(existant.champs_manuels) ? (existant.champs_manuels as string[]) : []);
-      const set: Record<string, unknown> = { externe_id: t.id, actif: t.actif ?? true, updated_at: new Date() };
-      if (!verrous.has('nom_complet')) set.nom_complet = nom;
-      if (!verrous.has('poste')) set.poste = t.poste?.trim() || null;
-      if (!verrous.has('photo_url')) set.photo_url = t.photo_url || null;
-      if (!verrous.has('telephone')) set.telephone = t.contact || null;
-      if (!verrous.has('role')) {
-        set.role_id = rid;
-        set.role = role;
-        set.poste_cuisine = posteCuisine;
-      }
+      const set = {
+        ...champsSynchro(existant.champs_manuels, {
+          nom,
+          poste: t.poste?.trim() || null,
+          photo_url: t.photo_url || null,
+          telephone: t.contact || null,
+          actif: t.actif ?? true,
+          externe_id: t.id,
+          role,
+          roleId: rid,
+          posteCuisine,
+        }),
+        updated_at: new Date(),
+      };
       await db.transaction(async (tx) => {
         // On NE touche PAS : pin_hash, doit_definir_pin, disponibilite, ni les champs verrouillés.
         const [u] = await tx.update(utilisateurs).set(set).where(eq(utilisateurs.id, existant.id)).returning();
