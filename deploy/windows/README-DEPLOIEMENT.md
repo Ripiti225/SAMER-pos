@@ -55,7 +55,11 @@ Sur chaque PC (aucune installation, aucun internet requis) :
 4. **Configurer ce restaurant** : Réglages → **Restaurant** → choisir le bon
    restaurant dans la liste → **Configurer**. L'identité (nom, marque, couleur)
    et l'équipe se mettent en place automatiquement.
-5. **Démarrage automatique** (recommandé) : clic droit sur
+5. **Régénérer les QR avant de les imprimer** (sécurité) : Réglages → **Salle & QR**
+   → **« Régénérer tous les QR »**. On obtient des jetons **frais et aléatoires**
+   (non devinables), puis on **imprime** les QR à poser sur les tables. À refaire
+   si un jour on soupçonne qu'un QR a fuité.
+6. **Démarrage automatique** (recommandé) : clic droit sur
    **`installer-demarrage-auto.ps1` → Exécuter avec PowerShell** → le POS se
    lancera tout seul à chaque allumage.
 
