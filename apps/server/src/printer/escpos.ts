@@ -86,6 +86,12 @@ function envoyerRawUnix(queue: string, data: Buffer): Promise<void> {
  * (imprimante partagée dans Windows), ou un chemin UNC complet `\\host\partage`.
  */
 async function envoyerRawWindows(partage: string, data: Buffer): Promise<void> {
+  // Le nom de partage passe par cmd.exe (copy) : on rejette tout métacaractère
+  // (& | > < ^ " % ( ) …) pour empêcher toute injection de commande. Seuls les
+  // caractères légitimes d'un nom de partage / chemin UNC sont autorisés.
+  if (!/^[\\A-Za-z0-9 ._$-]+$/.test(partage)) {
+    throw new Error('Nom de file d’impression invalide (caractères non autorisés)');
+  }
   const tmp = join(tmpdir(), `pos-ticket-${randomBytes(6).toString('hex')}.bin`);
   await writeFile(tmp, data);
   try {
