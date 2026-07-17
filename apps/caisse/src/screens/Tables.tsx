@@ -1,8 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { IconArrowsExchange } from '@tabler/icons-react';
 import type { CommandeVue, TableVue, UtilisateurPublic } from '@pos/shared';
 import { PlanSalle } from '@pos/shared-ui';
 import { api } from '../api';
+import { Modale } from '../components/Modale';
+import { EnteteEcran } from '../components/EnteteEcran';
 import { useCaisse } from '../stores/session';
 
 /**
@@ -39,27 +42,33 @@ export function Tables() {
     }
   };
 
+  const transferables = (tables ?? []).filter((t) => t.ouverte_par);
+
   return (
-    <div className="min-h-full p-6">
-      <header className="mb-6 flex items-center gap-4">
-        <button type="button" className="btn-blanc" onClick={() => aller('accueil')}>
-          ← Accueil
-        </button>
-        <h1 className="text-2xl font-bold">Tables</h1>
-      </header>
+    <div className="min-h-full bg-fond p-6">
+      <EnteteEcran titre="Tables" onRetour={() => aller('accueil')} />
 
       <PlanSalle tables={tables ?? []} onTable={(t) => void ouvrirTable(t)} />
 
       {/* Transfert : uniquement pour les tables ayant un propriétaire */}
-      <div className="mt-6 flex flex-wrap gap-2">
-        {(tables ?? [])
-          .filter((t) => t.ouverte_par)
-          .map((t) => (
-            <button key={t.id} type="button" className="btn-blanc text-sm" onClick={() => setTransfert(t)}>
-              Transférer {t.numero} ({(t.ouverte_par_nom ?? '').split(' ')[0]})
-            </button>
-          ))}
-      </div>
+      {transferables.length > 0 && (
+        <section className="mt-8">
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-doux">Transférer une table</h2>
+          <div className="flex flex-wrap gap-2">
+            {transferables.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTransfert(t)}
+                className="flex items-center gap-2 rounded-full border border-bordure bg-surface px-4 py-2 text-sm font-semibold shadow-e1 transition hover:border-marque hover:bg-marque-tint"
+              >
+                <IconArrowsExchange size={16} className="text-marque-fonce" />
+                {t.numero} · {(t.ouverte_par_nom ?? '').split(' ')[0]}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       {transfert && (
         <ModaleTransfert
@@ -102,18 +111,21 @@ function ModaleTransfert({
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4" onClick={onFermer}>
-      <div className="carte w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
-        <h2 className="mb-3 text-xl font-bold">Transférer la table {table.numero}</h2>
-        <div className="space-y-2">
-          {serveurs.map((s) => (
-            <button key={s.id} type="button" className="btn-blanc w-full" onClick={() => void transferer(s.id)}>
-              {s.nom_complet}
-            </button>
-          ))}
-          {serveurs.length === 0 && <div className="text-doux">Aucun autre serveur disponible.</div>}
-        </div>
+    <Modale titre={`Transférer la table ${table.numero}`} onFermer={onFermer} enfants={
+      <div className="space-y-2">
+        <p className="text-sm text-doux">Vers quel serveur ?</p>
+        {serveurs.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            className="carte w-full p-4 text-left font-semibold hover:border-marque"
+            onClick={() => void transferer(s.id)}
+          >
+            {s.nom_complet}
+          </button>
+        ))}
+        {serveurs.length === 0 && <div className="text-doux">Aucun autre serveur disponible.</div>}
       </div>
-    </div>
+    } />
   );
 }

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { formatFCFA, LIBELLES_STATUTS_COMMANDE, LIBELLES_TYPES_COMMANDE, type StatutCommande, type TypeCommande } from '@pos/shared';
 import { api } from '../api';
 import { CarteSante } from '../components/SanteSync';
+import { EnteteEcran } from '../components/EnteteEcran';
 import { TableauBord } from '../components/TableauBord';
 import { useCaisse } from '../stores/session';
 
@@ -19,11 +20,6 @@ interface MesVentesVue {
   nb_payees?: number;
   total_payees?: number;
 }
-
-const COULEURS_STATUT: Record<string, string> = {
-  PAYEE: 'text-ok',
-  ANNULEE: 'text-alerte',
-};
 
 /** « Mes ventes » : les commandes du service en cours du caissier connecté. */
 export function MesVentes() {
@@ -54,28 +50,26 @@ export function MesVentes() {
   });
 
   return (
-    <div className="min-h-full p-6">
-      <header className="mb-6 flex items-center gap-4">
-        <button type="button" className="btn-blanc" onClick={rentrer}>
-          ← Accueil
-        </button>
-        <h1 className="text-2xl font-bold">Mes ventes</h1>
-        {data?.nb_payees !== undefined && (
-          <span className="ml-auto text-doux">
+    <div className="min-h-full bg-fond p-6">
+      <EnteteEcran
+        titre="Mes ventes"
+        onRetour={rentrer}
+        actions={data?.nb_payees !== undefined ? (
+          <span className="rounded-full bg-surface-douce px-3 py-1.5 text-sm text-doux">
             {data.nb_payees} encaissées
-            {voitMontants && <> — <span className="font-bold text-marque-fonce">{formatFCFA(data.total_payees ?? 0)}</span></>}
+            {voitMontants && <> · <span className="font-bold text-marque-fonce tabular-nums">{formatFCFA(data.total_payees ?? 0)}</span></>}
           </span>
-        )}
-      </header>
+        ) : undefined}
+      />
 
-      {!data?.service && <div className="text-doux">Aucun service ouvert.</div>}
+      {!data?.service && <div className="carte p-6 text-center text-doux">Aucun service ouvert.</div>}
 
       <div className="space-y-2">
         {(data?.commandes ?? []).map((c) => (
           <button
             key={c.id}
             type="button"
-            className="carte flex w-full items-center justify-between p-4 text-left hover:border-marque"
+            className="carte flex w-full items-center justify-between p-4 text-left shadow-e1 transition hover:shadow-e2"
             onClick={() => aller(c.statut === 'PAYEE' || c.statut === 'ANNULEE' ? 'paiement' : 'commande', c.id)}
           >
             <div>
@@ -84,9 +78,13 @@ export function MesVentes() {
                 {LIBELLES_TYPES_COMMANDE[c.type]} — {new Date(c.created_at).toLocaleTimeString('fr-FR')}
               </span>
             </div>
-            <div className="text-right">
-              {voitMontants && <div className="font-bold">{formatFCFA(c.total)}</div>}
-              <div className={`text-sm ${COULEURS_STATUT[c.statut] ?? 'text-doux'}`}>{LIBELLES_STATUTS_COMMANDE[c.statut]}</div>
+            <div className="flex items-center gap-3 text-right">
+              {voitMontants && <div className="font-bold tabular-nums">{formatFCFA(c.total)}</div>}
+              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                c.statut === 'PAYEE' ? 'bg-ok-tint text-ok' : c.statut === 'ANNULEE' ? 'bg-alerte-tint text-alerte' : 'bg-surface-tres-haute text-doux'
+              }`}>
+                {LIBELLES_STATUTS_COMMANDE[c.statut]}
+              </span>
             </div>
           </button>
         ))}

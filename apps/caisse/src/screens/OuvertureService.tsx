@@ -64,16 +64,17 @@ export function OuvertureService() {
 
   if (etape === 'fond') {
     return (
-      <div className="flex min-h-full flex-col items-center justify-center gap-6 p-6">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold">Ouverture de service</h1>
-          <p className="mt-1 text-doux">
-            {session?.utilisateur.nom_complet} — comptez le fond de caisse et saisissez le montant
-          </p>
-        </div>
-        <div className="w-full max-w-xs space-y-3">
-          <div className="champ flex items-center justify-center text-3xl font-bold">
-            {montant ? formatFCFA(Number(montant)) : <span className="text-base font-normal text-doux">Fond de caisse…</span>}
+      <div className="flex min-h-full flex-col items-center justify-center p-6">
+        <div className="carte w-full max-w-sm space-y-4 p-6 shadow-e2">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-marque-fonce">Ouverture de service</h1>
+            <p className="mt-1 text-sm text-doux">{session?.utilisateur.nom_complet}</p>
+          </div>
+          <div className="rounded-[13px] bg-surface-douce p-4 text-center">
+            <div className="text-xs font-semibold uppercase tracking-widest text-doux">Fond de caisse</div>
+            <div className="mt-1 text-4xl font-black tabular-nums text-fort">
+              {montant ? formatFCFA(Number(montant)) : <span className="text-lg font-normal text-doux">à compter…</span>}
+            </div>
           </div>
           <Numpad
             valeur={montant}
@@ -83,13 +84,9 @@ export function OuvertureService() {
             validerDesactive={montant === ''}
           />
           {estSuperviseur ? (
-            <button type="button" className="btn-blanc w-full" onClick={rentrer}>
-              ← Retour à la supervision
-            </button>
+            <button type="button" className="btn-blanc w-full" onClick={rentrer}>← Retour à la supervision</button>
           ) : (
-            <button type="button" className="btn-blanc w-full" onClick={seDeconnecter}>
-              Se déconnecter
-            </button>
+            <button type="button" className="btn-blanc w-full" onClick={seDeconnecter}>Se déconnecter</button>
           )}
         </div>
       </div>
@@ -97,18 +94,18 @@ export function OuvertureService() {
   }
 
   return (
-    <div className="flex min-h-full flex-col p-6">
-      <div className="mb-4 text-center">
-        <h1 className="text-3xl font-bold">Équipe du jour</h1>
-        <p className="mt-1 text-doux">Cochez les personnes présentes et ajustez leur poste du jour</p>
+    <div className="flex min-h-full flex-col bg-fond p-6">
+      <div className="mb-5 text-center">
+        <h1 className="text-2xl font-bold text-marque-fonce">Équipe du jour</h1>
+        <p className="mt-1 text-sm text-doux">Cochez les personnes présentes et ajustez leur poste</p>
       </div>
       <div className="mx-auto grid w-full max-w-2xl gap-2">
         {(proposes ?? []).map((m) => {
           const present = m.utilisateur_id in equipe;
           return (
-            <div key={m.utilisateur_id} className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${present ? 'border-marque bg-marque-tint' : 'border-bordure'}`}>
+            <div key={m.utilisateur_id} className={`flex items-center gap-3 rounded-[13px] border-2 px-4 py-3 transition ${present ? 'border-marque bg-marque-tint shadow-e1' : 'border-bordure bg-surface'}`}>
               <button type="button" className="flex flex-1 items-center gap-3 text-left" onClick={() => basculer(m)}>
-                <span className={`flex h-6 w-6 items-center justify-center rounded-md border ${present ? 'bg-marque text-white' : 'border-bordure'}`}>{present ? '✓' : ''}</span>
+                <span className={`flex h-6 w-6 flex-none items-center justify-center rounded-md border-2 text-xs font-bold ${present ? 'border-marque bg-marque text-sur-marque' : 'border-bordure-forte'}`}>{present ? '✓' : ''}</span>
                 <span className="font-semibold">{m.nom_complet}</span>
               </button>
               {present && (
