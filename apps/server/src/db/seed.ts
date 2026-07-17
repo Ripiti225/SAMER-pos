@@ -27,6 +27,7 @@ import {
 } from './schema/index.js';
 
 import { etablirRolesSysteme } from '../modules/roles/service.js';
+import { genererQrToken } from '../modules/salle/qr.js';
 
 export async function hacherPin(pin: string): Promise<string> {
   return argon2.hash(pin, { type: argon2.argon2id });
@@ -241,7 +242,9 @@ export async function seed(): Promise<void> {
     .returning();
 
   // qr_token : jeton du QR collé sur chaque table (CORRECTIONS3 — page client /t/:qr_token)
-  const jeton = (numero: string) => `SAMER-${numero.replace(/\s+/g, '-')}`;
+  // Jetons QR ALÉATOIRES (non devinables) — comme en production. Un jeton
+  // prévisible (ex. SAMER-T1) permettrait d'énumérer les tables via /api/client.
+  const jeton = (_numero: string) => genererQrToken();
   await db.insert(tablesSalle).values([
     ...Array.from({ length: 6 }, (_, i) => ({ zone_id: zoneRC!.id, numero: `T${i + 1}`, qr_token: jeton(`T${i + 1}`) })),
     ...Array.from({ length: 4 }, (_, i) => ({ zone_id: zoneTerrasse!.id, numero: `TE${i + 1}`, qr_token: jeton(`TE${i + 1}`) })),
