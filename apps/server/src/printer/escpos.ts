@@ -7,6 +7,10 @@
  * pour éviter les soucis de page de code des imprimantes génériques.
  */
 import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { unlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import type { CommandeVue, RapportZ } from '@pos/shared';
 import { formatFCFA, LIBELLES_MODES, LIBELLES_TYPES_COMMANDE } from '@pos/shared';
@@ -59,7 +63,13 @@ class Ruban {
   buffer(): Buffer { return Buffer.from(this.o); }
 }
 
+/** Envoi RAW multi-plateforme : Windows (copy /b) ou CUPS (lp). */
 function envoyerRaw(queue: string, data: Buffer): Promise<void> {
+  return process.platform === 'win32' ? envoyerRawWindows(queue, data) : envoyerRawUnix(queue, data);
+}
+
+/** macOS / Linux : file CUPS via `lp -d <file> -o raw` (stdin). */
+function envoyerRawUnix(queue: string, data: Buffer): Promise<void> {
   return new Promise((res, rej) => {
     const p = spawn('lp', ['-d', queue, '-o', 'raw']);
     p.on('error', rej);
@@ -68,6 +78,26 @@ function envoyerRaw(queue: string, data: Buffer): Promise<void> {
     p.stdin.write(data);
     p.stdin.end();
   });
+}
+
+/**
+ * Windows : impression RAW via `copy /b <fichier> \\localhost\<partage>`.
+ * Le paramètre `imprimante_thermique_queue` = le NOM DE PARTAGE de l'imprimante
+ * (imprimante partagée dans Windows), ou un chemin UNC complet `\\host\partage`.
+ */
+async function envoyerRawWindows(partage: string, data: Buffer): Promise<void> {
+  const tmp = join(tmpdir(), `pos-ticket-${randomBytes(6).toString('hex')}.bin`);
+  await writeFile(tmp, data);
+  try {
+    await new Promise<void>((res, rej) => {
+      const dest = partage.startsWith('\\\\') ? partage : `\\\\localhost\\${partage}`;
+      const p = spawn('cmd', ['/c', 'copy', '/b', tmp, dest], { windowsHide: true });
+      p.on('error', rej);
+      p.on('close', (code) => (code === 0 ? res() : rej(new Error(`copy a renvoyé ${code}`))));
+    });
+  } finally {
+    await unlink(tmp).catch(() => undefined);
+  }
 }
 
 /** En-tête commun (logo + nom + contact + type/table/ticket). */
