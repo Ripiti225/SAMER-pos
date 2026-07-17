@@ -90,6 +90,19 @@ export function champsSynchro(champsManuels: unknown, d: ChampsSync): Record<str
   return set;
 }
 
+/** Restaurants SamerTrackly (pour configurer l'identité du POS). [] si hors ligne. */
+export async function restaurantsSamtrackly(): Promise<{ id: string; nom: string; couleur: string | null }[]> {
+  const url = process.env.SAMTRACKLY_URL;
+  const key = process.env.SAMTRACKLY_KEY;
+  if (!url || !key) return [];
+  const rep = await fetch(`${url}/rest/v1/restaurants?select=id,nom,couleur&order=nom`, {
+    headers: { apikey: key, Authorization: `Bearer ${key}` },
+  }).catch(() => null);
+  if (!rep?.ok) return [];
+  const rows = (await rep.json()) as { id: string; nom: string | null; couleur: string | null }[];
+  return rows.filter((r) => (r.nom ?? '').trim()).map((r) => ({ id: r.id, nom: r.nom!.trim(), couleur: r.couleur }));
+}
+
 /** Postes distincts existant dans SamerTrackly (tout le groupe). [] si hors ligne. */
 export async function postesSamtrackly(): Promise<string[]> {
   const url = process.env.SAMTRACKLY_URL;

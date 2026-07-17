@@ -252,6 +252,11 @@ export const MajDisponibiliteSchema = z.object({
   disponibilite: z.enum(['PRESENT', 'MALADE', 'CONGE', 'PERMISSION']),
 });
 
+/** Configuration de l'identité du restaurant (choix depuis SamerTrackly). */
+export const ConfigRestaurantSchema = z.object({
+  samtrackly_restaurant_id: z.string().uuid('Restaurant invalide'),
+});
+
 /** Pose du PIN par l'employé (code temporaire à usage unique + PIN choisi deux fois). */
 export const PoserPinSchema = z
   .object({

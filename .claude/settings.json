@@ -25,7 +25,11 @@
       "Bash(psql \"postgres://localhost:5432/pos_samer\" -tAc \"SELECT enumlabel FROM pg_enum e JOIN pg_type t ON t.oid=e.enumtypid WHERE t.typname='mode_paiement' ORDER BY e.enumsortorder\")",
       "Bash(psql \"postgres://localhost:5432/pos_samer\" -tAc \"SELECT to_regclass\\('sequences_caisse'\\)\")",
       "Bash(psql \"postgres://localhost:5432/pos_samer\" -tAc \"SELECT string_agg\\(column_name,', '\\) FROM information_schema.columns WHERE table_name='services_caisse' AND column_name IN \\('sequence_id','depenses','reconciliation','vente_totale','total_systeme'\\)\")",
-      "Bash(echo \"exit $?\")"
+      "Bash(echo \"exit $?\")",
+      "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('./package.json'\\).scripts,null,1\\)\\)\")",
+      "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('./apps/server/package.json'\\).scripts,null,1\\)\\)\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('node', JSON.stringify\\(p.engines\\), '| pm', p.packageManager\\)\")",
+      "Bash(xargs -n1 basename)"
     ]
   }
 }

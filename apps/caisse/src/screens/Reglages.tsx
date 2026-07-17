@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconArrowLeft, IconLock } from '@tabler/icons-react';
-import { DISPONIBILITES, type Disponibilite, LIBELLES_DISPONIBILITE, SECTIONS_PERMISSIONS, PERMISSION_PROTEGEE } from '@pos/shared';
+import { DISPONIBILITES, type Disponibilite, LIBELLES_DISPONIBILITE, SECTIONS_PERMISSIONS, PERMISSION_PROTEGEE, type SessionInfo } from '@pos/shared';
 import { api } from '../api';
 import { Modale } from '../components/Modale';
 import { useCaisse } from '../stores/session';
@@ -21,6 +21,7 @@ export function Reglages() {
         { cle: 'reglages.catalogue', libelle: 'Catalogue', rendu: () => <Catalogue /> },
         { cle: 'reglages.fidelite', libelle: 'Fidélité', rendu: () => <Fidelite /> },
         { cle: 'reglages.parametres', libelle: 'Paramètres', rendu: () => <Parametres /> },
+        { cle: 'reglages.restaurant', libelle: 'Restaurant', rendu: () => <ConfigRestaurant /> },
         { cle: 'reglages.audit', libelle: "Journal d'audit", rendu: () => <Audit /> },
         { cle: 'roles.gerer', libelle: 'Rôles & accès', rendu: () => <Roles /> },
       ].filter((s) => a(s.cle)),
@@ -843,6 +844,90 @@ function Roles() {
           </div>
         </div>
       )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Configurer ce restaurant (déploiement multi-restaurants)
+// ---------------------------------------------------------------------------
+interface ConfigResto {
+  actuel: { code: string; nom: string; marque: string; couleur_hex: string } | null;
+  samtrackly_restaurant_id: string;
+  restaurants: { id: string; nom: string; couleur: string | null }[];
+}
+
+function ConfigRestaurant() {
+  const qc = useQueryClient();
+  const { poserSession } = useCaisse();
+  const [msg, setMsg] = useState<{ texte: string; ok?: boolean } | null>(null);
+  const [choix, setChoix] = useState('');
+
+  const { data } = useQuery({ queryKey: ['admin', 'restaurant-config'], queryFn: () => api<ConfigResto>('/api/admin/restaurant/config') });
+  const selection = choix || data?.samtrackly_restaurant_id || '';
+
+  const configurer = useMutation({
+    mutationFn: (id: string) => api('/api/admin/restaurant/config', { method: 'POST', corps: { samtrackly_restaurant_id: id } }),
+    onSuccess: async () => {
+      // Applique la nouvelle identité (nom, marque, couleur) à la session en cours.
+      try {
+        poserSession(await api<SessionInfo>('/api/auth/moi'));
+      } catch { /* ignore */ }
+      // Synchronise l'équipe du restaurant choisi.
+      let equipe = '';
+      try {
+        const r = await api<{ crees: number; maj: number }>('/api/admin/equipe/synchroniser', { method: 'POST' });
+        equipe = ` · Équipe : ${r.crees} ajouté(s), ${r.maj} à jour.`;
+      } catch { /* ignore */ }
+      setMsg({ texte: `Restaurant configuré.${equipe}`, ok: true });
+      void qc.invalidateQueries();
+    },
+    onError: (e: Error) => setMsg({ texte: e.message }),
+  });
+
+  return (
+    <section className="max-w-2xl space-y-4">
+      <h2 className="text-xl font-bold">Restaurant de ce poste</h2>
+      <Message texte={msg?.texte ?? null} ok={msg?.ok} />
+
+      {data?.actuel && (
+        <div className="carte flex items-center gap-3 p-4">
+          <span className="h-9 w-9 flex-none rounded-full border border-bordure" style={{ background: data.actuel.couleur_hex }} />
+          <div>
+            <div className="font-bold">{data.actuel.nom}</div>
+            <div className="text-sm text-doux">
+              {data.actuel.marque === 'AL_KAYAN' ? 'Al Kayan' : 'Chez Samer'} · {data.actuel.code}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <p className="text-sm text-doux">
+        Choisissez le restaurant de CE poste : son identité (nom, marque, couleur) et son
+        équipe sont récupérées depuis SamerTrackly.
+      </p>
+
+      {(data?.restaurants.length ?? 0) === 0 ? (
+        <div className="rounded-xl bg-alerte-tint p-4 text-sm text-alerte">
+          Liste indisponible — vérifiez la clé SamerTrackly (apps/server/.env) et la connexion internet.
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-3">
+          <select className="champ w-auto" value={selection} onChange={(e) => setChoix(e.target.value)}>
+            <option value="">— choisir un restaurant —</option>
+            {data!.restaurants.map((r) => (
+              <option key={r.id} value={r.id}>{r.nom}</option>
+            ))}
+          </select>
+          <button type="button" className="btn-accent" disabled={!selection || configurer.isPending} onClick={() => configurer.mutate(selection)}>
+            {configurer.isPending ? 'Configuration…' : 'Configurer ce restaurant'}
+          </button>
+        </div>
+      )}
+
+      <p className="text-xs text-doux">
+        Le catalogue reste local à ce poste : les modifications de menu ici n'affectent pas les autres restaurants.
+      </p>
     </section>
   );
 }

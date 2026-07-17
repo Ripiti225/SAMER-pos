@@ -65,6 +65,7 @@ export const SECTIONS_PERMISSIONS: SectionPermissions[] = [
       { cle: 'reglages.catalogue', libelle: 'Catalogue' },
       { cle: 'reglages.fidelite', libelle: 'Fidélité' },
       { cle: 'reglages.parametres', libelle: 'Paramètres' },
+      { cle: 'reglages.restaurant', libelle: 'Configurer le restaurant' },
       { cle: 'reglages.audit', libelle: "Journal d'audit" },
       { cle: 'reglages.sante', libelle: 'Santé du système' },
     ],
