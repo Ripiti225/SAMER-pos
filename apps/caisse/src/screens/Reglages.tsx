@@ -32,12 +32,17 @@ export function Reglages() {
   const sectionActive = sections.find((s) => s.cle === active) ?? sections[0];
 
   return (
-    <div className="flex min-h-full flex-col p-6">
-      <header className="mb-6 flex items-center gap-4">
-        <button type="button" className="btn-blanc flex items-center gap-2" onClick={rentrer}>
-          <IconArrowLeft size={20} /> Accueil
+    <div className="flex min-h-full flex-col bg-fond p-6">
+      <header className="mb-6 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={rentrer}
+          title="Retour"
+          className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-surface-douce text-doux transition hover:bg-marque-tint hover:text-marque-fonce"
+        >
+          <IconArrowLeft size={20} />
         </button>
-        <h1 className="text-2xl font-black text-marque-fonce">Réglages</h1>
+        <h1 className="text-2xl font-bold text-marque-fonce">Réglages</h1>
       </header>
 
       <div className="flex flex-1 gap-6">
@@ -46,8 +51,8 @@ export function Reglages() {
             <button
               key={s.cle}
               type="button"
-              className={`rounded-xl px-4 py-3 text-left text-lg font-semibold ${
-                s.cle === sectionActive?.cle ? 'bg-marque text-white' : 'hover:bg-marque-tint'
+              className={`rounded-[13px] px-4 py-3 text-left text-lg font-semibold transition ${
+                s.cle === sectionActive?.cle ? 'bg-marque text-sur-marque shadow-e1' : 'text-doux hover:bg-marque-tint hover:text-marque-fonce'
               }`}
               onClick={() => setActive(s.cle)}
             >
