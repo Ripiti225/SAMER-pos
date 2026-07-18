@@ -77,25 +77,25 @@ export function PageTable({ jeton, table }: { jeton: string; table: TableClientV
 
   return (
     <div className="min-h-full bg-fond text-fort">
-      <header className="sticky top-0 z-10 border-b border-bordure bg-surface px-4 py-3">
-        <div className="text-sm text-doux">{table.restaurant.nom}</div>
-        <div className="text-2xl font-black text-marque-fonce">Table {table.numero}</div>
+      <header className="sticky top-0 z-10 border-b border-bordure bg-surface px-4 py-3 shadow-e1">
+        <div className="text-sm font-medium text-doux">{table.restaurant.nom}</div>
         <div className="flex items-center justify-between">
-          <span className="text-xs text-doux">{table.zone_nom}</span>
+          <div className="text-2xl font-bold text-marque-fonce">Table {table.numero}</div>
           {table.etat !== 'LIBRE' && (
-            <span className="rounded-full bg-marque-tint px-2 py-0.5 text-xs font-semibold text-marque-fonce">
+            <span className="rounded-full bg-marque-tint px-3 py-1 text-xs font-semibold text-marque-fonce">
               {LIBELLES_ETAT_TABLE[table.etat]}
             </span>
           )}
         </div>
+        <span className="text-xs text-doux">{table.zone_nom}</span>
       </header>
 
-      <div className="space-y-4 p-4">
+      <div className="space-y-5 p-4">
         {/* Deux boutons d'appel */}
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
-            className="btn-accent min-h-[56px]"
+            className="flex min-h-[60px] items-center justify-center rounded-[13px] bg-marque text-lg font-bold text-sur-marque shadow-e2 transition active:translate-y-px disabled:opacity-40"
             disabled={appeler.isPending}
             onClick={() => appeler.mutate('APPEL_SERVEUR')}
           >
@@ -103,7 +103,7 @@ export function PageTable({ jeton, table }: { jeton: string; table: TableClientV
           </button>
           <button
             type="button"
-            className="btn-blanc min-h-[56px]"
+            className="flex min-h-[60px] items-center justify-center rounded-[13px] border-2 border-bordure-forte text-lg font-semibold text-marque-fonce transition hover:bg-marque/5 disabled:opacity-40"
             disabled={appeler.isPending}
             onClick={() => appeler.mutate('DEMANDE_FACTURE')}
           >
@@ -122,7 +122,9 @@ export function PageTable({ jeton, table }: { jeton: string; table: TableClientV
               <button
                 key={c.id}
                 type="button"
-                className={`btn shrink-0 ${c.id === categorieActive ? 'bg-marque text-white' : 'border border-bordure bg-surface'}`}
+                className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  c.id === categorieActive ? 'bg-marque text-sur-marque shadow-e1' : 'border border-bordure bg-surface text-doux'
+                }`}
                 onClick={() => setCategorieId(c.id)}
               >
                 {c.nom}
@@ -135,7 +137,7 @@ export function PageTable({ jeton, table }: { jeton: string; table: TableClientV
                 key={a.id}
                 type="button"
                 disabled={!a.disponible}
-                className="carte flex flex-col overflow-hidden p-0 text-left transition active:scale-[0.98]"
+                className="carte flex flex-col overflow-hidden p-0 text-left shadow-e1 transition active:scale-[0.98]"
                 onClick={() => ajouter(a.id, a.nom, a.prix_base)}
               >
                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-marque-tint">
@@ -165,13 +167,17 @@ export function PageTable({ jeton, table }: { jeton: string; table: TableClientV
 
       {/* Panier fixe en bas */}
       {panier.length > 0 && (
-        <div className="sticky bottom-0 border-t border-bordure bg-surface p-4">
-          <div className="mb-2 max-h-32 space-y-1 overflow-y-auto">
+        <div className="sticky bottom-0 border-t border-bordure bg-surface p-4 shadow-e3">
+          <div className="mb-3 max-h-32 space-y-1.5 overflow-y-auto">
             {panier.map((l) => (
               <div key={l.cle} className="flex items-center gap-2 text-sm">
                 <span className="flex-1">{l.quantite} × {l.nom}</span>
-                <span className="prix font-semibold">{formatFCFA(l.prix * l.quantite)}</span>
-                <button type="button" className="text-alerte" onClick={() => setPanier((p) => p.filter((x) => x.cle !== l.cle))}>
+                <span className="prix font-semibold tabular-nums">{formatFCFA(l.prix * l.quantite)}</span>
+                <button
+                  type="button"
+                  className="rounded-full px-2 py-0.5 text-xs font-medium text-alerte transition hover:bg-alerte/10"
+                  onClick={() => setPanier((p) => p.filter((x) => x.cle !== l.cle))}
+                >
                   retirer
                 </button>
               </div>
@@ -179,13 +185,13 @@ export function PageTable({ jeton, table }: { jeton: string; table: TableClientV
           </div>
           <button
             type="button"
-            className="btn-ok min-h-[52px] w-full text-lg"
+            className="flex min-h-[56px] w-full items-center justify-center rounded-[13px] bg-marque text-lg font-bold text-sur-marque shadow-e2 transition active:translate-y-px disabled:opacity-40"
             disabled={envoyer.isPending}
             onClick={() => envoyer.mutate()}
           >
-            Envoyer à mon serveur — {formatFCFA(totalPanier)}
+            Envoyer à mon serveur · {formatFCFA(totalPanier)}
           </button>
-          <p className="mt-1 text-center text-xs text-doux">Votre serveur validera la commande avant la cuisine.</p>
+          <p className="mt-2 text-center text-xs text-doux">Votre serveur validera la commande avant la cuisine.</p>
         </div>
       )}
 

@@ -23,14 +23,14 @@ export function SuiviCommandes({ jeton }: { jeton: string }) {
     <section className="space-y-3">
       <h2 className="text-lg font-bold">Votre commande</h2>
       {data.map((c) => (
-        <div key={c.id} className="carte p-3">
-          <div className="mb-2 flex items-center justify-between">
+        <div key={c.id} className="carte p-4 shadow-e1">
+          <div className="mb-3 flex items-center justify-between">
             <span className="text-sm text-doux">Ticket n° {c.numero_ticket}</span>
-            <span className="prix font-bold">{formatFCFA(c.total)}</span>
+            <span className="prix font-bold tabular-nums">{formatFCFA(c.total)}</span>
           </div>
 
           {c.etat === 'REFUSEE' ? (
-            <div className="rounded-lg bg-alerte-tint px-3 py-2 text-alerte">
+            <div className="rounded-[13px] bg-alerte-tint px-3 py-2 text-alerte">
               <div className="font-bold">Commande refusée</div>
               {c.refus_motif && <div className="text-sm">{c.refus_motif}</div>}
             </div>
@@ -57,7 +57,7 @@ function Jauge({ etat }: { etat: EtatSuiviClient }) {
         const atteint = indexActuel >= 0 && i <= indexActuel;
         return (
           <div key={e} className="flex flex-1 flex-col items-center gap-1">
-            <div className={`h-2 w-full rounded-full ${atteint ? 'bg-ok' : 'bg-bordure'}`} />
+            <div className={`h-2.5 w-full rounded-full transition ${atteint ? 'bg-ok' : 'bg-surface-tres-haute'}`} />
             <span className={`text-[11px] ${i === indexActuel ? 'font-bold text-ok' : 'text-doux'}`}>
               {LIBELLES_SUIVI_CLIENT[e]}
             </span>
