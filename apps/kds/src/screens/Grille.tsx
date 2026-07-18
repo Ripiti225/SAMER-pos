@@ -20,7 +20,6 @@ export function Grille({ onJetonRefuse }: { onJetonRefuse: () => void }) {
   const queryClient = useQueryClient();
   const [connecte, setConnecte] = useState(true);
   const [muet, setMuet] = useState(sons.muet);
-  const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
   const [, forcerTic] = useState(0);
   const idsConnus = useRef<Set<string> | null>(null);
   const idsAlertes = useRef(new Set<string>());
@@ -111,9 +110,18 @@ export function Grille({ onJetonRefuse }: { onJetonRefuse: () => void }) {
     mutationFn: (id: string) => apiKds(`/api/kds/commandes/${id}/pret`, { method: 'POST', corps: {} }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['kds'] }),
   });
+  const servir = useMutation({
+    mutationFn: (id: string) => apiKds(`/api/kds/commandes/${id}/servir`, { method: 'POST', corps: {} }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['kds'] }),
+  });
+  const reprendre = useMutation({
+    mutationFn: (id: string) => apiKds(`/api/kds/commandes/${id}/reprendre`, { method: 'POST', corps: {} }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['kds'] }),
+  });
 
   const cartesAttente = (data?.en_cuisine ?? []).filter((c) => !enPreparation(c));
   const cartesEnCours = (data?.en_cuisine ?? []).filter((c) => enPreparation(c));
+  const cartesPretes = data?.pretes ?? [];
 
   return (
     <div className="flex h-screen flex-col">
@@ -124,22 +132,13 @@ export function Grille({ onJetonRefuse }: { onJetonRefuse: () => void }) {
             Reconnexion…
           </span>
         )}
-        <div className="ml-auto flex gap-2">
-          <button
-            type="button"
-            className="rounded-[13px] border border-bordure bg-surface px-4 py-2 font-semibold shadow-e1 transition hover:bg-surface-douce"
-            onClick={() => setHistoriqueOuvert(true)}
-          >
-            Historique{data?.pretes.length ? ` (${data.pretes.length})` : ''}
-          </button>
-          <button
-            type="button"
-            className={`rounded-[13px] px-4 py-2 font-semibold transition ${muet ? 'bg-alerte text-white' : 'border border-bordure bg-surface shadow-e1 hover:bg-surface-douce'}`}
-            onClick={() => { sons.basculerMute(); setMuet(sons.muet); }}
-          >
-            {muet ? 'Son coupé (30 min max)' : 'Couper le son'}
-          </button>
-        </div>
+        <button
+          type="button"
+          className={`ml-auto rounded-[13px] px-4 py-2 font-semibold transition ${muet ? 'bg-alerte text-white' : 'border border-bordure bg-surface shadow-e1 hover:bg-surface-douce'}`}
+          onClick={() => { sons.basculerMute(); setMuet(sons.muet); }}
+        >
+          {muet ? 'Son coupé (30 min max)' : 'Couper le son'}
+        </button>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
@@ -168,14 +167,19 @@ export function Grille({ onJetonRefuse }: { onJetonRefuse: () => void }) {
             />
           ))}
         </Colonne>
-      </div>
 
-      {historiqueOuvert && (
-        <Historique
-          cartes={data?.pretes ?? []}
-          onFermer={() => setHistoriqueOuvert(false)}
-        />
-      )}
+        {/* Colonne 3 : PRÊTES — restent visibles jusqu'à « Servi » */}
+        <Colonne titre="Prêtes — à servir" nombre={cartesPretes.length} accent="prete">
+          {cartesPretes.map((carte) => (
+            <CartePrete
+              key={carte.id}
+              carte={carte}
+              onServir={() => servir.mutate(carte.id)}
+              onReprendre={() => reprendre.mutate(carte.id)}
+            />
+          ))}
+        </Colonne>
+      </div>
     </div>
   );
 }
@@ -189,12 +193,12 @@ function Colonne({
 }: {
   titre: string;
   nombre: number;
-  accent: 'attente' | 'cours';
+  accent: 'attente' | 'cours' | 'prete';
   children: ReactNode;
 }) {
-  const couleur = accent === 'attente' ? 'text-marque-fonce' : 'text-info';
+  const couleur = accent === 'attente' ? 'text-marque-fonce' : accent === 'cours' ? 'text-info' : 'text-ok';
   return (
-    <section className={`flex flex-1 flex-col overflow-hidden ${accent === 'attente' ? 'border-r border-bordure' : ''}`}>
+    <section className={`flex flex-1 flex-col overflow-hidden ${accent !== 'prete' ? 'border-r border-bordure' : ''}`}>
       <div className="flex flex-none items-center gap-2 border-b border-bordure bg-surface-douce px-5 py-3">
         <h2 className={`text-xl font-bold ${couleur}`}>{titre}</h2>
         <span className="rounded-full bg-surface-tres-haute px-3 py-0.5 text-lg font-bold tabular-nums text-doux">{nombre}</span>
@@ -210,42 +214,54 @@ function Colonne({
   );
 }
 
-/** Panneau Historique : les commandes prêtes (consultation seule). */
-function Historique({
-  cartes,
-  onFermer,
+/** Carte d'une commande PRÊTE : reste affichée jusqu'à « Servi » (§ demande terrain). */
+function CartePrete({
+  carte,
+  onServir,
+  onReprendre,
 }: {
-  cartes: CarteKds[];
-  onFermer: () => void;
+  carte: CarteKds;
+  onServir: () => void;
+  onReprendre: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-black/40" onClick={onFermer}>
-      <div className="flex h-full w-full max-w-md flex-col bg-fond shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-bordure px-4 py-3">
-          <h2 className="text-2xl font-black text-ok">Historique — Prêtes ✔</h2>
-          <button type="button" className="btn-blanc px-3" onClick={onFermer}>✕</button>
+    <div className="carte flex flex-col border-ok p-4 shadow-e1">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="text-5xl font-black leading-none text-fort">N° {carte.numero_ticket}</div>
+          <div className="mt-1 text-lg text-doux">
+            {LIBELLES_TYPES_COMMANDE[carte.type]}
+            {carte.partenaire ? ` — ${carte.partenaire}` : ''}
+            {carte.table_numero ? ` — Table ${carte.table_numero}` : ''}
+          </div>
+          <div className="text-sm text-doux">🕐 Commandé à {heure(carte.heure_commande)}</div>
         </div>
-        <div className="flex-1 space-y-3 overflow-y-auto p-4">
-          {cartes.length === 0 && <p className="pt-10 text-center text-doux">Aucune commande prête pour l’instant.</p>}
-          {cartes.map((carte) => (
-            <div key={carte.id} className="carte border-ok p-3">
-              <div className="flex items-start justify-between">
-                <div className="text-3xl font-black">N° {carte.numero_ticket}</div>
-                <div className="text-right text-sm text-doux">
-                  <div>{carte.table_numero ? `Table ${carte.table_numero}` : LIBELLES_TYPES_COMMANDE[carte.type]}</div>
-                  <div>Commandé à {heure(carte.heure_commande)}</div>
-                </div>
-              </div>
-              <ul className="my-2 space-y-1">
-                {carte.items
-                  .filter((i) => i.statut_cuisine !== 'ANNULE')
-                  .map((item) => (
-                    <li key={item.id} className="text-lg font-semibold">{item.quantite} × {item.nom_snapshot}</li>
-                  ))}
-              </ul>
-            </div>
+        <span className="rounded-full bg-ok-tint px-3 py-1 text-sm font-bold text-ok">Prête ✔</span>
+      </div>
+
+      <ul className="my-3 flex-1 space-y-2">
+        {carte.items
+          .filter((i) => i.statut_cuisine !== 'ANNULE')
+          .map((item) => (
+            <li key={item.id} className="text-2xl font-bold leading-tight">{item.quantite} × {item.nom_snapshot}</li>
           ))}
-        </div>
+      </ul>
+
+      <div className="grid grid-cols-3 gap-2">
+        <button
+          type="button"
+          className="h-14 rounded-[13px] border-2 border-bordure-forte text-lg font-bold text-doux transition hover:bg-marque/5"
+          onClick={onReprendre}
+        >
+          Reprendre
+        </button>
+        <button
+          type="button"
+          className="col-span-2 h-14 rounded-[13px] bg-ok text-xl font-bold text-white shadow-e1 transition hover:brightness-105 active:translate-y-px"
+          onClick={onServir}
+        >
+          Servi ✔
+        </button>
       </div>
     </div>
   );

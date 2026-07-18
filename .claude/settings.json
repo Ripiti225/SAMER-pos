@@ -29,7 +29,11 @@
       "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('./package.json'\\).scripts,null,1\\)\\)\")",
       "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('./apps/server/package.json'\\).scripts,null,1\\)\\)\")",
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('node', JSON.stringify\\(p.engines\\), '| pm', p.packageManager\\)\")",
-      "Bash(xargs -n1 basename)"
+      "Bash(xargs -n1 basename)",
+      "Bash(echo \"tsc kds \\($?\\)\")",
+      "Bash(echo \"tsc server \\($?\\)\")",
+      "Bash(psql \"postgres://localhost:5432/pos_samer\" -tAc \"SELECT valeur FROM parametres_locaux WHERE cle='kds_jeton_appareil'\")",
+      "Bash(psql \"postgres://localhost:5432/pos_samer\" -tAc \"SELECT id FROM articles WHERE disponible=true LIMIT 1\")"
     ]
   }
 }

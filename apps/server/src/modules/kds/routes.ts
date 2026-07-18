@@ -211,6 +211,27 @@ export function routesKds(app: FastifyInstance): void {
     return { ok: true };
   });
 
+  // « Servi » : la carte prête quitte l'écran (PRETE → SERVIE). Tant que ce
+  // n'est pas fait, la commande reste visible dans la colonne « Prêtes ».
+  app.post('/api/kds/commandes/:id/servir', { preHandler: gardeKds }, async (req) => {
+    const { id } = req.params as { id: string };
+    const tableId = await db.transaction(async (tx) => {
+      const c = await verrouillerCommande(tx, id);
+      if (c.statut !== 'PRETE') throw new ErreurMetier('Cette commande n’est pas prête à être servie', 409);
+      const [maj] = await tx
+        .update(commandes)
+        .set({ statut: 'SERVIE', updated_at: new Date() })
+        .where(eq(commandes.id, id))
+        .returning();
+      await ecrireOutbox(tx, 'commandes', 'UPDATE', id, maj as unknown as Record<string, unknown>);
+      return maj!.table_id;
+    });
+    app.diffuser('commande:servie', id);
+    app.diffuser('commande:modifiee', id);
+    if (tableId) app.diffuser('table:changee', tableId);
+    return { ok: true };
+  });
+
   // « Reprendre » : rappel d'une carte marquée Prête par erreur
   app.post('/api/kds/commandes/:id/reprendre', { preHandler: gardeKds }, async (req) => {
     const { id } = req.params as { id: string };
