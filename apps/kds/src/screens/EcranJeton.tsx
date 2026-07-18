@@ -10,23 +10,23 @@ export function EcranJeton({ refuse, onConfigure }: { refuse: boolean; onConfigu
   const [jeton, setJeton] = useState('');
 
   return (
-    <div className="flex min-h-full flex-col items-center justify-center gap-6 p-6">
-      <div className="text-center">
-        <h1 className="text-3xl font-black text-marque-fonce">Installation de l’écran cuisine</h1>
-        <p className="mt-2 max-w-md text-doux">
-          Saisissez le jeton d’appareil fourni à l’installation (paramètre
-          « kds_jeton_appareil » du serveur). À faire une seule fois : ensuite,
-          l’écran s’ouvrira directement sur les commandes.
-        </p>
-      </div>
-
-      {refuse && (
-        <div className="rounded-xl bg-alerte-tint px-5 py-3 text-alerte">
-          Jeton refusé par le serveur — vérifiez-le et réessayez.
+    <div className="flex min-h-full items-center justify-center p-6">
+      <div className="carte w-full max-w-md space-y-5 p-8 shadow-e2">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-marque-fonce">Installation de l’écran cuisine</h1>
+          <p className="mt-2 text-sm text-doux">
+            Saisissez le jeton d’appareil fourni à l’installation (paramètre
+            « kds_jeton_appareil » du serveur). À faire une seule fois : ensuite,
+            l’écran s’ouvrira directement sur les commandes.
+          </p>
         </div>
-      )}
 
-      <div className="w-full max-w-sm space-y-3">
+        {refuse && (
+          <div className="rounded-[13px] bg-alerte-tint px-5 py-3 text-sm font-medium text-alerte">
+            Jeton refusé par le serveur — vérifiez-le et réessayez.
+          </div>
+        )}
+
         <input
           className="champ text-center"
           value={jeton}

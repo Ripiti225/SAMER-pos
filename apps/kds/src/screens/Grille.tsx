@@ -117,24 +117,24 @@ export function Grille({ onJetonRefuse }: { onJetonRefuse: () => void }) {
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex items-center gap-4 border-b border-bordure px-4 py-2">
-        <h1 className="text-2xl font-black text-marque-fonce">Cuisine</h1>
+      <header className="flex flex-none items-center gap-4 border-b border-bordure bg-surface px-5 py-3 shadow-e1">
+        <h1 className="text-2xl font-bold text-marque-fonce">Cuisine</h1>
         {!connecte && (
-          <span className="animate-pulse rounded-full bg-alerte-tint px-4 py-1 text-alerte">
+          <span className="animate-pulse rounded-full bg-alerte-tint px-4 py-1 text-sm font-semibold text-alerte">
             Reconnexion…
           </span>
         )}
         <div className="ml-auto flex gap-2">
           <button
             type="button"
-            className="btn border border-bordure bg-surface"
+            className="rounded-[13px] border border-bordure bg-surface px-4 py-2 font-semibold shadow-e1 transition hover:bg-surface-douce"
             onClick={() => setHistoriqueOuvert(true)}
           >
             Historique{data?.pretes.length ? ` (${data.pretes.length})` : ''}
           </button>
           <button
             type="button"
-            className={`btn ${muet ? 'bg-alerte text-white' : 'border border-bordure bg-surface'}`}
+            className={`rounded-[13px] px-4 py-2 font-semibold transition ${muet ? 'bg-alerte text-white' : 'border border-bordure bg-surface shadow-e1 hover:bg-surface-douce'}`}
             onClick={() => { sons.basculerMute(); setMuet(sons.muet); }}
           >
             {muet ? 'Son coupé (30 min max)' : 'Couper le son'}
@@ -195,9 +195,9 @@ function Colonne({
   const couleur = accent === 'attente' ? 'text-marque-fonce' : 'text-info';
   return (
     <section className={`flex flex-1 flex-col overflow-hidden ${accent === 'attente' ? 'border-r border-bordure' : ''}`}>
-      <div className="flex items-center gap-2 border-b border-bordure px-4 py-2">
-        <h2 className={`text-xl font-black ${couleur}`}>{titre}</h2>
-        <span className="rounded-full bg-surface px-3 py-0.5 text-lg font-bold text-doux">{nombre}</span>
+      <div className="flex flex-none items-center gap-2 border-b border-bordure bg-surface-douce px-5 py-3">
+        <h2 className={`text-xl font-bold ${couleur}`}>{titre}</h2>
+        <span className="rounded-full bg-surface-tres-haute px-3 py-0.5 text-lg font-bold tabular-nums text-doux">{nombre}</span>
       </div>
       <div className="grid flex-1 auto-rows-min grid-cols-1 gap-4 overflow-y-auto p-4 xl:grid-cols-2">
         {nombre === 0 ? (
@@ -279,11 +279,11 @@ function Carte({
   const enAttente = carte.items.some((i) => i.statut_cuisine === 'A_PREPARER');
 
   return (
-    <div className={`carte flex flex-col p-4 ${minutes > seuils.rouge_minutes ? 'border-alerte' : ''}`}>
+    <div className={`carte flex flex-col p-4 shadow-e1 ${minutes > seuils.rouge_minutes ? 'border-alerte shadow-e2' : ''}`}>
       <div className="flex items-start justify-between gap-2">
         <div>
           {/* Numéro de ticket en TRÈS grand (§A1) */}
-          <div className="text-5xl font-black leading-none">N° {carte.numero_ticket}</div>
+          <div className="text-5xl font-black leading-none text-fort">N° {carte.numero_ticket}</div>
           <div className="mt-1 text-lg text-doux">
             {LIBELLES_TYPES_COMMANDE[carte.type]}
             {carte.partenaire ? ` — ${carte.partenaire}` : ''}
@@ -322,10 +322,19 @@ function Carte({
 
       {/* 2 boutons par carte, la carte entière change d'état (§A2) */}
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" className="btn-blanc py-5" disabled={!enAttente} onClick={onCommencer}>
+        <button
+          type="button"
+          className="h-14 rounded-[13px] border-2 border-bordure-forte text-lg font-bold text-marque-fonce transition hover:bg-marque/5 disabled:opacity-40"
+          disabled={!enAttente}
+          onClick={onCommencer}
+        >
           {enAttente ? 'Commencer' : 'En cours…'}
         </button>
-        <button type="button" className="btn-ok py-5" onClick={onPret}>
+        <button
+          type="button"
+          className="h-14 rounded-[13px] bg-ok text-lg font-bold text-white shadow-e1 transition hover:brightness-105 active:translate-y-px"
+          onClick={onPret}
+        >
           Prêt ✔
         </button>
       </div>
