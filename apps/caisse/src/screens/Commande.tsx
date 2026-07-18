@@ -98,6 +98,12 @@ export function Commande() {
     onSuccess: (vue) => { rafraichir(vue); setRemiseOuverte(false); afficherToast('Remise appliquée'); },
     onError: surErreur,
   });
+  // La caisse peut aussi marquer une commande SERVIE (pas seulement la cuisine).
+  const servir = useMutation({
+    mutationFn: () => api<CommandeVue>(`/api/commandes/${commandeId}/servir`, { method: 'POST', corps: {} }),
+    onSuccess: (vue) => { rafraichir(vue); afficherToast('Commande servie ✔'); },
+    onError: surErreur,
+  });
 
   if (!commande || !catalogue) {
     return <div className="flex min-h-full items-center justify-center text-doux">Chargement…</div>;
@@ -360,6 +366,15 @@ export function Commande() {
             >
               <IconSend size={20} /> Envoyer en cuisine
             </button>
+            {commande.statut === 'PRETE' && (
+              <button
+                type="button"
+                onClick={() => servir.mutate()}
+                className="flex h-14 w-full items-center justify-center gap-2 rounded-[13px] bg-ok text-lg font-bold text-white shadow-e1 transition hover:brightness-105 active:translate-y-px"
+              >
+                Servi ✔
+              </button>
+            )}
             <button
               type="button"
               onClick={() => aller('paiement', commande.id)}

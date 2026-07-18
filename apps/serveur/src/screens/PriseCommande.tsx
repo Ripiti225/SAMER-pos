@@ -101,6 +101,19 @@ export function PriseCommande({
     afficherToast('Addition demandée — la caisse est prévenue');
   };
 
+  // Marquer la commande SERVIE (le serveur peut le faire depuis son app, pas
+  // seulement la cuisine). Disponible dès que la commande est PRÊTE.
+  const servir = async () => {
+    if (!table?.commande_id) return;
+    try {
+      await api(`/api/commandes/${table.commande_id}/servir`, { method: 'POST', corps: {} });
+      afficherToast('Commande servie ✔');
+      onRetour();
+    } catch (e) {
+      afficherToast((e as Error).message);
+    }
+  };
+
   return (
     <div className="flex h-[calc(100vh-57px)] flex-col">
       <div className="flex flex-none items-center gap-3 border-b border-bordure bg-surface p-3 shadow-e1">
@@ -118,9 +131,18 @@ export function PriseCommande({
             Ticket n° {commande.numero_ticket} · {formatFCFA(commande.total)}
           </span>
         )}
+        {commande?.statut === 'PRETE' && (
+          <button
+            type="button"
+            className="ml-auto rounded-[13px] bg-ok px-4 py-2 font-bold text-white shadow-e1 transition hover:brightness-105 active:translate-y-px"
+            onClick={() => void servir()}
+          >
+            Servi ✔
+          </button>
+        )}
         <button
           type="button"
-          className="ml-auto rounded-[13px] border border-bordure-forte px-4 py-2 font-semibold text-marque-fonce transition hover:bg-marque/5 disabled:opacity-40"
+          className={`rounded-[13px] border border-bordure-forte px-4 py-2 font-semibold text-marque-fonce transition hover:bg-marque/5 disabled:opacity-40 ${commande?.statut === 'PRETE' ? '' : 'ml-auto'}`}
           disabled={!table?.commande_id && panier.length === 0}
           onClick={() => void demanderAddition()}
         >
