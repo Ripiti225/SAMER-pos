@@ -103,19 +103,24 @@ export function PriseCommande({
 
   return (
     <div className="flex h-[calc(100vh-57px)] flex-col">
-      <div className="flex items-center gap-3 border-b border-bordure p-3">
-        <button type="button" className="btn-blanc" onClick={onRetour}>
-          ← Salle
+      <div className="flex flex-none items-center gap-3 border-b border-bordure bg-surface p-3 shadow-e1">
+        <button
+          type="button"
+          onClick={onRetour}
+          title="Retour à la salle"
+          className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-surface-douce text-doux transition hover:bg-marque-tint hover:text-marque-fonce"
+        >
+          ←
         </button>
-        <span className="text-xl font-black">Table {table?.numero ?? '…'}</span>
+        <span className="text-xl font-bold text-marque-fonce">Table {table?.numero ?? '…'}</span>
         {commande && (
-          <span className="text-sm text-doux">
-            Ticket n° {commande.numero_ticket} — {formatFCFA(commande.total)}
+          <span className="rounded-full bg-info-tint px-3 py-1 text-sm font-medium text-info">
+            Ticket n° {commande.numero_ticket} · {formatFCFA(commande.total)}
           </span>
         )}
         <button
           type="button"
-          className="btn-blanc ml-auto"
+          className="ml-auto rounded-[13px] border border-bordure-forte px-4 py-2 font-semibold text-marque-fonce transition hover:bg-marque/5 disabled:opacity-40"
           disabled={!table?.commande_id && panier.length === 0}
           onClick={() => void demanderAddition()}
         >
@@ -124,12 +129,14 @@ export function PriseCommande({
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        <nav className="w-36 shrink-0 space-y-2 overflow-y-auto border-r border-bordure p-2">
+        <nav className="w-36 shrink-0 space-y-2 overflow-y-auto border-r border-bordure bg-surface-douce p-2">
           {categories.map((c) => (
             <button
               key={c.id}
               type="button"
-              className={`btn w-full ${c.id === categorieActive ? 'bg-marque text-white' : 'border border-bordure bg-surface'}`}
+              className={`w-full rounded-[13px] px-3 py-3 text-sm font-semibold transition ${
+                c.id === categorieActive ? 'bg-marque text-sur-marque shadow-e1' : 'border border-bordure bg-surface text-doux hover:bg-marque-tint'
+              }`}
               onClick={() => setCategorieId(c.id)}
             >
               {c.nom}
@@ -143,7 +150,7 @@ export function PriseCommande({
               key={combo.id}
               type="button"
               disabled={!combo.disponible}
-              className="carte flex min-h-[88px] flex-col justify-between p-3 text-left hover:border-marque disabled:opacity-40"
+              className="carte flex min-h-[88px] flex-col justify-between p-3 text-left shadow-e1 transition hover:-translate-y-0.5 hover:shadow-e2 disabled:opacity-40"
               onClick={() =>
                 ajouterAuPanier({ article_id: null, combo_id: combo.id, nom: combo.nom, prix_affiche: combo.prix, quantite: 1, options: [], supplements: [] })
               }
@@ -157,7 +164,7 @@ export function PriseCommande({
               key={a.id}
               type="button"
               disabled={!a.disponible}
-              className="carte flex flex-col overflow-hidden p-0 text-left hover:border-marque disabled:opacity-100"
+              className="carte group flex flex-col overflow-hidden p-0 text-left shadow-e1 transition hover:-translate-y-0.5 hover:shadow-e2"
               onClick={() => clicArticle(a)}
             >
               <div className="relative aspect-[4/3] w-full overflow-hidden bg-marque-tint">
@@ -246,11 +253,11 @@ export function PriseCommande({
             {/* Bouton UNIQUE « Envoyer en cuisine » (§B2) — pas d'encaissement ici */}
             <button
               type="button"
-              className="btn-accent w-full py-5 text-xl"
+              className="flex h-16 w-full items-center justify-center gap-2 rounded-[13px] bg-marque text-xl font-bold text-sur-marque shadow-e2 transition hover:brightness-105 active:translate-y-px disabled:opacity-40"
               disabled={panier.length === 0}
               onClick={() => void envoyerEnCuisine()}
             >
-              Envoyer en cuisine {panier.length > 0 ? `(${formatFCFA(totalPanier)})` : ''}
+              Envoyer en cuisine {panier.length > 0 ? `· ${formatFCFA(totalPanier)}` : ''}
             </button>
           </div>
         </aside>

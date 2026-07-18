@@ -62,26 +62,26 @@ export function App() {
   return (
     <div className="h-full">
       {/* Le nom du serveur connecté est affiché en permanence (§B5) */}
-      <header className="flex items-center gap-3 border-b border-bordure px-4 py-2">
-        <span className="font-black text-marque-fonce">{session.restaurant.nom}</span>
-        <span className="rounded-full border border-bordure bg-surface px-3 py-1 text-sm font-semibold">
+      <header className="flex h-14 items-center gap-3 border-b border-bordure bg-surface px-4 shadow-e1">
+        <span className="font-bold text-marque-fonce">{session.restaurant.nom}</span>
+        <span className="rounded-full bg-marque-tint px-3 py-1 text-sm font-semibold text-marque-fonce">
           {session.utilisateur.nom_complet}
         </span>
         {enAttente > 0 && (
-          <span className="animate-pulse rounded-full bg-alerte-tint px-3 py-1 text-sm text-alerte">
+          <span className="animate-pulse rounded-full bg-alerte-tint px-3 py-1 text-sm font-medium text-alerte">
             En attente de connexion ({enAttente})
           </span>
         )}
         <button
           type="button"
-          className="btn-blanc ml-auto"
+          className="ml-auto flex items-center gap-2 rounded-[13px] bg-alerte/10 px-4 py-2 font-semibold text-alerte transition hover:bg-alerte/20"
           onClick={async () => {
             try { await api('/api/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
             setSession(null);
             setTableId(null);
           }}
         >
-          Se déconnecter
+          Déconnexion
         </button>
       </header>
 
