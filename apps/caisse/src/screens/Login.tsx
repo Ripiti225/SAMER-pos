@@ -32,12 +32,25 @@ function libelleRole(u: UtilisateurPublic): string {
   return u.role_nom ?? (u.role ? LIBELLES_ROLES[u.role] ?? u.role : '');
 }
 
+/**
+ * Pont fourni par la coquille desktop (PosSamer.exe) via son preload :
+ * `window.posSamer.fermer()`. Absent dans un navigateur normal (dev, KDS,
+ * serveur) → le bouton « Fermer l'application » ne s'affiche alors pas.
+ */
+function fermetureBureau(): (() => void) | null {
+  const pont = (window as unknown as { posSamer?: { fermer?: () => void } }).posSamer;
+  return typeof pont?.fermer === 'function' ? () => pont.fermer!() : null;
+}
+
 export function Login() {
   const { poserSession, afficherToast, session } = useCaisse();
   const queryClient = useQueryClient();
   const [choisi, setChoisi] = useState<UtilisateurPublic | null>(null);
   const [pin, setPin] = useState('');
   const [enCours, setEnCours] = useState(false);
+  // Bouton « Fermer l'application » : uniquement dans la coquille kiosque.
+  const fermerApp = fermetureBureau();
+  const [confirmerFermeture, setConfirmerFermeture] = useState(false);
   // Premier accès : pose du PIN
   const [etapeDef, setEtapeDef] = useState<EtapeDef>('code');
   const [code, setCode] = useState('');
@@ -168,9 +181,43 @@ export function Login() {
             </div>
           </div>
 
-          <footer className="mt-8 flex items-center gap-3 border-t border-bordure/60 pt-6 text-doux">
-            <IconeWifi className="h-5 w-5" />
-            <span className="text-sm font-medium">{nomResto} · Réseau local</span>
+          <footer className="mt-8 flex items-center justify-between gap-3 border-t border-bordure/60 pt-6 text-doux">
+            <div className="flex items-center gap-3">
+              <IconeWifi className="h-5 w-5" />
+              <span className="text-sm font-medium">{nomResto} · Réseau local</span>
+            </div>
+            {/* Fermeture de l'app : seulement dans la coquille kiosque ET au
+                moment de choisir l'utilisateur (masqué pendant la saisie du PIN). */}
+            {fermerApp && !choisi && (
+              confirmerFermeture ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-alerte">Fermer&nbsp;?</span>
+                  <button
+                    type="button"
+                    onClick={() => fermerApp()}
+                    className="rounded-lg bg-alerte px-3 py-1.5 text-xs font-bold text-white transition hover:brightness-110"
+                  >
+                    Oui, fermer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmerFermeture(false)}
+                    className="rounded-lg border border-bordure px-3 py-1.5 text-xs font-semibold text-doux transition hover:text-fort"
+                  >
+                    Annuler
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmerFermeture(true)}
+                  className="flex items-center gap-2 rounded-lg border border-bordure px-3 py-1.5 text-sm font-semibold text-doux transition hover:border-alerte hover:text-alerte"
+                >
+                  <IconePower className="h-4 w-4" />
+                  Fermer l’application
+                </button>
+              )
+            )}
           </footer>
         </section>
 
@@ -404,6 +451,14 @@ function IconeRetourArriere({ className }: { className?: string }) {
       <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z" />
       <line x1="18" y1="9" x2="12" y2="15" />
       <line x1="12" y1="9" x2="18" y2="15" />
+    </svg>
+  );
+}
+function IconePower({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+      <line x1="12" y1="2" x2="12" y2="12" />
     </svg>
   );
 }

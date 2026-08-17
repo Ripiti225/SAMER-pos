@@ -11,6 +11,7 @@ interface MesVentesVue {
   commandes: {
     id: string;
     numero_ticket: number;
+    code_commande: string | null;
     type: TypeCommande;
     statut: StatutCommande;
     total: number;
@@ -73,7 +74,7 @@ export function MesVentes() {
             onClick={() => aller(c.statut === 'PAYEE' || c.statut === 'ANNULEE' ? 'paiement' : 'commande', c.id)}
           >
             <div>
-              <span className="font-bold">Ticket n° {c.numero_ticket}</span>
+              <span className="font-bold">{c.code_commande ?? `Ticket n° ${c.numero_ticket}`}</span>
               <span className="ml-3 text-sm text-doux">
                 {LIBELLES_TYPES_COMMANDE[c.type]} — {new Date(c.created_at).toLocaleTimeString('fr-FR')}
               </span>

@@ -50,6 +50,10 @@ export interface Donnees {
   table_qr: string;
   table2_id: string;
   table2_qr: string;
+  /** Table virtuelle des repas offerts (zone RC). */
+  table_kdo_id: string;
+  /** Table virtuelle Yango (zone Livraison). */
+  table_yango_id: string;
   zone_id: string;
   roles: Record<string, string>;
 }
@@ -126,11 +130,16 @@ export async function resetDonnees(): Promise<Donnees> {
   ]);
 
   const [zone] = await db.insert(zones).values({ nom: 'RC', ordre: 1 }).returning();
-  const [table, table2] = await db
+  // Tables VIRTUELLES : le Kdo vit en RC (le cadeau se consomme sur place),
+  // Yango dans la zone Livraison — comme en production.
+  const [zoneLivraison] = await db.insert(zones).values({ nom: 'Livraison', ordre: 4 }).returning();
+  const [table, table2, tableKdo, tableYango] = await db
     .insert(tablesSalle)
     .values([
       { zone_id: zone!.id, numero: 'T1', qr_token: 'QR-T1-TEST' },
       { zone_id: zone!.id, numero: 'T2', qr_token: 'QR-T2-TEST' },
+      { zone_id: zone!.id, numero: 'KDO', partenaire: 'KDO' },
+      { zone_id: zoneLivraison!.id, numero: 'YANGO', partenaire: 'YANGO' },
     ])
     .returning();
 
@@ -149,6 +158,8 @@ export async function resetDonnees(): Promise<Donnees> {
     table_qr: table!.qr_token!,
     table2_id: table2!.id,
     table2_qr: table2!.qr_token!,
+    table_kdo_id: tableKdo!.id,
+    table_yango_id: tableYango!.id,
     zone_id: zone!.id,
     roles: Object.fromEntries(roleIdParNom),
   };

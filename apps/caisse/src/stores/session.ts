@@ -13,12 +13,17 @@ export type Ecran =
   | 'reglages';
 
 /**
- * Écran d'atterrissage selon le rôle : le propriétaire et le superviseur ne sont
- * pas des caissiers, ils arrivent sur le tableau de bord Supervision (d'où ils
- * peuvent basculer en mode caisse). Les autres arrivent sur l'accueil caissier.
+ * Écran d'atterrissage selon le rôle : le propriétaire, le superviseur et le
+ * GÉRANT (porteur de `caisse.fermer_sequence`) ne sont pas des caissiers. Ils
+ * arrivent sur le tableau de bord Supervision, d'où ils peuvent fermer la
+ * séquence ET basculer en mode caisse à la demande — sans être forcés d'ouvrir
+ * un shift juste pour entrer (un shift ouvert empêcherait de raser la séquence).
+ * Les autres arrivent sur l'accueil caissier.
  */
 export function ecranInitial(session: SessionInfo | null): Ecran {
-  if (session && (session.utilisateur.est_proprietaire || session.utilisateur.est_superviseur)) {
+  if (!session) return 'accueil';
+  const { est_proprietaire, est_superviseur } = session.utilisateur;
+  if (est_proprietaire || est_superviseur || session.permissions.includes('caisse.fermer_sequence')) {
     return 'supervision';
   }
   return 'accueil';

@@ -8,6 +8,7 @@ import {
   ModifierItemSchema,
   RemiseSchema,
   ReouvrirSchema,
+  estTableKdo,
 } from '@pos/shared';
 import { db } from '../../db/client.js';
 import { commandeItems, commandes, tablesSalle } from '../../db/schema/index.js';
@@ -17,10 +18,12 @@ import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
 import { verifierPinManager } from '../auth/pin.js';
 import { exigerAccesTable } from '../tables/propriete.js';
+import { imprimerBonsEnvoi } from '../../printer/bons.js';
 import {
   chargerCommandeVue,
   exigerModifiable,
   figerNouvelItem,
+  genererCodeCommande,
   majStatutTable,
   marquerEnvoiCuisine,
   recalculerTotaux,
@@ -35,20 +38,28 @@ export function routesCommandes(app: FastifyInstance): void {
     const service = await serviceOuvertDe(db, req.session!.utilisateur_id);
 
     let partenaire = corps.partenaire ?? null;
+    // Un Kdo se reconnaît à SA TABLE, jamais à un drapeau envoyé par le client :
+    // offrir un repas sort de la marchandise sans contrepartie, ça ne se décide
+    // pas côté navigateur.
+    let offert = false;
     if (corps.table_id) {
       const [table] = await db.select().from(tablesSalle).where(eq(tablesSalle.id, corps.table_id));
       if (!table) throw introuvable('Table');
       if (corps.type === 'LIVRAISON' && table.partenaire) partenaire = table.partenaire;
+      offert = estTableKdo(table.partenaire);
     }
     if (corps.type !== 'LIVRAISON') partenaire = null;
 
     const vueId = await db.transaction(async (tx) => {
+      const code = await genererCodeCommande(tx, corps.type, service.id);
       const [c] = await tx
         .insert(commandes)
         .values({
           type: corps.type,
+          code_commande: code,
           table_id: corps.table_id ?? null,
           partenaire,
+          offert,
           ref_partenaire: corps.type === 'LIVRAISON' ? (corps.ref_partenaire ?? null) : null,
           service_id: service.id,
           caissier_id: req.session!.utilisateur_id,
@@ -226,12 +237,13 @@ export function routesCommandes(app: FastifyInstance): void {
    */
   app.post('/api/commandes/:id/envoyer', { preHandler: app.exigePermission('salle.envoyer_cuisine') }, async (req) => {
     const { id } = req.params as { id: string };
-    const vue = await db.transaction(async (tx) => {
+    const { vue, envoyes } = await db.transaction(async (tx) => {
       const c = await verrouillerCommande(tx, id);
       exigerModifiable(c);
-      await marquerEnvoiCuisine(tx, id);
-      return chargerCommandeVue(tx, id);
+      const ids = await marquerEnvoiCuisine(tx, id);
+      return { vue: await chargerCommandeVue(tx, id), envoyes: ids };
     });
+    await imprimerBonsEnvoi(app, id, envoyes);
     app.diffuser('commande:envoyee', id);
     app.diffuser('commande', id);
     return vue;

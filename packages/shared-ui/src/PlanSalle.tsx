@@ -76,6 +76,7 @@ export function PlanSalle({ tables, onTable, masquerPartenaires, moiServeurId, o
 
       <div className="mt-6 flex flex-wrap gap-3 text-xs text-doux">
         <span><span className="mr-1 inline-block h-3 w-3 rounded border border-bordure bg-surface align-middle" /> Libre</span>
+        <span><span className="mr-1 inline-block h-3 w-3 rounded bg-[#64748b] align-middle" /> Occupée</span>
         <span><span className="mr-1 inline-block h-3 w-3 rounded bg-[#7c3aed] align-middle" /> Client à valider</span>
         <span><span className="mr-1 inline-block h-3 w-3 rounded bg-marque align-middle" /> En préparation</span>
         <span><span className="mr-1 inline-block h-3 w-3 rounded bg-ok align-middle" /> Prête</span>
@@ -89,6 +90,8 @@ export function PlanSalle({ tables, onTable, masquerPartenaires, moiServeurId, o
 /** Couleur de l'état principal dérivé (point 4). */
 function couleurEtat(etat: TableVue['etat']): string {
   switch (etat) {
+    case 'OCCUPEE':
+      return 'bg-[#64748b] text-white';
     case 'COMMANDE_CLIENT_A_VALIDER':
       return 'bg-[#7c3aed] text-white';
     case 'EN_PREPARATION':

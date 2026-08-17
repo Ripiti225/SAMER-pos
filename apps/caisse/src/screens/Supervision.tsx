@@ -18,9 +18,10 @@ function initiales(nom: string): string {
 }
 
 /**
- * Tableau de bord de supervision : écran d'accueil du propriétaire et du
- * superviseur. Ils pilotent (rapports, réglages, séquence) et peuvent
- * BASCULER en mode caisse à la demande.
+ * Tableau de bord de supervision : écran d'accueil du propriétaire, du
+ * superviseur et du gérant. Ils pilotent (rapports, réglages, séquence) et
+ * peuvent BASCULER en mode caisse à la demande — l'ouverture d'un shift devient
+ * un choix explicite au lieu d'un passage obligé (voir `ecranInitial`).
  */
 export function Supervision() {
   const { session, aller, poserSession } = useCaisse();
@@ -52,7 +53,7 @@ export function Supervision() {
           <div className="mx-1 hidden text-right sm:block">
             <div className="text-sm font-bold leading-tight text-fort">{session?.utilisateur.nom_complet}</div>
             <div className="text-[10px] uppercase tracking-wider text-doux">
-              {session?.utilisateur.est_proprietaire ? 'Propriétaire' : 'Superviseur'}
+              {session?.utilisateur.role_nom || session?.utilisateur.role || 'Superviseur'}
             </div>
           </div>
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-marque-tint text-sm font-bold text-marque-fonce">

@@ -55,7 +55,12 @@ async function detailShifts(dbx: DbOuTx, sequenceId: string): Promise<ShiftSeque
     .orderBy(asc(servicesCaisse.ouvert_le));
 
   return rows.map((r) => {
-    const rec = (r.reconciliation ?? {}) as { livraisons?: Record<string, number>; modes?: Record<string, number> };
+    const rec = (r.reconciliation ?? {}) as {
+      livraisons?: Record<string, number>;
+      // Absent des shifts clôturés AVANT l'arrivée des Kdo : on retombe sur 0.
+      offerts?: { nb: number; total: number };
+      modes?: Record<string, number>;
+    };
     return {
       service_id: r.id,
       caissier: r.caissier ?? '—',
@@ -69,6 +74,7 @@ async function detailShifts(dbx: DbOuTx, sequenceId: string): Promise<ShiftSeque
       total_systeme: r.total_systeme,
       depenses: r.depenses,
       livraisons: rec.livraisons ?? {},
+      offerts: rec.offerts ?? { nb: 0, total: 0 },
       modes_declares: rec.modes ?? {},
     };
   });
@@ -78,6 +84,7 @@ async function detailShifts(dbx: DbOuTx, sequenceId: string): Promise<ShiftSeque
 function agreger(shifts: ShiftSequence[]): RecapSequence {
   const livraisons = recAdditif();
   const modes = recAdditif();
+  const offerts = { nb: 0, total: 0 };
   let vente_totale = 0;
   let total_systeme = 0;
   let especes_comptees = 0;
@@ -92,8 +99,10 @@ function agreger(shifts: ShiftSequence[]): RecapSequence {
     ecart_especes += s.ecart ?? 0;
     ajoute(livraisons, s.livraisons);
     ajoute(modes, s.modes_declares);
+    offerts.nb += s.offerts?.nb ?? 0;
+    offerts.total += s.offerts?.total ?? 0;
   }
-  return { vente_totale, total_systeme, diff: vente_totale - total_systeme, especes_comptees, depenses, ecart_especes, livraisons, modes };
+  return { vente_totale, total_systeme, diff: vente_totale - total_systeme, especes_comptees, depenses, ecart_especes, livraisons, offerts, modes };
 }
 
 export function routesSequences(app: FastifyInstance): void {
@@ -163,7 +172,24 @@ export function routesSequences(app: FastifyInstance): void {
       return rapportSeq;
     });
 
+    // Le gérant repart avec le papier : détail de chaque shift + totaux du jour.
+    // Hors transaction (une panne d'imprimante ne doit pas annuler le rasage) ;
+    // le rapport reste refaisable depuis « Réimprimer le récap ».
+    await app.imprimante.imprimerRapportSequence(rapport);
     app.diffuser('service', rapport.sequence_id);
     return rapport;
+  });
+
+  /**
+   * Réimpression du récap d'une séquence déjà rasée (papier perdu, bourrage,
+   * imprimante hors ligne au moment du rasage). Lit le rapport figé en base.
+   */
+  app.post('/api/sequences/:id/reimprimer', { preHandler: garde }, async (req) => {
+    const { id } = req.params as { id: string };
+    const [seq] = await db.select().from(sequencesCaisse).where(eq(sequencesCaisse.id, id));
+    if (!seq) throw new ErreurMetier('Séquence introuvable', 404);
+    if (!seq.rapport) throw new ErreurMetier('Cette séquence n’a pas encore été fermée', 409);
+    await app.imprimante.imprimerRapportSequence(seq.rapport as RapportSequence);
+    return { ok: true };
   });
 }

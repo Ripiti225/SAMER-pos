@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist.avant-optimisation/
 dev-dist/
 .env
 *.log

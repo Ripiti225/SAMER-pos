@@ -60,7 +60,26 @@ describe('équipe du jour à l’ouverture de service', () => {
     expect(outbox.length).toBe(2);
   });
 
-  it('accepte une ouverture sans équipe (rétrocompatible)', async () => {
+  // Un seul shift ouvert à la fois : le caissier 1 tient encore la caisse ici.
+  it('refuse le shift d’un second caissier tant que la caisse est tenue', async () => {
+    const c2 = await seConnecter(app, donnees.caissier2_id, '4826');
+    const rep = await app.inject({ method: 'POST', url: '/api/services/ouvrir', cookies: c2, payload: { fond_de_caisse: 10000 } });
+    expect(rep.statusCode).toBe(409);
+    expect(rep.json().erreur).toContain('shift en cours');
+
+    // L'écran d'ouverture sait qui bloque, sans jamais voir de montant
+    const occupation = await app.inject({ method: 'GET', url: '/api/services/occupation', cookies: c2 });
+    expect(occupation.statusCode).toBe(200);
+    expect(occupation.json().occupee).toBe(true);
+    expect(occupation.json().caissier).toBeTruthy();
+    expect(occupation.json()).not.toHaveProperty('fond_de_caisse');
+  });
+
+  it('accepte une ouverture sans équipe (rétrocompatible) une fois la caisse libérée', async () => {
+    // Le caissier 1 fait « J'ai fini » (aucune vente) → la caisse se libère
+    const fin = await app.inject({ method: 'POST', url: '/api/services/cloturer', cookies, payload: { especes_comptees: 25000 } });
+    expect(fin.statusCode).toBe(200);
+
     const c2 = await seConnecter(app, donnees.caissier2_id, '4826');
     const rep = await app.inject({ method: 'POST', url: '/api/services/ouvrir', cookies: c2, payload: { fond_de_caisse: 10000 } });
     expect(rep.statusCode).toBe(200);

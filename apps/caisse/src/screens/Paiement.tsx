@@ -9,9 +9,10 @@ import {
   IconCirclePlus,
   IconCreditCard,
   IconDeviceMobile,
+  IconTruckDelivery,
 } from '@tabler/icons-react';
 import type { CommandeVue, ModePaiement } from '@pos/shared';
-import { formatFCFA, LIBELLES_MODES, MODES_PAIEMENT } from '@pos/shared';
+import { estLivraisonSansEncaissement, formatFCFA, LIBELLES_MODES, MODES_PAIEMENT } from '@pos/shared';
 import { api } from '../api';
 import { Modale } from '../components/Modale';
 import { Fidelite } from '../components/Fidelite';
@@ -61,6 +62,17 @@ export function Paiement() {
     onError: (e: Error) => afficherToast(e.message),
   });
 
+  // Livraison externe (Yango/Glovo) : réglée chez le partenaire, aucune saisie
+  // de mode de paiement — un seul bouton clôture la commande en PAYEE.
+  const cloturerLivraison = useMutation({
+    mutationFn: () => api<CommandeVue>(`/api/commandes/${commandeId}/cloturer-livraison`, { method: 'POST' }),
+    onSuccess: (vue) => {
+      rafraichir(vue);
+      afficherToast(`Livraison ${vue.partenaire ?? ''} validée ✔ — reçu imprimé`);
+    },
+    onError: (e: Error) => afficherToast(e.message),
+  });
+
   const commandePrete = !!commande;
   const estPayee = commande?.statut === 'PAYEE';
 
@@ -82,6 +94,7 @@ export function Paiement() {
     return <div className="flex min-h-full items-center justify-center text-doux">Chargement…</div>;
   }
 
+  const sansEncaissement = estLivraisonSansEncaissement(commande.partenaire);
   const noteActive = commande.notes.find((n) => n.id === noteId) ?? null;
   const resteCible = noteActive ? noteActive.reste : commande.reste;
   const montantSaisi = montant === '' ? resteCible : Number(montant);
@@ -131,7 +144,7 @@ export function Paiement() {
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-bold">Résumé du ticket</h3>
               <span className="rounded-full bg-marque-tint px-3 py-1 text-xs font-bold text-marque-fonce">
-                N° {commande.numero_ticket}
+                {commande.code_commande ?? `N° ${commande.numero_ticket}`}
               </span>
             </div>
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
@@ -159,11 +172,11 @@ export function Paiement() {
             </div>
           </div>
 
-          {!estPayee && (
+          {!estPayee && !sansEncaissement && (
             <Fidelite commande={commande} onMaj={rafraichir} />
           )}
 
-          {splitPossible && (
+          {splitPossible && !sansEncaissement && (
             <div className="rounded-2xl bg-surface-moyenne p-5 shadow-e1">
               <div className="mb-3 flex items-center gap-2">
                 <IconArrowsSplit2 size={22} className="text-marque-fonce" />
@@ -206,7 +219,31 @@ export function Paiement() {
             </div>
           )}
 
-          {!estPayee && (
+          {!estPayee && sansEncaissement && (
+            <div className="carte flex min-h-0 flex-1 flex-col items-center justify-center gap-5 p-8 text-center">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-info-tint text-info">
+                <IconTruckDelivery size={44} />
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold">Livraison {commande.partenaire}</h3>
+                <p className="mt-2 max-w-xs text-doux">
+                  Le client règle chez {commande.partenaire} — aucun encaissement en caisse.
+                  Validez la livraison pour clôturer la commande et imprimer le reçu.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => cloturerLivraison.mutate()}
+                disabled={cloturerLivraison.isPending}
+                className="flex h-16 w-full max-w-sm items-center justify-center gap-2 rounded-[13px] bg-marque text-xl font-bold text-sur-marque shadow-e2 transition hover:brightness-105 active:translate-y-px disabled:opacity-40"
+              >
+                <IconTruckDelivery size={24} />
+                {cloturerLivraison.isPending ? 'Validation…' : `Valider la livraison · ${formatFCFA(commande.total)}`}
+              </button>
+            </div>
+          )}
+
+          {!estPayee && !sansEncaissement && (
             <>
               <div className="carte p-5">
                 <h3 className="mb-4 text-lg font-bold">Mode de paiement</h3>
@@ -296,7 +333,7 @@ export function Paiement() {
         <div className="col-span-12 flex min-h-0 flex-col gap-4 lg:col-span-3">
           <div className={`flex h-44 flex-none flex-col items-center justify-center rounded-2xl border-4 p-4 text-center shadow-e2 ${estPayee ? 'border-ok bg-fort' : 'border-marque bg-fort'}`}>
             <span className="text-xs font-bold uppercase tracking-widest text-fond/70">
-              {estPayee ? 'Encaissé' : noteActive ? `Reste — ${noteActive.libelle}` : 'Reste à payer'}
+              {estPayee ? 'Encaissé' : sansEncaissement ? `À régler chez ${commande.partenaire}` : noteActive ? `Reste — ${noteActive.libelle}` : 'Reste à payer'}
             </span>
             <div className={`mt-1 text-5xl font-extrabold tabular-nums ${estPayee ? 'text-ok' : 'text-fond'}`}>
               {formatFCFA(resteCible)}
@@ -308,7 +345,9 @@ export function Paiement() {
             <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-doux">Paiements enregistrés</h3>
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
               {commande.paiements.length === 0 && (
-                <div className="py-10 text-center text-sm italic text-doux/60">Aucun paiement saisi</div>
+                <div className="py-10 text-center text-sm italic text-doux/60">
+                  {sansEncaissement ? `Réglé par ${commande.partenaire} — pas d’encaissement en caisse` : 'Aucun paiement saisi'}
+                </div>
               )}
               {commande.paiements.map((p) => {
                 const Icone = iconeMode(p.mode);
@@ -324,7 +363,7 @@ export function Paiement() {
             </div>
           </div>
 
-          {!estPayee && (
+          {!estPayee && !sansEncaissement && (
             <button
               type="button"
               onClick={ajouter}
@@ -334,19 +373,23 @@ export function Paiement() {
               <IconCirclePlus size={22} /> {encaisser.isPending ? 'Encaissement…' : `Ajouter ${LIBELLES_MODES[mode]}`}
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => aller('accueil')}
-            disabled={commande.reste > 0}
-            className={`h-16 flex-none rounded-[13px] text-xl font-bold transition ${
-              commande.reste > 0
-                ? 'cursor-not-allowed border-2 border-dashed border-bordure-forte bg-surface-tres-haute text-doux/50'
-                : 'bg-marque text-sur-marque shadow-e2 hover:brightness-105 active:translate-y-px'
-            }`}
-          >
-            {estPayee ? 'Terminer' : 'Valider la vente'}
-          </button>
-          {commande.reste > 0 && (
+          {/* La clôture d'une livraison externe passe par le bouton dédié (colonne
+              du milieu) : ici on n'affiche « Terminer » qu'une fois clôturée. */}
+          {(estPayee || !sansEncaissement) && (
+            <button
+              type="button"
+              onClick={() => aller('accueil')}
+              disabled={!estPayee && commande.reste > 0}
+              className={`h-16 flex-none rounded-[13px] text-xl font-bold transition ${
+                !estPayee && commande.reste > 0
+                  ? 'cursor-not-allowed border-2 border-dashed border-bordure-forte bg-surface-tres-haute text-doux/50'
+                  : 'bg-marque text-sur-marque shadow-e2 hover:brightness-105 active:translate-y-px'
+              }`}
+            >
+              {estPayee ? 'Terminer' : 'Valider la vente'}
+            </button>
+          )}
+          {!estPayee && commande.reste > 0 && !sansEncaissement && (
             <p className="flex-none text-center text-xs font-bold uppercase leading-tight text-alerte">
               Soldez la totalité avant de valider
             </p>

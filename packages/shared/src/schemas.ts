@@ -95,6 +95,35 @@ export const ModifierItemSchema = z.object({
   quantite: z.number().int().min(1, 'La quantité doit être au moins 1').max(99),
 });
 
+// ---------------------------------------------------------------------------
+// Options réutilisables (migration 0020) — administration
+// ---------------------------------------------------------------------------
+
+/** Le prix est porté par l'option : 0 = gratuite (pâte à l'ail), > 0 = payante. */
+export const CreerOptionSchema = z.object({
+  nom: z.string().trim().min(1, 'Le nom de l’option est obligatoire').max(60),
+  prix: z.number().int().min(0, 'Le prix ne peut pas être négatif').max(1000000),
+});
+
+export const ModifierOptionSchema = z
+  .object({
+    nom: z.string().trim().min(1, 'Le nom de l’option est obligatoire').max(60).optional(),
+    prix: z.number().int().min(0, 'Le prix ne peut pas être négatif').max(1000000).optional(),
+    actif: z.boolean().optional(),
+    ordre: z.number().int().min(0).max(999).optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: 'Aucune modification demandée' });
+
+/** Une liaison vise UNE catégorie entière OU UN article, jamais les deux. */
+export const LierOptionSchema = z
+  .object({
+    categorie_id: z.string().uuid('Catégorie invalide').nullish(),
+    article_id: z.string().uuid('Article invalide').nullish(),
+  })
+  .refine((v) => !!v.categorie_id !== !!v.article_id, {
+    message: 'Choisissez une catégorie OU un article',
+  });
+
 const MotifObligatoire = z
   .string({ required_error: 'Le motif est obligatoire' })
   .trim()
@@ -127,6 +156,15 @@ export const ReouvrirSchema = z.object({
 export const AnnulerCommandeSchema = z.object({
   motif: MotifObligatoire,
   pin_manager: PinSaisiSchema,
+});
+
+/**
+ * Clôture d'un Kdo (repas offert). Pas de PIN manager — décision client : le
+ * caissier peut offrir seul — mais le motif reste OBLIGATOIRE, c'est la seule
+ * trace qui permettra de repérer un abus dans le journal d'audit.
+ */
+export const OffrirSchema = z.object({
+  motif: MotifObligatoire,
 });
 
 export const PaiementSchema = z.object({

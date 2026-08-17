@@ -13,7 +13,7 @@ import { calculerStatsService, reconciliationAuto } from './rapport.js';
 import { sequenceOuverte } from './sequences.js';
 import { aPermission } from '../../plugins/sessions.js';
 import { permissionsDuRole } from '../roles/service.js';
-import type { ReconciliationPreview } from '@pos/shared';
+import type { OccupationCaisse, ReconciliationPreview } from '@pos/shared';
 
 /** Vue publique d'un service : ne contient JAMAIS especes_theorique tant que non clôturé. */
 function vueService(s: typeof servicesCaisse.$inferSelect) {
@@ -25,8 +25,35 @@ function vueService(s: typeof servicesCaisse.$inferSelect) {
   };
 }
 
+/** Shifts actuellement OUVERTS, avec le nom du caissier (un seul attendu). */
+async function servicesOuverts(): Promise<{ id: string; caissier_id: string; caissier: string; ouvert_le: Date }[]> {
+  const lignes = await db
+    .select({
+      id: servicesCaisse.id,
+      caissier_id: servicesCaisse.caissier_id,
+      caissier: utilisateurs.nom_complet,
+      ouvert_le: servicesCaisse.ouvert_le,
+    })
+    .from(servicesCaisse)
+    .leftJoin(utilisateurs, eq(utilisateurs.id, servicesCaisse.caissier_id))
+    .where(eq(servicesCaisse.statut, 'OUVERT'));
+  return lignes.map((l) => ({ ...l, caissier: l.caissier ?? 'Un collègue' }));
+}
+
 export function routesServices(app: FastifyInstance): void {
   const gardeCaisse = app.exigePermission('caisse.service.ouvrir');
+
+  /**
+   * Caisse occupée ? Renvoie le shift ouvert par QUELQU'UN D'AUTRE, pour que
+   * l'écran d'ouverture explique le blocage au lieu d'attendre l'erreur 409.
+   * N'expose aucun montant (comptage à l'aveugle intact).
+   */
+  app.get('/api/services/occupation', { preHandler: app.exigerAuth }, async (req): Promise<OccupationCaisse> => {
+    const autre = (await servicesOuverts()).find((s) => s.caissier_id !== req.session!.utilisateur_id);
+    return autre
+      ? { occupee: true, caissier: autre.caissier, ouvert_le: autre.ouvert_le.toISOString() }
+      : { occupee: false, caissier: null, ouvert_le: null };
+  });
 
   // Employés actifs proposés pour l'équipe du jour, avec un poste par défaut.
   app.get('/api/services/equipe-proposee', { preHandler: gardeCaisse }, async () => {
@@ -54,12 +81,19 @@ export function routesServices(app: FastifyInstance): void {
     const corps = valider(OuvrirServiceSchema, req.body);
     const caissierId = req.session!.utilisateur_id;
 
-    const [dejaOuvert] = await db
-      .select()
-      .from(servicesCaisse)
-      .where(and(eq(servicesCaisse.caissier_id, caissierId), eq(servicesCaisse.statut, 'OUVERT')));
-    if (dejaOuvert) {
+    const ouverts = await servicesOuverts();
+    if (ouverts.some((s) => s.caissier_id === caissierId)) {
       throw new ErreurMetier('Vous avez déjà un service ouvert — terminez-le avant d’en ouvrir un autre', 409);
+    }
+    // Un seul shift à la fois sur la caisse : tant que la collègue en poste n'a
+    // pas fait « J'ai fini », personne d'autre ne peut ouvrir le sien (un seul
+    // tiroir, un seul comptage). La relève passe par « Transférer ».
+    const autre = ouverts[0];
+    if (autre) {
+      throw new ErreurMetier(
+        `${autre.caissier} a encore un shift en cours — il doit d’abord le clôturer (« J’ai fini »)`,
+        409,
+      );
     }
 
     const service = await db.transaction(async (tx) => {
@@ -139,7 +173,10 @@ export function routesServices(app: FastifyInstance): void {
     const auto = await reconciliationAuto(db, service.id);
     const modes = { ...auto.modes };
     delete (modes as Record<string, number>).ESPECES; // jamais révélé avant comptage
-    return { fond_de_caisse: service.fond_de_caisse, livraisons: auto.livraisons, modes };
+    // Les offerts sont affichés pour information : le caissier ne peut rien y
+    // saisir (aucun encaissement), mais il doit les voir pour comprendre l'écart
+    // entre ce qu'il a vendu et ce qu'il a dans le tiroir.
+    return { fond_de_caisse: service.fond_de_caisse, livraisons: auto.livraisons, offerts: auto.offerts, modes };
   });
 
   // Accusé de fin : le caissier valide son ticket (bouton « Terminer »). Le shift
@@ -280,8 +317,12 @@ export function routesServices(app: FastifyInstance): void {
 
       const stats = await calculerStatsService(tx, service.id);
       const auto = await reconciliationAuto(tx, service.id);
-      // Théorique = fond + espèces système HORS livraison (comptage aveugle).
-      const especesTheorique = service.fond_de_caisse + auto.modes.ESPECES;
+      // Théorique = fond + espèces encaissées (HORS livraisons externes) − les
+      // dépenses payées en espèces depuis le tiroir. L'argent du tiroir est
+      // fongible : une dépense sort du tiroir (fond ou recette), donc sans la
+      // déduire une dépense légitime apparaîtrait comme un manquant. Comptage
+      // aveugle préservé (le théorique n'est jamais exposé avant la saisie).
+      const especesTheorique = service.fond_de_caisse + auto.modes.ESPECES - corps.depenses;
       const ecart = corps.especes_comptees - especesTheorique;
       const clotureLe = new Date();
 
@@ -289,8 +330,20 @@ export function routesServices(app: FastifyInstance): void {
       const livraisons = corps.livraisons ?? {};
       const modesDeclares = corps.modes ?? {};
       const somme = (o: Record<string, number>) => Object.values(o).reduce((s, v) => s + (Number(v) || 0), 0);
+      // Les Kdo entrent dans la vente du shift au même titre qu'une livraison
+      // Yango — vendre 25 000 et offrir 5 000 fait 30 000 de vente — mais ils
+      // ne se DÉCLARENT pas : aucun argent n'a été reçu, le caissier n'a rien à
+      // saisir. C'est donc le serveur qui les ajoute, depuis les commandes
+      // marquées offertes. Sans cette ligne, chaque cadeau creusait un faux
+      // écart de réconciliation, le total système les comptant déjà.
+      const offerts = auto.offerts;
       const venteTotale =
-        corps.depenses + somme(livraisons) + somme(modesDeclares) + corps.especes_comptees - service.fond_de_caisse;
+        corps.depenses +
+        somme(livraisons) +
+        somme(modesDeclares) +
+        offerts.total +
+        corps.especes_comptees -
+        service.fond_de_caisse;
       const totalSysteme = stats.total_ventes;
       const diff = venteTotale - totalSysteme;
       const sequenceId = service.sequence_id ?? (await sequenceOuverte(tx));
@@ -306,6 +359,7 @@ export function routesServices(app: FastifyInstance): void {
         ecart,
         depenses: corps.depenses,
         livraisons,
+        offerts,
         modes_declares: modesDeclares,
         vente_totale: venteTotale,
         total_systeme: totalSysteme,
@@ -323,7 +377,7 @@ export function routesServices(app: FastifyInstance): void {
           especes_theorique: especesTheorique,
           ecart,
           depenses: corps.depenses,
-          reconciliation: { livraisons, modes: modesDeclares },
+          reconciliation: { livraisons, offerts, modes: modesDeclares },
           vente_totale: venteTotale,
           total_systeme: totalSysteme,
           rapport_z: rapportZ,

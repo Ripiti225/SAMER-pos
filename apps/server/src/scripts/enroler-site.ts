@@ -27,6 +27,22 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // Garde-fou anti-mélange : tant que le poste n'a pas pris son identité, il
+  // porte encore celle de l'image de déploiement (même UUID sur les 7 sites).
+  // L'enrôler ici ferait remonter ses ventes sous l'identité d'un autre site.
+  const [confId] = await db
+    .select()
+    .from(parametresLocaux)
+    .where(eq(parametresLocaux.cle, 'samtrackly_restaurant_id'));
+  if (resto.code === 'A_CONFIGURER' || typeof confId?.valeur !== 'string' || !confId.valeur) {
+    console.error(
+      'Ce poste n’a pas encore d’identité propre.\n' +
+        'Faites d’abord : caisse → Réglages → Restaurant → choisir le restaurant → Configurer,\n' +
+        'puis relancez `pnpm site:enroler`.',
+    );
+    process.exit(1);
+  }
+
   // Réutilise la clé existante si déjà enrôlé (idempotent), sinon en génère une.
   const [existant] = await db.select().from(parametresLocaux).where(eq(parametresLocaux.cle, 'cle_site'));
   const cleSite = typeof existant?.valeur === 'string' ? existant.valeur : randomBytes(32).toString('hex');
@@ -45,7 +61,14 @@ async function main(): Promise<void> {
   console.log(
     `INSERT INTO sites_autorises (restaurant_id, code, cle_hash, actif)\n` +
       `VALUES ('${resto.id}', '${resto.code}', '${hash}', TRUE)\n` +
-      `ON CONFLICT (restaurant_id) DO UPDATE SET cle_hash = EXCLUDED.cle_hash, actif = TRUE;`,
+      `ON CONFLICT (restaurant_id) DO UPDATE SET cle_hash = EXCLUDED.cle_hash, actif = TRUE\n` +
+      `  WHERE sites_autorises.code = EXCLUDED.code;`,
+  );
+  console.log(
+    '\n(Le WHERE final est un garde-fou : si Supabase répond « UPDATE 0 », cet\n' +
+      ' identifiant appartient DÉJÀ à un autre restaurant — ne forcez pas, les\n' +
+      ' deux sites partageraient leurs ventes. Reconfigurez le poste dans\n' +
+      ' Réglages → Restaurant pour lui donner un identifiant neuf.)',
   );
   console.log('\nPour RÉVOQUER ce site (vol de matériel) :');
   console.log(`  UPDATE sites_autorises SET actif = FALSE WHERE restaurant_id = '${resto.id}';`);

@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { sql } from 'drizzle-orm';
 import { db, fermerDb, pool } from '../db/client.js';
 import { articles, categories, restaurant } from '../db/schema/index.js';
+import { appliquerRoutageDefaut } from '../modules/reglages/routage-defaut.js';
 
 // Racine du dépôt (le script vit dans apps/server/src/scripts) : les chemins
 // relatifs sont résolus depuis la racine, quel que soit le cwd de pnpm.
@@ -111,7 +112,10 @@ async function importerLocal(exp: Export): Promise<void> {
       }
     }
     await client.query('COMMIT');
-    console.log(`✔ Import local : ${exp.categories.length} catégories, ${nbArticles} produits.`);
+    // Routage d'impression par défaut pour les nouvelles catégories (idempotent,
+    // ne touche pas aux choix déjà faits dans Réglages › Routage impression).
+    const nbRoutage = await appliquerRoutageDefaut(db);
+    console.log(`✔ Import local : ${exp.categories.length} catégories, ${nbArticles} produits (routage défaut : ${nbRoutage}).`);
   } catch (e) {
     await client.query('ROLLBACK');
     throw e;

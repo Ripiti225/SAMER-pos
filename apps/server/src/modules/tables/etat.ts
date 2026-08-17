@@ -8,7 +8,7 @@
  * ADDITION_DEMANDEE) reste géré comme avant pour la compatibilité.
  */
 import { and, asc, eq, notInArray } from 'drizzle-orm';
-import type { BadgeTable, EtatTable, TableVue } from '@pos/shared';
+import type { BadgeTable, CommandeOuverteVue, EtatTable, TableVue } from '@pos/shared';
 import { db } from '../../db/client.js';
 import { appelsTable, commandes, tablesSalle, utilisateurs, zones } from '../../db/schema/index.js';
 
@@ -49,6 +49,10 @@ export function deriverEtat(
   else if (aPrete) etat = 'PRETE';
   else if (aEnPreparation) etat = 'EN_PREPARATION';
   else if (aServie) etat = 'SERVIE';
+  // Une commande prise mais pas encore envoyée en cuisine (OUVERTE, origine
+  // caisse/serveur) laisse la table OCCUPÉE — sinon elle paraissait « Libre »
+  // alors qu'une commande est en cours (visible dans Mes ventes).
+  else if (commandesActives.length > 0) etat = 'OCCUPEE';
   else etat = 'LIBRE';
 
   return { etat, badges };
@@ -73,9 +77,15 @@ export async function chargerTables(): Promise<TableVue[]> {
         table_id: commandes.table_id,
         statut: commandes.statut,
         origine: commandes.origine,
+        code_commande: commandes.code_commande,
+        numero_ticket: commandes.numero_ticket,
+        total: commandes.total,
+        offert: commandes.offert,
+        created_at: commandes.created_at,
       })
       .from(commandes)
-      .where(notInArray(commandes.statut, ['PAYEE', 'ANNULEE'])),
+      .where(notInArray(commandes.statut, ['PAYEE', 'ANNULEE']))
+      .orderBy(asc(commandes.created_at)),
     db
       .select({ table_id: appelsTable.table_id, type: appelsTable.type })
       .from(appelsTable)
@@ -98,6 +108,19 @@ export async function chargerTables(): Promise<TableVue[]> {
       partenaire: table.partenaire,
       statut: table.statut as TableVue['statut'],
       commande_id: sesCommandes[0]?.id ?? null,
+      // Plusieurs commandes peuvent coexister sur une table virtuelle
+      // (deux livreurs Yango en même temps, plusieurs cadeaux) : on les expose
+      // toutes, du plus ancien au plus récent, pour que la caisse laisse
+      // choisir laquelle reprendre au lieu d'en imposer une.
+      commandes_ouvertes: sesCommandes.map((c) => ({
+        id: c.id,
+        code_commande: c.code_commande,
+        numero_ticket: Number(c.numero_ticket),
+        statut: c.statut as CommandeOuverteVue['statut'],
+        total: c.total,
+        offert: c.offert,
+        created_at: c.created_at.toISOString(),
+      })),
       etat,
       badges,
       ouverte_par: ouvertePar,

@@ -38,7 +38,9 @@ Deno.serve(async (req) => {
       // Table inconnue : on s'arrête pour ne pas acquitter à tort la suite.
       break;
     }
-    const { error } = await admin.from(l.table_name).upsert(ligne, { onConflict: 'id' });
+    // Clé composite : un site ne peut jamais réécrire la ligne d'un autre,
+    // même si les deux portent le même UUID (image de déploiement clonée).
+    const { error } = await admin.from(l.table_name).upsert(ligne, { onConflict: 'restaurant_id,id' });
     if (error) break; // acquittement contigu : on ne dépasse pas la 1re erreur
     acquitteJusqua = l.seq;
   }

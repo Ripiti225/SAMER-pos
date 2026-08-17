@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconArrowLeft, IconLock } from '@tabler/icons-react';
-import { DISPONIBILITES, type Disponibilite, LIBELLES_DISPONIBILITE, SECTIONS_PERMISSIONS, PERMISSION_PROTEGEE, type SessionInfo } from '@pos/shared';
+import { DISPONIBILITES, type Disponibilite, formatFCFA, LIBELLES_DISPONIBILITE, LIBELLES_POSTE_IMPRESSION, POSTES_IMPRESSION, type PosteImpression, SECTIONS_PERMISSIONS, PERMISSION_PROTEGEE, type SessionInfo } from '@pos/shared';
 import { api } from '../api';
 import { Modale } from '../components/Modale';
 import { useCaisse } from '../stores/session';
@@ -19,12 +19,15 @@ export function Reglages() {
         { cle: 'reglages.salle', libelle: 'Salle & QR', rendu: () => <Salle /> },
         { cle: 'reglages.disponibilite', libelle: 'Plats du jour', rendu: () => <Disponibilite /> },
         { cle: 'reglages.catalogue', libelle: 'Catalogue', rendu: () => <Catalogue /> },
+        { cle: 'options', perm: 'reglages.catalogue', libelle: 'Options', rendu: () => <Options /> },
         { cle: 'reglages.fidelite', libelle: 'Fidélité', rendu: () => <Fidelite /> },
+        { cle: 'imprimante', perm: 'reglages.parametres', libelle: 'Imprimantes', rendu: () => <Imprimante /> },
+        { cle: 'routage', perm: 'reglages.parametres', libelle: 'Routage impression', rendu: () => <RoutageImpression /> },
         { cle: 'reglages.parametres', libelle: 'Paramètres', rendu: () => <Parametres /> },
         { cle: 'reglages.restaurant', libelle: 'Restaurant', rendu: () => <ConfigRestaurant /> },
         { cle: 'reglages.audit', libelle: "Journal d'audit", rendu: () => <Audit /> },
         { cle: 'roles.gerer', libelle: 'Rôles & accès', rendu: () => <Roles /> },
-      ].filter((s) => a(s.cle)),
+      ].filter((s) => a(s.perm ?? s.cle)),
     [perms.join(',')],
   );
 
@@ -646,6 +649,191 @@ function LignePrix({ art, onEnregistrer }: { art: { id: string; nom: string; pri
 }
 
 // ---------------------------------------------------------------------------
+// Options (migration 0020) — créées ici, liées à une CATÉGORIE ou à un ARTICLE.
+// Donnée LOCALE : modifiable hors ligne, jamais écrasée par une descente cloud
+// (contrairement au Catalogue ci-dessus, qui s'édite au siège).
+// ---------------------------------------------------------------------------
+interface LiaisonVue {
+  id: string;
+  categorie_id: string | null;
+  article_id: string | null;
+  libelle: string;
+}
+interface OptionAdminVue {
+  id: string;
+  nom: string;
+  prix: number;
+  actif: boolean;
+  ordre: number;
+  liaisons: LiaisonVue[];
+}
+interface OptionsAdminVue {
+  options: OptionAdminVue[];
+  categories: { id: string; nom: string }[];
+  articles: { id: string; nom: string; categorie_id: string }[];
+}
+
+function Options() {
+  const qc = useQueryClient();
+  const [msg, setMsg] = useState<{ texte: string; ok?: boolean } | null>(null);
+  const [nom, setNom] = useState('');
+  const [prix, setPrix] = useState('0');
+  const [ouverte, setOuverte] = useState<string | null>(null);
+
+  const { data } = useQuery({
+    queryKey: ['admin', 'options'],
+    queryFn: () => api<OptionsAdminVue>('/api/admin/options'),
+  });
+
+  const rafraichir = () => void qc.invalidateQueries({ queryKey: ['admin', 'options'] });
+  const surErreur = (e: Error) => setMsg({ texte: e.message });
+  const surSucces = (texte: string) => () => {
+    setMsg({ texte, ok: true });
+    rafraichir();
+  };
+
+  const creer = useMutation({
+    mutationFn: (corps: { nom: string; prix: number }) =>
+      api('/api/admin/options', { method: 'POST', corps }),
+    onSuccess: () => {
+      setNom('');
+      setPrix('0');
+      surSucces('Option créée')();
+    },
+    onError: surErreur,
+  });
+  const modifier = useMutation({
+    mutationFn: ({ id, ...corps }: { id: string; nom?: string; prix?: number; actif?: boolean }) =>
+      api(`/api/admin/options/${id}`, { method: 'PATCH', corps }),
+    onSuccess: surSucces('Option modifiée'),
+    onError: surErreur,
+  });
+  const supprimer = useMutation({
+    mutationFn: (id: string) => api(`/api/admin/options/${id}`, { method: 'DELETE' }),
+    onSuccess: surSucces('Option supprimée'),
+    onError: surErreur,
+  });
+  const lier = useMutation({
+    mutationFn: ({ id, ...corps }: { id: string; categorie_id?: string; article_id?: string }) =>
+      api(`/api/admin/options/${id}/liaisons`, { method: 'POST', corps }),
+    onSuccess: surSucces('Liaison ajoutée'),
+    onError: surErreur,
+  });
+  const delier = useMutation({
+    mutationFn: (liaisonId: string) => api(`/api/admin/liaisons/${liaisonId}`, { method: 'DELETE' }),
+    onSuccess: surSucces('Liaison retirée'),
+    onError: surErreur,
+  });
+
+  const prixValide = /^\d+$/.test(prix);
+
+  return (
+    <section>
+      <h2 className="mb-2 text-xl font-bold">Options</h2>
+      <div className="mb-4 rounded-xl bg-blue-50 px-4 py-3 text-blue-900">
+        Créez une option (pâte à l’ail, fromage…), puis liez-la à une catégorie entière ou à un produit
+        précis. Un prix de <strong>0</strong> = option offerte. Les commandes déjà passées ne changent jamais.
+      </div>
+      <Message texte={msg?.texte ?? null} ok={msg?.ok} />
+
+      {/* Création */}
+      <div className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-bordure p-4">
+        <div>
+          <label htmlFor="opt-nom" className="mb-1 block text-sm font-semibold text-doux">Nom de l’option</label>
+          <input id="opt-nom" className="champ w-64" value={nom} onChange={(e) => setNom(e.target.value)} placeholder="ex : Pâte à l’ail" />
+        </div>
+        <div>
+          <label htmlFor="opt-prix" className="mb-1 block text-sm font-semibold text-doux">Prix (FCFA)</label>
+          <input id="opt-prix" className="champ w-32" value={prix} onChange={(e) => setPrix(e.target.value)} inputMode="numeric" />
+        </div>
+        <button
+          type="button"
+          className="btn-accent"
+          disabled={nom.trim().length === 0 || !prixValide || creer.isPending}
+          onClick={() => creer.mutate({ nom: nom.trim(), prix: Number(prix) })}
+        >
+          {creer.isPending ? 'Création…' : 'Créer l’option'}
+        </button>
+      </div>
+
+      {/* Liste */}
+      <div className="space-y-3">
+        {(data?.options ?? []).map((o) => (
+          <div key={o.id} className={`rounded-xl border border-bordure p-4 ${o.actif ? '' : 'opacity-60'}`}>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-lg font-bold">{o.nom}</span>
+              <span className="rounded-full bg-marque-tint px-3 py-1 text-sm font-semibold text-marque-fonce">
+                {o.prix > 0 ? formatFCFA(o.prix) : 'Offert'}
+              </span>
+              {!o.actif && <span className="text-sm font-semibold text-doux">désactivée</span>}
+              <div className="ml-auto flex gap-2">
+                <button type="button" className="btn-blanc" onClick={() => setOuverte(ouverte === o.id ? null : o.id)}>
+                  {ouverte === o.id ? 'Fermer' : 'Lier à…'}
+                </button>
+                <button type="button" className="btn-blanc" onClick={() => modifier.mutate({ id: o.id, actif: !o.actif })}>
+                  {o.actif ? 'Désactiver' : 'Réactiver'}
+                </button>
+                <button type="button" className="btn-blanc" onClick={() => supprimer.mutate(o.id)}>
+                  Supprimer
+                </button>
+              </div>
+            </div>
+
+            {/* Liaisons existantes */}
+            <div className="mt-2 flex flex-wrap gap-2">
+              {o.liaisons.length === 0 && (
+                <span className="text-sm text-doux">Liée à aucun produit — elle n’apparaît nulle part.</span>
+              )}
+              {o.liaisons.map((l) => (
+                <span key={l.id} className="flex items-center gap-2 rounded-full bg-surface-douce px-3 py-1 text-sm">
+                  {l.libelle}
+                  <button type="button" className="font-bold text-alerte" title="Retirer" onClick={() => delier.mutate(l.id)}>
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+
+            {/* Ajout de liaison */}
+            {ouverte === o.id && (
+              <div className="mt-3 flex flex-wrap gap-3 border-t border-bordure pt-3">
+                <div>
+                  <label htmlFor={`cat-${o.id}`} className="mb-1 block text-sm font-semibold text-doux">Toute une catégorie</label>
+                  <select
+                    id={`cat-${o.id}`}
+                    className="champ w-56"
+                    defaultValue=""
+                    onChange={(e) => { if (e.target.value) lier.mutate({ id: o.id, categorie_id: e.target.value }); e.target.value = ''; }}
+                  >
+                    <option value="">Choisir…</option>
+                    {(data?.categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.nom}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor={`art-${o.id}`} className="mb-1 block text-sm font-semibold text-doux">Un produit précis</label>
+                  <select
+                    id={`art-${o.id}`}
+                    className="champ w-64"
+                    defaultValue=""
+                    onChange={(e) => { if (e.target.value) lier.mutate({ id: o.id, article_id: e.target.value }); e.target.value = ''; }}
+                  >
+                    <option value="">Choisir…</option>
+                    {(data?.articles ?? []).map((a) => <option key={a.id} value={a.id}>{a.nom}</option>)}
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+        {(data?.options ?? []).length === 0 && (
+          <p className="text-doux">Aucune option pour l’instant — créez la première ci-dessus.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Fidélité (barème)
 // ---------------------------------------------------------------------------
 function Fidelite() {
@@ -678,6 +866,369 @@ function Fidelite() {
         </button>
       </div>
     </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Imprimante (découverte + sélection + test)
+// ---------------------------------------------------------------------------
+interface ImprimanteSysteme { nom: string; port: string; partagee: boolean; nom_partage: string | null; virtuelle: boolean }
+type ModeLogo = 'aucun' | 'raster' | 'bandes';
+interface ImprimantesVue {
+  disponibles: ImprimanteSysteme[];
+  postes: Record<PosteImpression, string>;
+  logo: ModeLogo;
+  colonnes: number;
+  colonnes_possibles: number[];
+}
+
+function Imprimante() {
+  const qc = useQueryClient();
+  const [msg, setMsg] = useState<{ texte: string; ok?: boolean } | null>(null);
+
+  const { data, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ['admin', 'imprimantes'],
+    queryFn: () => api<ImprimantesVue>('/api/admin/imprimantes'),
+  });
+
+  return (
+    <section className="max-w-2xl">
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <h2 className="text-xl font-bold">Imprimantes</h2>
+        <button type="button" className="btn-blanc" disabled={isFetching} onClick={() => refetch()}>
+          {isFetching ? 'Recherche…' : 'Actualiser la liste'}
+        </button>
+      </div>
+      <Message texte={msg?.texte ?? null} ok={msg?.ok} />
+      <p className="mb-4 text-sm text-doux">
+        Reliez chaque poste à son imprimante. Le <b>reçu</b> et le <b>rapport Z</b> sortent à la
+        <b> Caisse</b> ; à l’envoi en cuisine, chaque article imprime un bon sur l’imprimante de son poste
+        (défini dans « Routage impression »). Les imprimantes installées apparaissent directement — aucune
+        configuration Windows nécessaire.
+      </p>
+
+      {isLoading ? (
+        <p className="text-doux">Recherche des imprimantes…</p>
+      ) : (
+        <div className="grid gap-3">
+          {(data?.disponibles.length ?? 0) === 0 && (
+            <div className="rounded-xl bg-amber-100 px-4 py-3 text-amber-900">
+              Aucune imprimante détectée. Installez le pilote, ou saisissez le nom manuellement dans chaque poste.
+            </div>
+          )}
+          {POSTES_IMPRESSION.map((poste) => (
+            <LignePosteImprimante
+              key={poste}
+              poste={poste}
+              valeur={data?.postes[poste] ?? ''}
+              disponibles={data?.disponibles ?? []}
+              onMessage={setMsg}
+              onEnregistre={() => void qc.invalidateQueries({ queryKey: ['admin', 'imprimantes'] })}
+            />
+          ))}
+          <LargeurPapier
+            valeur={data?.colonnes ?? 48}
+            possibles={data?.colonnes_possibles ?? [32, 42, 48]}
+            onMessage={setMsg}
+            onEnregistre={() => void qc.invalidateQueries({ queryKey: ['admin', 'imprimantes'] })}
+          />
+          <LogoTicket
+            valeur={data?.logo ?? 'aucun'}
+            onMessage={setMsg}
+            onEnregistre={() => void qc.invalidateQueries({ queryKey: ['admin', 'imprimantes'] })}
+          />
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Largeur du papier. Trop grande, la fin de chaque ligne bascule à la ligne
+ * suivante : c'est ce qui séparait le « 5 » de « 000 F » sur les montants.
+ */
+function LargeurPapier({
+  valeur,
+  possibles,
+  onMessage,
+  onEnregistre,
+}: {
+  valeur: number;
+  possibles: number[];
+  onMessage: (m: { texte: string; ok?: boolean }) => void;
+  onEnregistre: () => void;
+}) {
+  const [choix, setChoix] = useState<number>(valeur);
+  useEffect(() => setChoix(valeur), [valeur]);
+
+  const enregistrer = useMutation({
+    mutationFn: (colonnes: number) => api('/api/admin/imprimante/colonnes', { method: 'POST', corps: { colonnes } }),
+    onSuccess: (_r, colonnes) => {
+      onMessage({ texte: `Largeur du papier : ${colonnes} colonnes.`, ok: true });
+      onEnregistre();
+    },
+    onError: (e: Error) => onMessage({ texte: e.message }),
+  });
+
+  return (
+    <div className="rounded-xl border border-bordure p-4">
+      <div className="mb-2 font-bold">Largeur du papier</div>
+      <p className="mb-3 text-sm text-doux">
+        Si les montants se coupent en deux (le <b>5</b> en haut, <b>000 F</b> en dessous), c’est que la
+        largeur est trop grande. Lancez « Tester » sur la <b>Caisse</b> : la partie <b>1</b> du ticket
+        imprime un essai par largeur — gardez <b>le plus grand qui tient sur une seule ligne</b>.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <select className="champ w-auto min-w-[16rem]" value={choix} onChange={(e) => setChoix(Number(e.target.value))}>
+          {possibles.map((n) => (
+            <option key={n} value={n}>{n} colonnes{n === 48 ? ' (80 mm classique)' : n === 32 ? ' (58 mm)' : ''}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="btn-accent"
+          disabled={choix === valeur || enregistrer.isPending}
+          onClick={() => enregistrer.mutate(choix)}
+        >
+          {enregistrer.isPending ? '…' : 'Enregistrer'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Choix de l'encodage du logo. Toutes les imprimantes ne comprennent pas la
+ * même commande image, et celle qui ne comprend pas imprime du charabia : on
+ * fait donc choisir sur pièce, à partir des modes A et B du ticket de test.
+ */
+const LIBELLES_LOGO: Record<ModeLogo, string> = {
+  aucun: 'Pas de logo (sûr)',
+  raster: 'Mode A — raster',
+  bandes: 'Mode B — bandes',
+};
+
+function LogoTicket({
+  valeur,
+  onMessage,
+  onEnregistre,
+}: {
+  valeur: ModeLogo;
+  onMessage: (m: { texte: string; ok?: boolean }) => void;
+  onEnregistre: () => void;
+}) {
+  const [choix, setChoix] = useState<ModeLogo>(valeur);
+  useEffect(() => setChoix(valeur), [valeur]);
+
+  const enregistrer = useMutation({
+    mutationFn: (mode: ModeLogo) => api('/api/admin/imprimante/logo', { method: 'POST', corps: { mode } }),
+    onSuccess: (_r, mode) => {
+      onMessage({ texte: `Logo du ticket : ${LIBELLES_LOGO[mode].toLowerCase()}.`, ok: true });
+      onEnregistre();
+    },
+    onError: (e: Error) => onMessage({ texte: e.message }),
+  });
+
+  return (
+    <div className="rounded-xl border border-bordure p-4">
+      <div className="mb-2 font-bold">Logo sur le ticket</div>
+      <p className="mb-3 text-sm text-doux">
+        Lancez « Tester » sur la <b>Caisse</b> ci-dessus : le ticket imprime le logo en <b>mode A</b> et en
+        <b> mode B</b>. Gardez celui qui sort proprement. Si les deux donnent des caractères bizarres,
+        laissez « Pas de logo » — cette imprimante ne sait pas imprimer d’image.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <select className="champ w-auto min-w-[16rem]" value={choix} onChange={(e) => setChoix(e.target.value as ModeLogo)}>
+          {(Object.keys(LIBELLES_LOGO) as ModeLogo[]).map((m) => (
+            <option key={m} value={m}>{LIBELLES_LOGO[m]}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="btn-accent"
+          disabled={choix === valeur || enregistrer.isPending}
+          onClick={() => enregistrer.mutate(choix)}
+        >
+          {enregistrer.isPending ? '…' : 'Enregistrer'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function LignePosteImprimante({
+  poste,
+  valeur,
+  disponibles,
+  onMessage,
+  onEnregistre,
+}: {
+  poste: PosteImpression;
+  valeur: string;
+  disponibles: ImprimanteSysteme[];
+  onMessage: (m: { texte: string; ok?: boolean }) => void;
+  onEnregistre: () => void;
+}) {
+  const [choix, setChoix] = useState<string>(valeur);
+  // Suit la valeur serveur quand elle change (après enregistrement / actualisation).
+  useEffect(() => setChoix(valeur), [valeur]);
+  const connue = disponibles.some((d) => d.nom === choix);
+
+  const enregistrer = useMutation({
+    mutationFn: (queue: string) => api('/api/admin/imprimante/poste', { method: 'POST', corps: { poste, queue } }),
+    onSuccess: (_r, queue) => {
+      onMessage({ texte: queue ? `${LIBELLES_POSTE_IMPRESSION[poste]} : ${queue}` : `${LIBELLES_POSTE_IMPRESSION[poste]} désactivée (console).`, ok: true });
+      onEnregistre();
+    },
+    onError: (e: Error) => onMessage({ texte: e.message }),
+  });
+  const tester = useMutation({
+    mutationFn: (queue: string) => api('/api/admin/imprimante/test', { method: 'POST', corps: { queue } }),
+    onSuccess: () => onMessage({ texte: `Ticket de test envoyé vers ${LIBELLES_POSTE_IMPRESSION[poste]}. Vérifiez la sortie papier.`, ok: true }),
+    onError: (e: Error) => onMessage({ texte: e.message }),
+  });
+
+  return (
+    <div className="rounded-xl border border-bordure p-4">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="font-bold">{LIBELLES_POSTE_IMPRESSION[poste]}</span>
+        {valeur ? <span className="text-xs text-ok">· {valeur}</span> : <span className="text-xs text-doux">· non configurée</span>}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          className="champ w-auto min-w-[16rem]"
+          value={connue ? choix : '__manuel__'}
+          onChange={(e) => setChoix(e.target.value === '__manuel__' ? '' : e.target.value)}
+        >
+          <option value="">— aucune (mode console) —</option>
+          {disponibles.map((d) => (
+            <option key={d.nom} value={d.nom}>{d.nom}{d.virtuelle ? ' (virtuelle)' : ''}</option>
+          ))}
+          <option value="__manuel__">Saisir manuellement…</option>
+        </select>
+        {!connue && (
+          <input
+            className="champ w-auto min-w-[16rem]"
+            value={choix}
+            onChange={(e) => setChoix(e.target.value)}
+            placeholder="Nom d’imprimante ou \\poste\partage"
+          />
+        )}
+        <button type="button" className="btn-blanc" disabled={!choix || tester.isPending} onClick={() => tester.mutate(choix)}>
+          {tester.isPending ? 'Test…' : 'Tester'}
+        </button>
+        <button type="button" className="btn-accent" disabled={choix === valeur || enregistrer.isPending} onClick={() => enregistrer.mutate(choix)}>
+          {enregistrer.isPending ? '…' : 'Enregistrer'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Routage impression (catégories + exceptions par article)
+// ---------------------------------------------------------------------------
+interface RoutageCatVue { id: string; nom: string; poste: PosteImpression | null }
+interface RoutageArtVue { id: string; nom: string; categorie_id: string; poste: PosteImpression | null }
+interface RoutageVue { defaut: PosteImpression; categories: RoutageCatVue[]; articles: RoutageArtVue[] }
+
+function RoutageImpression() {
+  const qc = useQueryClient();
+  const [msg, setMsg] = useState<{ texte: string; ok?: boolean } | null>(null);
+  const [ouvertes, setOuvertes] = useState<Set<string>>(new Set());
+  const { data } = useQuery({ queryKey: ['admin', 'routage'], queryFn: () => api<RoutageVue>('/api/admin/routage') });
+
+  const invalider = () => void qc.invalidateQueries({ queryKey: ['admin', 'routage'] });
+  const majCat = useMutation({
+    mutationFn: (v: { categorie_id: string; poste: PosteImpression | null }) => api('/api/admin/routage/categorie', { method: 'PUT', corps: v }),
+    onSuccess: () => { setMsg({ texte: 'Routage catégorie enregistré.', ok: true }); invalider(); },
+    onError: (e: Error) => setMsg({ texte: e.message }),
+  });
+  const majArt = useMutation({
+    mutationFn: (v: { article_id: string; poste: PosteImpression | null }) => api('/api/admin/routage/article', { method: 'PUT', corps: v }),
+    onSuccess: () => { setMsg({ texte: 'Routage article enregistré.', ok: true }); invalider(); },
+    onError: (e: Error) => setMsg({ texte: e.message }),
+  });
+
+  const basculer = (id: string) => {
+    const s = new Set(ouvertes);
+    if (s.has(id)) s.delete(id); else s.add(id);
+    setOuvertes(s);
+  };
+  const posteEffectifCat = (c: RoutageCatVue): PosteImpression => c.poste ?? (data?.defaut ?? 'CUISINE');
+
+  return (
+    <section className="max-w-3xl">
+      <h2 className="mb-1 text-xl font-bold">Routage impression</h2>
+      <p className="mb-4 text-sm text-doux">
+        Sur quelle imprimante sort chaque produit à l’envoi en cuisine. On règle par <b>catégorie</b> ;
+        un article peut faire exception. Par défaut : <b>{LIBELLES_POSTE_IMPRESSION[data?.defaut ?? 'CUISINE']}</b>.
+      </p>
+      <Message texte={msg?.texte ?? null} ok={msg?.ok} />
+
+      <div className="grid gap-2">
+        {(data?.categories ?? []).map((c) => {
+          const arts = (data?.articles ?? []).filter((a) => a.categorie_id === c.id);
+          const nbExceptions = arts.filter((a) => a.poste !== null).length;
+          return (
+            <div key={c.id} className="rounded-xl border border-bordure p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <button type="button" className="text-left font-semibold" onClick={() => basculer(c.id)}>
+                  {ouvertes.has(c.id) ? '▾' : '▸'} {c.nom}
+                  <span className="ml-2 text-xs font-normal text-doux">
+                    {arts.length} article(s){nbExceptions ? ` · ${nbExceptions} exception(s)` : ''}
+                  </span>
+                </button>
+                <SelectPoste
+                  valeur={c.poste}
+                  labelHerite={`Défaut (${LIBELLES_POSTE_IMPRESSION[data?.defaut ?? 'CUISINE']})`}
+                  onChange={(poste) => majCat.mutate({ categorie_id: c.id, poste })}
+                />
+              </div>
+              {ouvertes.has(c.id) && (
+                <div className="mt-3 grid gap-1.5 border-t border-bordure pt-3">
+                  {arts.length === 0 && <p className="text-sm text-doux">Aucun article dans cette catégorie.</p>}
+                  {arts.map((a) => (
+                    <div key={a.id} className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm">{a.nom}</span>
+                      <SelectPoste
+                        valeur={a.poste}
+                        labelHerite={`Comme la catégorie (${LIBELLES_POSTE_IMPRESSION[posteEffectifCat(c)]})`}
+                        onChange={(poste) => majArt.mutate({ article_id: a.id, poste })}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** Sélecteur de poste d'impression avec option « hérité » (valeur null). */
+function SelectPoste({
+  valeur,
+  labelHerite,
+  onChange,
+}: {
+  valeur: PosteImpression | null;
+  labelHerite: string;
+  onChange: (poste: PosteImpression | null) => void;
+}) {
+  return (
+    <select
+      className="champ w-auto"
+      value={valeur ?? ''}
+      onChange={(e) => onChange(e.target.value === '' ? null : (e.target.value as PosteImpression))}
+    >
+      <option value="">{labelHerite}</option>
+      {POSTES_IMPRESSION.map((p) => (
+        <option key={p} value={p}>{LIBELLES_POSTE_IMPRESSION[p]}</option>
+      ))}
+    </select>
   );
 }
 
@@ -872,8 +1423,9 @@ function ConfigRestaurant() {
   const selection = choix || data?.samtrackly_restaurant_id || '';
 
   const configurer = useMutation({
-    mutationFn: (id: string) => api('/api/admin/restaurant/config', { method: 'POST', corps: { samtrackly_restaurant_id: id } }),
-    onSuccess: async () => {
+    mutationFn: (id: string) =>
+      api<{ sync_a_reenroler?: boolean }>('/api/admin/restaurant/config', { method: 'POST', corps: { samtrackly_restaurant_id: id } }),
+    onSuccess: async (rep) => {
       // Applique la nouvelle identité (nom, marque, couleur) à la session en cours.
       try {
         poserSession(await api<SessionInfo>('/api/auth/moi'));
@@ -884,7 +1436,12 @@ function ConfigRestaurant() {
         const r = await api<{ crees: number; maj: number }>('/api/admin/equipe/synchroniser', { method: 'POST' });
         equipe = ` · Équipe : ${r.crees} ajouté(s), ${r.maj} à jour.`;
       } catch { /* ignore */ }
-      setMsg({ texte: `Restaurant configuré.${equipe}`, ok: true });
+      // Le poste a reçu une identité neuve : l'ancienne clé de synchro cloud a
+      // été effacée exprès (elle appartenait au restaurant précédent).
+      const reenroler = rep?.sync_a_reenroler
+        ? ' ⚠ Synchro cloud à ré-enrôler (`pnpm site:enroler`) avant la prochaine remontée.'
+        : '';
+      setMsg({ texte: `Restaurant configuré.${equipe}${reenroler}`, ok: true });
       void qc.invalidateQueries();
     },
     onError: (e: Error) => setMsg({ texte: e.message }),

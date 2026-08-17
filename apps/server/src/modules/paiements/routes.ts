@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { and, eq } from 'drizzle-orm';
-import { PaiementSchema, SplitSchema } from '@pos/shared';
+import { estLivraisonSansEncaissement, OffrirSchema, PaiementSchema, SplitSchema } from '@pos/shared';
 import { db } from '../../db/client.js';
 import { appelsTable, commandes, notesSplit, paiements } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
@@ -163,6 +163,105 @@ export function routesPaiements(app: FastifyInstance): void {
     if (payee) {
       await app.imprimante.imprimerTicket(vue);
     }
+    app.diffuser('commande', id);
+    return vue;
+  });
+
+  /**
+   * Clôture d'une livraison EXTERNE (Yango/Glovo) : le client règle chez le
+   * partenaire, jamais en caisse. La commande passe à PAYEE SANS ligne de
+   * paiement — son montant est compté à part (bucket « livraisons » du rapport
+   * Z), hors du théorique espèces. Samer Deliv est refusé ici : il encaisse
+   * normalement via /paiements.
+   */
+  app.post('/api/commandes/:id/cloturer-livraison', { preHandler: gardeCaisse }, async (req) => {
+    const { id } = req.params as { id: string };
+    const service = await serviceOuvertDe(db, req.session!.utilisateur_id);
+
+    const vue = await db.transaction(async (tx) => {
+      const c = await verrouillerCommande(tx, id);
+      if (c.statut === 'ANNULEE') throw new ErreurMetier('Cette commande est annulée', 409);
+      if (c.statut === 'PAYEE') throw new ErreurMetier('Cette commande est déjà clôturée', 409);
+      if (c.total <= 0) throw new ErreurMetier('Ajoutez des articles avant de clôturer', 400);
+      if (!estLivraisonSansEncaissement(c.partenaire)) {
+        throw new ErreurMetier('Cette commande s’encaisse normalement', 400);
+      }
+
+      // Rattachement au service du caissier (comme un paiement) pour l'audit et
+      // la comptabilisation dans SON rapport Z.
+      const serviceId = c.service_id ?? service.id;
+      const [maj] = await tx
+        .update(commandes)
+        .set({ statut: 'PAYEE', service_id: serviceId, updated_at: new Date() })
+        .where(eq(commandes.id, id))
+        .returning();
+      await ecrireOutbox(tx, 'commandes', 'UPDATE', id, maj as unknown as Record<string, unknown>);
+      await majStatutTable(tx, c.table_id, 'LIBRE');
+      // Fidélité : crédit des points même sans encaissement en caisse.
+      if (c.client_fidelite_id) {
+        await crediterVente(tx, c.client_fidelite_id, id, c.total);
+      }
+      await journaliser(tx, {
+        user_id: req.session!.utilisateur_id,
+        action: 'PAIEMENT',
+        entite: 'commandes',
+        entite_id: id,
+        montant: c.total,
+        meta: { numero_ticket: Number(c.numero_ticket), livraison: true, partenaire: c.partenaire },
+      });
+      return chargerCommandeVue(tx, id);
+    });
+
+    await app.imprimante.imprimerTicket(vue);
+    app.diffuser('commande', id);
+    return vue;
+  });
+
+  /**
+   * Kdo : clôture d'un repas OFFERT, sans aucune ligne de paiement.
+   *
+   * Conséquence comptable voulue (décision client) : la commande compte dans la
+   * vente du shift — vendre 25 000 et offrir 5 000 affiche 30 000 — mais le
+   * théorique espèces ne bouge pas d'un franc, puisqu'il se calcule sur les
+   * paiements encaissés. Le tiroir reste donc juste, sans écart.
+   *
+   * Le motif est obligatoire : c'est la seule trace qui distingue un geste
+   * commercial d'une marchandise qui sort sans raison.
+   */
+  app.post('/api/commandes/:id/offrir', { preHandler: gardeCaisse }, async (req) => {
+    const { id } = req.params as { id: string };
+    const corps = valider(OffrirSchema, req.body);
+    const service = await serviceOuvertDe(db, req.session!.utilisateur_id);
+
+    const vue = await db.transaction(async (tx) => {
+      const c = await verrouillerCommande(tx, id);
+      if (c.statut === 'ANNULEE') throw new ErreurMetier('Cette commande est annulée', 409);
+      if (c.statut === 'PAYEE') throw new ErreurMetier('Cette commande est déjà clôturée', 409);
+      if (!c.offert) throw new ErreurMetier('Cette commande n’est pas un Kdo', 400);
+      if (c.total <= 0) throw new ErreurMetier('Ajoutez des articles avant de valider le Kdo', 400);
+
+      const serviceId = c.service_id ?? service.id;
+      const [maj] = await tx
+        .update(commandes)
+        .set({ statut: 'PAYEE', motif_offert: corps.motif, service_id: serviceId, updated_at: new Date() })
+        .where(eq(commandes.id, id))
+        .returning();
+      await ecrireOutbox(tx, 'commandes', 'UPDATE', id, maj as unknown as Record<string, unknown>);
+      await majStatutTable(tx, c.table_id, 'LIBRE');
+      // Pas de crédit de fidélité : un repas offert n'est pas un achat.
+      await journaliser(tx, {
+        user_id: req.session!.utilisateur_id,
+        action: 'COMMANDE_OFFERTE',
+        entite: 'commandes',
+        entite_id: id,
+        montant: c.total,
+        motif: corps.motif,
+        meta: { numero_ticket: Number(c.numero_ticket), code_commande: c.code_commande },
+      });
+      return chargerCommandeVue(tx, id);
+    });
+
+    await app.imprimante.imprimerTicket(vue);
     app.diffuser('commande', id);
     return vue;
   });

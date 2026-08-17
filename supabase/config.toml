@@ -13,3 +13,6 @@ verify_jwt = false
 
 [functions.sync-reconcile]
 verify_jwt = false
+
+[functions.admin-catalogue]
+verify_jwt = false

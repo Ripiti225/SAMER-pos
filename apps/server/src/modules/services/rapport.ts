@@ -1,7 +1,7 @@
 /** Statistiques d'un service caisse — utilisées par le rapport Z (figé) et le rapport X (live). */
-import { and, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 import type { ModePaiement, TypeCommande } from '@pos/shared';
-import { MODES_PAIEMENT, TYPES_COMMANDE } from '@pos/shared';
+import { MODES_PAIEMENT, PARTENAIRES_EXTERNES, TYPES_COMMANDE } from '@pos/shared';
 import type { DbOuTx } from '../../db/client.js';
 import { commandeItems, commandes, utilisateurs } from '../../db/schema/index.js';
 import { paiements } from '../../db/schema/index.js';
@@ -35,20 +35,36 @@ export interface StatsService {
 
 /**
  * Valeurs auto de réconciliation d'un shift :
- * - `modes` : somme des paiements par mode, HORS commandes de livraison
- *   (les livraisons sont comptées à part → pas de double comptage).
- * - `livraisons` : total des commandes payées par partenaire (Yango/Glovo/Deliv).
+ * - `modes` : somme des paiements par mode, HORS livraisons EXTERNES
+ *   (Yango/Glovo, réglées chez le partenaire → comptées à part). Samer Delly,
+ *   réglée au comptoir, reste dans les modes comme une vente normale.
+ * - `livraisons` : total des commandes payées par partenaire EXTERNE seulement.
+ * - `offerts` : Kdo. Ces commandes n'ont AUCUNE ligne de paiement, donc elles
+ *   sont déjà absentes de `modes` sans qu'on ait à les filtrer — le théorique
+ *   espèces les ignore par construction. On les compte ici pour les afficher
+ *   à la clôture, à côté des livraisons, car elles pèsent dans la vente du
+ *   shift : vendre 25 000 et offrir 5 000 fait bien 30 000 de vente.
  * `modes.ESPECES` sert au théorique côté serveur (jamais exposé avant comptage).
  */
 export async function reconciliationAuto(
   dbx: DbOuTx,
   serviceId: string,
-): Promise<{ modes: Record<ModePaiement, number>; livraisons: Record<string, number> }> {
+): Promise<{
+  modes: Record<ModePaiement, number>;
+  livraisons: Record<string, number>;
+  offerts: { nb: number; total: number };
+}> {
+  const externes = [...PARTENAIRES_EXTERNES];
   const lignesModes = await dbx
     .select({ mode: paiements.mode, total: sql<string>`SUM(${paiements.montant})` })
     .from(paiements)
     .innerJoin(commandes, eq(commandes.id, paiements.commande_id))
-    .where(and(eq(paiements.service_id, serviceId), isNull(commandes.partenaire)))
+    .where(
+      and(
+        eq(paiements.service_id, serviceId),
+        or(isNull(commandes.partenaire), notInArray(commandes.partenaire, externes)),
+      ),
+    )
     .groupBy(paiements.mode);
   const modes = Object.fromEntries(MODES_PAIEMENT.map((m) => [m, 0])) as Record<ModePaiement, number>;
   for (const l of lignesModes) modes[l.mode] = Number(l.total);
@@ -56,12 +72,30 @@ export async function reconciliationAuto(
   const lignesPart = await dbx
     .select({ partenaire: commandes.partenaire, total: sql<string>`SUM(${commandes.total})` })
     .from(commandes)
-    .where(and(eq(commandes.service_id, serviceId), eq(commandes.statut, 'PAYEE'), isNotNull(commandes.partenaire)))
+    .where(and(eq(commandes.service_id, serviceId), eq(commandes.statut, 'PAYEE'), inArray(commandes.partenaire, externes)))
     .groupBy(commandes.partenaire);
   const livraisons: Record<string, number> = {};
   for (const l of lignesPart) if (l.partenaire) livraisons[l.partenaire] = Number(l.total);
 
-  return { modes, livraisons };
+  const [ligneOfferts] = await dbx
+    .select({
+      nb: sql<string>`COUNT(*)`,
+      total: sql<string>`COALESCE(SUM(${commandes.total}), 0)`,
+    })
+    .from(commandes)
+    .where(
+      and(
+        eq(commandes.service_id, serviceId),
+        eq(commandes.statut, 'PAYEE'),
+        eq(commandes.offert, true),
+      ),
+    );
+  const offerts = {
+    nb: Number(ligneOfferts?.nb ?? 0),
+    total: Number(ligneOfferts?.total ?? 0),
+  };
+
+  return { modes, livraisons, offerts };
 }
 
 export async function calculerStatsService(dbx: DbOuTx, serviceId: string): Promise<StatsService> {

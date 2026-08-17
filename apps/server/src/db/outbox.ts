@@ -24,7 +24,12 @@ export type TableSynchronisee =
   | 'role_permissions'
   | 'utilisateurs'
   // Sprint 4C : disponibilité locale (remonte au cloud à titre d'information).
-  | 'disponibilite_locale';
+  | 'disponibilite_locale'
+  // Migration 0020 : options réutilisables. Locales pour l'instant (le siège ne
+  // les redescend pas), mais la remontée est préparée dès maintenant — c'est
+  // tout l'intérêt d'écrire l'outbox sans attendre le branchement cloud.
+  | 'options_catalogue'
+  | 'options_liaisons';
 
 export async function ecrireOutbox(
   tx: DbOuTx,

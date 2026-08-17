@@ -40,7 +40,8 @@ describe('réconciliation de shift', () => {
     const c = await ouvrirServiceEtCommande(app, caissier, donnees, 2); // 6000 F
     await payer(c.commande_id, 6000, caissier);
 
-    // fond 25000 + espèces 6000 → théorique 31000, compté 31000 → écart 0.
+    // fond 25000 + espèces 6000 − dépenses 1000 → théorique 30000. Compté 31000
+    // → écart +1000 (excédent) : la dépense aurait dû sortir 1000 du tiroir.
     // vente_totale = dépenses 1000 + Wave 500 + espèce 31000 − fond 25000 = 7500.
     const rep = await app.inject({
       method: 'POST',
@@ -50,7 +51,7 @@ describe('réconciliation de shift', () => {
     });
     expect(rep.statusCode).toBe(200);
     const z = rep.json();
-    expect(z.ecart).toBe(0);
+    expect(z.ecart).toBe(1000);
     expect(z.total_systeme).toBe(6000);
     expect(z.vente_totale).toBe(7500);
     expect(z.diff).toBe(1500);

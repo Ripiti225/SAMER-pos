@@ -44,6 +44,8 @@ CREATE TABLE parametres_locaux (        -- LOCAL UNIQUEMENT
 
 CREATE TYPE role_pos AS ENUM ('PROPRIETAIRE','MANAGER','CAISSIER','SERVEUR','CUISINE');
 CREATE TYPE poste_cuisine AS ENUM ('CUISINIER','PIZZAIOLO','COMPTOIRISTE');
+-- Poste d'impression (routage des tickets) : chaque poste ↔ une imprimante locale.
+CREATE TYPE poste_impression AS ENUM ('CAISSE','CUISINE','BAR');
 
 -- Sprint 4B+4C : rôles composés de permissions (roles + role_permissions).
 CREATE TABLE roles (
@@ -116,7 +118,7 @@ CREATE TABLE disponibilite_locale (
 CREATE TABLE prix_canaux (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   article_id  UUID NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
-  canal       TEXT NOT NULL,     -- 'YANGO','GLOVO','SAMER_DELIV','EMPORTER'...
+  canal       TEXT NOT NULL,     -- 'YANGO','GLOVO','SAMER_DELLY','EMPORTER'...
   prix        INTEGER NOT NULL CHECK (prix >= 0),
   UNIQUE (article_id, canal)
 );
@@ -144,6 +146,38 @@ CREATE TABLE supplements (
   prix        INTEGER NOT NULL CHECK (prix >= 0)
 );
 
+-- Options reutilisables (migration 0020). Remplacent groupes_options/options
+-- et supplements, qui restent en place uniquement parce que la descente cloud
+-- les alimente encore : plus aucune lecture applicative ne passe par eux.
+-- Tables LOCALES, volontairement HORS descente (cf. sync/descente.ts) : une
+-- synchro du siege ne les ecrase jamais. Prix unique porte par l'option.
+CREATE TABLE options_catalogue (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nom         TEXT NOT NULL CHECK (length(btrim(nom)) > 0),
+  prix        INTEGER NOT NULL DEFAULT 0 CHECK (prix >= 0),  -- 0 = option gratuite
+  actif       BOOLEAN NOT NULL DEFAULT TRUE,
+  ordre       SMALLINT NOT NULL DEFAULT 0,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- Unicite sur (nom, prix) : le meme nom peut exister a deux prix, la reprise
+-- de l'existant ne doit jamais fusionner deux prix de vente differents.
+CREATE UNIQUE INDEX options_catalogue_nom_prix_idx
+  ON options_catalogue (lower(btrim(nom)), prix);
+
+-- Liaison d'une option a une CATEGORIE entiere OU a un ARTICLE precis.
+-- Les options d'un article = celles de sa categorie UNION les siennes.
+CREATE TABLE options_liaisons (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  option_id     UUID NOT NULL REFERENCES options_catalogue(id) ON DELETE CASCADE,
+  categorie_id  UUID REFERENCES categories(id) ON DELETE CASCADE,
+  article_id    UUID REFERENCES articles(id) ON DELETE CASCADE,
+  CHECK ((categorie_id IS NULL) <> (article_id IS NULL))
+);
+CREATE UNIQUE INDEX options_liaisons_categorie_idx
+  ON options_liaisons (option_id, categorie_id) WHERE categorie_id IS NOT NULL;
+CREATE UNIQUE INDEX options_liaisons_article_idx
+  ON options_liaisons (option_id, article_id) WHERE article_id IS NOT NULL;
+
 -- Combos / menus à prix packagé
 CREATE TABLE combos (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -166,6 +200,19 @@ CREATE TABLE mapping_poste_categorie (
   poste_cuisine  poste_cuisine NOT NULL,
   categorie_id   UUID NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
   PRIMARY KEY (poste_cuisine, categorie_id)
+);
+
+-- Routage d'impression LOCAL (jamais écrasé par une descente catalogue cloud,
+-- comme disponibilite_locale). Résolution : article ?? catégorie ?? CUISINE.
+CREATE TABLE routage_categorie (
+  categorie_id  UUID PRIMARY KEY REFERENCES categories(id) ON DELETE CASCADE,
+  poste         poste_impression NOT NULL,
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE routage_article (
+  article_id    UUID PRIMARY KEY REFERENCES articles(id) ON DELETE CASCADE,
+  poste         poste_impression NOT NULL,
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Promotions automatiques (§5.5) : happy hour, promo du jour
@@ -196,8 +243,10 @@ CREATE TABLE tables_salle (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   zone_id     UUID NOT NULL REFERENCES zones(id),
   numero      TEXT NOT NULL,           -- 'T1', 'VIP3'...
-  -- tables virtuelles partenaires (§5.1) : zone 'Livraison'
-  partenaire  TEXT,                    -- NULL, ou 'YANGO','GLOVO','SAMER_DELIV'
+  -- Marqueur de table VIRTUELLE (§5.1) : livraisons en zone 'Livraison'
+  -- ('YANGO','GLOVO','SAMER_DELLY') et cadeaux en zone RC ('KDO' — le repas
+  -- offert se consomme sur place). NULL = vraie table physique.
+  partenaire  TEXT,
   statut      TEXT NOT NULL DEFAULT 'LIBRE'
               CHECK (statut IN ('LIBRE','OCCUPEE','ADDITION_DEMANDEE')),
   qr_token    TEXT UNIQUE,             -- token du QR de notation collé sur la table
@@ -269,9 +318,13 @@ CREATE TYPE statut_commande AS ENUM
 CREATE TABLE commandes (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   numero_ticket  BIGINT NOT NULL UNIQUE DEFAULT nextval('seq_numero_ticket'),
+  -- Code court lisible (ex. « SP215 »), imprimé sur reçu + bons cuisine ;
+  -- préfixe type + 3 chiffres aléatoires, unique dans le service. Le
+  -- numero_ticket reste la référence continue d'audit.
+  code_commande  TEXT,
   type           type_commande NOT NULL,
   table_id       UUID REFERENCES tables_salle(id),
-  partenaire     TEXT,                              -- YANGO/GLOVO/SAMER_DELIV si livraison
+  partenaire     TEXT,                              -- YANGO/GLOVO/SAMER_DELLY si livraison
   ref_partenaire TEXT,                              -- n° de commande côté partenaire
   service_id     UUID REFERENCES services_caisse(id),
   caissier_id    UUID REFERENCES utilisateurs(id),
@@ -292,16 +345,26 @@ CREATE TABLE commandes (
   remise_montant INTEGER NOT NULL DEFAULT 0,
   remise_par     UUID REFERENCES utilisateurs(id),  -- manager/proprio uniquement
   remise_motif   TEXT,                              -- obligatoire si remise
+  -- Kdo (repas offert, table virtuelle KDO en zone RC) : clôturé PAYEE SANS
+  -- aucune ligne de paiement. Compte dans la vente du shift comme une livraison
+  -- Yango, mais jamais dans le théorique espèces (calculé sur les paiements).
+  offert         BOOLEAN NOT NULL DEFAULT false,
+  motif_offert   TEXT,                              -- obligatoire à la clôture
   promo_id       UUID REFERENCES promotions(id),
   promo_montant  INTEGER NOT NULL DEFAULT 0,
   total          INTEGER NOT NULL DEFAULT 0,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT remise_motif_obligatoire
-    CHECK (remise_montant = 0 OR (remise_motif IS NOT NULL AND remise_par IS NOT NULL))
+    CHECK (remise_montant = 0 OR (remise_motif IS NOT NULL AND remise_par IS NOT NULL)),
+  CONSTRAINT motif_offert_obligatoire
+    CHECK (offert = false OR statut <> 'PAYEE' OR motif_offert IS NOT NULL)
 );
 CREATE INDEX idx_commandes_service ON commandes (service_id);
 CREATE INDEX idx_commandes_jour ON commandes (created_at);
+-- Code court unique dans un même service (retry serveur en cas de collision).
+CREATE UNIQUE INDEX uniq_code_commande_service
+  ON commandes (service_id, code_commande) WHERE code_commande IS NOT NULL;
 
 CREATE TABLE commande_items (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -456,7 +519,7 @@ CREATE TABLE points_fidelite (
   client_id   UUID NOT NULL REFERENCES clients_fidelite(id),
   commande_id UUID REFERENCES commandes(id),
   points      INTEGER NOT NULL,          -- positif = gain, négatif = utilisation
-  source      TEXT NOT NULL DEFAULT 'POS',   -- 'POS' | 'SAMER_DELIV'
+  source      TEXT NOT NULL DEFAULT 'POS',   -- 'POS' | 'SAMER_DELLY'
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

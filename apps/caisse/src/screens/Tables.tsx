@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { IconArrowsExchange } from '@tabler/icons-react';
 import type { CommandeVue, TableVue, UtilisateurPublic } from '@pos/shared';
+import { estTableKdo, formatFCFA, LIBELLE_KDO, libellePartenaire, LIBELLES_STATUTS_COMMANDE } from '@pos/shared';
 import { PlanSalle } from '@pos/shared-ui';
 import { api } from '../api';
 import { Modale } from '../components/Modale';
@@ -16,19 +17,28 @@ import { useCaisse } from '../stores/session';
 export function Tables() {
   const { aller, afficherToast } = useCaisse();
   const [transfert, setTransfert] = useState<TableVue | null>(null);
+  const [virtuelle, setVirtuelle] = useState<TableVue | null>(null);
   const { data: tables, refetch } = useQuery({
     queryKey: ['tables'],
     queryFn: () => api<TableVue[]>('/api/tables'),
     refetchInterval: 15000,
   });
 
+  /**
+   * Les tables VIRTUELLES (Yango, Glovo, Samer Delly, Kdo) ouvrent une modale
+   * au lieu d'entrer directement : plusieurs commandes y coexistent pendant un
+   * rush (deux livreurs en même temps), il faut donc choisir laquelle reprendre
+   * — ou en démarrer une nouvelle. Avant, un message renvoyait vers « Nouvelle
+   * commande » et la table restait éternellement affichée « Libre », faute de
+   * rattachement entre la commande et sa table.
+   */
   const ouvrirTable = async (t: TableVue) => {
-    if (t.commande_id) {
-      aller(t.etat === 'ADDITION_DEMANDEE' ? 'paiement' : 'commande', t.commande_id);
+    if (t.partenaire) {
+      setVirtuelle(t);
       return;
     }
-    if (t.partenaire) {
-      afficherToast('Table virtuelle partenaire — passez par « Nouvelle commande » → Livraison');
+    if (t.commande_id) {
+      aller(t.etat === 'ADDITION_DEMANDEE' ? 'paiement' : 'commande', t.commande_id);
       return;
     }
     try {
@@ -70,6 +80,13 @@ export function Tables() {
         </section>
       )}
 
+      {virtuelle && (
+        <ModaleTableVirtuelle
+          table={virtuelle}
+          onFermer={() => setVirtuelle(null)}
+        />
+      )}
+
       {transfert && (
         <ModaleTransfert
           table={transfert}
@@ -82,6 +99,68 @@ export function Tables() {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Table virtuelle : on entre dans une commande DÉJÀ ouverte pour y ajouter des
+ * produits, ou on en démarre une nouvelle. Le Kdo (repas offert) vit en zone RC
+ * et se crée comme une commande sur place — c'est le SERVEUR qui la marque
+ * offerte d'après la table, jamais la caisse.
+ */
+function ModaleTableVirtuelle({ table, onFermer }: { table: TableVue; onFermer: () => void }) {
+  const { aller, afficherToast } = useCaisse();
+  const kdo = estTableKdo(table.partenaire);
+  const nom = kdo ? LIBELLE_KDO : libellePartenaire(table.partenaire ?? '');
+  const enCours = table.commandes_ouvertes ?? [];
+
+  const nouvelle = async () => {
+    try {
+      const commande = await api<CommandeVue>('/api/commandes', {
+        method: 'POST',
+        corps: kdo
+          ? { type: 'SUR_PLACE', table_id: table.id }
+          : { type: 'LIVRAISON', table_id: table.id, partenaire: table.partenaire },
+      });
+      aller('commande', commande.id);
+    } catch (e) {
+      afficherToast((e as Error).message);
+    }
+  };
+
+  return (
+    <Modale titre={nom} onFermer={onFermer} enfants={
+      <div className="space-y-3">
+        {enCours.length > 0 && (
+          <>
+            <p className="text-sm text-doux">
+              {enCours.length === 1 ? 'Une commande en cours' : `${enCours.length} commandes en cours`} —
+              touchez-la pour ajouter des produits.
+            </p>
+            {enCours.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className="carte flex w-full items-center justify-between p-4 text-left hover:border-marque"
+                onClick={() => aller('commande', c.id)}
+              >
+                <span>
+                  <span className="text-lg font-semibold">{c.code_commande ?? `N°${c.numero_ticket}`}</span>
+                  <span className="ml-2 text-sm text-doux">{LIBELLES_STATUTS_COMMANDE[c.statut]}</span>
+                </span>
+                <span className="text-lg font-semibold">{formatFCFA(c.total)}</span>
+              </button>
+            ))}
+          </>
+        )}
+        {enCours.length === 0 && (
+          <p className="text-sm text-doux">Aucune commande en cours sur {nom}.</p>
+        )}
+        <button type="button" className="btn-marque w-full py-5 text-lg" onClick={() => void nouvelle()}>
+          {kdo ? 'Nouveau Kdo' : `Nouvelle commande ${nom}`}
+        </button>
+      </div>
+    } />
   );
 }
 

@@ -44,6 +44,69 @@ export const LIBELLES_TYPES_COMMANDE: Record<TypeCommande, string> = {
   LIVRAISON: 'Livraison',
 };
 
+/**
+ * Postes d'impression (routage des tickets). Chaque poste est relié à UNE
+ * imprimante configurée localement dans Réglages › Imprimante. Le reçu, la
+ * facture et le rapport Z sortent toujours à la CAISSE ; un article part sur
+ * l'imprimante de son poste (bon de préparation) à l'envoi en cuisine.
+ */
+export const POSTES_IMPRESSION = ['CAISSE', 'CUISINE', 'BAR'] as const;
+export type PosteImpression = (typeof POSTES_IMPRESSION)[number];
+
+export const LIBELLES_POSTE_IMPRESSION: Record<PosteImpression, string> = {
+  CAISSE: 'Caisse',
+  CUISINE: 'Cuisine',
+  BAR: 'Bar',
+};
+
+/** Poste de repli si aucun routage n'est défini (sécurité : ne rien perdre en cuisine). */
+export const POSTE_IMPRESSION_DEFAUT: PosteImpression = 'CUISINE';
+
+/** Clé du paramètre local (parametres_locaux) portant l'imprimante d'un poste. */
+export function clePosteImprimante(poste: PosteImpression): string {
+  return `imprimante_poste_${poste.toLowerCase()}`;
+}
+
+/** Préfixe du code court de commande (SP215) selon le type de commande. */
+export const PREFIXE_CODE_TYPE: Record<TypeCommande, string> = {
+  SUR_PLACE: 'SP',
+  EMPORTER: 'EM',
+  LIVRAISON: 'LV',
+};
+
+/**
+ * Routage d'impression PAR DÉFAUT, par nom de catégorie (catalogue de marque,
+ * commun aux restaurants). Appliqué au seed et à l'import catalogue, SANS écraser
+ * un choix déjà fait dans Réglages › Routage impression (modifiable à volonté).
+ * Clé = nom normalisé (minuscule, sans accents) via `normaliserNomCategorie`.
+ */
+export const ROUTAGE_CATEGORIE_DEFAUT: Record<string, PosteImpression> = {
+  salades: 'CUISINE',
+  sandwiches: 'CUISINE',
+  tacos: 'CUISINE',
+  assiettes: 'CUISINE',
+  'poulet & poisson': 'CUISINE',
+  accompagnements: 'CUISINE',
+  manaiches: 'CUISINE',
+  pizzas: 'CUISINE',
+  aperitifs: 'CUISINE',
+  chawarmas: 'CAISSE',
+  'jus naturels': 'CAISSE',
+  boissons: 'CAISSE',
+  crepes: 'CAISSE',
+  desserts: 'CAISSE',
+};
+
+/** Normalise un nom de catégorie pour le matching du routage par défaut. */
+export function normaliserNomCategorie(nom: string): string {
+  return nom.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+
+/** Poste par défaut d'une catégorie selon son nom (null si non répertoriée). */
+export function posteDefautCategorie(nom: string): PosteImpression | null {
+  return ROUTAGE_CATEGORIE_DEFAUT[normaliserNomCategorie(nom)] ?? null;
+}
+
 export const STATUTS_COMMANDE = [
   'OUVERTE',
   'ENVOYEE_CUISINE',
@@ -64,8 +127,55 @@ export const LIBELLES_STATUTS_COMMANDE: Record<StatutCommande, string> = {
   ANNULEE: 'Annulée',
 };
 
-export const PARTENAIRES = ['YANGO', 'GLOVO', 'SAMER_DELIV'] as const;
+export const PARTENAIRES = ['YANGO', 'GLOVO', 'SAMER_DELLY'] as const;
 export type Partenaire = (typeof PARTENAIRES)[number];
+
+/**
+ * Libellés affichés. `SAMER_DELIV` est l'ANCIEN code, renommé en `SAMER_DELLY`
+ * par la migration 0019 : il ne peut plus apparaître dans les tables, mais il
+ * survit dans les rapports Z et de séquence DÉJÀ FIGÉS (JSONB immuables, on ne
+ * réécrit pas une archive). D'où son maintien ici, en lecture seule.
+ */
+export const LIBELLES_PARTENAIRES: Record<string, string> = {
+  YANGO: 'Yango',
+  GLOVO: 'Glovo',
+  SAMER_DELLY: 'Samer Delly',
+  SAMER_DELIV: 'Samer Delly',
+};
+
+/** Libellé d'un partenaire, y compris pour un code archivé. */
+export function libellePartenaire(code: string): string {
+  return LIBELLES_PARTENAIRES[code] ?? code.replace(/_/g, ' ');
+}
+
+/**
+ * Partenaires de livraison EXTERNES : le client règle chez le partenaire
+ * (Yango/Glovo), jamais en caisse. Une telle commande se clôture SANS
+ * encaissement et son montant est compté à part (bucket « livraisons » du
+ * rapport Z), hors du théorique espèces. Samer Delly (livraison propre du
+ * restaurant) encaisse normalement au comptoir → il n'est PAS dans cette liste.
+ */
+export const PARTENAIRES_EXTERNES: readonly Partenaire[] = ['YANGO', 'GLOVO'];
+
+/** Vrai si la commande est une livraison réglée hors caisse (Yango/Glovo). */
+export function estLivraisonSansEncaissement(partenaire: string | null | undefined): boolean {
+  return partenaire != null && (PARTENAIRES_EXTERNES as readonly string[]).includes(partenaire);
+}
+
+/**
+ * Table virtuelle du Kdo (repas offert). Elle vit en zone **RC** et non en
+ * « Livraison » : le cadeau se consomme sur place. La commande qui en part est
+ * marquée `offert` par le SERVEUR (jamais sur la foi du client) et se clôture
+ * PAYEE sans aucune ligne de paiement : elle compte dans la vente du shift,
+ * comme une livraison Yango, mais n'ajoute pas un franc au tiroir.
+ */
+export const TABLE_KDO = 'KDO';
+export const LIBELLE_KDO = 'Kdo (offert)';
+
+/** Vrai si cette table virtuelle est la table des repas offerts. */
+export function estTableKdo(partenaire: string | null | undefined): boolean {
+  return partenaire === TABLE_KDO;
+}
 
 /**
  * Postes prédéfinis pour l'« équipe du jour » (remplace le pointage) : à
@@ -137,6 +247,7 @@ export const LIBELLES_SUIVI_CLIENT: Record<EtatSuiviClient, string> = {
  */
 export const ETATS_TABLE = [
   'LIBRE',
+  'OCCUPEE',
   'COMMANDE_CLIENT_A_VALIDER',
   'EN_PREPARATION',
   'PRETE',
@@ -147,6 +258,7 @@ export type EtatTable = (typeof ETATS_TABLE)[number];
 
 export const LIBELLES_ETAT_TABLE: Record<EtatTable, string> = {
   LIBRE: 'Libre',
+  OCCUPEE: 'Occupée',
   COMMANDE_CLIENT_A_VALIDER: 'Commande client à valider',
   EN_PREPARATION: 'En préparation',
   PRETE: 'Prête',

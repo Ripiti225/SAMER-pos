@@ -20,6 +20,9 @@ export type ActionAudit =
   | 'ANNULATION_COMMANDE'
   | 'REOUVERTURE_NOTE'
   | 'PAIEMENT'
+  // Kdo : repas offert, clôturé sans encaissement. Le motif accompagne
+  // toujours l'entrée — sans lui, un cadeau est indiscernable d'un vol.
+  | 'COMMANDE_OFFERTE'
   | 'SPLIT_NOTE'
   | 'TRANSFERT_TABLE'
   | 'ECART_RECONCILIATION'

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { RapportZ, ReconciliationPreview, UtilisateurPublic } from '@pos/shared';
-import { formatFCFA, LIBELLES_MODES, type ModePaiement } from '@pos/shared';
+import { formatFCFA, libellePartenaire, LIBELLES_MODES, type ModePaiement, PARTENAIRES } from '@pos/shared';
 import { api } from '../api';
 import { Modale } from '../components/Modale';
 import { Numpad } from '../components/Numpad';
@@ -9,12 +9,7 @@ import { useCaisse } from '../stores/session';
 
 type Etape = 'compter' | 'saisir' | 'confirmer' | 'rapport';
 
-const LIBELLES_LIVRAISON: Record<string, string> = {
-  YANGO: 'Yango',
-  GLOVO: 'Glovo',
-  SAMER_DELIV: 'Samer Deliv',
-};
-const PARTENAIRES_ORDRE = ['YANGO', 'GLOVO', 'SAMER_DELIV'];
+const PARTENAIRES_ORDRE = [...PARTENAIRES];
 const MODES_ELECTRO: ModePaiement[] = ['WAVE', 'ORANGE_MONEY', 'MTN_MOMO', 'MOOV_MONEY', 'CARTE', 'DJAMO'];
 
 interface VentesService {
@@ -67,9 +62,14 @@ export function Cloture() {
 
   const fond = preview?.fond_de_caisse ?? 0;
   const livraisons = preview?.livraisons ?? {};
+  const offerts = preview?.offerts ?? { nb: 0, total: 0 };
   const totalLivraisons = PARTENAIRES_ORDRE.reduce((s, p) => s + (livraisons[p] ?? 0), 0);
   const totalModes = MODES_ELECTRO.reduce((s, m) => s + nombre(modes[m] ?? ''), 0);
-  const venteTotale = nombre(depenses) + totalLivraisons + totalModes + nombre(espece) - fond;
+  // Les Kdo entrent dans la vente sans passer par le tiroir : vendre 25 000 et
+  // offrir 5 000 affiche bien 30 000. Le même calcul est refait côté serveur à
+  // la clôture — les deux doivent donner le même chiffre, sinon le caissier
+  // verrait un total différent de celui figé sur son ticket.
+  const venteTotale = nombre(depenses) + totalLivraisons + totalModes + offerts.total + nombre(espece) - fond;
   const especeValide = espece !== '' && nombre(espece) >= 0;
 
   const cloturer = async () => {
@@ -153,11 +153,22 @@ export function Cloture() {
               <div className="text-sm font-semibold text-doux">Livraisons (auto)</div>
               {PARTENAIRES_ORDRE.map((p) => (
                 <div key={p} className="flex items-center justify-between rounded-lg border border-bordure bg-surface px-4 py-2 text-sm">
-                  <span>{LIBELLES_LIVRAISON[p] ?? p}</span>
+                  <span>{libellePartenaire(p)}</span>
                   <span className="font-semibold tabular-nums">{formatFCFA(livraisons[p] ?? 0)}</span>
                 </div>
               ))}
+              {offerts.total > 0 && (
+                <div className="flex items-center justify-between rounded-lg border border-bordure bg-surface px-4 py-2 text-sm">
+                  <span>Kdo offerts ({offerts.nb})</span>
+                  <span className="font-semibold tabular-nums">{formatFCFA(offerts.total)}</span>
+                </div>
+              )}
             </div>
+            {offerts.total > 0 && (
+              <p className="text-xs text-doux">
+                Les Kdo comptent dans la vente mais pas dans le tiroir : ne les cherchez pas dans vos espèces.
+              </p>
+            )}
 
             <div className="space-y-1">
               <div className="text-sm font-semibold text-doux">Encaissements électroniques (modifiables)</div>
@@ -208,11 +219,14 @@ export function Cloture() {
               <Ligne libelle="Fond de caisse" valeur={formatFCFA(rapport.fond_de_caisse)} />
               <Ligne libelle="Dépenses" valeur={formatFCFA(rapport.depenses)} />
               {PARTENAIRES_ORDRE.filter((p) => (rapport.livraisons[p] ?? 0) > 0).map((p) => (
-                <Ligne key={p} libelle={LIBELLES_LIVRAISON[p] ?? p} valeur={formatFCFA(rapport.livraisons[p] ?? 0)} />
+                <Ligne key={p} libelle={libellePartenaire(p)} valeur={formatFCFA(rapport.livraisons[p] ?? 0)} />
               ))}
               {MODES_ELECTRO.filter((m) => (rapport.modes_declares[m] ?? 0) > 0).map((m) => (
                 <Ligne key={m} libelle={LIBELLES_MODES[m]} valeur={formatFCFA(rapport.modes_declares[m] ?? 0)} />
               ))}
+              {(rapport.offerts?.total ?? 0) > 0 && (
+                <Ligne libelle={`Kdo offerts (${rapport.offerts.nb})`} valeur={formatFCFA(rapport.offerts.total)} />
+              )}
               <div className="border-t border-bordure pt-1" />
               <Ligne libelle="Vente totale (réconciliée)" valeur={formatFCFA(rapport.vente_totale)} fort />
               <Ligne libelle="Total système" valeur={formatFCFA(rapport.total_systeme)} />

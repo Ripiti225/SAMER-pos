@@ -2,6 +2,23 @@ packages:
   - "packages/*"
   - "apps/*"
 
+# node_modules SANS liens symboliques (structure classique, comme npm).
+# Ce dossier est copié sur clé USB puis sur les 7 restaurants : or les outils de
+# copie Windows ne recréent les liens qu'avec des droits administrateur
+# (robocopy /SL, que robocopy ignore dès que /MT est actif), et une copie ratée
+# produit des paquets simplement absents — l'app ne démarre plus, sans message
+# clair. En « hoisted », n'importe quel outil de copie convient.
+# NB : depuis pnpm 10, ce réglage se met ICI et non dans .npmrc.
+nodeLinker: hoisted
+
+# Les paquets internes (@pos/shared, @pos/theme, @pos/shared-ui) sont COPIÉS
+# dans chaque app au lieu d'être liés : sans cela il resterait 13 liens, et
+# leur perte à la copie ferait planter l'app au démarrage (module introuvable).
+# CONTREPARTIE, en développement : après une modification dans packages/*,
+# relancer `pnpm install` pour la propager aux apps.
+injectWorkspacePackages: true
+
 allowBuilds:
   argon2: true
+  electron: true
   esbuild: true

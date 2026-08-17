@@ -6,25 +6,24 @@ import {
   categories,
   comboArticles,
   combos,
-  groupesOptions,
-  options,
+  optionsCatalogue,
+  optionsLiaisons,
   prixCanaux,
   promotions,
-  supplements,
 } from '../../db/schema/index.js';
 import { promotionActive } from './promos.js';
 import { lireDisponibilites } from './disponibilite.js';
+import { resoudreOptionsParArticle } from './options.js';
 
 /** Charge le catalogue complet (partagé caisse / tablette / client). */
 export async function chargerCatalogue(): Promise<CatalogueVue> {
   const dispo = await lireDisponibilites(db);
-  const [cats, arts, canaux, groupes, opts, suppls, cbs, cbArts, promos] = await Promise.all([
+  const [cats, arts, canaux, optsCat, liaisons, cbs, cbArts, promos] = await Promise.all([
     db.select().from(categories).where(eq(categories.actif, true)).orderBy(asc(categories.ordre)),
     db.select().from(articles).where(eq(articles.actif, true)).orderBy(asc(articles.nom)),
     db.select().from(prixCanaux),
-    db.select().from(groupesOptions),
-    db.select().from(options),
-    db.select().from(supplements),
+    db.select().from(optionsCatalogue).where(eq(optionsCatalogue.actif, true)),
+    db.select().from(optionsLiaisons),
     db.select().from(combos).where(eq(combos.actif, true)),
     db
       .select({
@@ -39,6 +38,8 @@ export async function chargerCatalogue(): Promise<CatalogueVue> {
   ]);
 
   const maintenant = new Date();
+  // Options d'un article = celles liées à sa CATÉGORIE + celles liées à lui.
+  const extrasParArticle = resoudreOptionsParArticle(arts, optsCat, liaisons);
   const vueArticles: ArticleVue[] = arts.map((a) => ({
     id: a.id,
     categorie_id: a.categorie_id,
@@ -51,18 +52,7 @@ export async function chargerCatalogue(): Promise<CatalogueVue> {
     prix_canaux: Object.fromEntries(
       canaux.filter((c) => c.article_id === a.id).map((c) => [c.canal, c.prix]),
     ),
-    groupes_options: groupes
-      .filter((g) => g.article_id === a.id)
-      .map((g) => ({
-        id: g.id,
-        nom: g.nom,
-        choix_min: g.choix_min,
-        choix_max: g.choix_max,
-        options: opts.filter((o) => o.groupe_id === g.id).map((o) => ({ id: o.id, nom: o.nom })),
-      })),
-    supplements: suppls
-      .filter((s) => s.article_id === a.id)
-      .map((s) => ({ id: s.id, nom: s.nom, prix: s.prix })),
+    options_extras: extrasParArticle.get(a.id) ?? [],
   }));
 
   return {

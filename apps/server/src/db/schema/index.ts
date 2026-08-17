@@ -36,6 +36,8 @@ export const rolePos = pgEnum('role_pos', [
   'CUISINE',
 ]);
 export const posteCuisine = pgEnum('poste_cuisine', ['CUISINIER', 'PIZZAIOLO', 'COMPTOIRISTE']);
+// Poste d'impression (routage des tickets) : chaque poste ↔ une imprimante locale.
+export const posteImpression = pgEnum('poste_impression', ['CAISSE', 'CUISINE', 'BAR']);
 // Disponibilité d'un employé (RH légère, gérée depuis Réglages › Équipe).
 export const disponibiliteEmploye = pgEnum('disponibilite_employe', ['PRESENT', 'MALADE', 'CONGE', 'PERMISSION']);
 export const typeCommande = pgEnum('type_commande', ['SUR_PLACE', 'EMPORTER', 'LIVRAISON']);
@@ -186,6 +188,35 @@ export const supplements = pgTable('supplements', {
   prix: integer('prix').notNull(),
 });
 
+/**
+ * Options réutilisables (migration 0020). Remplacent groupes_options/options et
+ * supplements côté application — ces trois tables restent déclarées uniquement
+ * parce que la descente cloud les alimente encore.
+ * Tables LOCALES : volontairement absentes de sync/descente.ts, une synchro du
+ * siège ne les écrase donc jamais (même principe que disponibilite_locale).
+ */
+export const optionsCatalogue = pgTable('options_catalogue', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  nom: text('nom').notNull(),
+  /** 0 = option gratuite (pâte à l'ail), > 0 = option payante (fromage). */
+  prix: integer('prix').notNull().default(0),
+  actif: boolean('actif').notNull().default(true),
+  ordre: smallint('ordre').notNull().default(0),
+  updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [check('options_catalogue_prix_check', sql`${t.prix} >= 0`)]);
+
+/**
+ * Liaison d'une option à une CATÉGORIE entière ou à un ARTICLE précis
+ * (exactement l'un des deux — contrainte CHECK côté base).
+ * Les options d'un article = celles de sa catégorie UNION les siennes.
+ */
+export const optionsLiaisons = pgTable('options_liaisons', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  option_id: uuid('option_id').notNull().references(() => optionsCatalogue.id, { onDelete: 'cascade' }),
+  categorie_id: uuid('categorie_id').references(() => categories.id, { onDelete: 'cascade' }),
+  article_id: uuid('article_id').references(() => articles.id, { onDelete: 'cascade' }),
+});
+
 export const combos = pgTable('combos', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   nom: text('nom').notNull(),
@@ -316,6 +347,10 @@ export const commandes = pgTable('commandes', {
     .notNull()
     .unique()
     .default(sql`nextval('seq_numero_ticket')`),
+  // Code court lisible (ex. « SP215 ») imprimé sur reçu + bons cuisine. Non
+  // séquentiel (préfixe type + 3 chiffres aléatoires), unique dans le service.
+  // Le numero_ticket reste la référence continue d'audit.
+  code_commande: text('code_commande'),
   type: typeCommande('type').notNull(),
   table_id: uuid('table_id').references(() => tablesSalle.id),
   partenaire: text('partenaire'),
@@ -333,6 +368,11 @@ export const commandes = pgTable('commandes', {
   remise_montant: integer('remise_montant').notNull().default(0),
   remise_par: uuid('remise_par').references(() => utilisateurs.id),
   remise_motif: text('remise_motif'),
+  // Kdo : repas offert, clôturé PAYEE sans aucune ligne de paiement. Il compte
+  // dans la vente du shift (comme une livraison Yango) mais jamais dans le
+  // théorique espèces, qui ne se calcule que sur les paiements encaissés.
+  offert: boolean('offert').notNull().default(false),
+  motif_offert: text('motif_offert'),
   promo_id: uuid('promo_id').references(() => promotions.id),
   promo_montant: integer('promo_montant').notNull().default(0),
   total: integer('total').notNull().default(0),
@@ -341,9 +381,20 @@ export const commandes = pgTable('commandes', {
 }, (t) => [
   index('idx_commandes_service').on(t.service_id),
   index('idx_commandes_jour').on(t.created_at),
+  // Le code court est unique par service (retry côté serveur en cas de collision).
+  uniqueIndex('uniq_code_commande_service')
+    .on(t.service_id, t.code_commande)
+    .where(sql`${t.code_commande} IS NOT NULL`),
   check(
     'remise_motif_obligatoire',
     sql`${t.remise_montant} = 0 OR (${t.remise_motif} IS NOT NULL AND ${t.remise_par} IS NOT NULL)`,
+  ),
+  // Un Kdo ne peut pas être clôturé sans dire pourquoi il a été offert. La règle
+  // est appliquée côté serveur ; ce CHECK est la ceinture de sécurité (un cadeau
+  // sans motif est exactement ce qui rend un abus indétectable).
+  check(
+    'motif_offert_obligatoire',
+    sql`${t.offert} = false OR ${t.statut} <> 'PAYEE' OR ${t.motif_offert} IS NOT NULL`,
   ),
 ]);
 
@@ -451,6 +502,21 @@ export const mappingPosteCategorie = pgTable('mapping_poste_categorie', {
   poste_cuisine: posteCuisine('poste_cuisine').notNull(),
   categorie_id: uuid('categorie_id').notNull().references(() => categories.id, { onDelete: 'cascade' }),
 }, (t) => [primaryKey({ columns: [t.poste_cuisine, t.categorie_id] })]);
+
+// Routage d'impression LOCAL (comme disponibilite_locale : jamais écrasé par une
+// descente catalogue cloud). Résolution d'un article :
+//   routage_article[article] ?? routage_categorie[catégorie] ?? POSTE_IMPRESSION_DEFAUT
+export const routageCategorie = pgTable('routage_categorie', {
+  categorie_id: uuid('categorie_id').primaryKey().references(() => categories.id, { onDelete: 'cascade' }),
+  poste: posteImpression('poste').notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const routageArticle = pgTable('routage_article', {
+  article_id: uuid('article_id').primaryKey().references(() => articles.id, { onDelete: 'cascade' }),
+  poste: posteImpression('poste').notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
 // Sprint 2 : idempotence de la file locale des tablettes serveur
 export const actionsRecues = pgTable('actions_recues', {

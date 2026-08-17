@@ -113,6 +113,7 @@ export function routesRapports(app: FastifyInstance): void {
       .select({
         id: commandes.id,
         numero_ticket: commandes.numero_ticket,
+        code_commande: commandes.code_commande,
         type: commandes.type,
         statut: commandes.statut,
         total: commandes.total,

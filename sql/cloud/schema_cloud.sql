@@ -4,7 +4,10 @@
 --
 -- Principes de fiabilité (§16 risque 3) : zéro perte, zéro doublon.
 --   * Chaque table métier reprend les colonnes locales + restaurant_id.
---   * PK = id (le MÊME UUID que local) → UPSERT idempotent, rejouable.
+--   * PK = (restaurant_id, id) : l'id reste le MÊME UUID que local → UPSERT
+--     idempotent, rejouable ; et deux sites qui portent le même UUID (image de
+--     déploiement copiée telle quelle) ne peuvent JAMAIS s'écraser l'un l'autre.
+--     Tout UPSERT doit donc cibler (restaurant_id, id) — jamais id seul.
 --   * Les tables de ventes N'ONT PAS de FK croisées : les lignes arrivent
 --     par lots dans l'ordre du seq local, mais un lot peut couper un
 --     parent/enfant ; on privilégie un réplica tolérant plutôt que des
@@ -334,6 +337,40 @@ BEGIN
 END $$;
 
 -- ----------------------------------------------------------------------------
+-- Cloisonnement : PK composite (restaurant_id, id) sur toutes les tables
+-- métier. Deux restaurants peuvent porter le même UUID (même image de
+-- déploiement) sans jamais se marcher dessus. Idempotent.
+-- ----------------------------------------------------------------------------
+DO $$
+DECLARE
+  t     TEXT;
+  pk    TEXT;
+  ncols INT;
+BEGIN
+  FOREACH t IN ARRAY ARRAY[
+    'commandes','commande_items','notes_split','paiements','services_caisse',
+    'audit_log','pointages','clients_fidelite','points_fidelite',
+    'categories','articles','prix_canaux','groupes_options','options',
+    'supplements','combos','combo_articles','promotions','utilisateurs'
+  ]
+  LOOP
+    CONTINUE WHEN to_regclass(t) IS NULL;  -- cloud plus ancien : table absente
+    SELECT c.conname, array_length(c.conkey, 1)
+      INTO pk, ncols
+      FROM pg_constraint c
+     WHERE c.conrelid = t::regclass AND c.contype = 'p';
+    IF pk IS NOT NULL AND ncols = 1 THEN
+      EXECUTE format('ALTER TABLE %I DROP CONSTRAINT %I', t, pk);
+    END IF;
+    IF pk IS NULL OR ncols = 1 THEN
+      EXECUTE format('ALTER TABLE %I ALTER COLUMN id SET NOT NULL', t);
+      EXECUTE format('ALTER TABLE %I ALTER COLUMN restaurant_id SET NOT NULL', t);
+      EXECUTE format('ALTER TABLE %I ADD PRIMARY KEY (restaurant_id, id)', t);
+    END IF;
+  END LOOP;
+END $$;
+
+-- ----------------------------------------------------------------------------
 -- RLS : tout est verrouillé. Les Edge Functions utilisent la service_role,
 -- qui contourne la RLS. Aucune politique anonyme => aucune lecture publique.
 -- ----------------------------------------------------------------------------
@@ -344,7 +381,7 @@ BEGIN
     'commandes','commande_items','notes_split','paiements','services_caisse','audit_log',
     'pointages','clients_fidelite','points_fidelite',
     'categories','articles','prix_canaux','groupes_options','options','supplements',
-    'combos','combo_articles','promotions','utilisateurs']
+    'combos','combo_articles','promotions','utilisateurs','parametres_locaux']
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);

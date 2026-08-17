@@ -11,13 +11,14 @@ import {
   IconLock,
   IconLogout,
   IconPrinter,
+  IconQrcode,
   IconReportMoney,
   IconSettings,
   IconToolsKitchen2,
   IconWifi,
 } from '@tabler/icons-react';
 import type { CommandeVue, TableVue } from '@pos/shared';
-import { PARTENAIRES, PERMISSIONS_ADMIN } from '@pos/shared';
+import { libellePartenaire, PARTENAIRES, PERMISSIONS_ADMIN } from '@pos/shared';
 import { api } from '../api';
 import { Modale } from '../components/Modale';
 import { useNbAdditionsEnAttente } from '../components/BandeauAdditions';
@@ -34,6 +35,7 @@ export function Accueil() {
   const [choixType, setChoixType] = useState(false);
   const [choixTable, setChoixTable] = useState(false);
   const [choixLivraison, setChoixLivraison] = useState(false);
+  const [appareils, setAppareils] = useState(false);
   const nbAdditions = useNbAdditionsEnAttente();
   const horloge = useHorloge();
 
@@ -51,7 +53,10 @@ export function Accueil() {
   const { data: tables } = useQuery({
     queryKey: ['tables'],
     queryFn: () => api<TableVue[]>('/api/tables'),
-    enabled: choixTable,
+    // Aussi pour le choix du partenaire : la commande de livraison doit être
+    // rattachée à SA table virtuelle, sinon celle-ci reste affichée « Libre »
+    // au plan de salle et on ne peut plus y revenir pour ajouter un produit.
+    enabled: choixTable || choixLivraison,
   });
 
   const creerCommande = async (corps: Record<string, unknown>) => {
@@ -98,6 +103,10 @@ export function Accueil() {
               <span className="hidden sm:inline">Séquence</span>
             </button>
           )}
+          <button type="button" className="btn-blanc flex items-center gap-2" onClick={() => setAppareils(true)} title="Connexion des appareils (QR)">
+            <IconQrcode size={18} />
+            <span className="hidden sm:inline">Appareils</span>
+          </button>
           {estAdmin && (
             <button type="button" className="btn-blanc flex items-center gap-2" onClick={() => aller('reglages')}>
               <IconSettings size={18} />
@@ -240,14 +249,80 @@ export function Accueil() {
         <Modale titre="Partenaire de livraison" onFermer={() => setChoixLivraison(false)} enfants={
           <div className="grid gap-3">
             {PARTENAIRES.map((p) => (
-              <button key={p} type="button" className="btn-blanc py-5 text-lg" onClick={() => creerCommande({ type: 'LIVRAISON', partenaire: p })}>
-                {p.replace('_', ' ')}
+              <button
+                key={p}
+                type="button"
+                className="btn-blanc py-5 text-lg"
+                onClick={() =>
+                  creerCommande({
+                    type: 'LIVRAISON',
+                    partenaire: p,
+                    table_id: (tables ?? []).find((t) => t.partenaire === p)?.id ?? null,
+                  })
+                }
+              >
+                {libellePartenaire(p)}
               </button>
             ))}
           </div>
         } />
       )}
+
+      {appareils && <AppareilsModale onFermer={() => setAppareils(false)} />}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Connexion des appareils (QR) : le serveur/cuisinier scanne et ouvre sa
+// plateforme, sur le même WiFi que la caisse — sans internet.
+// ---------------------------------------------------------------------------
+interface AppareilConnexion { cle: string; nom: string; indice: string; url: string | null; image: string | null }
+interface ConnexionVue { ip: string | null; reseau_pret: boolean; appareils: AppareilConnexion[] }
+
+function AppareilsModale({ onFermer }: { onFermer: () => void }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['appareils-connexion'],
+    queryFn: () => api<ConnexionVue>('/api/appareils/connexion'),
+  });
+
+  return (
+    <Modale titre="Connexion des appareils" large onFermer={onFermer} enfants={
+      <div className="space-y-4">
+        <p className="text-sm text-doux">
+          Le serveur (tablette) et le cuisinier (écran KDS) scannent leur QR pour ouvrir leur
+          plateforme — sans rien taper. Ils doivent juste être sur le <b>même WiFi que la caisse</b>
+          {' '}(la connexion internet n’est pas nécessaire).
+        </p>
+
+        {isLoading && <p className="text-doux">Préparation des codes…</p>}
+
+        {data && !data.reseau_pret && (
+          <div className="rounded-xl bg-amber-100 px-4 py-3 text-amber-900">
+            Aucun réseau local détecté. Branchez ce poste au WiFi/réseau du restaurant, puis rouvrez ce menu.
+          </div>
+        )}
+
+        {data?.reseau_pret && (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {data.appareils.map((a) => (
+                <div key={a.cle} className="flex flex-col items-center rounded-2xl border border-bordure p-4 text-center">
+                  <div className="font-bold">{a.nom}</div>
+                  <div className="mb-3 text-xs text-doux">{a.indice}</div>
+                  {a.image && <img src={a.image} alt={`QR ${a.nom}`} className="h-52 w-52 rounded-lg border border-bordure bg-white p-2" />}
+                  <div className="mt-2 break-all text-xs text-doux">{a.url}</div>
+                </div>
+              ))}
+            </div>
+            <p className="text-center text-xs text-doux">
+              Astuce : sur la box, réservez une IP fixe pour ce poste ({data.ip}) — les QR resteront valables même
+              après un redémarrage.
+            </p>
+          </>
+        )}
+      </div>
+    } />
   );
 }
 

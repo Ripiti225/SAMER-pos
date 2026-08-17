@@ -16,7 +16,7 @@ import { db } from '../../db/client.js';
 import { commandes, parametresLocaux, restaurant, tablesSalle, zones } from '../../db/schema/index.js';
 import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
-import { adresseReseauLocale, PORT_CLIENT_DEFAUT, resoudreBaseClient } from '../../lib/reseau.js';
+import { adresseReseauLocale, PORT_CLIENT_DEFAUT, PORT_KDS, PORT_SERVEUR, resoudreBaseClient } from '../../lib/reseau.js';
 import { journaliser } from '../audit/audit.js';
 import { genererQrToken, pdfQrTables, qrDataUrl, urlQr } from './qr.js';
 
@@ -59,6 +59,26 @@ export function routesSalleAdmin(app: FastifyInstance): void {
       adresse_configuree: configuree,
       base_effective: resoudreBaseClient(configuree),
     };
+  });
+
+  // QR de connexion des appareils : un serveur (tablette) ou un cuisinier (KDS)
+  // sur le MÊME WiFi que la caisse scanne le QR et ouvre directement sa
+  // plateforme — sans taper d'adresse, et sans internet (tout est local au LAN).
+  // Guard léger (exigerAuth) : ce sont des adresses LAN, joignables de toute
+  // façon par quiconque est sur le réseau ; ce n'est pas une donnée sensible.
+  app.get('/api/appareils/connexion', { preHandler: app.exigerAuth }, async () => {
+    const ip = adresseReseauLocale();
+    const def = [
+      { cle: 'cuisine', nom: 'Cuisine (écran KDS)', port: PORT_KDS, indice: 'Sur l’écran/tablette de la cuisine' },
+      { cle: 'serveur', nom: 'Serveur (tablette)', port: PORT_SERVEUR, indice: 'Sur la tablette d’un serveur de salle' },
+    ];
+    const appareils = await Promise.all(
+      def.map(async (d) => {
+        const url = ip ? `http://${ip}:${d.port}` : null;
+        return { cle: d.cle, nom: d.nom, indice: d.indice, url, image: url ? await qrDataUrl(url) : null };
+      }),
+    );
+    return { ip, reseau_pret: !!ip, appareils };
   });
 
   // Plan : zones + tables

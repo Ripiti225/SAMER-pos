@@ -1,5 +1,9 @@
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
+import fastifyStatic from '@fastify/static';
 import { enregistrerGestionErreurs } from './plugins/erreurs.js';
 import { enregistrerSessions } from './plugins/sessions.js';
 import { enregistrerWs } from './plugins/ws.js';
@@ -22,6 +26,7 @@ import { routesSalleAdmin } from './modules/salle/admin.js';
 import { routesDisponibilite } from './modules/catalogue/admin-disponibilite.js';
 import { routesReglages } from './modules/reglages/routes.js';
 import { routesCatalogueAdmin } from './modules/catalogue/admin-catalogue.js';
+import { routesOptionsAdmin } from './modules/catalogue/admin-options.js';
 import { EscposPrinter } from './printer/escpos.js';
 import type { PrinterService } from './printer/PrinterService.js';
 
@@ -61,6 +66,21 @@ export async function construireApp(options: { logger?: boolean } = {}): Promise
   routesDisponibilite(app);
   routesReglages(app);
   routesCatalogueAdmin(app);
+  routesOptionsAdmin(app);
+
+  // Sert le build de la caisse (apps/caisse/dist) depuis la même origine que
+  // l'API : requis par api.ts (fetch relatif + cookie de session same-origin).
+  // Absent en dev (Vite sert la caisse séparément avec sa propre proxy).
+  // Pas de routing côté client (pas de react-router) : l'index par défaut de
+  // @fastify/static suffit, pas besoin de fallback SPA ni d'un 2e setNotFoundHandler
+  // (erreurs.ts en a déjà un ; Fastify interdit d'en définir deux sur la même instance).
+  const distCaisse = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '../../caisse/dist',
+  );
+  if (existsSync(distCaisse)) {
+    await app.register(fastifyStatic, { root: distCaisse, prefix: '/' });
+  }
 
   return app;
 }

@@ -133,8 +133,8 @@ Points non négociables du schéma :
 
 ## Seed de démonstration (`db/seed.ts`)
 
-- Restaurant : `SAMER_ANGRE7E`, « Chez Samer Angré 7E », marque SAMER.
-- Utilisateurs : 1 propriétaire (PIN 852741), 1 manager (PIN 963852), 2 caissiers, 2 serveurs.
+- Restaurant : `A_CONFIGURER`, « Restaurant à configurer », marque SAMER. **Identité neutre volontaire** : la même image de déploiement part sur les 7 sites, chaque poste prend son identité (et un `restaurant.id` neuf) via Réglages → Restaurant. Ne jamais seeder ici un restaurant réel, son `samtrackly_restaurant_id` ni son équipe — ils se retrouveraient sur tous les autres sites. L'équipe réelle du 7E reste disponible en dev via `SEED_EQUIPE_7E=1 pnpm db:seed`.
+- Utilisateurs : **exactement deux comptes PROPRIETAIRE** — `SAMER Zreik` (PIN 852741) et `Admin Willy` (PIN 2212, l'administrateur qui installe et dépanne les 7 sites). Aucun autre employé : le reste de l'équipe arrive par Réglages → Équipe ou la descente SamerTrackly, sinon les comptes du premier restaurant partiraient sur tous les autres. L'équipe réelle du 7E reste disponible en dev via `SEED_EQUIPE_7E=1 pnpm db:seed`.
 - Catalogue : 4 catégories (Chawarmas, Pizzas, Grillades, Boissons), ~15 articles avec prix FCFA réalistes (chawarma 3000, pizza 6500, jus 1500…), 1 groupe d'options (Sauce), 2 suppléments (Fromage +500, Frites +1000), 1 combo (Chawarma + Boisson 4000), surcharges `prix_canaux` Yango/Glovo, 1 promotion happy hour −20 % 17h–19h.
 - Zones : RC (6 tables), Terrasse (4), VIP (2), Livraison (3 tables virtuelles YANGO/GLOVO/SAMER_DELIV).
 

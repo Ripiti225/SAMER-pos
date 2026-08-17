@@ -32,7 +32,7 @@ import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
 import { chargerCatalogue } from '../catalogue/service.js';
-import { figerNouvelItem, recalculerTotaux } from '../commandes/service.js';
+import { figerNouvelItem, genererCodeCommande, recalculerTotaux } from '../commandes/service.js';
 import { calculerDestinataire } from '../routage/routage.js';
 import { etatDUneTable } from '../tables/etat.js';
 
@@ -189,9 +189,10 @@ export function routesClient(app: FastifyInstance): void {
 
     const { commandeId, destinataire } = await db.transaction(async (tx) => {
       await tx.select().from(tablesSalle).where(eq(tablesSalle.id, table.id)).for('update');
+      const code = await genererCodeCommande(tx, 'SUR_PLACE', null);
       const [commande] = await tx
         .insert(commandes)
-        .values({ type: 'SUR_PLACE', table_id: table.id, origine: 'CLIENT_QR' })
+        .values({ type: 'SUR_PLACE', code_commande: code, table_id: table.id, origine: 'CLIENT_QR' })
         .returning();
       await ecrireOutbox(tx, 'commandes', 'INSERT', commande!.id, commande as unknown as Record<string, unknown>);
       for (const item of corps.items) {

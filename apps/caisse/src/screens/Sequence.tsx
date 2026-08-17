@@ -2,12 +2,11 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconArrowLeft } from '@tabler/icons-react';
 import type { RapportSequence, SequenceCourante } from '@pos/shared';
-import { formatFCFA, LIBELLES_MODES, type ModePaiement } from '@pos/shared';
+import { formatFCFA, libellePartenaire, LIBELLES_MODES, type ModePaiement } from '@pos/shared';
 import { api } from '../api';
 import { Modale } from '../components/Modale';
 import { useCaisse } from '../stores/session';
 
-const LIBELLES_LIVRAISON: Record<string, string> = { YANGO: 'Yango', GLOVO: 'Glovo', SAMER_DELIV: 'Samer Deliv' };
 
 /**
  * Fermeture de séquence (journée) — réservé aux porteurs de la permission
@@ -105,8 +104,11 @@ export function Sequence() {
           {/* Répartition */}
           <div className="grid gap-3 sm:grid-cols-2">
             <Bloc titre="Encaissements" lignes={Object.entries(seq.totaux.modes).filter(([, v]) => v > 0).map(([m, v]) => [LIBELLES_MODES[m as ModePaiement] ?? m, v])} />
-            <Bloc titre="Livraisons & dépenses" lignes={[
-              ...Object.entries(seq.totaux.livraisons).filter(([, v]) => v > 0).map(([p, v]) => [LIBELLES_LIVRAISON[p] ?? p, v] as [string, number]),
+            <Bloc titre="Livraisons, Kdo & dépenses" lignes={[
+              ...Object.entries(seq.totaux.livraisons).filter(([, v]) => v > 0).map(([p, v]) => [libellePartenaire(p), v] as [string, number]),
+              ...((seq.totaux.offerts?.total ?? 0) > 0
+                ? [[`Kdo offerts (${seq.totaux.offerts.nb})`, seq.totaux.offerts.total] as [string, number]]
+                : []),
               ['Dépenses', seq.totaux.depenses] as [string, number],
             ]} />
           </div>
@@ -139,6 +141,23 @@ export function Sequence() {
 }
 
 function RapportSequenceVue({ rapport, onQuitter }: { rapport: RapportSequence; onQuitter: () => void }) {
+  const { afficherToast } = useCaisse();
+  const [reimpression, setReimpression] = useState(false);
+
+  // Le récap papier part à l'imprimante dès le rasage ; ce bouton couvre le
+  // papier perdu, le bourrage ou l'imprimante hors ligne au mauvais moment.
+  const reimprimer = async () => {
+    setReimpression(true);
+    try {
+      await api(`/api/sequences/${rapport.sequence_id}/reimprimer`, { method: 'POST' });
+      afficherToast('Récap renvoyé à l’imprimante');
+    } catch (e) {
+      afficherToast((e as Error).message);
+    } finally {
+      setReimpression(false);
+    }
+  };
+
   return (
     <div className="mx-auto w-full max-w-lg space-y-3">
       <div className="carte space-y-3 p-6">
@@ -160,6 +179,12 @@ function RapportSequenceVue({ rapport, onQuitter }: { rapport: RapportSequence; 
           <L libelle="Écart espèces cumulé" valeur={`${rapport.ecart_especes > 0 ? '+' : ''}${formatFCFA(rapport.ecart_especes)}`} />
           <L libelle="Dépenses" valeur={formatFCFA(rapport.depenses)} />
         </div>
+        <p className="text-center text-sm text-doux">
+          Le récap détaillé (chaque shift + totaux du jour) a été envoyé à l’imprimante de la caisse.
+        </p>
+        <button type="button" className="btn-blanc w-full py-3" disabled={reimpression} onClick={reimprimer}>
+          {reimpression ? 'Envoi…' : 'Réimprimer le récap'}
+        </button>
         <button type="button" className="btn-accent w-full py-4 text-lg" onClick={onQuitter}>Terminé</button>
       </div>
     </div>

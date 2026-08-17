@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { ServiceOuvertVue } from '@pos/shared';
+import type { OccupationCaisse, ServiceOuvertVue } from '@pos/shared';
 import { formatFCFA, LIBELLES_POSTES, POSTES_JOUR } from '@pos/shared';
 import { api } from '../api';
 import { Numpad } from '../components/Numpad';
-import { useCaisse } from '../stores/session';
+import { ecranInitial, useCaisse } from '../stores/session';
 
 interface MembrePropose {
   utilisateur_id: string;
@@ -15,7 +15,9 @@ interface MembrePropose {
 /** Ouverture de service : fond de caisse, puis équipe du jour (allègement). */
 export function OuvertureService() {
   const { session, poserServiceOuvert, poserSession, afficherToast, rentrer } = useCaisse();
-  const estSuperviseur = !!session && (session.utilisateur.est_proprietaire || session.utilisateur.est_superviseur);
+  // Proprio, superviseur ET gérant ont un tableau de bord où revenir : ouvrir un
+  // service reste facultatif pour eux (ils ne sont pas venus pour encaisser).
+  const estSuperviseur = ecranInitial(session) === 'supervision';
   const [etape, setEtape] = useState<'fond' | 'equipe'>('fond');
   const [montant, setMontant] = useState('');
   const [enCours, setEnCours] = useState(false);
@@ -26,6 +28,15 @@ export function OuvertureService() {
     queryKey: ['equipe-proposee'],
     queryFn: () => api<MembrePropose[]>('/api/services/equipe-proposee'),
     enabled: etape === 'equipe',
+  });
+
+  // Un seul shift ouvert à la fois : on interroge la caisse avant d'afficher le
+  // clavier, pour expliquer qui est en poste au lieu d'un refus après saisie.
+  // Rafraîchi toutes les 15 s : dès que la collègue clôture, l'écran se libère.
+  const { data: occupation } = useQuery({
+    queryKey: ['occupation-caisse'],
+    queryFn: () => api<OccupationCaisse>('/api/services/occupation'),
+    refetchInterval: 15000,
   });
 
   const basculer = (m: MembrePropose) => {
@@ -61,6 +72,36 @@ export function OuvertureService() {
     } catch { /* ignore */ }
     poserSession(null);
   };
+
+  // Caisse tenue par quelqu'un d'autre : rien d'autre à faire que patienter ou
+  // se déconnecter. Le blocage est aussi appliqué côté serveur (409).
+  if (occupation?.occupee) {
+    const depuis = occupation.ouvert_le
+      ? new Date(occupation.ouvert_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+      : null;
+    return (
+      <div className="flex min-h-full flex-col items-center justify-center p-6">
+        <div className="carte w-full max-w-sm space-y-4 p-6 text-center shadow-e2">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-alerte/10 text-3xl">⏳</div>
+          <h1 className="text-2xl font-bold text-alerte">Un autre shift est en cours</h1>
+          <p className="text-doux">
+            <span className="font-semibold text-fort">{occupation.caissier}</span> tient la caisse
+            {depuis ? ` depuis ${depuis}` : ''}. Vous pourrez ouvrir votre service dès qu’il aura
+            fait « J’ai fini ».
+          </p>
+          <p className="text-sm text-doux">
+            Pour une relève, l’employé en poste passe par « J’ai fini » puis « Transférer au
+            caissier suivant ».
+          </p>
+          {estSuperviseur ? (
+            <button type="button" className="btn-blanc w-full" onClick={rentrer}>← Retour à la supervision</button>
+          ) : (
+            <button type="button" className="btn-blanc w-full" onClick={seDeconnecter}>Se déconnecter</button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (etape === 'fond') {
     return (
