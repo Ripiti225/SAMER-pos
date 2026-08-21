@@ -7,10 +7,14 @@
 //
 // Spéc : samtrackly/docs/superpowers/specs/2026-08-20-pos-inventaire-vers-samtrackly-design.md
 //
-// ⚠ produits_inventaire.code (POS) = inventaire_lignes.produit_id (Samtrackly)
-// — le même identifiant texte des deux côtés, catalogue de comptage repris tel
-// quel de Samtrackly. Pas de table de correspondance : une simple recherche par
-// uuid POS → code.
+// ⚠ CE MODULE NE CONSULTE AUCUN CATALOGUE, ET C'EST VOULU (2026-08-21).
+// `inventaire_lignes.produit_id` est un uuid GÉNÉRÉ SUR LE MINI-PC : chaque
+// site sème `produits_inventaire` avec ses propres uuid (CATALOGUE_INVENTAIRE
+// ne porte que des `code`). Le cloud ne peut donc traduire ces uuid avec rien.
+// Le site fige désormais code/nom/prix sur chaque ligne (migration 0026) et ce
+// module ne lit que ce snapshot — `produits_inventaire.code` (POS) reste égal à
+// `inventaire_lignes.produit_id` (Samtrackly), mais c'est le site qui l'affirme,
+// au moment du comptage, avec le prix qu'il a réellement appliqué.
 // ──────────────────────────────────────────────────────────────────────────────
 
 /** Nombre sûr : une donnée absente ou non numérique vaut 0, jamais NaN. */
@@ -153,14 +157,12 @@ export function construireInventaireShift(
 // Le détail : inventaire_lignes
 // ---------------------------------------------------------------------------
 
-export interface ProduitInfo {
-  code: string;
-  nom: string;
-  prix: number;
-}
-
 export interface LigneInventairePosCloud {
   produit_id: string;
+  /** Snapshot figé par le site (migration 0026). Null = site pas encore migré. */
+  produit_code: string | null;
+  produit_nom: string | null;
+  produit_prix: string | number | null;
   stock_initial: string | number | null;
   entrees: string | number | null;
   sorties: string | number | null;
@@ -212,25 +214,26 @@ function aUneExplicationUtile(explication: string | null, quantiteExpliquee: num
  */
 export function construireLignesInventaire(
   lignes: LigneInventairePosCloud[],
-  produits: Map<string, ProduitInfo>,
   invShiftId: string,
   serviceValideNormalement: boolean,
 ): LigneInventaireDetail[] {
   const resultat: LigneInventaireDetail[] = [];
 
   for (const l of lignes) {
-    const produit = produits.get(l.produit_id);
-    if (!produit) continue;
+    // Sans snapshot, la ligne vient d'un site antérieur à la migration 0026 :
+    // son uuid n'est traduisible nulle part. L'écarter isolément est sans
+    // gravité ; les écarter TOUTES est détecté par `correspondanceRompue`.
+    if (!l.produit_code) continue;
 
     const ecart = nOuNull(l.ecart);
     const quantiteExpliquee = n(l.quantite_expliquee);
     const montantDeduit = serviceValideNormalement
-      ? manqueChiffre(ecart, quantiteExpliquee, produit.prix)
+      ? manqueChiffre(ecart, quantiteExpliquee, n(l.produit_prix))
       : 0;
 
     const ligne: LigneInventaireDetail = {
       inventaire_id: invShiftId,
-      produit_id: produit.code,
+      produit_id: l.produit_code,
       stock_initial: n(l.stock_initial),
       entrees: n(l.entrees),
       sorties: n(l.sorties),
@@ -257,10 +260,9 @@ export function construireLignesInventaire(
 /**
  * La correspondance uuid POS → code produit est-elle rompue ?
  *
- * Vrai quand le POS a compté des lignes mais qu'AUCUNE n'a pu être traduite :
- * le catalogue `produits_inventaire` du cloud est vide, ou ses uuid ne sont pas
- * ceux du site (chaque mini-PC sème son catalogue avec ses propres uuid — voir
- * seed.ts, `CATALOGUE_INVENTAIRE` n'a pas d'`id`).
+ * Vrai quand le POS a compté des lignes mais qu'AUCUNE ne porte de snapshot :
+ * le site n'a pas encore la migration 0026, ou sa montée filtre encore les
+ * colonnes `produit_*` (listes blanches de `tables.ts`).
  *
  * Constaté en production le 2026-08-21 : 4 services ont écrit un en-tête
  * « validé, 0 à déduire » alors que leurs 34 lignes avaient toutes été
@@ -284,6 +286,8 @@ const CODE_DARINA = 'b7';
 
 export interface EntreeStockCloud {
   produit_id: string;
+  produit_code: string | null;
+  produit_nom: string | null;
   quantite: string | number;
   fournisseur: string | null;
 }
@@ -308,21 +312,19 @@ export interface LigneEntreeShift {
  */
 export function construireEntreesShift(
   entrees: EntreeStockCloud[],
-  produits: Map<string, ProduitInfo>,
   invShiftId: string,
 ): LigneEntreeShift[] {
   const resultat: LigneEntreeShift[] = [];
 
   for (const e of entrees) {
-    const produit = produits.get(e.produit_id);
-    if (!produit || produit.code === CODE_DARINA) continue;
+    if (!e.produit_code || e.produit_code === CODE_DARINA) continue;
 
     resultat.push({
       inventaire_id: invShiftId,
       fournisseur_id: null,
       fournisseur_nom: e.fournisseur && e.fournisseur.trim() ? e.fournisseur : null,
-      produit_id: produit.code,
-      produit_nom: produit.nom,
+      produit_id: e.produit_code,
+      produit_nom: e.produit_nom ?? e.produit_code,
       quantite: n(e.quantite),
       source: 'reception',
     });

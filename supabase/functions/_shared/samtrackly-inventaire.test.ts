@@ -15,7 +15,6 @@ import {
   construireLignesInventaire,
   construireEntreesShift,
   correspondanceRompue,
-  type ProduitInfo,
 } from './samtrackly-inventaire.ts';
 
 describe('typeShiftDe — le créneau le plus proche', () => {
@@ -86,16 +85,11 @@ describe('construireInventaireShift — la ligne d’en-tête', () => {
 });
 
 describe('construireLignesInventaire — le détail par produit', () => {
-  const PRODUITS = new Map<string, ProduitInfo>([
-    ['uuid-p1', { code: 'p1', nom: 'Pain chawarma', prix: 2_500 }],
-    ['uuid-po8', { code: 'po8', nom: 'Total poulet', prix: 8_000 }],
-  ]);
-
   test('produit_id devient le code, pas l’uuid POS', () => {
     const lignes = [
-      { produit_id: 'uuid-p1', stock_initial: '10', entrees: '0', sorties: '8', stock_compte: '2', ecart: '0', quantite_expliquee: '0', explication: null },
+      { produit_id: 'uuid-p1', produit_code: 'p1', produit_nom: 'Pain chawarma', produit_prix: 2_500, stock_initial: '10', entrees: '0', sorties: '8', stock_compte: '2', ecart: '0', quantite_expliquee: '0', explication: null },
     ];
-    const [l] = construireLignesInventaire(lignes, PRODUITS, 'inv-shift-1', true);
+    const [l] = construireLignesInventaire(lignes, 'inv-shift-1', true);
     assert.equal(l.produit_id, 'p1');
     assert.equal(l.inventaire_id, 'inv-shift-1');
   });
@@ -103,89 +97,92 @@ describe('construireLignesInventaire — le détail par produit', () => {
   test('manquant non expliqué chiffré : même formule que calcul.ts (écart négatif − expliqué, jamais sous zéro, arrondi au FCFA)', () => {
     // po8 : écart −3, rien d'expliqué, prix 8000 → 3 × 8000 = 24 000
     const lignes = [
-      { produit_id: 'uuid-po8', stock_initial: '20', entrees: '0', sorties: '17', stock_compte: '17', ecart: '-3', quantite_expliquee: '0', explication: null },
+      { produit_id: 'uuid-po8', produit_code: 'po8', produit_nom: 'Total poulet', produit_prix: 8_000, stock_initial: '20', entrees: '0', sorties: '17', stock_compte: '17', ecart: '-3', quantite_expliquee: '0', explication: null },
     ];
-    const [l] = construireLignesInventaire(lignes, PRODUITS, 'inv-shift-1', true);
+    const [l] = construireLignesInventaire(lignes, 'inv-shift-1', true);
     assert.equal(l.montant_deduit, 24_000);
   });
 
   test('une quantité expliquée réduit le manquant chiffré avant l’arrondi', () => {
     // écart −3, 1 unité expliquée → 2 restantes × 8000 = 16 000
     const lignes = [
-      { produit_id: 'uuid-po8', stock_initial: '20', entrees: '0', sorties: '17', stock_compte: '17', ecart: '-3', quantite_expliquee: '1', explication: 'cassé' },
+      { produit_id: 'uuid-po8', produit_code: 'po8', produit_nom: 'Total poulet', produit_prix: 8_000, stock_initial: '20', entrees: '0', sorties: '17', stock_compte: '17', ecart: '-3', quantite_expliquee: '1', explication: 'cassé' },
     ];
-    const [l] = construireLignesInventaire(lignes, PRODUITS, 'inv-shift-1', true);
+    const [l] = construireLignesInventaire(lignes, 'inv-shift-1', true);
     assert.equal(l.montant_deduit, 16_000);
   });
 
   test('un surplus (écart positif) ne déduit jamais rien', () => {
     const lignes = [
-      { produit_id: 'uuid-p1', stock_initial: '10', entrees: '0', sorties: '5', stock_compte: '6', ecart: '1', quantite_expliquee: '0', explication: null },
+      { produit_id: 'uuid-p1', produit_code: 'p1', produit_nom: 'Pain chawarma', produit_prix: 2_500, stock_initial: '10', entrees: '0', sorties: '5', stock_compte: '6', ecart: '1', quantite_expliquee: '0', explication: null },
     ];
-    const [l] = construireLignesInventaire(lignes, PRODUITS, 'inv-shift-1', true);
+    const [l] = construireLignesInventaire(lignes, 'inv-shift-1', true);
     assert.equal(l.montant_deduit, 0);
   });
 
   test('inventaire débloqué → montant_deduit à zéro sur toutes les lignes, même avec un écart réel', () => {
     const lignes = [
-      { produit_id: 'uuid-po8', stock_initial: '20', entrees: '0', sorties: '17', stock_compte: '17', ecart: '-3', quantite_expliquee: '0', explication: null },
+      { produit_id: 'uuid-po8', produit_code: 'po8', produit_nom: 'Total poulet', produit_prix: 8_000, stock_initial: '20', entrees: '0', sorties: '17', stock_compte: '17', ecart: '-3', quantite_expliquee: '0', explication: null },
     ];
-    const [l] = construireLignesInventaire(lignes, PRODUITS, 'inv-shift-1', false);
+    const [l] = construireLignesInventaire(lignes, 'inv-shift-1', false);
     assert.equal(l.montant_deduit, 0);
   });
 
   test('une explication avec écart réel → explication_statut en_attente, MÊME sur un inventaire débloqué', () => {
     const lignes = [
-      { produit_id: 'uuid-po8', stock_initial: '20', entrees: '0', sorties: '17', stock_compte: '17', ecart: '-3', quantite_expliquee: '1', explication: 'cassé' },
+      { produit_id: 'uuid-po8', produit_code: 'po8', produit_nom: 'Total poulet', produit_prix: 8_000, stock_initial: '20', entrees: '0', sorties: '17', stock_compte: '17', ecart: '-3', quantite_expliquee: '1', explication: 'cassé' },
     ];
-    const [validee] = construireLignesInventaire(lignes, PRODUITS, 'inv-shift-1', true);
-    const [debloquee] = construireLignesInventaire(lignes, PRODUITS, 'inv-shift-1', false);
+    const [validee] = construireLignesInventaire(lignes, 'inv-shift-1', true);
+    const [debloquee] = construireLignesInventaire(lignes, 'inv-shift-1', false);
     assert.equal(validee.explication_statut, 'en_attente');
     assert.equal(debloquee.explication_statut, 'en_attente', 'le déblocage manager évite la retenue automatique, pas la revue du vérificateur');
   });
 
   test('un écart nul avec une explication ne déclenche pas la revue (rien à revoir)', () => {
     const lignes = [
-      { produit_id: 'uuid-p1', stock_initial: '10', entrees: '0', sorties: '10', stock_compte: '10', ecart: '0', quantite_expliquee: '0', explication: 'texte sans objet' },
+      { produit_id: 'uuid-p1', produit_code: 'p1', produit_nom: 'Pain chawarma', produit_prix: 2_500, stock_initial: '10', entrees: '0', sorties: '10', stock_compte: '10', ecart: '0', quantite_expliquee: '0', explication: 'texte sans objet' },
     ];
-    const [l] = construireLignesInventaire(lignes, PRODUITS, 'inv-shift-1', true);
+    const [l] = construireLignesInventaire(lignes, 'inv-shift-1', true);
     assert.equal(l.explication_statut, undefined);
   });
 
   test('sans explication et sans écart → pas de statut du tout', () => {
     const lignes = [
-      { produit_id: 'uuid-p1', stock_initial: '10', entrees: '0', sorties: '10', stock_compte: '10', ecart: '0', quantite_expliquee: '0', explication: null },
+      { produit_id: 'uuid-p1', produit_code: 'p1', produit_nom: 'Pain chawarma', produit_prix: 2_500, stock_initial: '10', entrees: '0', sorties: '10', stock_compte: '10', ecart: '0', quantite_expliquee: '0', explication: null },
     ];
-    const [l] = construireLignesInventaire(lignes, PRODUITS, 'inv-shift-1', true);
+    const [l] = construireLignesInventaire(lignes, 'inv-shift-1', true);
     assert.equal(l.explication_statut, undefined);
   });
 
-  test('un produit_id absent du catalogue (supprimé entretemps) est écarté plutôt que de faire planter le transfert', () => {
+  test('une ligne sans snapshot (montée par un site pas encore migré) est écartée plutôt que de faire planter le transfert', () => {
     const lignes = [
-      { produit_id: 'uuid-inconnu', stock_initial: '1', entrees: '0', sorties: '1', stock_compte: '0', ecart: '0', quantite_expliquee: '0', explication: null },
+      { produit_id: 'uuid-vieux', produit_code: null, produit_nom: null, produit_prix: null, stock_initial: '1', entrees: '0', sorties: '1', stock_compte: '0', ecart: '0', quantite_expliquee: '0', explication: null },
     ];
-    const resultat = construireLignesInventaire(lignes, PRODUITS, 'inv-shift-1', true);
+    const resultat = construireLignesInventaire(lignes, 'inv-shift-1', true);
     assert.equal(resultat.length, 0);
+  });
+
+  test('le prix figé sur la ligne l’emporte : un changement de catalogue après coup ne rechiffre pas un manquant déjà compté', () => {
+    const lignes = [
+      { produit_id: 'uuid-po8', produit_code: 'po8', produit_nom: 'Total poulet', produit_prix: 8_000, stock_initial: '20', entrees: '0', sorties: '17', stock_compte: '17', ecart: '-2', quantite_expliquee: '0', explication: null },
+    ];
+    const [l] = construireLignesInventaire(lignes, 'inv-shift-1', true);
+    assert.equal(l.montant_deduit, 16_000);
   });
 
   test('entrees est reprise telle quelle depuis la ligne figée du POS', () => {
     const lignes = [
-      { produit_id: 'uuid-p1', stock_initial: '10', entrees: '5', sorties: '8', stock_compte: '7', ecart: '0', quantite_expliquee: '0', explication: null },
+      { produit_id: 'uuid-p1', produit_code: 'p1', produit_nom: 'Pain chawarma', produit_prix: 2_500, stock_initial: '10', entrees: '5', sorties: '8', stock_compte: '7', ecart: '0', quantite_expliquee: '0', explication: null },
     ];
-    const [l] = construireLignesInventaire(lignes, PRODUITS, 'inv-shift-1', true);
+    const [l] = construireLignesInventaire(lignes, 'inv-shift-1', true);
     assert.equal(l.entrees, 5);
   });
 });
 
 describe('construireEntreesShift — les réceptions détaillées', () => {
-  const PRODUITS = new Map<string, ProduitInfo>([
-    ['uuid-p1', { code: 'p1', nom: 'Pain chawarma', prix: 2_500 }],
-    ['uuid-b7', { code: 'b7', nom: 'Darina', prix: 0 }],
-  ]);
-
   test('une entrée normale devient une ligne entrees_shift avec le code produit', () => {
-    const entrees = [{ produit_id: 'uuid-p1', quantite: '20', fournisseur: 'Boulangerie Awa' }];
-    const [l] = construireEntreesShift(entrees, PRODUITS, 'inv-shift-1');
+    const entrees = [{ produit_id: 'uuid-p1', produit_code: 'p1', produit_nom: 'Pain chawarma', produit_prix: 2_500, quantite: '20', fournisseur: 'Boulangerie Awa' }];
+    const [l] = construireEntreesShift(entrees, 'inv-shift-1');
     assert.equal(l.produit_id, 'p1');
     assert.equal(l.produit_nom, 'Pain chawarma');
     assert.equal(l.quantite, 20);
@@ -197,27 +194,27 @@ describe('construireEntreesShift — les réceptions détaillées', () => {
 
   test('le produit Darina (b7) est exclu : son entrée vit dans inventaire_lignes.entrees, pas ici', () => {
     const entrees = [
-      { produit_id: 'uuid-p1', quantite: '20', fournisseur: null },
-      { produit_id: 'uuid-b7', quantite: '4', fournisseur: null },
+      { produit_id: 'uuid-p1', produit_code: 'p1', produit_nom: 'Pain chawarma', produit_prix: 2_500, quantite: '20', fournisseur: null },
+      { produit_id: 'uuid-b7', produit_code: 'b7', produit_nom: 'Darina', quantite: '4', fournisseur: null },
     ];
-    const resultat = construireEntreesShift(entrees, PRODUITS, 'inv-shift-1');
+    const resultat = construireEntreesShift(entrees, 'inv-shift-1');
     assert.equal(resultat.length, 1);
     assert.equal(resultat[0].produit_id, 'p1');
   });
 
   test('un fournisseur absent devient null, jamais une chaîne vide', () => {
-    const entrees = [{ produit_id: 'uuid-p1', quantite: '3', fournisseur: null }];
-    const [l] = construireEntreesShift(entrees, PRODUITS, 'inv-shift-1');
+    const entrees = [{ produit_id: 'uuid-p1', produit_code: 'p1', produit_nom: 'Pain chawarma', produit_prix: 2_500, quantite: '3', fournisseur: null }];
+    const [l] = construireEntreesShift(entrees, 'inv-shift-1');
     assert.equal(l.fournisseur_nom, null);
   });
 });
 
 describe('correspondanceRompue — le garde-fou du 2026-08-21', () => {
-  test('34 lignes comptées, 0 traduite → rompue (catalogue cloud vide)', () => {
+  test('34 lignes comptées, 0 traduite → rompue (site pas encore migré, aucun snapshot)', () => {
     assert.equal(correspondanceRompue(34, 0), true);
   });
 
-  test('34 comptées, 33 traduites → normale : un produit retiré du catalogue s’écarte sans drame', () => {
+  test('34 comptées, 33 traduites → normale : une ligne isolée sans snapshot s’écarte sans drame', () => {
     assert.equal(correspondanceRompue(34, 33), false);
   });
 

@@ -54,7 +54,6 @@ import {
   construireEntreesShift,
   correspondanceRompue,
   type InventaireServiceCloud,
-  type ProduitInfo,
 } from '../_shared/samtrackly-inventaire.ts';
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -137,6 +136,9 @@ interface InventaireDuService {
   inventaire: InventaireServiceCloud;
   lignes: {
     produit_id: string;
+    produit_code: string | null;
+    produit_nom: string | null;
+    produit_prix: string | number | null;
     stock_initial: string | number | null;
     entrees: string | number | null;
     sorties: string | number | null;
@@ -145,7 +147,13 @@ interface InventaireDuService {
     quantite_expliquee: string | number | null;
     explication: string | null;
   }[];
-  entrees: { produit_id: string; quantite: string | number; fournisseur: string | null }[];
+  entrees: {
+    produit_id: string;
+    produit_code: string | null;
+    produit_nom: string | null;
+    quantite: string | number;
+    fournisseur: string | null;
+  }[];
 }
 
 /**
@@ -167,11 +175,11 @@ async function lireInventaireDuService(
   const [{ data: lignes }, { data: entrees }] = await Promise.all([
     admin
       .from('inventaire_lignes')
-      .select('produit_id, stock_initial, entrees, sorties, stock_compte, ecart, quantite_expliquee, explication')
+      .select('produit_id, produit_code, produit_nom, produit_prix, stock_initial, entrees, sorties, stock_compte, ecart, quantite_expliquee, explication')
       .eq('inventaire_id', inventaire.id),
     admin
       .from('entrees_stock')
-      .select('produit_id, quantite, fournisseur')
+      .select('produit_id, produit_code, produit_nom, quantite, fournisseur')
       .eq('inventaire_id', inventaire.id),
   ]);
 
@@ -232,7 +240,6 @@ async function transfererService(
   service: ServiceCloud & { restaurant_id: string; caissier_id: string | null },
   restaurantStId: string,
   dejaTransfere: boolean,
-  produitsParId: Map<string, ProduitInfo>,
 ): Promise<{
   pointId: string;
   journee: string;
@@ -318,12 +325,11 @@ async function transfererService(
     // produirait un inventaire « validé, 0 à déduire » sans une seule ligne,
     // qui lève la bannière « Inventaire du jour requis » en affirmant qu'il n'y
     // a rien à retenir. Mieux vaut un service en échec, visible et rejouable.
-    const nbTraduisibles = inventaireDuService.lignes
-      .filter((l) => produitsParId.has(l.produit_id)).length;
+    const nbTraduisibles = inventaireDuService.lignes.filter((l) => l.produit_code).length;
     if (correspondanceRompue(inventaireDuService.lignes.length, nbTraduisibles)) {
       throw new ErreurSamtrackly(
-        `Inventaire illisible : ${inventaireDuService.lignes.length} produits comptés, aucun `
-        + `retrouvé dans produits_inventaire du cloud (${produitsParId.size} produit(s) au catalogue). `
+        `Inventaire illisible : ${inventaireDuService.lignes.length} produits comptés, aucun ne `
+        + `porte de snapshot produit. Ce site n'a pas encore la migration locale 0026. `
         + `Rien n'a été écrit.`,
       );
     }
@@ -352,7 +358,6 @@ async function transfererService(
       && !inventaireDuService.inventaire.debloque_par;
     const lignesDetail = construireLignesInventaire(
       inventaireDuService.lignes,
-      produitsParId,
       invShiftId,
       serviceValideNormalement,
     );
@@ -365,7 +370,7 @@ async function transfererService(
     // annuler ce qui vient d'être écrit au-dessus — même principe que le
     // rattrapage journal plus bas dans ce fichier.
     try {
-      const lignesEntrees = construireEntreesShift(inventaireDuService.entrees, produitsParId, invShiftId);
+      const lignesEntrees = construireEntreesShift(inventaireDuService.entrees, invShiftId);
       await supprimer(`entrees_shift?inventaire_id=eq.${invShiftId}`);
       await inserer('entrees_shift', lignesEntrees as unknown as Record<string, unknown>[]);
     } catch {
@@ -397,15 +402,6 @@ Deno.serve(async (req) => {
 
   const admin = clientAdmin();
   const bilan: Bilan = { transferes: 0, echecs: 0, ignores: 0, details: [] };
-
-  // Chargé une seule fois par passage (catalogue stable, ~50 produits) plutôt
-  // que refait à chaque service — même raison que `configParResto` plus bas.
-  const { data: catalogueInventaire } = await admin
-    .from('produits_inventaire')
-    .select('id, code, nom, prix');
-  const produitsParId = new Map<string, ProduitInfo>(
-    (catalogueInventaire ?? []).map((p) => [p.id as string, { code: p.code, nom: p.nom, prix: p.prix } as ProduitInfo]),
-  );
 
   // ── Rattrapage automatique des présences en attente d'une fiche RH ────────
   // Un service déjà transféré peut avoir des présences manquantes parce qu'un
@@ -534,7 +530,7 @@ Deno.serve(async (req) => {
       // Un service déjà abouti une fois est un REJEU : il retourne sur sa
       // propre journée, jamais relocalisé. Voir journeePourTransfert.
       const r = await transfererService(
-        admin, service as never, restaurantStId, dejaAbouti.has(service.id), produitsParId,
+        admin, service as never, restaurantStId, dejaAbouti.has(service.id),
       );
       await admin.from('samtrackly_transferts').upsert({
         service_id: service.id,

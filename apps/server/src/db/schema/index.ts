@@ -13,6 +13,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgSequence,
   pgTable,
@@ -34,8 +35,16 @@ export const rolePos = pgEnum('role_pos', [
   'CAISSIER',
   'SERVEUR',
   'CUISINE',
+  // Migration 0024 : le comptoir et l'entretien ne sont ni des caissiers ni des
+  // cuisiniers. `SUPERVISEUR` reste volontairement absent — ce rôle n'a jamais
+  // existé que dans la table `roles`, la colonne `utilisateurs.role` étant un
+  // vestige de compatibilité dont `role_id` est la source de vérité.
+  'COMPTOIRISTE',
+  'ENTRETIEN',
 ]);
 export const posteCuisine = pgEnum('poste_cuisine', ['CUISINIER', 'PIZZAIOLO', 'COMPTOIRISTE']);
+// Poste d'impression (routage des tickets) : chaque poste ↔ une imprimante locale.
+export const posteImpression = pgEnum('poste_impression', ['CAISSE', 'CUISINE', 'BAR']);
 // Disponibilité d'un employé (RH légère, gérée depuis Réglages › Équipe).
 export const disponibiliteEmploye = pgEnum('disponibilite_employe', ['PRESENT', 'MALADE', 'CONGE', 'PERMISSION']);
 export const typeCommande = pgEnum('type_commande', ['SUR_PLACE', 'EMPORTER', 'LIVRAISON']);
@@ -115,6 +124,9 @@ export const utilisateurs = pgTable('utilisateurs', {
   champs_manuels: jsonb('champs_manuels').notNull().default(sql`'[]'::jsonb`),
   // Présence / absence RH (ne bloque pas la connexion, informatif pour l'équipe).
   disponibilite: disponibiliteEmploye('disponibilite').notNull().default('PRESENT'),
+  // Salaire journalier proposé à l'écran Dépenses › Paie (modifiable, avec
+  // motif obligatoire). NULL = employé qui n'est pas payé à la journée.
+  taux_journalier: integer('taux_journalier'),
   pin_hash: text('pin_hash').notNull(),
   telephone: text('telephone'),
   actif: boolean('actif').notNull().default(true),
@@ -137,6 +149,14 @@ export const categories = pgTable('categories', {
   nom: text('nom').notNull(),
   ordre: smallint('ordre').notNull().default(0),
   actif: boolean('actif').notNull().default(true),
+  /**
+   * Catégorie réservée à un ou plusieurs partenaires de livraison (migration
+   * 0023). NULL = catégorie normale, visible partout. Sinon, elle n'apparaît
+   * que sur une commande dont le `partenaire` est dans la liste : c'est ce qui
+   * empêche « Glovo spéciale » de s'afficher au client qui scanne un QR de
+   * table ou au serveur qui prend une commande en salle.
+   */
+  partenaires: text('partenaires').array(),
 });
 
 export const articles = pgTable('articles', {
@@ -184,6 +204,35 @@ export const supplements = pgTable('supplements', {
   article_id: uuid('article_id').notNull().references(() => articles.id, { onDelete: 'cascade' }),
   nom: text('nom').notNull(),
   prix: integer('prix').notNull(),
+});
+
+/**
+ * Options réutilisables (migration 0020). Remplacent groupes_options/options et
+ * supplements côté application — ces trois tables restent déclarées uniquement
+ * parce que la descente cloud les alimente encore.
+ * Tables LOCALES : volontairement absentes de sync/descente.ts, une synchro du
+ * siège ne les écrase donc jamais (même principe que disponibilite_locale).
+ */
+export const optionsCatalogue = pgTable('options_catalogue', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  nom: text('nom').notNull(),
+  /** 0 = option gratuite (pâte à l'ail), > 0 = option payante (fromage). */
+  prix: integer('prix').notNull().default(0),
+  actif: boolean('actif').notNull().default(true),
+  ordre: smallint('ordre').notNull().default(0),
+  updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [check('options_catalogue_prix_check', sql`${t.prix} >= 0`)]);
+
+/**
+ * Liaison d'une option à une CATÉGORIE entière ou à un ARTICLE précis
+ * (exactement l'un des deux — contrainte CHECK côté base).
+ * Les options d'un article = celles de sa catégorie UNION les siennes.
+ */
+export const optionsLiaisons = pgTable('options_liaisons', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  option_id: uuid('option_id').notNull().references(() => optionsCatalogue.id, { onDelete: 'cascade' }),
+  categorie_id: uuid('categorie_id').references(() => categories.id, { onDelete: 'cascade' }),
+  article_id: uuid('article_id').references(() => articles.id, { onDelete: 'cascade' }),
 });
 
 export const combos = pgTable('combos', {
@@ -276,6 +325,9 @@ export const servicesCaisse = pgTable('services_caisse', {
   reconciliation: jsonb('reconciliation'),
   vente_totale: integer('vente_totale'),
   total_systeme: integer('total_systeme'),
+  // Verrou de clôture (§ 6.10) : sans inventaire validé, pas de clôture.
+  // Appliqué CÔTÉ SERVEUR — l'UI ne fait que le refléter.
+  inventaire_valide: boolean('inventaire_valide').notNull().default(false),
   rapport_z: jsonb('rapport_z'),
 }, (t) => [
   uniqueIndex('un_service_ouvert_par_caissier')
@@ -291,6 +343,13 @@ export const equipeService = pgTable('equipe_service', {
   service_id: uuid('service_id').notNull().references(() => servicesCaisse.id, { onDelete: 'cascade' }),
   utilisateur_id: uuid('utilisateur_id').notNull().references(() => utilisateurs.id),
   poste_jour: text('poste_jour').notNull(),
+  // Heure d'ARRIVÉE = heure du clic sur « Pointer » (§ 6.7). Une heure saisie à
+  // la main est une heure négociable ; le clic est daté par le système.
+  pointe_le: timestamp('pointe_le', { withTimezone: true }),
+  // Départ (§ 6.8) : NULL = pas encore tranché, true = reste, false = parti.
+  // À la clôture, tout ce qui n'est pas `true` est enregistré comme PARTI —
+  // le caissier ne marque donc que les exceptions.
+  reste: boolean('reste'),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex('equipe_service_service_utilisateur_key').on(t.service_id, t.utilisateur_id)]);
 
@@ -316,6 +375,10 @@ export const commandes = pgTable('commandes', {
     .notNull()
     .unique()
     .default(sql`nextval('seq_numero_ticket')`),
+  // Code court lisible (ex. « SP215 ») imprimé sur reçu + bons cuisine. Non
+  // séquentiel (préfixe type + 3 chiffres aléatoires), unique dans le service.
+  // Le numero_ticket reste la référence continue d'audit.
+  code_commande: text('code_commande'),
   type: typeCommande('type').notNull(),
   table_id: uuid('table_id').references(() => tablesSalle.id),
   partenaire: text('partenaire'),
@@ -333,6 +396,11 @@ export const commandes = pgTable('commandes', {
   remise_montant: integer('remise_montant').notNull().default(0),
   remise_par: uuid('remise_par').references(() => utilisateurs.id),
   remise_motif: text('remise_motif'),
+  // Kdo : repas offert, clôturé PAYEE sans aucune ligne de paiement. Il compte
+  // dans la vente du shift (comme une livraison Yango) mais jamais dans le
+  // théorique espèces, qui ne se calcule que sur les paiements encaissés.
+  offert: boolean('offert').notNull().default(false),
+  motif_offert: text('motif_offert'),
   promo_id: uuid('promo_id').references(() => promotions.id),
   promo_montant: integer('promo_montant').notNull().default(0),
   total: integer('total').notNull().default(0),
@@ -341,9 +409,20 @@ export const commandes = pgTable('commandes', {
 }, (t) => [
   index('idx_commandes_service').on(t.service_id),
   index('idx_commandes_jour').on(t.created_at),
+  // Le code court est unique par service (retry côté serveur en cas de collision).
+  uniqueIndex('uniq_code_commande_service')
+    .on(t.service_id, t.code_commande)
+    .where(sql`${t.code_commande} IS NOT NULL`),
   check(
     'remise_motif_obligatoire',
     sql`${t.remise_montant} = 0 OR (${t.remise_motif} IS NOT NULL AND ${t.remise_par} IS NOT NULL)`,
+  ),
+  // Un Kdo ne peut pas être clôturé sans dire pourquoi il a été offert. La règle
+  // est appliquée côté serveur ; ce CHECK est la ceinture de sécurité (un cadeau
+  // sans motif est exactement ce qui rend un abus indétectable).
+  check(
+    'motif_offert_obligatoire',
+    sql`${t.offert} = false OR ${t.statut} <> 'PAYEE' OR ${t.motif_offert} IS NOT NULL`,
   ),
 ]);
 
@@ -390,6 +469,150 @@ export const paiements = pgTable('paiements', {
   service_id: uuid('service_id').notNull().references(() => servicesCaisse.id),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [check('paiements_montant_check', sql`${t.montant} > 0`)]);
+
+// ---------------------------------------------------------------------------
+// 6 bis. Dépenses du service (DESIGN_V2 § 6.8)
+// `services_caisse.depenses` en devient la SOMME : la caissière ne retape rien
+// à la clôture, où la ligne passe en lecture seule.
+// ---------------------------------------------------------------------------
+export const depenses = pgTable('depenses', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  service_id: uuid('service_id').notNull().references(() => servicesCaisse.id, { onDelete: 'cascade' }),
+  categorie: text('categorie').notNull(),
+  libelle: text('libelle').notNull(),
+  montant: integer('montant').notNull(),
+  /** Qui a été payé (salaire, encouragement). */
+  agent_id: uuid('agent_id').references(() => utilisateurs.id),
+  saisi_par: uuid('saisi_par').notNull().references(() => utilisateurs.id),
+  /**
+   * Ligne née d'un paiement réel : NON SUPPRIMABLE. L'effacer ferait
+   * disparaître de l'argent réellement sorti du tiroir.
+   */
+  auto: boolean('auto').notNull().default(false),
+  /** Obligatoire quand le montant payé s'écarte du taux de la fiche. */
+  motif: text('motif'),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('idx_depenses_service').on(t.service_id),
+  uniqueIndex('un_salaire_par_agent_et_service')
+    .on(t.service_id, t.agent_id)
+    .where(sql`categorie = 'SALAIRES'`),
+  check('depenses_categorie_check', sql`${t.categorie} IN ('MARCHE','LEGUMES','FRUITS','ANNEXES','SALAIRES','ENCOURAGEMENTS')`),
+  check('depenses_montant_check', sql`${t.montant} > 0`),
+  check('depenses_libelle_check', sql`length(btrim(${t.libelle})) > 0`),
+  check('depenses_agent_check', sql`${t.categorie} NOT IN ('SALAIRES','ENCOURAGEMENTS') OR ${t.agent_id} IS NOT NULL`),
+]);
+
+// ---------------------------------------------------------------------------
+// 6 ter. Inventaire de fin de service (DESIGN_V2 § 6.9)
+// Sans inventaire validé, pas de clôture.
+// ---------------------------------------------------------------------------
+/**
+ * Catalogue de COMPTAGE (celui de SamerTrackly), distinct du catalogue de
+ * VENTE (`articles`) : les lignes de consommation (« Manaïche (100g) ») et les
+ * totaux dérivés (« Total Fromage ») ne sont pas vendables. `article_id` fait
+ * le pont quand il existe — c'est lui qui porte les sorties automatiques.
+ * Table LOCALE : absente de sync/descente.ts.
+ */
+export const produitsInventaire = pgTable('produits_inventaire', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  code: text('code').notNull().unique(),
+  categorie: text('categorie').notNull(),
+  nom: text('nom').notNull(),
+  /** Prix de vente : sert à chiffrer le manquant non expliqué. */
+  prix: integer('prix').notNull().default(0),
+  unite: text('unite').notNull().default('u'),
+  role: text('role').notNull().default('COMPTE'),
+  /** Grammes de fromage, boules de glace, portions par sachet — selon le rôle. */
+  ratio: numeric('ratio', { precision: 12, scale: 3 }),
+  ordre: smallint('ordre').notNull().default(0),
+  actif: boolean('actif').notNull().default(true),
+}, (t) => [
+  check('produits_inventaire_categorie_check', sql`${t.categorie} IN ('PAIN','POUL','APER','PLAT','FROM','BOIS','GLAC','FRIT')`),
+  check('produits_inventaire_prix_check', sql`${t.prix} >= 0`),
+  check(
+    'produits_inventaire_role_check',
+    sql`${t.role} IN ('COMPTE','ENTREE','AUTO_ENT','CONSO','CONSO_POULET','CONSO_FROMAGE','CONSO_GLACE','CONSO_FRITES','TOTAL_POULET','TOTAL_FROMAGE','TOTAL_GLACE','TOTAL_FRITES','DARINA')`,
+  ),
+]);
+
+export const inventairesService = pgTable('inventaires_service', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  service_id: uuid('service_id').notNull().unique().references(() => servicesCaisse.id, { onDelete: 'cascade' }),
+  valide: boolean('valide').notNull().default(false),
+  valide_le: timestamp('valide_le', { withTimezone: true }),
+  valide_par: uuid('valide_par').references(() => utilisateurs.id),
+  /** Issue de secours manager (PIN + motif), tracée au journal d'audit. */
+  debloque_par: uuid('debloque_par').references(() => utilisateurs.id),
+  debloque_le: timestamp('debloque_le', { withTimezone: true }),
+  debloque_motif: text('debloque_motif'),
+  /** Manquant non expliqué chiffré : INFORMATION manager, jamais une retenue. */
+  montant_manquant: integer('montant_manquant').notNull().default(0),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check('inventaires_service_manquant_check', sql`${t.montant_manquant} >= 0`),
+  check('inventaires_service_deblocage_check', sql`${t.debloque_par} IS NULL OR ${t.debloque_motif} IS NOT NULL`),
+]);
+
+export const inventaireLignes = pgTable('inventaire_lignes', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  inventaire_id: uuid('inventaire_id').notNull().references(() => inventairesService.id, { onDelete: 'cascade' }),
+  produit_id: uuid('produit_id').notNull().references(() => produitsInventaire.id, { onDelete: 'cascade' }),
+  /** Stock final du service précédent — repris, jamais modifiable. */
+  stock_initial: numeric('stock_initial', { precision: 12, scale: 2 }).notNull().default('0'),
+  entrees: numeric('entrees', { precision: 12, scale: 2 }).notNull().default('0'),
+  sorties: numeric('sorties', { precision: 12, scale: 2 }).notNull().default('0'),
+  /** La SEULE donnée que le caissier saisit. NULL = pas encore compté. */
+  stock_compte: numeric('stock_compte', { precision: 12, scale: 2 }),
+  ecart: numeric('ecart', { precision: 12, scale: 2 }),
+  /** Snapshot produit (migration 0026) : le pont vers SamerTrackly ne peut pas
+   *  traduire `produit_id` — chaque site a ses propres uuid. Rempli par trigger. */
+  produit_code: text('produit_code'),
+  produit_nom: text('produit_nom'),
+  /** Le prix qui a servi au comptage, pas celui du catalogue au transfert. */
+  produit_prix: integer('produit_prix'),
+  quantite_expliquee: numeric('quantite_expliquee', { precision: 12, scale: 2 }).notNull().default('0'),
+  explication: text('explication'),
+}, (t) => [
+  uniqueIndex('inventaire_lignes_produit_key').on(t.inventaire_id, t.produit_id),
+  check('inventaire_lignes_expliquee_check', sql`${t.quantite_expliquee} >= 0`),
+]);
+
+/**
+ * Recettes d'inventaire (migration 0022) : ce qu'un article de vente consomme.
+ * Le lien produit de comptage ↔ article est un-à-plusieurs DANS LES DEUX SENS —
+ * « Pain chawarma » sort avec les 6 Chawarmas, un « Poulet Pané + Frites »
+ * consomme poulet, frites ET pain. `quantite` = unités du produit par article
+ * vendu ; elle se compose avec `ratio` (conversion SamerTrackly), elle ne le
+ * remplace pas. Table LOCALE : jamais publiée, jamais écrasée par le cloud.
+ */
+export const inventaireConsommations = pgTable('inventaire_consommations', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  produit_id: uuid('produit_id').notNull().references(() => produitsInventaire.id, { onDelete: 'cascade' }),
+  article_id: uuid('article_id').notNull().references(() => articles.id, { onDelete: 'cascade' }),
+  quantite: numeric('quantite', { precision: 12, scale: 3 }).notNull().default('1'),
+}, (t) => [
+  uniqueIndex('inventaire_consommations_key').on(t.produit_id, t.article_id),
+  index('idx_inventaire_consommations_article').on(t.article_id),
+  check('inventaire_consommations_quantite_check', sql`${t.quantite} > 0`),
+]);
+
+export const entreesStock = pgTable('entrees_stock', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  inventaire_id: uuid('inventaire_id').notNull().references(() => inventairesService.id, { onDelete: 'cascade' }),
+  produit_id: uuid('produit_id').notNull().references(() => produitsInventaire.id, { onDelete: 'cascade' }),
+  quantite: numeric('quantite', { precision: 12, scale: 2 }).notNull(),
+  fournisseur: text('fournisseur'),
+  /** Snapshot produit (migration 0026) : le pont vers SamerTrackly ne peut pas
+   *  traduire `produit_id` — chaque site a ses propres uuid. Rempli par trigger. */
+  produit_code: text('produit_code'),
+  produit_nom: text('produit_nom'),
+  saisi_par: uuid('saisi_par').references(() => utilisateurs.id),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('idx_entrees_stock_inventaire').on(t.inventaire_id),
+  check('entrees_stock_quantite_check', sql`${t.quantite} > 0`),
+]);
 
 // ---------------------------------------------------------------------------
 // 7. Journal d'audit immuable (§14.2)
@@ -451,6 +674,21 @@ export const mappingPosteCategorie = pgTable('mapping_poste_categorie', {
   poste_cuisine: posteCuisine('poste_cuisine').notNull(),
   categorie_id: uuid('categorie_id').notNull().references(() => categories.id, { onDelete: 'cascade' }),
 }, (t) => [primaryKey({ columns: [t.poste_cuisine, t.categorie_id] })]);
+
+// Routage d'impression LOCAL (comme disponibilite_locale : jamais écrasé par une
+// descente catalogue cloud). Résolution d'un article :
+//   routage_article[article] ?? routage_categorie[catégorie] ?? POSTE_IMPRESSION_DEFAUT
+export const routageCategorie = pgTable('routage_categorie', {
+  categorie_id: uuid('categorie_id').primaryKey().references(() => categories.id, { onDelete: 'cascade' }),
+  poste: posteImpression('poste').notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const routageArticle = pgTable('routage_article', {
+  article_id: uuid('article_id').primaryKey().references(() => articles.id, { onDelete: 'cascade' }),
+  poste: posteImpression('poste').notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
 // Sprint 2 : idempotence de la file locale des tablettes serveur
 export const actionsRecues = pgTable('actions_recues', {

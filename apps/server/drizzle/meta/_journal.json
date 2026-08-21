@@ -127,6 +127,69 @@
       "when": 1752660000000,
       "tag": "0017_remis_le",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1784465252579,
+      "tag": "0018_routage_impression",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1786528800000,
+      "tag": "0019_kdo_samer_delly",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1786700000000,
+      "tag": "0020_options_catalogue",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1786900000000,
+      "tag": "0021_depenses_inventaire_pointage",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1786950000000,
+      "tag": "0022_recettes_inventaire",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1787010000000,
+      "tag": "0023_categories_reservees_partenaire",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1787020000000,
+      "tag": "0024_roles_comptoiriste_entretien",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1787030000000,
+      "tag": "0025_permissions_depenses_inventaire",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1787040000000,
+      "tag": "0026_inventaire_snapshot_produit",
+      "breakpoints": true
     }
   ]
 }
