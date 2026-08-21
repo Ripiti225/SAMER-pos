@@ -14,6 +14,7 @@ import {
   construireInventaireShift,
   construireLignesInventaire,
   construireEntreesShift,
+  correspondanceRompue,
   type ProduitInfo,
 } from './samtrackly-inventaire.ts';
 
@@ -208,5 +209,23 @@ describe('construireEntreesShift — les réceptions détaillées', () => {
     const entrees = [{ produit_id: 'uuid-p1', quantite: '3', fournisseur: null }];
     const [l] = construireEntreesShift(entrees, PRODUITS, 'inv-shift-1');
     assert.equal(l.fournisseur_nom, null);
+  });
+});
+
+describe('correspondanceRompue — le garde-fou du 2026-08-21', () => {
+  test('34 lignes comptées, 0 traduite → rompue (catalogue cloud vide)', () => {
+    assert.equal(correspondanceRompue(34, 0), true);
+  });
+
+  test('34 comptées, 33 traduites → normale : un produit retiré du catalogue s’écarte sans drame', () => {
+    assert.equal(correspondanceRompue(34, 33), false);
+  });
+
+  test('34 comptées, 34 traduites → normale', () => {
+    assert.equal(correspondanceRompue(34, 34), false);
+  });
+
+  test('aucune ligne comptée → PAS rompue : il n’y avait rien à traduire', () => {
+    assert.equal(correspondanceRompue(0, 0), false);
   });
 });

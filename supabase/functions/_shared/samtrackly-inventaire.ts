@@ -254,6 +254,27 @@ export function construireLignesInventaire(
   return resultat;
 }
 
+/**
+ * La correspondance uuid POS → code produit est-elle rompue ?
+ *
+ * Vrai quand le POS a compté des lignes mais qu'AUCUNE n'a pu être traduite :
+ * le catalogue `produits_inventaire` du cloud est vide, ou ses uuid ne sont pas
+ * ceux du site (chaque mini-PC sème son catalogue avec ses propres uuid — voir
+ * seed.ts, `CATALOGUE_INVENTAIRE` n'a pas d'`id`).
+ *
+ * Constaté en production le 2026-08-21 : 4 services ont écrit un en-tête
+ * « validé, 0 à déduire » alors que leurs 34 lignes avaient toutes été
+ * écartées une par une. Un inventaire vide d'apparence saine est PIRE qu'un
+ * inventaire absent — il lève la bannière « Inventaire du jour requis » et
+ * affirme qu'il n'y a rien à retenir. L'appelant doit échouer bruyamment.
+ *
+ * Écarter QUELQUES lignes reste normal (un produit retiré du catalogue) : seul
+ * le tout-ou-rien signale une correspondance rompue.
+ */
+export function correspondanceRompue(nbLignesPos: number, nbLignesConstruites: number): boolean {
+  return nbLignesPos > 0 && nbLignesConstruites === 0;
+}
+
 // ---------------------------------------------------------------------------
 // Les réceptions : entrees_shift
 // ---------------------------------------------------------------------------

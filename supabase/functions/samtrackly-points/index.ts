@@ -52,6 +52,7 @@ import {
   construireInventaireShift,
   construireLignesInventaire,
   construireEntreesShift,
+  correspondanceRompue,
   type InventaireServiceCloud,
   type ProduitInfo,
 } from '../_shared/samtrackly-inventaire.ts';
@@ -311,6 +312,22 @@ async function transfererService(
   let nbLignesInventaire = 0;
   const inventaireDuService = await lireInventaireDuService(admin, service.id);
   if (inventaireDuService) {
+    // Garde-fou (2026-08-21) : refuser d'écrire AVANT de toucher quoi que ce
+    // soit. Si aucune des lignes comptées ne se traduit, le catalogue cloud est
+    // vide ou porte d'autres uuid que le site — écrire l'en-tête quand même
+    // produirait un inventaire « validé, 0 à déduire » sans une seule ligne,
+    // qui lève la bannière « Inventaire du jour requis » en affirmant qu'il n'y
+    // a rien à retenir. Mieux vaut un service en échec, visible et rejouable.
+    const nbTraduisibles = inventaireDuService.lignes
+      .filter((l) => produitsParId.has(l.produit_id)).length;
+    if (correspondanceRompue(inventaireDuService.lignes.length, nbTraduisibles)) {
+      throw new ErreurSamtrackly(
+        `Inventaire illisible : ${inventaireDuService.lignes.length} produits comptés, aucun `
+        + `retrouvé dans produits_inventaire du cloud (${produitsParId.size} produit(s) au catalogue). `
+        + `Rien n'a été écrit.`,
+      );
+    }
+
     const ligneInventaireShift = construireInventaireShift(inventaireDuService.inventaire, {
       pointId,
       restaurantId: restaurantStId,
