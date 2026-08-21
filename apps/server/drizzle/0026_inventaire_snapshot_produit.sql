@@ -55,6 +55,23 @@ UPDATE "entrees_stock" e
  WHERE p."id" = e."produit_id" AND e."produit_code" IS NULL;
 --> statement-breakpoint
 
+-- REPUBLIER l'historique. L'outbox est alimenté par le code applicatif
+-- (`ecrireOutbox`), PAS par un trigger : les UPDATE ci-dessus ne remontent donc
+-- rien tout seuls, et les lignes déjà dans le cloud garderaient un
+-- `produit_code` vide à jamais. On pousse nous-mêmes les lignes rattrapées.
+-- Sur une base neuve, le backfill n'a rien touché : cet INSERT insère 0 ligne.
+INSERT INTO "sync_outbox" ("table_name", "record_id", "operation", "payload")
+SELECT 'inventaire_lignes', l."id", 'UPDATE', to_jsonb(l)
+  FROM "inventaire_lignes" l
+ WHERE l."produit_code" IS NOT NULL;
+--> statement-breakpoint
+
+INSERT INTO "sync_outbox" ("table_name", "record_id", "operation", "payload")
+SELECT 'entrees_stock', e."id", 'UPDATE', to_jsonb(e)
+  FROM "entrees_stock" e
+ WHERE e."produit_code" IS NOT NULL;
+--> statement-breakpoint
+
 -- Le remplissage est fait par la base, pas par le code applicatif : l'inventaire
 -- est écrit depuis plusieurs endroits (comptage, réceptions, recalculs), et un
 -- seul oubli reproduirait exactement la panne du 2026-08-21.
