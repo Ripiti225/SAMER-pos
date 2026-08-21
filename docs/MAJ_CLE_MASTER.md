@@ -24,20 +24,22 @@ avant que les 6 autres restaurants ne reçoivent quoi que ce soit.
   pour toute modif SERVEUR (tsx lit les sources, sans watch).
 - « Repackager » = `pnpm --filter @pos/desktop build` — seulement si `apps/desktop`
   change. **Aucune entrée de ce journal ne l'exige à ce jour.**
-- Aucune migration de base n'a été ajoutée depuis la clé : la dernière est **0025**,
-  déjà présente sur la clé et déjà appliquée en production.
+- **Une migration a été ajoutée depuis la clé** : la **0026**, écrite le 21/08. La
+  clé s'arrête à la 0025. Tout poste qui reçoit cette mise à jour doit passer
+  `pnpm db:migrate` — c'est la seule entrée de ce journal qui l'exige.
 
 ## État de synthèse
 
 | | |
 |---|---|
-| Dernière migration | **0025** (`0025_permissions_depenses_inventaire.sql`) — sur la clé |
-| Migrations ajoutées depuis la clé | **aucune** |
+| Dernière migration | **0026** (`0026_inventaire_snapshot_produit.sql`) — **pas sur la clé** |
+| Migrations ajoutées depuis la clé | **1 — la 0026** (`pnpm db:migrate` obligatoire) |
 | Rebuild caisse | **fait** — `dist` du 18/08 23h30, postérieur à la dernière source |
 | Report du code sur la clé master | **fait le 21/08 15h48** (43 fichiers, 0 échec) |
 | Repackaging `PosSamer.exe` nécessaire | non |
-| Redéploiement Edge Function | **OUI — `sync-push`** (fait sur le cloud le 17/08) |
-| Tests | 38 fichiers, 235 tests verts |
+| Redéploiement Edge Function | **OUI — `sync-push`** (fait le 17/08) et **`samtrackly-points`** (nouvelle, à confirmer déployée) |
+| Migrations CLOUD à appliquer | **2** — `20260817140000_pont_samtrackly`, `20260821150000_inventaire_snapshot_produit` |
+| Tests | **38 fichiers, 235 tests verts** (POS) + **103 tests** du pont (`pnpm test:functions`) |
 
 ---
 
@@ -418,8 +420,94 @@ et la liste des commandes à emporter avec `nb_items`.
 
 ---
 
+## 2026-08-18 — `preparer-base-master.sql` refuse de tourner sur le cloud
+
+**Fichier** : `scripts/preparer-base-master.sql`.
+
+Ce script purge les ventes, l'équipe et l'identité d'une base pour en faire un
+master neutre. Le 18/08 il a été lancé **par erreur dans l'éditeur SQL Supabase**,
+c'est-à-dire sur la base **CLOUD** — celle des 7 restaurants à la fois.
+
+Il s'est arrêté seul sur `appels_table`, une table locale absente du cloud : la
+transaction n'a jamais atteint son `COMMIT`, donc rien n'a été effacé. **C'est un
+hasard, pas une protection.** Une table de plus dans le cloud et les 7 sites
+perdaient leurs ventes.
+
+Le script commence désormais par un bloc `DO` qui **refuse explicitement de
+s'exécuter**, AVANT le moindre `DELETE` :
+
+- si `sites_autorises` existe → c'est le cloud, refus ;
+- si `restaurant`, `appels_table` ou `sync_outbox` manquent → ce n'est pas une base
+  POS locale complète, refus.
+
+Le message nomme la base concernée, pour qu'on voie tout de suite où on était.
+
+**À faire pour déployer** : rien — un script d'outillage, lu au moment où on s'en
+sert. Il doit simplement être **sur la clé** dans cette version.
+
+---
+
+## 2026-08-21 — Le pont inventaire : un snapshot produit sur chaque ligne
+
+**Fichiers** : `apps/server/drizzle/0026_inventaire_snapshot_produit.sql`,
+`apps/server/src/db/schema/index.ts`,
+`supabase/functions/_shared/samtrackly-{api,shift,detail,inventaire,rattrapage}.ts`
+(+ leurs tests), `supabase/functions/samtrackly-points/index.ts`,
+`supabase/migrations/{20260817140000_pont_samtrackly,20260821150000_inventaire_snapshot_produit}.sql`,
+`supabase/config.toml`, `scripts/diagnostic-pont-samtrackly.sql`.
+
+> **Ce travail a été fait sur le Mac, pas sur le 7E.** Contrairement aux six
+> entrées précédentes, il n'a **jamais tourné sur un vrai service**. Il passe
+> d'abord une journée sur le 7E avant de partir sur la clé master — c'est le rôle
+> du site de test, et une migration de base ne s'improvise pas sur 6 restaurants.
+
+### Le problème
+
+`CATALOGUE_INVENTAIRE` ne porte que des `code` : chaque mini-PC sème donc
+`produits_inventaire` avec **ses propres uuid**, générés localement. Deux sites
+n'ont pas le même id pour « Pain chawarma ». Or le cloud reçoit
+`inventaire_lignes.produit_id` — un uuid local qu'il ne sait traduire avec **rien**,
+sa table `produits_inventaire` étant une table de DESCENTE, jamais remontée.
+
+Constaté le 21/08 : **4 services transférés ont écrit chez SamerTrackly un
+inventaire « validé, 0 à déduire »** dont les **34 lignes avaient toutes été
+écartées**, faute de correspondance. Un inventaire vide d'apparence saine lève la
+bannière « Inventaire du jour requis » en affirmant qu'il n'y a rien à retenir sur
+la paie. C'est une erreur d'argent, silencieuse.
+
+### Le correctif
+
+- **Migration 0026** : `produit_code`, `produit_nom`, `produit_prix` sur
+  `inventaire_lignes` (et `produit_code`/`produit_nom` sur `entrees_stock`),
+  remplis par **trigger** à chaque écriture. Le `produit_prix` retenu est celui qui
+  a servi au **comptage**, pas celui du catalogue au moment du transfert.
+- La migration **rattrape l'existant** puis **réinjecte les lignes corrigées dans
+  `sync_outbox`** : l'historique déjà monté est republié avec son snapshot, sinon
+  les inventaires passés restaient intraduisibles à jamais.
+- Côté cloud, `20260821150000` ajoute les mêmes colonnes.
+- Le pont **refuse d'écrire un inventaire dont aucune ligne ne se traduit** — mieux
+  vaut un transfert en échec, visible et rejouable, qu'un « 0 à déduire » mensonger.
+
+### À faire pour déployer
+
+1. **`pnpm db:migrate`** sur le poste — seule entrée de ce journal qui l'exige.
+2. Appliquer les **2 migrations cloud** (`supabase/migrations/`).
+3. Déployer l'Edge Function **`samtrackly-points`** — et la **vérifier par
+   `functions download` dans un dossier jetable**, jamais par `functions list`
+   (voir le piège de l'entrée du 17/08).
+4. Relancer l'exe. **Pas de rebuild caisse** : aucun fichier de `apps/caisse` n'est
+   touché par cette entrée.
+
+---
+
 ## Procédure de report sur les autres sites
 
+0. **Récupérer l'arbre fusionné.** Depuis le 21/08 le code de référence n'est plus
+   celui du 7E seul : les 7 correctifs du site ont été fusionnés sur le Mac avec le
+   pont inventaire, et poussés sur **GitHub (`Ripiti225/SAMER-pos`, branche `main`)**.
+   Le 7E part donc de là — la clé, en NTFS, est en lecture seule côté Mac et ne peut
+   plus servir de courroie de retour. Sur le poste : récupérer `main`, puis
+   `pnpm install`, **`pnpm db:migrate`** (la 0026 est nouvelle pour lui), `pnpm test`.
 1. **Sur ce poste master (7E)** : `pnpm --filter caisse build` — sans ça le kiosque
    sert un vieux `dist`.
 2. Refaire la clé USB **depuis une base repassée par `preparer-base-master.sql`**
@@ -440,3 +528,9 @@ et la liste des commandes à emporter avec `nb_items`.
   à supprimer un jour.
 - Trou connu dans le catalogue de permissions : **Dépenses / Inventaire / Pointage**
   n'y figurent pas encore.
+- **Le pont inventaire (0026) attend sa journée sur le 7E.** Décidé le 21/08 : il ne
+  part sur la clé master qu'après avoir tourné sur un vrai service. Tant que cette
+  ligne est là, **ne pas graver de nouvelle clé**.
+- `pnpm-lock.yaml` : le lock du 7E référençait un workspace `apps/siege` qui n'existe
+  dans aucun arbre. Le lock retenu est celui du Mac, sans ce bloc. Si un
+  `pnpm install --frozen-lockfile` ronchonne sur un poste, c'est de là que ça vient.
