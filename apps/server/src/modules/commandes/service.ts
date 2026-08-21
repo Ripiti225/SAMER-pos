@@ -334,6 +334,43 @@ export async function majStatutTable(tx: DbOuTx, tableId: string | null, statut:
 }
 
 /**
+ * Abandonne les commandes SANS AUCUN ARTICLE d'un service — tables ouvertes
+ * par erreur, refermées sans que rien soit tapé. Elles passent ANNULEE (numéro
+ * de ticket conservé : la séquence ne fait jamais de trou), leur table est
+ * libérée, et surtout elles ne bloquent plus « J'ai fini » : demander à un
+ * caissier d'« encaisser ou annuler » une commande à 0 F qu'il n'a jamais
+ * saisie n'a aucun sens, et l'annulation manuelle réclamerait un PIN manager.
+ *
+ * Retourne les commandes abandonnées (pour la trace d'audit de l'appelant).
+ */
+export async function abandonnerCommandesVidesDuService(
+  tx: DbOuTx,
+  serviceId: string,
+): Promise<{ id: string; table_id: string | null; numero_ticket: number }[]> {
+  const vides = await tx
+    .select({ id: commandes.id, table_id: commandes.table_id, numero_ticket: commandes.numero_ticket })
+    .from(commandes)
+    .where(
+      and(
+        eq(commandes.service_id, serviceId),
+        eq(commandes.statut, 'OUVERTE'),
+        sql`NOT EXISTS (SELECT 1 FROM commande_items ci WHERE ci.commande_id = ${commandes.id})`,
+      ),
+    );
+
+  for (const c of vides) {
+    const [maj] = await tx
+      .update(commandes)
+      .set({ statut: 'ANNULEE', updated_at: new Date() })
+      .where(eq(commandes.id, c.id))
+      .returning();
+    await ecrireOutbox(tx, 'commandes', 'UPDATE', c.id, maj as unknown as Record<string, unknown>);
+    await majStatutTable(tx, c.table_id, 'LIBRE');
+  }
+  return vides.map((c) => ({ ...c, numero_ticket: Number(c.numero_ticket) }));
+}
+
+/**
  * Envoi en cuisine : marque envoye_le sur les articles pas encore partis
  * (ils restent A_PREPARER — le KDS les passera EN_COURS) et passe la commande
  * à ENVOYEE_CUISINE. Seuls les NOUVEAUX articles partent (ajout en plusieurs

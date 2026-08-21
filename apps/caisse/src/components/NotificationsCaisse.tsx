@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { AppelVue } from '@pos/shared';
 import { LIBELLES_APPEL } from '@pos/shared';
 import { api } from '../api';
@@ -22,7 +22,6 @@ const sonPrete = new Audio('/sons/prete.wav');
 export function NotificationsCaisse() {
   const { session, aller, afficherToast } = useCaisse();
   const queryClient = useQueryClient();
-  const [pretes, setPretes] = useState<NotifPrete[]>([]);
   const dejaVus = useRef(new Set<string>());
 
   const { data: appels } = useQuery({
@@ -37,13 +36,28 @@ export function NotificationsCaisse() {
     enabled: !!session,
     refetchInterval: 15_000,
   });
+  /**
+   * Les pastilles « prête » viennent du SERVEUR, pas d'un état local nourri au
+   * WebSocket : quand la cuisine ou un serveur marquait la commande servie, la
+   * caisse gardait sa pastille à l'écran pour toujours. Ici la liste est
+   * relue — la pastille disparaît dès que la commande n'est plus prête, qui
+   * que soit celui qui l'a servie, encaissée ou annulée.
+   */
+  const { data: pretesServeur } = useQuery({
+    queryKey: ['pretes-caisse'],
+    queryFn: () => api<NotifPrete[]>('/api/commandes/pretes'),
+    enabled: !!session,
+    refetchInterval: 15_000,
+  });
 
   const appelsCaisse = (appels ?? []).filter((a) => a.cible === 'CAISSE');
   const validationsCaisse = aValider ?? [];
+  const pretes = pretesServeur ?? [];
 
   const rafraichir = () => {
     void queryClient.invalidateQueries({ queryKey: ['appels-caisse'] });
     void queryClient.invalidateQueries({ queryKey: ['a-valider-caisse'] });
+    void queryClient.invalidateQueries({ queryKey: ['pretes-caisse'] });
     void queryClient.invalidateQueries({ queryKey: ['tables'] });
   };
 
@@ -85,9 +99,11 @@ export function NotificationsCaisse() {
         }
         if (type === 'commande:prete' && m.cible === 'CAISSE') {
           bip(sonPrete);
-          setPretes((p) => (p.some((x) => x.commande_id === m.commande_id) ? p : [...p, { commande_id: m.commande_id as string, table_numero: (m.table_numero as string) ?? null }]));
+          rafraichir();
         }
-        if (type === 'commande:servie' || type === 'commande') rafraichir();
+        // Servie / encaissée / annulée / modifiée : la liste des commandes
+        // prêtes a pu changer, on la relit plutôt que de deviner.
+        if (type === 'commande:servie' || type === 'commande' || type === 'commande:modifiee') rafraichir();
       };
       socket.onclose = () => { if (!arrete) setTimeout(connecter, 2000); };
     };
@@ -108,7 +124,7 @@ export function NotificationsCaisse() {
       if (a.type === 'DEMANDE_FACTURE') aller('tables');
     } catch (e) { afficherToast((e as Error).message); }
   };
-  const servir = async (id: string) => { try { await api(`/api/commandes/${id}/servir`, { method: 'POST', corps: {} }); setPretes((p) => p.filter((x) => x.commande_id !== id)); rafraichir(); } catch (e) { afficherToast((e as Error).message); } };
+  const servir = async (id: string) => { try { await api(`/api/commandes/${id}/servir`, { method: 'POST', corps: {} }); rafraichir(); } catch (e) { afficherToast((e as Error).message); } };
 
   if (appelsCaisse.length === 0 && validationsCaisse.length === 0 && pretes.length === 0) return null;
 

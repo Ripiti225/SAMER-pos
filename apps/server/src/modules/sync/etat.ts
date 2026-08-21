@@ -64,9 +64,14 @@ class EtatSync {
       return { couleur: 'vert', message: 'Synchronisé' };
     }
     if (this.lignes_en_attente > 0 || this.derniere_erreur) {
+      // Dire POURQUOI quand on le sait. « Hors ligne » en dur a coûté une
+      // journée le 2026-08-17 : le cloud répondait parfaitement, il refusait
+      // les lignes — et l'écran affichait quand même une panne de réseau.
       return {
         couleur: 'orange',
-        message: `Hors ligne — ${this.lignes_en_attente} vente(s) en attente, les ventes continuent normalement`,
+        message: this.derniere_erreur
+          ? `${this.lignes_en_attente} vente(s) en attente — ${this.derniere_erreur}. Les ventes continuent normalement.`
+          : `Hors ligne — ${this.lignes_en_attente} vente(s) en attente, les ventes continuent normalement`,
       };
     }
     return { couleur: 'vert', message: 'Synchronisé' };

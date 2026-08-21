@@ -9,7 +9,7 @@
 import { and, asc, isNull, lte, lt, sql } from 'drizzle-orm';
 import { db } from '../../db/client.js';
 import { syncOutbox } from '../../db/schema/index.js';
-import type { ClientCloud, LignePush } from './cloud-client.js';
+import { ErreurSync, STATUT_REFUS_CLOUD, type ClientCloud, type LignePush } from './cloud-client.js';
 import { etatSync } from './etat.js';
 
 export const LOT_MAX = 200;
@@ -57,15 +57,29 @@ export async function pousserUnLot(client: ClientCloud): Promise<ResultatLot> {
   }));
 
   // Peut lever ErreurSync — on laisse remonter SANS rien marquer.
-  const { acquitte_jusqua_seq } = await client.push(charge);
+  const { acquitte_jusqua_seq, blocage } = await client.push(charge);
 
-  if (acquitte_jusqua_seq > 0) {
-    // Marque synced_at UNIQUEMENT le préfixe acquitté (et jamais deux fois).
-    await db
-      .update(syncOutbox)
-      .set({ synced_at: new Date() })
-      .where(and(isNull(syncOutbox.synced_at), lte(syncOutbox.seq, acquitte_jusqua_seq)));
+  // Lot non vide, RIEN d'acquitté : le cloud a répondu 200 mais n'a rien
+  // appliqué. C'est un ÉCHEC, jamais un succès. Le compter comme un succès
+  // (bug corrigé le 2026-08-17) laissait la file bloquée au même seq à chaque
+  // cycle, voyant au vert et caisse muette : « ventes en attente » pour
+  // toujours, sans la moindre raison affichée. Cause ce jour-là : la fonction
+  // `sync-push` déployée upsertait sur `id` alors que le cloud est passé en
+  // clé primaire composite (restaurant_id, id).
+  if (acquitte_jusqua_seq <= 0) {
+    throw new ErreurSync(
+      blocage
+        ? `Le cloud a refusé ${blocage.table_name} (seq ${blocage.seq}) : ${blocage.raison}`
+        : `Le cloud n'a acquitté aucune des ${lignes.length} ligne(s) envoyées`,
+      STATUT_REFUS_CLOUD,
+    );
   }
+
+  // Marque synced_at UNIQUEMENT le préfixe acquitté (et jamais deux fois).
+  await db
+    .update(syncOutbox)
+    .set({ synced_at: new Date() })
+    .where(and(isNull(syncOutbox.synced_at), lte(syncOutbox.seq, acquitte_jusqua_seq)));
 
   const reste = await compterEnAttente();
   etatSync.succesMontee(reste);

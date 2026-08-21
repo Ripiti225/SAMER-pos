@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { AppelVue, SessionInfo } from '@pos/shared';
 import { LIBELLES_APPEL } from '@pos/shared';
 import { api } from '@pos/shared-ui';
@@ -21,7 +21,6 @@ const sonPrete = new Audio('/sons/prete.wav');
 export function NotificationsServeur({ session, afficherToast }: { session: SessionInfo; afficherToast: (m: string) => void }) {
   const moi = session.utilisateur.id;
   const queryClient = useQueryClient();
-  const [pretes, setPretes] = useState<NotifPrete[]>([]);
 
   // Appels + commandes à valider qui me sont destinés (réconciliation au montage)
   const { data: appels } = useQuery({
@@ -35,12 +34,25 @@ export function NotificationsServeur({ session, afficherToast }: { session: Sess
     refetchInterval: 15_000,
   });
 
+  /**
+   * Pastilles « prête » : la liste vient du SERVEUR, pas d'un état local. Si la
+   * cuisine ou la caisse sert la commande, la pastille disparaît d'elle-même —
+   * avant, elle restait affichée jusqu'au rechargement de la page.
+   */
+  const { data: pretesServeur } = useQuery({
+    queryKey: ['pretes'],
+    queryFn: () => api<NotifPrete[]>('/api/commandes/pretes'),
+    refetchInterval: 15_000,
+  });
+
   const mesAppels = (appels ?? []).filter((a) => a.cible === 'SERVEUR' && a.serveur_id === moi);
   const mesValidations = (aValider ?? []).filter((c) => !c.serveur_id || c.serveur_id === moi);
+  const pretes = pretesServeur ?? [];
 
   const rafraichir = () => {
     void queryClient.invalidateQueries({ queryKey: ['appels-en-attente'] });
     void queryClient.invalidateQueries({ queryKey: ['a-valider'] });
+    void queryClient.invalidateQueries({ queryKey: ['pretes'] });
     void queryClient.invalidateQueries({ queryKey: ['tables'] });
   };
 
@@ -77,9 +89,11 @@ export function NotificationsServeur({ session, afficherToast }: { session: Sess
         }
         if (type === 'commande:prete' && m.cible === 'SERVEUR' && m.serveur_id === moi) {
           if (!dejaVus.current.has(cle)) { dejaVus.current.add(cle); void sonPrete.play().catch(() => undefined); }
-          setPretes((p) => (p.some((x) => x.commande_id === m.commande_id) ? p : [...p, { commande_id: m.commande_id as string, table_numero: (m.table_numero as string) ?? null }]));
+          rafraichir();
         }
-        if (type === 'commande:servie' || type === 'commande') rafraichir();
+        // Servie / encaissée / annulée / modifiée : on relit la liste des
+        // commandes prêtes au lieu de deviner ce qui a changé.
+        if (type === 'commande:servie' || type === 'commande' || type === 'commande:modifiee') rafraichir();
         if (typeof type === 'string' && type.startsWith('table')) void queryClient.invalidateQueries({ queryKey: ['tables'] });
       };
       socket.onclose = () => {
@@ -99,7 +113,7 @@ export function NotificationsServeur({ session, afficherToast }: { session: Sess
   };
   const traiterAppel = async (id: string) => { try { await api(`/api/appels/${id}/traiter`, { method: 'POST', corps: {} }); rafraichir(); } catch (e) { afficherToast((e as Error).message); } };
   const servir = async (id: string) => {
-    try { await api(`/api/commandes/${id}/servir`, { method: 'POST', corps: {} }); setPretes((p) => p.filter((x) => x.commande_id !== id)); rafraichir(); }
+    try { await api(`/api/commandes/${id}/servir`, { method: 'POST', corps: {} }); rafraichir(); }
     catch (e) { afficherToast((e as Error).message); }
   };
 

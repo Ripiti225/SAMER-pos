@@ -23,7 +23,7 @@ import { PIN_CAISSIER, resetDonnees, seConnecter, type Donnees } from './aide.js
 // ---------------------------------------------------------------------------
 // Faux cloud
 // ---------------------------------------------------------------------------
-type Mode = 'normal' | 'coupure' | 'cinqcent' | 'revoque';
+type Mode = 'normal' | 'coupure' | 'cinqcent' | 'revoque' | 'refus';
 
 class FauxCloud {
   private serveur!: Server;
@@ -77,6 +77,27 @@ class FauxCloud {
             this.echecsRestants -= 1;
             res.writeHead(500);
             res.end('boom');
+            return;
+          }
+          // Le cloud s'exécute (200) mais REFUSE tout : contrainte, schéma,
+          // table inconnue. Rien n'est appliqué, rien n'est acquitté.
+          if (this.mode === 'refus') {
+            const premiere = [...(body.lignes ?? [])].sort(
+              (a: { seq: number }, b: { seq: number }) => a.seq - b.seq,
+            )[0];
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(
+              JSON.stringify({
+                acquitte_jusqua_seq: 0,
+                blocage: premiere
+                  ? {
+                      seq: premiere.seq,
+                      table_name: premiere.table_name,
+                      raison: 'upsert commandes : there is no unique or exclusion constraint matching the ON CONFLICT specification',
+                    }
+                  : undefined,
+              }),
+            );
             return;
           }
           const ack = this.appliquer(body.lignes ?? []); // applique AVANT toute réponse
@@ -325,5 +346,47 @@ describe('Panne 6 — réconciliation détecte un trou côté cloud', () => {
     // reconcilierJour a détecté l'écart, re-poussé le jour, puis re-vérifié → OK
     expect(r.statut).toBe('OK');
     expect(etatSync.derniere_reconciliation?.statut).toBe('OK');
+  });
+});
+
+describe('Panne 7 — le cloud répond 200 mais n’applique rien', () => {
+  /**
+   * La panne du 2026-08-17 en production : la `sync-push` déployée upsertait
+   * sur `id` alors que le cloud était passé en PK composite. Elle répondait
+   * 200 avec `acquitte_jusqua_seq: 0`. Le POS comptait ça comme un SUCCÈS :
+   * file figée au même seq à chaque cycle, voyant au vert, et la caisse
+   * répétait « ventes en attente » sans jamais dire pourquoi.
+   */
+  it('c’est un échec, pas un succès : rien n’est marqué et la raison est affichable', async () => {
+    await insererOutbox(3);
+    cloud.mode = 'refus';
+
+    const erreur = await pousserUnLot(client).catch((e: unknown) => e);
+    expect(erreur).toBeInstanceOf(ErreurSync);
+    // Ni panne réseau ni révocation : l'appel a parfaitement abouti.
+    expect((erreur as ErreurSync).estReseau).toBe(false);
+    expect((erreur as ErreurSync).estRevocation).toBe(false);
+    // La raison exacte doit arriver jusqu'à l'écran.
+    expect((erreur as ErreurSync).message).toContain('ON CONFLICT');
+    expect((erreur as ErreurSync).message).toContain('commandes');
+
+    // Zéro perte : rien n'est marqué synchronisé.
+    expect(await nbEnAttente()).toBe(3);
+    expect(etatSync.dernier_acquittement).toBeNull();
+
+    // Le voyant ne doit PAS dire « Hors ligne » : le cloud répondait très bien.
+    etatSync.echecMontee((erreur as ErreurSync).message);
+    etatSync.majEnAttente(3);
+    const voyant = etatSync.voyant();
+    expect(voyant.couleur).toBe('orange');
+    expect(voyant.message).not.toContain('Hors ligne');
+    expect(voyant.message).toContain('ON CONFLICT');
+
+    // Le cloud réparé : tout repart, sans doublon.
+    cloud.mode = 'normal';
+    const r = await pousserUnLot(client);
+    expect(r.fini).toBe(true);
+    expect(await nbEnAttente()).toBe(0);
+    expect(cloud.nb('commandes')).toBe(3);
   });
 });

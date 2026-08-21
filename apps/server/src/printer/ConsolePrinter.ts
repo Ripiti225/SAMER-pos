@@ -158,6 +158,9 @@ export class ConsolePrinter implements PrinterService {
       `Ouverte le ${new Date(s.ouverte_le).toLocaleString('fr-FR')}`,
       `Rasee le   ${new Date(s.cloturee_le).toLocaleString('fr-FR')}`,
       `Par ${s.cloturee_par} — ${s.nb_shifts} shift(s)`,
+      // Sans cette ligne, un total amputé des shifts laissés pour le lendemain
+      // passerait pour un manque en caisse.
+      ...(s.shifts_reportes > 0 ? [`${s.shifts_reportes} shift(s) reporte(s) sur la sequence suivante`] : []),
       '-'.repeat(LARGEUR),
     ];
     for (const sh of s.shifts) {

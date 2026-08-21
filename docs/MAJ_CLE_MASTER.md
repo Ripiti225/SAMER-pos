@@ -1,0 +1,442 @@
+# MAJ de la clé master
+
+**Journal des modifications faites APRÈS la création de la clé master USB.**
+
+La clé a été copiée le **2026-08-17 à 05h01:32**, avec l'identité neutre `A_CONFIGURER`
+et les deux seuls comptes propriétaire. Tout ce qui est écrit ici est **postérieur**.
+
+> **Report effectué le 2026-08-21 à 15h48** via `mettre-a-jour-cle.ps1` (`data\` exclu,
+> la base neutre de la clé est intacte). **Toutes les entrées ci-dessous sont désormais
+> sur la clé**, code et `apps/caisse/dist` compris. Les entrées ajoutées après cette
+> date ne le seront pas : recommencer le report avant tout nouveau déploiement.
+
+Le poste **Samer Angré 7E** (`C:\Users\PC\Documents\POS-Samer-deploiement`) est le
+**site de test** du groupe : c'est ici qu'on essaie, qu'on casse et qu'on corrige
+avant que les 6 autres restaurants ne reçoivent quoi que ce soit.
+
+## Comment lire ce fichier
+
+- Chaque entrée dit **ce qui a changé**, **pourquoi**, et **ce qu'il faut faire pour
+  le déployer ailleurs**.
+- « Rebuild caisse » = `pnpm --filter caisse build`. **Obligatoire après toute modif
+  de `apps/caisse`** : le kiosque sert la caisse en STATIQUE depuis `apps/caisse/dist`.
+- « Relancer l'exe » = quitter `PosSamer.exe` (`Ctrl+Alt+Q`) et le relancer. Suffit
+  pour toute modif SERVEUR (tsx lit les sources, sans watch).
+- « Repackager » = `pnpm --filter @pos/desktop build` — seulement si `apps/desktop`
+  change. **Aucune entrée de ce journal ne l'exige à ce jour.**
+- Aucune migration de base n'a été ajoutée depuis la clé : la dernière est **0025**,
+  déjà présente sur la clé et déjà appliquée en production.
+
+## État de synthèse
+
+| | |
+|---|---|
+| Dernière migration | **0025** (`0025_permissions_depenses_inventaire.sql`) — sur la clé |
+| Migrations ajoutées depuis la clé | **aucune** |
+| Rebuild caisse | **fait** — `dist` du 18/08 23h30, postérieur à la dernière source |
+| Report du code sur la clé master | **fait le 21/08 15h48** (43 fichiers, 0 échec) |
+| Repackaging `PosSamer.exe` nécessaire | non |
+| Redéploiement Edge Function | **OUI — `sync-push`** (fait sur le cloud le 17/08) |
+| Tests | 38 fichiers, 235 tests verts |
+
+---
+
+## 2026-08-17 — Enrôlement : `enroler-ce-poste.bat`
+
+**Fichier** : `POS-Samer\enroler-ce-poste.bat` (racine du dossier portable, hors `app`).
+
+Créé à 05h50, soit **49 minutes après la copie de la clé — il n'est donc pas dessus.**
+Sans lui, l'opérateur d'un nouveau site doit connaître Node, pnpm et les variables
+d'environnement, qu'aucun poste n'a.
+
+Ce que le script fait :
+
+- met `runtime\node` dans le `PATH` (les postes n'ont ni Node ni pnpm installés) ;
+- pose `SUPABASE_SYNC_URL` ;
+- **vérifie `pg_isready` AVANT de lancer quoi que ce soit** — sans ce contrôle,
+  l'opérateur recevait une trace Drizzle de 30 lignes au lieu de la vraie consigne
+  (« Lance d'abord PosSamer.exe ») ;
+- `pause` à la fin pour laisser le temps de copier le SQL affiché.
+
+**À faire pour un nouveau site** : copier ce `.bat` à la racine du dossier POS-Samer
+du poste, ou l'inclure dans la prochaine clé.
+
+**Rappel de la procédure d'enrôlement** (rien ne se recopie d'un poste à l'autre) :
+
+1. Copier le dossier de la clé vers le **disque dur**, lancer `PosSamer.exe`.
+2. **Réglages → Restaurant** → choisir le restaurant dans la liste (lue chez
+   SamerTrackly). Ce clic **génère un `restaurant.id` neuf** et efface `cle_site` :
+   c'est ce qui empêche les 7 sites de remonter leurs ventes dans le même seau.
+3. Lancer `enroler-ce-poste.bat`.
+4. Coller les **deux** `INSERT` affichés — `sites_autorises` **et** `restaurants` —
+   puis relancer `PosSamer.exe`.
+
+> On ne « retrouve » pas l'identifiant d'un site : on **relance le script**.
+> `enroler-site.ts` est idempotent, il réutilise la clé déjà posée et réaffiche le
+> même SQL.
+
+---
+
+## 2026-08-17 — Synchro cloud : un refus silencieux ne peut plus geler un site
+
+**Fichiers** : `apps/server/src/modules/sync/{cloud-client,montee,moteur,etat}.ts`,
+`supabase/functions/sync-push/index.ts`, `apps/caisse/src/components/SanteSync.tsx`,
+`apps/server/test/sync-pannes.test.ts`.
+
+### Le symptôme
+
+« Synchroniser » laissait **tout en attente**, rien n'arrivait dans SamerTrackly, et
+le voyant restait **vert**.
+
+### La cause
+
+Le code **réellement déployé** de `sync-push` était une version antérieure au 08/08 :
+elle faisait `upsert(..., { onConflict: 'id' })` alors que le cloud est en **PK
+composite `(restaurant_id, id)`** depuis le 09/08. PostgreSQL répondait
+*there is no unique or exclusion constraint matching the ON CONFLICT specification*,
+la fonction `break`ait sur la première ligne et renvoyait **HTTP 200 avec
+`acquitte_jusqua_seq: 0`**. La file locale étant strictement ordonnée par `seq`,
+**tout ce qui suivait restait bloqué à jamais**.
+
+### PIÈGE À RETENIR — `functions list` MENT
+
+Il annonçait `sync-push` en v3 puis v4 « mise à jour le 16/08 » alors que le paquet en
+ligne avait deux mois (un deploy était parti d'un arbre périmé). **La seule
+vérification qui vaut** :
+
+```
+npx.cmd --yes supabase@latest functions download <nom> --project-ref <ref>
+```
+
+**dans un dossier jetable** — il écrase le `supabase/functions/` du répertoire courant,
+et chaque téléchargement réécrit `_shared/` avec SA copie (donc : une fonction à la
+fois). Puis comparer les `Get-FileHash` aux sources.
+
+### Les correctifs
+
+| Où | Ce qui change |
+|---|---|
+| `montee.ts` | lève une `ErreurSync` quand un lot **non vide** revient acquitté à 0. Avant, c'était compté comme un succès — d'où le voyant vert et la file figée. |
+| `sync-push` | trace le blocage dans `sync_rejets` (dédoublonné par site/seq/raison, **sans acquitter**) et renvoie `blocage: { seq, table_name, raison }`. |
+| `etat.ts` | n'affiche plus « Hors ligne » quand le cloud répond très bien : il affiche **la raison** du blocage. |
+| `SanteSync.tsx` | la pilule de la caisse affiche la même raison. |
+| `sync-pannes.test.ts` | **Panne 7** ajoutée : le faux cloud ne simulait jamais « 200 sans rien appliquer », c'est par ce trou que le bug est passé. |
+
+### Résultat vérifié sur le 7E
+
+2 220 lignes vidées en ~5 min. Recoupé : 9 commandes, 18 items, 7 paiements
+(33 500 F), 2 services, 15 `utilisateurs_site`, **0 `sync_rejets`**.
+
+**À faire pour un nouveau site** : rien de particulier — le correctif Edge Function est
+**déjà déployé sur le cloud**, il est partagé par tous les sites. Côté poste, les
+sources modifiées doivent être sur la clé (rebuild caisse pour `SanteSync.tsx`).
+
+---
+
+## 2026-08-18 — Une table ouverte par erreur reste une table LIBRE
+
+**Fichiers** : `apps/server/src/modules/tables/etat.ts`,
+`apps/server/src/modules/commandes/{routes,service}.ts`,
+`apps/server/src/modules/services/routes.ts`, `apps/server/src/modules/audit/audit.ts`,
+`apps/caisse/src/screens/Commande.tsx`, `apps/server/test/table-ouverte-par-erreur.test.ts`.
+
+### Le problème constaté sur le terrain
+
+Le caissier ouvre une table (mauvais numéro, client qui repart), ne tape **aucun
+produit** et ressort. La table restait **OCCUPÉE** : le plan de salle se remplissait de
+fausses tables que personne ne pouvait encaisser, et « J'ai fini » se bloquait sur
+« encaissez ou annulez les N commandes en cours » — pour une commande à 0 F jamais
+saisie, dont l'annulation manuelle réclamait en plus un PIN manager.
+
+### La règle posée
+
+> **Une commande à ZÉRO ligne d'article n'existe pas pour la salle.**
+
+- `deriverEtat` (source unique de calcul, jamais dupliquée dans les apps) **écarte les
+  commandes vides**. Elles n'apparaissent ni en `commande_id`, ni dans
+  `commandes_ouvertes` (tables virtuelles Yango/Glovo/Kdo), et `ouverte_par` n'est pas
+  exposé — sinon la table paraîtrait libre **tout en restant verrouillée** pour les
+  autres serveurs.
+- Sortir de l'écran commande sans rien taper appelle
+  **`POST /api/commandes/:id/abandonner`** : statut `ANNULEE`, table libérée,
+  **numéro de ticket CONSERVÉ** (la séquence ne fait jamais de trou), audit
+  `ABANDON_COMMANDE_VIDE`. **Aucun PIN manager** : rien n'a été tapé, aucun franc n'a
+  bougé — l'exiger apprendrait au personnel à laisser traîner les fausses tables.
+  La route est **idempotente** et **refuse de toucher** une commande qui a la moindre
+  ligne : c'est le serveur qui revérifie, jamais le client qui décide.
+- **Rouvrir** une table qui porte déjà une commande vide la **REPREND** au lieu d'en
+  créer une seconde : pas de numéro de ticket gaspillé, pas d'empilement de fantômes.
+  La commande reprise change de caissier et de service (elle appartient à qui la
+  remplit).
+- **« J'ai fini »** abandonne d'abord les commandes vides du shift, puis seulement
+  vérifie les commandes en cours.
+
+### Nuance à connaître
+
+Le critère est **« aucune ligne du tout »**, pas « aucune ligne active ». Un article
+tapé puis annulé (motif + trace) laisse la table occupée : c'est un **retour**, et il
+doit rester visible.
+
+### Filet de sécurité
+
+Les deux mécanismes se doublent : même si l'abandon échoue (coupure réseau, exe tué),
+l'état dérivé côté serveur montre la table **LIBRE** — la commande vide n'occupe rien.
+
+**À faire pour déployer** : rebuild caisse + relancer l'exe. Aucune migration.
+
+---
+
+## 2026-08-18 — Une séquence est une JOURNÉE, et le gérant choisit ses shifts
+
+**Fichiers** : `apps/server/src/modules/services/sequences.ts`,
+`packages/shared/src/{types,schemas}.ts`,
+`apps/server/src/printer/{ConsolePrinter,escpos}.ts`,
+`apps/caisse/src/screens/Sequence.tsx`, `apps/server/test/sequence.test.ts`.
+
+### Le problème
+
+Le rasage refusait de se faire tant qu'un shift était ouvert. Or une séquence, c'est
+**une journée de travail** (logique SamerTrackly), et le shift de nuit tourne encore
+quand le gérant fait sa journée.
+
+### Ce que dit le métier (et pourquoi aucune règle d'horloge ne suffit)
+
+- Une journée commence au premier point : `00h-08h` pour un resto 24 h, `08h-16h` pour
+  un resto du matin — **mais le créneau n'est pas figé** : un 24 h peut démarrer sa
+  journée à `03h-08h35`.
+- Elle se termine quand le **dernier point** se termine : 00 h, 01 h, 03 h — ça dépend
+  de l'heure à laquelle on a rasé.
+- **Un shift commencé la veille et fini le lendemain appartient à la VEILLE.**
+
+### La décision : sélection des SHIFTS, la journée servant de proposition
+
+Le choix était entre « sélection du jour » et « sélection des shifts ». **On a retenu
+la sélection des shifts**, pour trois raisons :
+
+1. Le créneau n'étant pas figé, une règle automatique se tromperait régulièrement — et
+   une erreur sur un ticket Z est une **erreur d'argent**.
+2. La sélection est un **sur-ensemble** : tout ce qu'une règle de jour ferait, le
+   gérant peut le faire, et le corriger.
+3. Elle répond directement au cas « il y a 5 shifts, j'en veux 3 dans cette séquence ».
+
+La journée n'est pas perdue pour autant, elle fait le travail dans le cas courant :
+
+- `ShiftSequence.journee` (AAAA-MM-JJ) est calculée **SERVEUR** sur l'heure
+  d'**OUVERTURE** du shift — un point 16h→01h reste donc de la veille. Abidjan est à
+  UTC+0 toute l'année (pas d'heure d'été) : la date ISO **est** la date locale, quelle
+  que soit l'horloge du poste.
+- L'écran **groupe les shifts par journée**, **pré-coche la première journée présente**
+  et offre un bouton **« Raser la journée du jj/mm/aa »** par groupe → la journée
+  complète en un geste.
+- Les cases individuelles restent là pour les exceptions.
+
+### Le comportement
+
+- `POST /api/sequences/cloturer` accepte `{ service_ids? }` — omis = **tous les shifts
+  clôturés** (le cas normal, rétro-compatible).
+- **Un shift ouvert ne bloque plus rien.** Il n'est simplement pas *rasable* : sans
+  comptage aveugle ni rapport Z, l'inclure **inventerait un chiffre de vente**. Le
+  cocher renvoie une erreur explicite nommant le caissier.
+- Tout ce qui n'est pas retenu (shift ouvert, ou shift clôturé rangé dans le lendemain)
+  est **REPORTÉ** : une nouvelle séquence s'ouvre dans la foulée et les récupère.
+  Rien ne se perd, rien ne bloque.
+- Rasage refusé si **aucun** shift clôturé n'est retenu (« la séquence serait vide »).
+- `RapportSequence.shifts_reportes` est **imprimé sur le récap papier** : sans cette
+  ligne, un total amputé des shifts laissés pour le lendemain passerait pour un manque
+  en caisse.
+- Le journal d'audit `CLOTURE_SEQUENCE` note qui a été reporté et si le choix était
+  manuel.
+
+> **Piège technique** : l'index unique partiel `un_sequence_ouverte` n'autorise qu'une
+> séquence `OUVERTE`. Le passage de l'ancienne à `CLOTUREE` doit donc précéder
+> l'`INSERT` de la suivante, sinon l'insertion est refusée.
+
+### Aperçu des totaux : calculé serveur
+
+Le total affiché suit les cases cochées. Il est demandé au serveur
+(**`POST /api/sequences/apercu`**) à chaque changement de coche, avec la valeur
+précédente conservée pendant l'aller-retour. **La caisse n'additionne aucun montant** —
+même règle que l'addition d'une commande (§ CLAUDE.md).
+
+**À faire pour déployer** : rebuild caisse + relancer l'exe. Aucune migration.
+
+---
+
+## 2026-08-18 — La pastille « commande prête » ne reste plus collée
+
+**Fichiers** : `apps/server/src/modules/salle/routes.ts`,
+`apps/caisse/src/components/NotificationsCaisse.tsx`,
+`apps/serveur/src/components/NotificationsServeur.tsx`.
+
+### Le problème
+
+Quand la cuisine ou un serveur marquait une commande **servie**, la pastille verte
+« Table X — commande prête » **restait affichée sur l'écran du caissier**, jusqu'au
+rechargement de la page.
+
+### La cause
+
+La liste des commandes prêtes était un **état local du navigateur**, alimenté par le
+WebSocket et vidé **uniquement** quand la caisse cliquait elle-même sur « Servie ».
+Tout ce qui se passait ailleurs (cuisine, tablette serveur, encaissement, annulation)
+lui échappait.
+
+### Le correctif
+
+Nouvelle route **`GET /api/commandes/pretes`** : la liste devient une **lecture
+serveur**, pas une mémoire d'écran. La pastille disparaît dès que la commande n'est
+plus prête — **qui que soit celui qui l'a servie, encaissée ou annulée**.
+
+Le ciblage serveur/caisse est **recalculé à chaque lecture** (même règle qu'au moment
+où la cuisine a dit « prête ») : la commande appartient à son serveur s'il est
+connecté, à la caisse sinon. Conséquence utile : **si le serveur se déconnecte, la
+commande retombe d'elle-même sur la caisse.**
+
+Le WebSocket ne sert plus qu'à faire **biper** et à déclencher la relecture immédiate.
+
+**Le même défaut existait sur la tablette serveur** — corrigé de la même façon.
+
+**À faire pour déployer** : rebuild caisse + relancer l'exe (la tablette serveur est
+servie depuis les sources, rien à construire).
+
+---
+
+## 2026-08-18 — Un caissier peut enchaîner deux tranches
+
+**Fichiers** : `apps/server/src/modules/services/routes.ts`,
+`apps/caisse/src/screens/Cloture.tsx`,
+`apps/server/test/shift-enchaine-et-notifs.test.ts`.
+
+### Le problème
+
+Un caissier fait `16h-00h` **puis** `00h-08h`. Pour clôturer sa première tranche il
+doit vider ses tables ; mais « Transférer » **refusait de le choisir lui-même**
+(« Choisissez un autre caissier que vous-même »). Il était donc coincé : soit il
+liquidait ses tables, soit il les prêtait à un collègue absent.
+
+### Le correctif
+
+Le receveur d'un transfert **peut être le donneur lui-même**.
+
+- Ses commandes sont alors **DÉTACHÉES** du shift qui se ferme (`service_id` mis à
+  `NULL`) au lieu d'y être remises — sans ça la clôture restait bloquée, puisque le
+  seul service ouvert du « receveur » est précisément celui qu'on vide.
+- Elles se **rattachent automatiquement** au shift suivant qu'il ouvre (mécanique déjà
+  en place pour les transferts reçus hors service).
+- **Le PIN reste demandé** : c'est le sien, et il protège contre un tiers qui ferait le
+  geste à sa place.
+- L'audit `TRANSFERT_COMMANDES` porte `meme_caissier: true` — un enchaînement de
+  tranches n'est **pas** une relève, il faut pouvoir les distinguer.
+
+Dans l'écran de clôture, il apparaît **en tête de liste** :
+*« J'enchaîne — je garde mes tables pour mon prochain shift »*.
+
+**À faire pour déployer** : rebuild caisse + relancer l'exe. Aucune migration.
+
+---
+
+## 2026-08-18 — Vider une table, et donner un toit aux commandes à emporter
+
+**Fichiers** : `apps/server/src/modules/salle/routes.ts`,
+`apps/server/src/modules/commandes/routes.ts`,
+`packages/shared/src/{types,schemas}.ts`,
+`apps/caisse/src/screens/{Tables,Commande,Accueil}.tsx`,
+`apps/server/test/liberer-table.test.ts`.
+
+### Les deux problèmes signalés par le boss
+
+1. **Aucun bouton ne rendait une table à la salle.** Ni celle ouverte par erreur (rien
+   de tapé), ni surtout celle qui porte des produits : une table ne se vidait qu'en
+   encaissant. Client parti, mauvais numéro, commande tapée deux fois → la table
+   restait affichée occupée jusqu'à la clôture.
+2. **Les commandes à emporter n'apparaissaient NULLE PART.** Elles n'occupent aucune
+   table : une fois l'écran de saisie quitté, plus rien à l'écran. Le caissier qui
+   revenait donner la facture ne les voyait plus, croyait n'avoir rien tapé, **et
+   retapait toute la commande** — deux tickets, deux fois les plats en cuisine.
+
+### 1. Libérer une table — une porte, deux régimes, tranchés par le SERVEUR
+
+Nouvelle route **`POST /api/caisse/tables/:id/liberer`** (permission
+`caisse.annuler_envoye`, celle de l'annulation) :
+
+| Ce que porte la table | Ce qu'il faut | Ce qui est écrit |
+|---|---|---|
+| Aucun article | **rien** — ni PIN ni motif | audit `ABANDON_COMMANDE_VIDE` |
+| Au moins un article | **PIN manager + motif** | audit `ANNULATION_COMMANDE` par commande |
+
+C'est le serveur qui compte les lignes, jamais l'écran. Un article ajouté pendant la
+manœuvre fait **refuser** la libération (409) plutôt que d'annuler des produits sans
+PIN. Les numéros de ticket sont conservés (statut `ANNULEE`) : la séquence ne fait
+jamais de trou. Les **appels client encore en attente sont soldés** — sinon la table
+repartait aussitôt en « Addition demandée » alors qu'elle ne portait plus rien.
+
+> **La trace est le cœur de la demande.** Une commande annulée dont les plats étaient
+> déjà partis en cuisine devient un **RETOUR** : `envoye_le` renseigné + commande
+> `ANNULEE`, exactement le discriminant du § Retours de `CLAUDE.md`. Vider une table
+> n'efface donc jamais ce qui a été produit — ça apparaît à la clôture, sur le ticket
+> Z, dans Mes ventes et en Supervision, avec **le motif et le manager** relus dans le
+> journal d'audit. Un plat tapé mais **jamais envoyé en cuisine** n'est pas un retour
+> (rien n'a été produit) : sa trace est l'entrée d'audit, comme avant.
+
+**Dans la caisse** :
+
+- **Plan de salle** : une corbeille sur chaque table occupée (et sur toute table restée
+  marquée occupée en base). Elle ouvre la confirmation qui va bien : simple sur une
+  table vide, PIN manager + motif dès qu'il y a des produits, montant annulé affiché
+  dans le titre. Les tables virtuelles (Yango, Glovo, Kdo) en sont exclues : elles
+  portent plusieurs commandes à la fois, on y annule commande par commande.
+- **Écran commande** : troisième bouton à côté de Remise et Facture — **« Libérer »**
+  s'il n'y a rien de tapé (aucun PIN), **« Vider »** sinon (PIN manager + motif). Il est
+  volontairement **loin du bouton Encaisser**.
+
+### 2. Les commandes à emporter ont enfin un endroit
+
+`GET /api/commandes/ouvertes` renvoie désormais `code_commande`, `partenaire` et surtout
+**`nb_items`** (une commande sans article est une commande ouverte par erreur, écartée
+partout, § entrée du 18/08). Type partagé `CommandeEnCoursVue`.
+
+Elles sont visibles à **trois endroits**, tous les trois sur le chemin du caissier :
+
+1. **Plan de salle → pseudo-zone « À emporter »**, sous les zones de la salle, avec son
+   compteur. Une carte par commande (code, statut, montant, ancienneté) ; on la touche
+   pour la reprendre, imprimer la facture ou encaisser. Toujours affichée, même vide :
+   c'est un endroit, il ne doit pas se déplacer.
+2. **Coup d'œil salle** : une ligne « À emporter — n ».
+3. **Accueil → Nouvelle commande → À emporter** : s'il y en a déjà en cours, la liste
+   s'affiche **avant** d'en créer une nouvelle. C'est là que naissaient les doublons,
+   c'est là qu'on les arrête. La tuile Tables l'annonce aussi (« Plan de salle · n à
+   emporter »).
+
+### Tests
+
+`apps/server/test/liberer-table.test.ts` (7 tests) : libération sans PIN d'une table
+vide, refus sans PIN puis sans motif quand il y a des produits, libération complète
+avec sa trace d'audit nominative, **présence du plat lancé dans les retours du jour**,
+et la liste des commandes à emporter avec `nb_items`.
+
+**À faire pour déployer** : rebuild caisse + relancer l'exe. **Aucune migration.**
+
+---
+
+## Procédure de report sur les autres sites
+
+1. **Sur ce poste master (7E)** : `pnpm --filter caisse build` — sans ça le kiosque
+   sert un vieux `dist`.
+2. Refaire la clé USB **depuis une base repassée par `preparer-base-master.sql`**
+   (identité `A_CONFIGURER` + les 2 comptes propriétaire seulement). **Ne jamais
+   copier la base du 7E telle quelle** : elle porte son identité, ses 17 utilisateurs
+   et sa `cle_site`, qui partiraient sur tous les autres restaurants.
+3. Vérifier que `enroler-ce-poste.bat` est bien à la racine du dossier copié.
+4. Sur le site cible, suivre la procédure d'enrôlement en 4 étapes rappelée plus haut.
+5. `node_modules` sans liens symboliques (`nodeLinker: hoisted`), clé en **NTFS**,
+   PostgreSQL **arrêté** au moment de la copie.
+
+## Points ouverts
+
+- **Sécuriser la clé `service_role` SamerTrackly** — demandé le 2026-08-13, toujours en
+  attente. La console siège ouvre la voie pour la sortir du `.env` des postes.
+- **Console siège** (`apps/siege`) : écrite, **rien n'est encore déployé**.
+- Ligne orpheline `SAMER_ANGRE7E` dans `sites_autorises` (test du 05/07), sans effet,
+  à supprimer un jour.
+- Trou connu dans le catalogue de permissions : **Dépenses / Inventaire / Pointage**
+  n'y figurent pas encore.

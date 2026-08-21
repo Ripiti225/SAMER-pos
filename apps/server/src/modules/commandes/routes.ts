@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { and, desc, eq, isNull, notInArray } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, notInArray } from 'drizzle-orm';
+import type { CommandeEnCoursVue } from '@pos/shared';
 import {
   AjouterItemSchema,
   AnnulerCommandeSchema,
@@ -51,6 +52,41 @@ export function routesCommandes(app: FastifyInstance): void {
     if (corps.type !== 'LIVRAISON') partenaire = null;
 
     const vueId = await db.transaction(async (tx) => {
+      // Table déjà ouverte par erreur (commande sans aucun article) : on la
+      // REPREND au lieu d'en ouvrir une seconde. Un numéro de ticket ne se
+      // gaspille pas, et deux commandes vides sur la même table n'apportent
+      // rien — elles ne feraient qu'encombrer la clôture.
+      if (corps.type === 'SUR_PLACE' && corps.table_id) {
+        const ouvertes = await tx
+          .select({ id: commandes.id })
+          .from(commandes)
+          .where(
+            and(
+              eq(commandes.table_id, corps.table_id),
+              eq(commandes.type, 'SUR_PLACE'),
+              eq(commandes.statut, 'OUVERTE'),
+              eq(commandes.origine, 'CAISSE'),
+            ),
+          )
+          .for('update');
+        for (const o of ouvertes) {
+          const [compte] = await tx
+            .select({ nb: count() })
+            .from(commandeItems)
+            .where(eq(commandeItems.commande_id, o.id));
+          if (Number(compte?.nb ?? 0) === 0) {
+            // Elle est vide : elle appartient désormais à celui qui la remplit.
+            const [repris] = await tx
+              .update(commandes)
+              .set({ caissier_id: req.session!.utilisateur_id, service_id: service.id, updated_at: new Date() })
+              .where(eq(commandes.id, o.id))
+              .returning();
+            await ecrireOutbox(tx, 'commandes', 'UPDATE', o.id, repris as unknown as Record<string, unknown>);
+            return o.id;
+          }
+        }
+      }
+
       const code = await genererCodeCommande(tx, corps.type, service.id);
       const [c] = await tx
         .insert(commandes)
@@ -74,24 +110,51 @@ export function routesCommandes(app: FastifyInstance): void {
     return chargerCommandeVue(db, vueId);
   });
 
-  // Commandes en cours (reprise depuis Tables ou Accueil)
-  app.get('/api/commandes/ouvertes', { preHandler: app.exigerAuth }, async () => {
+  /**
+   * Commandes en cours (reprise depuis Tables ou Accueil).
+   *
+   * `nb_items` accompagne chaque ligne : une commande sans aucun article est une
+   * commande ouverte par erreur, écartée partout ailleurs (§ `deriverEtat`).
+   * C'est cette liste qui donne enfin un TOIT aux commandes à emporter : elles
+   * n'occupent aucune table et n'apparaissaient donc sur aucun écran une fois
+   * l'écran de saisie quitté — le caissier les retapait.
+   */
+  app.get('/api/commandes/ouvertes', { preHandler: app.exigerAuth }, async (): Promise<CommandeEnCoursVue[]> => {
     const lignes = await db
       .select({
         id: commandes.id,
+        code_commande: commandes.code_commande,
         numero_ticket: commandes.numero_ticket,
         type: commandes.type,
         statut: commandes.statut,
         total: commandes.total,
         table_id: commandes.table_id,
         table_numero: tablesSalle.numero,
+        partenaire: commandes.partenaire,
         created_at: commandes.created_at,
       })
       .from(commandes)
       .leftJoin(tablesSalle, eq(tablesSalle.id, commandes.table_id))
       .where(notInArray(commandes.statut, ['PAYEE', 'ANNULEE']))
       .orderBy(desc(commandes.created_at));
-    return lignes.map((l) => ({ ...l, numero_ticket: Number(l.numero_ticket), created_at: l.created_at.toISOString() }));
+
+    const comptes = await db
+      .select({ commande_id: commandeItems.commande_id, nb: count() })
+      .from(commandeItems)
+      .innerJoin(commandes, eq(commandes.id, commandeItems.commande_id))
+      .where(notInArray(commandes.statut, ['PAYEE', 'ANNULEE']))
+      .groupBy(commandeItems.commande_id);
+    const nbParCommande = new Map(comptes.map((c) => [c.commande_id, Number(c.nb)]));
+
+    return lignes.map((l) => ({
+      ...l,
+      type: l.type as CommandeEnCoursVue['type'],
+      statut: l.statut as CommandeEnCoursVue['statut'],
+      table_numero: l.table_numero ?? null,
+      numero_ticket: Number(l.numero_ticket),
+      nb_items: nbParCommande.get(l.id) ?? 0,
+      created_at: l.created_at.toISOString(),
+    }));
   });
 
   app.get('/api/commandes/:id', { preHandler: app.exigerAuth }, async (req) => {
@@ -319,6 +382,57 @@ export function routesCommandes(app: FastifyInstance): void {
 
     app.diffuser('commande', id);
     return vue;
+  });
+
+  /**
+   * Abandon d'une commande VIDE — table ouverte par erreur.
+   *
+   * Le caissier ouvre une table, ne tape aucun produit et ressort : la table
+   * doit redevenir LIBRE et la commande ne doit rien retenir (ni le plan de
+   * salle, ni la clôture). Aucun PIN manager : il n'y a rien à cacher, aucun
+   * article n'a été tapé, aucun franc n'a bougé — l'exiger apprendrait au
+   * personnel à laisser traîner les fausses tables.
+   *
+   * Le numéro de ticket est CONSERVÉ (statut ANNULEE, jamais de suppression) :
+   * la séquence ne fait jamais de trou (§ schéma).
+   *
+   * Idempotent et sans effet si la commande contient ne serait-ce qu'une
+   * ligne : le serveur revérifie, ce n'est jamais le client qui décide.
+   */
+  app.post('/api/commandes/:id/abandonner', { preHandler: app.exigePermission('salle.commande') }, async (req) => {
+    const { id } = req.params as { id: string };
+
+    const resultat = await db.transaction(async (tx) => {
+      const c = await verrouillerCommande(tx, id);
+      await exigerAccesTable(tx, req.session!, c.table_id);
+      if (c.statut !== 'OUVERTE') return { abandonnee: false };
+      const [compte] = await tx
+        .select({ nb: count() })
+        .from(commandeItems)
+        .where(eq(commandeItems.commande_id, id));
+      if (Number(compte?.nb ?? 0) > 0) return { abandonnee: false };
+
+      const [maj] = await tx
+        .update(commandes)
+        .set({ statut: 'ANNULEE', updated_at: new Date() })
+        .where(eq(commandes.id, id))
+        .returning();
+      await ecrireOutbox(tx, 'commandes', 'UPDATE', id, maj as unknown as Record<string, unknown>);
+      await majStatutTable(tx, c.table_id, 'LIBRE');
+      await journaliser(tx, {
+        user_id: req.session!.utilisateur_id,
+        action: 'ABANDON_COMMANDE_VIDE',
+        entite: 'commandes',
+        entite_id: id,
+        montant: 0,
+        motif: 'Table ouverte par erreur — aucun article tapé',
+        meta: { numero_ticket: Number(c.numero_ticket), table_id: c.table_id },
+      });
+      return { abandonnee: true };
+    });
+
+    if (resultat.abandonnee) app.diffuser('commande', id);
+    return resultat;
   });
 
   // Réouverture d'une commande PAYEE : PIN manager + motif (§ actions protégées)

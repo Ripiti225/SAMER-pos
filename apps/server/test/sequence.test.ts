@@ -5,6 +5,7 @@ import { fermerDb } from '../src/db/client.js';
 import {
   ouvrirServiceEtCommande,
   PIN_CAISSIER,
+  PIN_CAISSIER2,
   PIN_MANAGER,
   resetDonnees,
   seConnecter,
@@ -98,14 +99,82 @@ describe('séquence (gérant)', () => {
     expect(seq.totaux.vente_totale).toBe(7500); // seul le shift clôturé compte
   });
 
-  it('refuse de raser tant qu’un shift est ouvert', async () => {
-    const rep = await app.inject({ method: 'POST', url: '/api/sequences/cloturer', cookies: manager });
-    expect(rep.statusCode).toBe(409);
-    expect(rep.json().erreur).toContain('ouvert');
+  /**
+   * L'aperçu suit les cases cochées par le gérant. Il est calculé SERVEUR :
+   * la caisse n'additionne aucun montant, même pour un simple affichage.
+   */
+  it('l’aperçu ne totalise que les shifts cochés, et jamais un shift ouvert', async () => {
+    const courante = await app.inject({ method: 'GET', url: '/api/sequences/courante', cookies: manager });
+    const shifts = courante.json().shifts as { service_id: string; statut: string }[];
+    const cloture = shifts.find((s) => s.statut === 'CLOTURE')!;
+
+    const tout = await app.inject({ method: 'POST', url: '/api/sequences/apercu', cookies: manager });
+    expect(tout.statusCode).toBe(200);
+    expect(tout.json().vente_totale).toBe(7500);
+
+    const rien = await app.inject({
+      method: 'POST', url: '/api/sequences/apercu', cookies: manager, payload: { service_ids: [] },
+    });
+    expect(rien.json().vente_totale).toBe(0);
+
+    const choisi = await app.inject({
+      method: 'POST', url: '/api/sequences/apercu', cookies: manager, payload: { service_ids: [cloture.service_id] },
+    });
+    expect(choisi.json().vente_totale).toBe(7500);
+
+    // Un shift encore ouvert coché ne peut rien gonfler : il n'a pas de Z.
+    const ouvertCoche = await app.inject({
+      method: 'POST', url: '/api/sequences/apercu', cookies: manager, payload: { service_ids: [service2] },
+    });
+    expect(ouvertCoche.json().vente_totale).toBe(0);
+
+    // Et un caissier n'y a pas accès (même garde que le rasage).
+    const interdit = await app.inject({ method: 'POST', url: '/api/sequences/apercu', cookies: caissier });
+    expect(interdit.statusCode).toBe(403);
   });
 
-  it('rase la séquence une fois tous les shifts clôturés, puis refuse une 2e fois', async () => {
-    // Encaisse la commande du 2e shift (3000 F) puis clôture ce shift.
+  /**
+   * Une séquence est une JOURNÉE de travail, pas « tout ce qui est fermé » : le
+   * gérant doit pouvoir raser la journée même si le shift de nuit tourne
+   * encore. Le shift ouvert n'est pas rasé — il repart dans la séquence
+   * suivante, qui démarre aussitôt.
+   */
+  it('rase même avec un shift encore ouvert : celui-ci est reporté', async () => {
+    const rep = await app.inject({ method: 'POST', url: '/api/sequences/cloturer', cookies: manager });
+    expect(rep.statusCode).toBe(200);
+    const r = rep.json();
+    expect(r.nb_shifts).toBe(1); // seul le shift clôturé est rasé
+    expect(r.shifts_reportes).toBe(1);
+    expect(r.vente_totale).toBe(7500);
+
+    // La séquence suivante existe déjà et porte le shift encore ouvert.
+    const suivante = await app.inject({ method: 'GET', url: '/api/sequences/courante', cookies: manager });
+    expect(suivante.statusCode).toBe(200);
+    const seq = suivante.json();
+    expect(seq.shifts).toHaveLength(1);
+    expect(seq.shifts[0].service_id).toBe(service2);
+    expect(seq.nb_shifts_ouverts).toBe(1);
+    expect(seq.totaux.vente_totale).toBe(0); // rien de clôturé encore
+    // Journée de travail = jour d'OUVERTURE du shift (logique SamerTrackly).
+    expect(seq.shifts[0].journee).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('refuse une sélection vide et un shift ouvert dans la sélection', async () => {
+    const vide = await app.inject({
+      method: 'POST', url: '/api/sequences/cloturer', cookies: manager, payload: { service_ids: [] },
+    });
+    expect(vide.statusCode).toBe(409);
+    expect(vide.json().erreur).toContain('Aucun shift clôturé');
+
+    const ouvert = await app.inject({
+      method: 'POST', url: '/api/sequences/cloturer', cookies: manager, payload: { service_ids: [service2] },
+    });
+    expect(ouvert.statusCode).toBe(409);
+    expect(ouvert.json().erreur).toContain('encore ouvert');
+  });
+
+  it('le gérant choisit les shifts de sa journée : le reste attend', async () => {
+    // Shift 2 (3000 F) fermé…
     await payer(commande2, 3000, caissier);
     await validerInventaire(app, caissier);
     const f = await app.inject({
@@ -116,15 +185,47 @@ describe('séquence (gérant)', () => {
     });
     expect(f.statusCode).toBe(200);
 
-    const rep = await app.inject({ method: 'POST', url: '/api/sequences/cloturer', cookies: manager });
+    // …puis un 3e shift, chez un autre caissier, également fermé : le gérant a
+    // donc deux shifts clôturés sous la main mais n'en veut qu'un dans sa
+    // journée (l'autre appartient déjà au lendemain).
+    const caissier2 = await seConnecter(app, donnees.caissier2_id, PIN_CAISSIER2);
+    const c3 = await ouvrirServiceEtCommande(app, caissier2, donnees, 1); // 3000 F
+    await payer(c3.commande_id, 3000, caissier2);
+    await validerInventaire(app, caissier2);
+    const f3 = await app.inject({
+      method: 'POST',
+      url: '/api/services/cloturer',
+      cookies: caissier2,
+      payload: { especes_comptees: 28000, livraisons: {}, modes: {} },
+    });
+    expect(f3.statusCode).toBe(200);
+
+    const avant = await app.inject({ method: 'GET', url: '/api/sequences/courante', cookies: manager });
+    expect(avant.json().shifts).toHaveLength(2);
+
+    const rep = await app.inject({
+      method: 'POST', url: '/api/sequences/cloturer', cookies: manager, payload: { service_ids: [service2] },
+    });
     expect(rep.statusCode).toBe(200);
     const r = rep.json();
-    expect(r.nb_shifts).toBe(2);
-    expect(r.vente_totale).toBe(10500); // 7500 (shift 1) + 3000 (shift 2)
+    expect(r.nb_shifts).toBe(1);
+    expect(r.shifts_reportes).toBe(1);
+    expect(r.vente_totale).toBe(3000); // le 3e shift n'est PAS compté
 
-    // Plus de séquence ouverte → 2e rasage refusé.
+    // Le 3e shift attend, seul, dans la séquence suivante.
+    const apres = await app.inject({ method: 'GET', url: '/api/sequences/courante', cookies: manager });
+    const seq = apres.json();
+    expect(seq.shifts).toHaveLength(1);
+    expect(seq.shifts[0].service_id).toBe(c3.service_id);
+    expect(seq.totaux.vente_totale).toBe(3000);
+
+    // Et cette dernière séquence se rase normalement (plus rien à reporter).
+    const dernier = await app.inject({ method: 'POST', url: '/api/sequences/cloturer', cookies: manager });
+    expect(dernier.statusCode).toBe(200);
+    expect(dernier.json().shifts_reportes).toBe(0);
+
+    // Plus de séquence ouverte → rasage suivant refusé.
     const encore = await app.inject({ method: 'POST', url: '/api/sequences/cloturer', cookies: manager });
     expect(encore.statusCode).toBe(409);
-    expect(service2).toBeTruthy();
   });
 });

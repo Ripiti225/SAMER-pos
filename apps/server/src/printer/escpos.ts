@@ -615,6 +615,10 @@ export class EscposPrinter implements PrinterService {
         r.duo('Rasee', horodatage(new Date(s.cloturee_le)));
         r.duo('Par', s.cloturee_par);
         r.duo('Shifts', String(s.nb_shifts));
+        // Shifts laissés pour le lendemain (encore ouverts, ou rangés dans la
+        // journée suivante par le gérant) : sans cette ligne, un total amputé
+        // passerait pour un manque en caisse.
+        if (s.shifts_reportes > 0) r.duo('Reportes', `${s.shifts_reportes} shift(s)`);
 
         // Un bloc par caissier : c'est le cœur du document pour le gérant.
         for (const sh of s.shifts) {

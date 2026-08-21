@@ -1,17 +1,58 @@
-import { useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconArrowLeft } from '@tabler/icons-react';
-import type { RapportSequence, SequenceCourante } from '@pos/shared';
+import type { RapportSequence, RecapSequence, SequenceCourante, ShiftSequence } from '@pos/shared';
 import { formatFCFA, libellePartenaire, LIBELLES_MODES, type ModePaiement } from '@pos/shared';
 import { api } from '../api';
 import { Modale } from '../components/Modale';
 import { useCaisse } from '../stores/session';
 
+/**
+ * Shifts pré-cochés : ceux de la PREMIÈRE journée présente dans la séquence,
+ * et clôturés. C'est la logique SamerTrackly (une séquence = une journée, un
+ * point appartient au jour où il a COMMENCÉ) ramenée à une simple proposition :
+ * si le gérant rase tard et que la journée suivante a déjà tourné, ces
+ * shifts-là ne partent pas avec la veille. Le gérant reste libre de cocher
+ * autrement — le créneau d'une journée n'est jamais figé.
+ */
+function preSelection(shifts: ShiftSequence[]): Set<string> {
+  const clotures = shifts.filter((s) => s.statut === 'CLOTURE');
+  if (clotures.length === 0) return new Set();
+  const premiereJournee = clotures.reduce((min, s) => (s.journee < min ? s.journee : min), clotures[0]!.journee);
+  return new Set(clotures.filter((s) => s.journee === premiereJournee).map((s) => s.service_id));
+}
+
+/**
+ * Aperçu vide, le temps que le serveur réponde. AUCUN montant n'est additionné
+ * dans cet écran : les totaux de la sélection sont calculés par le serveur
+ * (`/api/sequences/apercu`), comme le rapport figé au rasage — même règle que
+ * l'addition d'une commande (§ CLAUDE.md).
+ */
+const RECAP_VIDE: RecapSequence = {
+  vente_totale: 0,
+  total_systeme: 0,
+  diff: 0,
+  especes_comptees: 0,
+  depenses: 0,
+  ecart_especes: 0,
+  livraisons: {},
+  offerts: { nb: 0, total: 0 },
+  modes: {},
+};
+
+function libelleJournee(journee: string): string {
+  const [a, m, j] = journee.split('-');
+  return `${j}/${m}/${a}`;
+}
 
 /**
  * Fermeture de séquence (journée) — réservé aux porteurs de la permission
  * `caisse.fermer_sequence` (le gérant par défaut). Détail par caissier de tous
  * les shifts depuis la dernière fermeture, puis « rasage » définitif.
+ *
+ * Le gérant COCHE les shifts qui composent la journée : un shift encore ouvert
+ * n'empêche plus de raser, et un shift qui appartient déjà au lendemain se
+ * décoche. Tout ce qui n'est pas coché repart dans la séquence suivante.
  */
 export function Sequence() {
   const { rentrer, afficherToast } = useCaisse();
@@ -19,6 +60,7 @@ export function Sequence() {
   const [confirmer, setConfirmer] = useState(false);
   const [rapport, setRapport] = useState<RapportSequence | null>(null);
   const [enCours, setEnCours] = useState(false);
+  const [choisis, setChoisis] = useState<Set<string> | null>(null);
 
   const { data: seq, isLoading } = useQuery({
     queryKey: ['sequence-courante'],
@@ -26,13 +68,63 @@ export function Sequence() {
     enabled: !rapport,
   });
 
+  // Proposition initiale, refaite si la séquence change (un shift qui se ferme
+  // pendant que le gérant regarde l'écran doit apparaître coché).
+  const signature = seq ? `${seq.id}|${seq.shifts.map((s) => `${s.service_id}:${s.statut}`).join(',')}` : '';
+  useEffect(() => {
+    setChoisis(seq ? preSelection(seq.shifts) : null);
+  }, [signature]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selection = choisis ?? new Set<string>();
+  /** Rase exactement cette journée : ses shifts clôturés, et rien d'autre. */
+  const choisirJournee = (journee: string) => {
+    setChoisis(
+      new Set(
+        (seq?.shifts ?? [])
+          .filter((s) => s.journee === journee && s.statut === 'CLOTURE')
+          .map((s) => s.service_id),
+      ),
+    );
+  };
+  const basculer = (serviceId: string) => {
+    setChoisis((prec) => {
+      const copie = new Set(prec ?? []);
+      if (copie.has(serviceId)) copie.delete(serviceId);
+      else copie.add(serviceId);
+      return copie;
+    });
+  };
+
+  const shiftsRetenus = (seq?.shifts ?? []).filter((s) => selection.has(s.service_id));
+  const shiftsReportes = (seq?.shifts ?? []).filter((s) => !selection.has(s.service_id));
+  const journeesRetenues = [...new Set(shiftsRetenus.map((s) => s.journee))];
+
+  // Les totaux affichés suivent les cases cochées — c'est le chiffre du rasage,
+  // pas celui de la séquence entière. Ils sont demandés AU SERVEUR à chaque
+  // changement de coche : la caisse n'additionne aucun montant.
+  const cleSelection = [...selection].sort().join(',');
+  const { data: apercu } = useQuery({
+    queryKey: ['sequence-apercu', seq?.id ?? '', cleSelection],
+    queryFn: () =>
+      api<RecapSequence>('/api/sequences/apercu', { method: 'POST', corps: { service_ids: [...selection] } }),
+    enabled: !!seq && choisis !== null,
+    // Garde le chiffre précédent pendant l'aller-retour : le gérant ne voit pas
+    // le total retomber à 0 F entre deux clics.
+    placeholderData: (precedent) => precedent,
+  });
+  const totauxRetenus = apercu ?? RECAP_VIDE;
+
   const raser = async () => {
     setEnCours(true);
     try {
-      const r = await api<RapportSequence>('/api/sequences/cloturer', { method: 'POST' });
+      const r = await api<RapportSequence>('/api/sequences/cloturer', {
+        method: 'POST',
+        corps: { service_ids: [...selection] },
+      });
       setRapport(r);
       setConfirmer(false);
       void qc.invalidateQueries({ queryKey: ['sequence-courante'] });
+      void qc.invalidateQueries({ queryKey: ['sequence-apercu'] });
     } catch (e) {
       afficherToast((e as Error).message);
       setConfirmer(false);
@@ -65,37 +157,71 @@ export function Sequence() {
             <span>{seq.shifts.length} shift(s){seq.nb_shifts_ouverts > 0 ? ` · ${seq.nb_shifts_ouverts} encore ouvert(s)` : ''}</span>
           </div>
 
-          {/* Total de la séquence */}
+          {/* Total des shifts COCHÉS — c'est le chiffre du rasage */}
           <div className="carte grid grid-cols-2 gap-3 p-5 sm:grid-cols-4">
-            <Tuile libelle="Vente totale" valeur={formatFCFA(seq.totaux.vente_totale)} accent />
-            <Tuile libelle="Total système" valeur={formatFCFA(seq.totaux.total_systeme)} />
-            <Tuile libelle="Écart réconc." valeur={`${seq.totaux.diff > 0 ? '+' : ''}${formatFCFA(seq.totaux.diff)}`} rouge={seq.totaux.diff < 0} />
-            <Tuile libelle="Écart espèces" valeur={`${seq.totaux.ecart_especes > 0 ? '+' : ''}${formatFCFA(seq.totaux.ecart_especes)}`} rouge={seq.totaux.ecart_especes < 0} />
+            <Tuile libelle="Vente totale" valeur={formatFCFA(totauxRetenus.vente_totale)} accent />
+            <Tuile libelle="Total système" valeur={formatFCFA(totauxRetenus.total_systeme)} />
+            <Tuile libelle="Écart réconc." valeur={`${totauxRetenus.diff > 0 ? '+' : ''}${formatFCFA(totauxRetenus.diff)}`} rouge={totauxRetenus.diff < 0} />
+            <Tuile libelle="Écart espèces" valeur={`${totauxRetenus.ecart_especes > 0 ? '+' : ''}${formatFCFA(totauxRetenus.ecart_especes)}`} rouge={totauxRetenus.ecart_especes < 0} />
           </div>
 
-          {/* Détail par caissier */}
+          {/* Détail par caissier, groupé par journée de travail. Le gérant coche
+              les shifts qui composent la journée qu'il rase. */}
           <div className="carte overflow-x-auto p-0">
             <table className="w-full text-left text-sm">
               <thead className="text-doux">
                 <tr className="border-b border-bordure">
+                  <th className="p-3">Raser</th>
                   <th className="p-3">Caissier</th><th className="p-3">Statut</th>
                   <th className="p-3 text-right">Vente</th><th className="p-3 text-right">Espèces</th>
                   <th className="p-3 text-right">Écart</th>
                 </tr>
               </thead>
               <tbody>
-                {seq.shifts.map((s) => (
-                  <tr key={s.service_id} className="border-b border-bordure last:border-0">
-                    <td className="p-3 font-semibold">{s.caissier}</td>
-                    <td className="p-3">
-                      {s.statut === 'CLOTURE'
-                        ? <span className="text-ok">Clôturé</span>
-                        : <span className="text-alerte">Ouvert</span>}
-                    </td>
-                    <td className="p-3 text-right tabular-nums">{s.vente_totale != null ? formatFCFA(s.vente_totale) : '—'}</td>
-                    <td className="p-3 text-right tabular-nums">{s.especes_comptees != null ? formatFCFA(s.especes_comptees) : '—'}</td>
-                    <td className={`p-3 text-right tabular-nums ${(s.ecart ?? 0) < 0 ? 'text-alerte' : ''}`}>{s.ecart != null ? formatFCFA(s.ecart) : '—'}</td>
-                  </tr>
+                {[...new Set(seq.shifts.map((s) => s.journee))].map((journee) => (
+                  <Fragment key={journee}>
+                    <tr className="bg-surface-douce">
+                      <td className="px-3 py-2" colSpan={6}>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-xs font-semibold text-doux">Journée du {libelleJournee(journee)}</span>
+                          {/* Le cas courant : la journée est complète, on la rase
+                              d'un geste. Les cases ne servent qu'aux exceptions. */}
+                          <button
+                            type="button"
+                            className="rounded-btn bg-marque-tint px-3 py-1 text-xs font-semibold text-marque-fonce"
+                            onClick={() => choisirJournee(journee)}
+                          >
+                            Raser la journée du {libelleJournee(journee)}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {seq.shifts.filter((s) => s.journee === journee).map((s) => (
+                      <tr key={s.service_id} className="border-b border-bordure last:border-0">
+                        <td className="p-3">
+                          <input
+                            type="checkbox"
+                            className="h-6 w-6 accent-marque"
+                            checked={selection.has(s.service_id)}
+                            // Un shift ouvert n'a ni comptage aveugle ni rapport Z :
+                            // il ne peut pas être rasé, seulement reporté.
+                            disabled={s.statut !== 'CLOTURE'}
+                            onChange={() => basculer(s.service_id)}
+                            aria-label={`Raser le shift de ${s.caissier}`}
+                          />
+                        </td>
+                        <td className="p-3 font-semibold">{s.caissier}</td>
+                        <td className="p-3">
+                          {s.statut === 'CLOTURE'
+                            ? <span className="text-ok">Clôturé</span>
+                            : <span className="text-alerte">Ouvert — reporté</span>}
+                        </td>
+                        <td className="p-3 text-right tabular-nums">{s.vente_totale != null ? formatFCFA(s.vente_totale) : '—'}</td>
+                        <td className="p-3 text-right tabular-nums">{s.especes_comptees != null ? formatFCFA(s.especes_comptees) : '—'}</td>
+                        <td className={`p-3 text-right tabular-nums ${(s.ecart ?? 0) < 0 ? 'text-alerte' : ''}`}>{s.ecart != null ? formatFCFA(s.ecart) : '—'}</td>
+                      </tr>
+                    ))}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -103,32 +229,53 @@ export function Sequence() {
 
           {/* Répartition */}
           <div className="grid gap-3 sm:grid-cols-2">
-            <Bloc titre="Encaissements" lignes={Object.entries(seq.totaux.modes).filter(([, v]) => v > 0).map(([m, v]) => [LIBELLES_MODES[m as ModePaiement] ?? m, v])} />
+            <Bloc titre="Encaissements" lignes={Object.entries(totauxRetenus.modes).filter(([, v]) => v > 0).map(([m, v]) => [LIBELLES_MODES[m as ModePaiement] ?? m, v])} />
             <Bloc titre="Livraisons, Kdo & dépenses" lignes={[
-              ...Object.entries(seq.totaux.livraisons).filter(([, v]) => v > 0).map(([p, v]) => [libellePartenaire(p), v] as [string, number]),
-              ...((seq.totaux.offerts?.total ?? 0) > 0
-                ? [[`Kdo offerts (${seq.totaux.offerts.nb})`, seq.totaux.offerts.total] as [string, number]]
+              ...Object.entries(totauxRetenus.livraisons).filter(([, v]) => v > 0).map(([p, v]) => [libellePartenaire(p), v] as [string, number]),
+              ...(totauxRetenus.offerts.total > 0
+                ? [[`Kdo offerts (${totauxRetenus.offerts.nb})`, totauxRetenus.offerts.total] as [string, number]]
                 : []),
-              ['Dépenses', seq.totaux.depenses] as [string, number],
+              ['Dépenses', totauxRetenus.depenses] as [string, number],
             ]} />
           </div>
 
-          {seq.nb_shifts_ouverts > 0 ? (
+          {shiftsReportes.length > 0 && (
             <div className="rounded-xl bg-alerte-tint p-4 text-sm text-alerte">
-              Des shifts sont encore ouverts. Attendez que chaque caissier ferme le sien avant de raser la séquence.
+              {shiftsReportes.length} shift(s) non coché(s) — {shiftsReportes.map((s) => s.caissier).join(', ')} — ne sont
+              pas rasés : ils repartent dans la séquence suivante.
             </div>
-          ) : (
-            <button type="button" className="btn-alerte w-full py-4 text-lg" onClick={() => setConfirmer(true)}>
-              Raser la séquence (fin de journée)
-            </button>
           )}
+
+          <button
+            type="button"
+            className="btn-alerte w-full py-4 text-lg"
+            disabled={shiftsRetenus.length === 0}
+            onClick={() => setConfirmer(true)}
+          >
+            {shiftsRetenus.length === 0
+              ? 'Cochez au moins un shift clôturé'
+              : `Raser la séquence (${shiftsRetenus.length} shift${shiftsRetenus.length > 1 ? 's' : ''})`}
+          </button>
         </div>
       )}
 
       {confirmer && (
         <Modale titre="Raser la séquence ?" onFermer={() => setConfirmer(false)} enfants={
           <div className="grid gap-3">
-            <p className="text-doux">Action définitive : la séquence est figée et une nouvelle démarrera au prochain shift.</p>
+            <p className="text-doux">
+              Action définitive : {shiftsRetenus.length} shift(s) sont figés dans cette séquence
+              {journeesRetenues.length === 1 ? ` (journée du ${libelleJournee(journeesRetenues[0]!)})` : ''}.
+            </p>
+            {shiftsReportes.length > 0 && (
+              <p className="text-alerte">
+                {shiftsReportes.map((s) => s.caissier).join(', ')} : non rasé(s), reporté(s) sur la séquence suivante,
+                qui démarre tout de suite.
+              </p>
+            )}
+            <div className="rounded-xl bg-marque-tint p-3 text-center">
+              <div className="text-sm text-marque-fonce">Vente totale rasée</div>
+              <div className="text-3xl font-black text-marque-fonce">{formatFCFA(totauxRetenus.vente_totale)}</div>
+            </div>
             <button type="button" className="btn-alerte py-4 text-lg" disabled={enCours} onClick={raser}>
               {enCours ? 'Fermeture…' : 'Confirmer — raser la séquence'}
             </button>
@@ -164,6 +311,7 @@ function RapportSequenceVue({ rapport, onQuitter }: { rapport: RapportSequence; 
         <h2 className="text-center text-2xl font-bold">Séquence clôturée</h2>
         <div className="text-center text-sm text-doux">
           Par {rapport.cloturee_par} · {new Date(rapport.cloturee_le).toLocaleString('fr-FR')} · {rapport.nb_shifts} shift(s)
+          {rapport.shifts_reportes > 0 ? ` · ${rapport.shifts_reportes} reporté(s)` : ''}
         </div>
         <div className="rounded-xl bg-marque-tint p-4 text-center">
           <div className="text-sm text-marque-fonce">Vente totale de la séquence</div>

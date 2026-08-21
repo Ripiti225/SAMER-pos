@@ -61,6 +61,10 @@ export function PiluleSync() {
         afficherToast('Synchronisation cloud non configurée sur ce poste');
       } else if (frais.lignes_en_attente === 0) {
         afficherToast('Tout est synchronisé');
+      } else if (frais.derniere_erreur) {
+        // Dire la cause. « Encore en attente » tout court laissait le
+        // restaurateur appuyer en boucle sans savoir quoi faire (17/08).
+        afficherToast(`${frais.lignes_en_attente} en attente — ${frais.derniere_erreur}`);
       } else {
         afficherToast(`${frais.lignes_en_attente} vente(s) encore en attente`);
       }

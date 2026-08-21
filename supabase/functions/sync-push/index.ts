@@ -13,6 +13,39 @@ interface LignePush {
   payload: Record<string, unknown>;
 }
 
+/**
+ * Trace un blocage dans `sync_rejets` — une seule ligne par (site, seq, raison),
+ * sinon un site qui réessaie toutes les 30 s remplirait la table.
+ *
+ * Contrairement au garage d'une table inconnue, la ligne N'EST PAS acquittée :
+ * elle sera rejouée. On ne trace ici que pour rendre la panne VISIBLE au siège.
+ */
+async function tracerBlocage(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  restaurantId: string,
+  l: LignePush,
+  raison: string,
+): Promise<void> {
+  const { data } = await admin
+    .from('sync_rejets')
+    .select('id')
+    .eq('restaurant_id', restaurantId)
+    .eq('seq', l.seq)
+    .eq('raison', raison)
+    .limit(1);
+  if (data && data.length > 0) return;
+  await admin.from('sync_rejets').insert({
+    restaurant_id: restaurantId,
+    seq: l.seq,
+    table_name: l.table_name,
+    record_id: l.record_id,
+    operation: l.operation,
+    payload: l.payload ?? {},
+    raison,
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ erreur: 'Méthode non autorisée' }, 405);
   const admin = clientAdmin();
@@ -32,6 +65,10 @@ Deno.serve(async (req) => {
   lignes.sort((a, b) => a.seq - b.seq);
 
   let acquitteJusqua = 0;
+  // Ce qui a arrêté le lot, renvoyé au site. Sans ça, un refus ressemblait à
+  // un simple « rien à acquitter » : le POS n'avait AUCUN moyen de savoir que
+  // le cloud le refusait, ni pourquoi (panne du 2026-08-17).
+  let blocage: { seq: number; table_name: string; raison: string } | undefined;
   for (const l of lignes) {
     const ligne = ligneAutorisee(l.table_name, l.payload ?? {}, l.record_id, restaurantId);
     if (!ligne) {
@@ -52,7 +89,14 @@ Deno.serve(async (req) => {
       });
       // Si même le rebut échoue (table absente sur un cloud pas à jour), on
       // revient à l'ancien comportement : bloquer plutôt que perdre.
-      if (erreurRejet) break;
+      if (erreurRejet) {
+        blocage = {
+          seq: l.seq,
+          table_name: l.table_name,
+          raison: `table inconnue, et le rebut a échoué : ${erreurRejet.message}`,
+        };
+        break;
+      }
       acquitteJusqua = l.seq;
       continue;
     }
@@ -60,10 +104,17 @@ Deno.serve(async (req) => {
     // même si les deux portent le même UUID (image de déploiement clonée).
     // `cibleMontee` : la fiche employé envoyée par un site atterrit dans
     // `utilisateurs_site`, jamais dans la table du siège, qui en est maître.
-    const { error } = await admin
-      .from(cibleMontee(l.table_name))
-      .upsert(ligne, { onConflict: 'restaurant_id,id' });
-    if (error) break; // acquittement contigu : on ne dépasse pas la 1re erreur
+    const cible = cibleMontee(l.table_name);
+    const { error } = await admin.from(cible).upsert(ligne, { onConflict: 'restaurant_id,id' });
+    if (error) {
+      // Acquittement contigu : on ne dépasse pas la 1re erreur — la ligne sera
+      // rejouée, rien n'est perdu. Mais on ne l'AVALE plus : trace au siège et
+      // raison renvoyée au site, qui peut enfin l'afficher au restaurateur.
+      const raison = `upsert ${cible} : ${error.message}`;
+      blocage = { seq: l.seq, table_name: l.table_name, raison };
+      await tracerBlocage(admin, restaurantId, l, raison);
+      break;
+    }
     acquitteJusqua = l.seq;
   }
 
@@ -76,5 +127,5 @@ Deno.serve(async (req) => {
     });
   }
 
-  return json({ acquitte_jusqua_seq: acquitteJusqua });
+  return json({ acquitte_jusqua_seq: acquitteJusqua, blocage });
 });

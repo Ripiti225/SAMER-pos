@@ -156,6 +156,30 @@ export interface CommandeOuverteVue {
   created_at: string;
 }
 
+/**
+ * Commande en cours qui n'a PAS de place sur le plan de salle — à emporter au
+ * premier chef. Une commande à emporter n'occupe aucune table : une fois
+ * l'écran quitté, elle n'était visible NULLE PART, et le caissier qui revenait
+ * donner la facture la retapait entièrement (signalé le 2026-08-18). D'où cette
+ * vue, servie par `GET /api/commandes/ouvertes`.
+ *
+ * `nb_items` distingue une vraie commande d'une commande ouverte par erreur
+ * (aucun article tapé), écartée partout ailleurs — voir `deriverEtat`.
+ */
+export interface CommandeEnCoursVue {
+  id: string;
+  code_commande: string | null;
+  numero_ticket: number;
+  type: TypeCommande;
+  statut: StatutCommande;
+  total: number;
+  table_id: string | null;
+  table_numero: string | null;
+  partenaire: string | null;
+  nb_items: number;
+  created_at: string;
+}
+
 export interface TableVue {
   id: string;
   zone_id: string;
@@ -426,6 +450,13 @@ export interface ShiftSequence {
   service_id: string;
   caissier: string;
   ouvert_le: string;
+  /**
+   * Journée de travail à laquelle le shift appartient (AAAA-MM-JJ), calculée
+   * SERVEUR sur l'heure d'OUVERTURE — logique SamerTrackly : un point commencé
+   * la veille et terminé le lendemain (16h→01h, 03h…) reste un point de la
+   * VEILLE. Sert à pré-cocher les shifts d'une même journée au rasage.
+   */
+  journee: string;
   cloture_le: string | null;
   statut: 'OUVERT' | 'CLOTURE';
   fond_de_caisse: number;
@@ -470,5 +501,12 @@ export interface RapportSequence extends RecapSequence {
   cloturee_le: string;
   cloturee_par: string;
   nb_shifts: number;
+  /**
+   * Shifts NON retenus (encore ouverts, ou volontairement laissés de côté par
+   * le gérant) : ils ne comptent pas dans ce rasage et repartent dans la
+   * séquence suivante. Le récap papier le dit, sinon un total plus petit que
+   * prévu passerait pour un manque.
+   */
+  shifts_reportes: number;
   shifts: ShiftSequence[];
 }

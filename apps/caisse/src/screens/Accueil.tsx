@@ -18,8 +18,14 @@ import {
   IconToolsKitchen2,
   IconWifi,
 } from '@tabler/icons-react';
-import type { CommandeVue, TableVue } from '@pos/shared';
-import { libellePartenaire, PARTENAIRES, PERMISSIONS_ADMIN } from '@pos/shared';
+import type { CommandeEnCoursVue, CommandeVue, TableVue } from '@pos/shared';
+import {
+  formatFCFA,
+  libellePartenaire,
+  LIBELLES_STATUTS_COMMANDE,
+  PARTENAIRES,
+  PERMISSIONS_ADMIN,
+} from '@pos/shared';
 import { api } from '../api';
 import { Modale } from '../components/Modale';
 import { useNbAdditionsEnAttente } from '../components/BandeauAdditions';
@@ -50,6 +56,7 @@ export function Accueil() {
   const [choixType, setChoixType] = useState(false);
   const [choixTable, setChoixTable] = useState(false);
   const [choixLivraison, setChoixLivraison] = useState(false);
+  const [choixEmporter, setChoixEmporter] = useState(false);
   const [appareils, setAppareils] = useState(false);
   const nbAdditions = useNbAdditionsEnAttente();
   const horloge = useHorloge();
@@ -77,6 +84,21 @@ export function Accueil() {
     enabled: choixTable || choixLivraison,
   });
 
+  /**
+   * Commandes à emporter en cours. Elles n'occupent aucune table : une fois
+   * l'écran de saisie quitté, elles n'étaient visibles nulle part et le
+   * caissier les retapait en croyant les avoir oubliées (signalé le
+   * 2026-08-18). On les remonte ici — au moment EXACT où il ouvrirait un
+   * doublon — et sur le plan de salle, pseudo-zone « À emporter ».
+   */
+  const { data: enCours } = useQuery({
+    queryKey: ['commandes-ouvertes'],
+    queryFn: () => api<CommandeEnCoursVue[]>('/api/commandes/ouvertes'),
+    enabled: !!session && peutCommander,
+    refetchInterval: 20000,
+  });
+  const emporter = (enCours ?? []).filter((c) => c.type === 'EMPORTER' && c.nb_items > 0);
+
   // Pastilles des deux nouvelles tuiles : nombre de sorties de caisse du
   // service, et alerte tant que l'inventaire n'est pas validé.
   const { data: depenses } = useQuery({
@@ -96,6 +118,7 @@ export function Accueil() {
       setChoixType(false);
       setChoixTable(false);
       setChoixLivraison(false);
+      setChoixEmporter(false);
       aller('commande', commande.id);
     } catch (e) {
       afficherToast((e as Error).message);
@@ -231,7 +254,14 @@ export function Accueil() {
               <CarteAction
                 couleur="#3b82f6"
                 titre="Tables"
-                sousTitre="Plan de salle & additions"
+                // Les commandes à emporter vivent maintenant dans le plan de
+                // salle (pseudo-zone) : la tuile le dit, sinon personne n'irait
+                // les y chercher.
+                sousTitre={
+                  emporter.length > 0
+                    ? `Plan de salle · ${emporter.length} à emporter`
+                    : 'Plan de salle & additions'
+                }
                 icone={<IconLayoutGrid size={28} />}
                 badge={nbAdditions > 0 ? String(nbAdditions) : undefined}
                 onClick={() => aller('tables')}
@@ -307,8 +337,27 @@ export function Accueil() {
             <button type="button" className="btn-accent py-6 text-xl" onClick={() => { setChoixType(false); setChoixTable(true); }}>
               Sur place
             </button>
-            <button type="button" className="btn-blanc py-6 text-xl" onClick={() => creerCommande({ type: 'EMPORTER' })}>
+            {/* Des commandes à emporter tournent déjà : on les MONTRE avant
+                d'en ouvrir une nouvelle. C'est ici que naissaient les doublons
+                — le caissier ne les voyait nulle part et retapait tout. */}
+            <button
+              type="button"
+              className="btn-blanc py-6 text-xl"
+              onClick={() => {
+                if (emporter.length > 0) {
+                  setChoixType(false);
+                  setChoixEmporter(true);
+                } else {
+                  void creerCommande({ type: 'EMPORTER' });
+                }
+              }}
+            >
               À emporter
+              {emporter.length > 0 && (
+                <span className="ml-2 rounded-full bg-marque-tint px-2.5 py-1 text-sm font-bold text-marque-fonce">
+                  {emporter.length} en cours
+                </span>
+              )}
             </button>
             <button type="button" className="btn-blanc py-6 text-xl" onClick={() => { setChoixType(false); setChoixLivraison(true); }}>
               Livraison
@@ -357,6 +406,43 @@ export function Accueil() {
                 {libellePartenaire(p)}
               </button>
             ))}
+          </div>
+        } />
+      )}
+
+      {choixEmporter && (
+        <Modale titre="À emporter" onFermer={() => setChoixEmporter(false)} enfants={
+          <div className="space-y-3">
+            <p className="text-sm text-doux">
+              {emporter.length === 1
+                ? 'Une commande à emporter est en cours'
+                : `${emporter.length} commandes à emporter sont en cours`}{' '}
+              — touchez-la pour la reprendre, imprimer la facture ou encaisser.
+            </p>
+            {emporter.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className="carte flex w-full items-center justify-between p-4 text-left hover:border-marque"
+                onClick={() => {
+                  setChoixEmporter(false);
+                  aller('commande', c.id);
+                }}
+              >
+                <span>
+                  <span className="text-lg font-semibold">{c.code_commande ?? `N°${c.numero_ticket}`}</span>
+                  <span className="ml-2 text-sm text-doux">{LIBELLES_STATUTS_COMMANDE[c.statut]}</span>
+                </span>
+                <span className="text-lg font-semibold">{formatFCFA(c.total)}</span>
+              </button>
+            ))}
+            <button
+              type="button"
+              className="btn-marque w-full py-5 text-lg"
+              onClick={() => void creerCommande({ type: 'EMPORTER' })}
+            >
+              Nouvelle commande à emporter
+            </button>
           </div>
         } />
       )}

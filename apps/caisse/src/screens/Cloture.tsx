@@ -163,7 +163,7 @@ export function Cloture() {
                     <div key={c.id}>Ticket n° {c.numero_ticket} — {formatFCFA(c.total)}</div>
                   ))}
                 </div>
-                <button type="button" className="btn-accent mt-3 w-full" onClick={() => setTransfertOuvert(true)}>Transférer au caissier suivant</button>
+                <button type="button" className="btn-accent mt-3 w-full" onClick={() => setTransfertOuvert(true)}>Transférer les tables (relève ou mon prochain shift)</button>
               </div>
             )}
             {/* Verrou d'inventaire (§ 6.10) : annoncé ICI, avant que le
@@ -453,7 +453,11 @@ export function Cloture() {
           onTransfere={(resultat) => {
             setTransfertOuvert(false);
             void queryClient.invalidateQueries({ queryKey: ['mes-ventes'] });
-            afficherToast(`${resultat.nb_transferees} commande(s) transférée(s) à ${resultat.receveur} ✔`);
+            afficherToast(
+              resultat.meme_caissier
+                ? `${resultat.nb_transferees} table(s) gardée(s) pour votre prochain shift ✔`
+                : `${resultat.nb_transferees} commande(s) transférée(s) à ${resultat.receveur} ✔`,
+            );
           }}
           onFermer={() => setTransfertOuvert(false)}
         />
@@ -496,7 +500,7 @@ function ModaleTransfert({
   onFermer,
 }: {
   moiId: string;
-  onTransfere: (r: { nb_transferees: number; receveur: string }) => void;
+  onTransfere: (r: { nb_transferees: number; receveur: string; meme_caissier: boolean }) => void;
   onFermer: () => void;
 }) {
   const { afficherToast } = useCaisse();
@@ -508,15 +512,23 @@ function ModaleTransfert({
     queryKey: ['utilisateurs-login'],
     queryFn: () => api<UtilisateurPublic[]>('/api/auth/utilisateurs'),
   });
-  const candidats = (utilisateurs ?? []).filter(
-    (u) => u.id !== moiId && (u.role === 'CAISSIER' || u.role === 'MANAGER' || u.role === 'PROPRIETAIRE'),
-  );
+  // Le caissier lui-même est un choix VALIDE : il enchaîne parfois deux
+  // tranches (16h-00h puis 00h-08h) et doit pouvoir garder ses tables d'un
+  // shift à l'autre. Il est mis en tête — c'est le geste le plus courant en
+  // fin de nuit — et ses commandes se rattacheront au shift qu'il rouvrira.
+  const tenirCaisse = (u: UtilisateurPublic) =>
+    u.role === 'CAISSIER' || u.role === 'MANAGER' || u.role === 'PROPRIETAIRE';
+  const moi = (utilisateurs ?? []).find((u) => u.id === moiId && tenirCaisse(u));
+  const candidats = [
+    ...(moi ? [moi] : []),
+    ...(utilisateurs ?? []).filter((u) => u.id !== moiId && tenirCaisse(u)),
+  ];
 
   const transferer = async () => {
     if (!receveur) return;
     setEnCours(true);
     try {
-      const resultat = await api<{ nb_transferees: number; receveur: string }>('/api/services/transferer', {
+      const resultat = await api<{ nb_transferees: number; receveur: string; meme_caissier: boolean }>('/api/services/transferer', {
         method: 'POST',
         corps: { receveur_id: receveur.id, pin_receveur: pin },
       });
@@ -530,22 +542,31 @@ function ModaleTransfert({
   };
 
   return (
-    <Modale titre="Transférer au caissier suivant" onFermer={onFermer} enfants={
+    <Modale titre="Transférer les tables" onFermer={onFermer} enfants={
       !receveur ? (
         <div className="space-y-2">
           <p className="text-sm text-doux">Qui prend la relève ?</p>
           {candidats.map((u) => (
             <button key={u.id} type="button" className="carte w-full p-4 text-left hover:border-marque" onClick={() => setReceveur(u)}>
-              <div className="font-bold">{u.nom_complet}</div>
-              <div className="text-sm text-doux">{u.role === 'CAISSIER' ? 'Caissier' : u.role === 'MANAGER' ? 'Manager' : 'Propriétaire'}</div>
+              <div className="font-bold">{u.id === moiId ? `${u.nom_complet} (moi)` : u.nom_complet}</div>
+              <div className="text-sm text-doux">
+                {u.id === moiId
+                  ? 'J’enchaîne — je garde mes tables pour mon prochain shift'
+                  : u.role === 'CAISSIER' ? 'Caissier' : u.role === 'MANAGER' ? 'Manager' : 'Propriétaire'}
+              </div>
             </button>
           ))}
-          {candidats.length === 0 && <div className="text-doux">Aucun autre caissier disponible.</div>}
+          {candidats.length === 0 && <div className="text-doux">Aucun caissier disponible.</div>}
         </div>
       ) : (
         <div className="space-y-3">
           <p className="text-sm text-doux">
-            <span className="font-semibold text-fort">{receveur.nom_complet}</span> accepte en saisissant <span className="font-semibold text-fort">son propre PIN</span>.
+            {receveur.id === moiId ? (
+              <>Confirmez avec <span className="font-semibold text-fort">votre PIN</span> : vos tables quittent ce shift
+              et reviendront sur le prochain que vous ouvrirez.</>
+            ) : (
+              <><span className="font-semibold text-fort">{receveur.nom_complet}</span> accepte en saisissant <span className="font-semibold text-fort">son propre PIN</span>.</>
+            )}
           </p>
           <div className="champ flex items-center justify-center text-2xl tracking-[0.5em]">
             {'•'.repeat(pin.length) || <span className="text-base tracking-normal text-doux">PIN du receveur…</span>}

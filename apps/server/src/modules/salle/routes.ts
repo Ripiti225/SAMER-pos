@@ -9,15 +9,23 @@
  * ouvertes aux rôles SERVEUR et CAISSE (+ MANAGER/PROPRIETAIRE).
  */
 import type { FastifyInstance } from 'fastify';
-import { and, asc, desc, eq, notInArray } from 'drizzle-orm';
+import { and, asc, count, desc, eq, notInArray } from 'drizzle-orm';
 import type { AppelVue } from '@pos/shared';
-import { RefusCommandeSchema, TransfertTableSchema } from '@pos/shared';
+import { LibererTableSchema, RefusCommandeSchema, TransfertTableSchema } from '@pos/shared';
 import { db } from '../../db/client.js';
-import { appelsTable, commandes, tablesSalle, utilisateurs, zones } from '../../db/schema/index.js';
+import {
+  appelsTable,
+  commandeItems,
+  commandes,
+  tablesSalle,
+  utilisateurs,
+  zones,
+} from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
+import { verifierPinManager } from '../auth/pin.js';
 import {
   chargerCommandeVue,
   majStatutTable,
@@ -257,6 +265,156 @@ export function routesSalle(app: FastifyInstance): void {
     },
   );
 
+  /**
+   * LIBÉRER UNE TABLE depuis le plan de salle (demandé le 2026-08-18).
+   *
+   * Jusqu'ici, une table occupée ne se vidait que par l'encaissement : aucun
+   * bouton nulle part ne la rendait à la salle. Une table ouverte par erreur,
+   * un client parti, une commande tapée sur le mauvais numéro restaient
+   * affichées « occupées » jusqu'à la clôture, et bloquaient le « J'ai fini ».
+   *
+   * Une seule porte, deux régimes, tranchés PAR LE SERVEUR d'après ce que la
+   * table porte vraiment :
+   *  - commandes SANS aucun article → abandon simple, sans PIN ni motif : rien
+   *    n'a été tapé, aucun franc n'a bougé (même règle que `/abandonner`) ;
+   *  - dès qu'UN article existe → c'est une ANNULATION DE COMMANDE : PIN manager
+   *    + motif obligatoires, audit `ANNULATION_COMMANDE` par commande. Les plats
+   *    déjà partis en cuisine deviennent donc des RETOURS (§ CLAUDE.md), visibles
+   *    à la clôture, sur le ticket Z, dans Mes ventes et en Supervision. Vider
+   *    une table ne fait JAMAIS disparaître ce qui a été produit.
+   *
+   * Les numéros de ticket sont conservés (statut ANNULEE) : la séquence ne fait
+   * jamais de trou. Les appels client encore en attente sont soldés, sinon la
+   * table repartait aussitôt en « addition demandée » sans aucune commande.
+   */
+  app.post(
+    '/api/caisse/tables/:id/liberer',
+    { preHandler: app.exigePermission('caisse.annuler_envoye') },
+    async (req) => {
+      const { id } = req.params as { id: string };
+      const corps = valider(LibererTableSchema, req.body);
+
+      const [table] = await db.select().from(tablesSalle).where(eq(tablesSalle.id, id));
+      if (!table) throw introuvable('Table');
+
+      // Ce que la table porte AVANT d'ouvrir la transaction : sert uniquement à
+      // savoir s'il faut un PIN manager. La vérification argon2 est lente, elle
+      // ne doit pas tenir un verrou de ligne ; le contrôle est refait dans la
+      // transaction, où il fait autorité.
+      const enCours = await db
+        .select({ id: commandes.id })
+        .from(commandes)
+        .where(and(eq(commandes.table_id, id), notInArray(commandes.statut, ['PAYEE', 'ANNULEE'])));
+
+      const nbItemsDe = async (commandeId: string): Promise<number> => {
+        const [c] = await db
+          .select({ nb: count() })
+          .from(commandeItems)
+          .where(eq(commandeItems.commande_id, commandeId));
+        return Number(c?.nb ?? 0);
+      };
+      let avecArticles = false;
+      for (const c of enCours) {
+        if ((await nbItemsDe(c.id)) > 0) avecArticles = true;
+      }
+
+      let managerId: string | null = null;
+      if (avecArticles) {
+        if (!corps.pin_manager) {
+          throw new ErreurMetier(
+            'Cette table porte des produits déjà tapés : PIN manager obligatoire',
+            403,
+          );
+        }
+        if (!corps.motif || corps.motif.length < 3) {
+          throw new ErreurMetier('Le motif est obligatoire pour vider une table qui porte des produits', 400);
+        }
+        managerId = (await verifierPinManager(corps.pin_manager, 'ANNULATION_COMMANDE')).id;
+      }
+
+      const resultat = await db.transaction(async (tx) => {
+        let annulees = 0;
+        let abandonnees = 0;
+        const touchees: string[] = [];
+
+        for (const ligne of enCours) {
+          const c = await verrouillerCommande(tx, ligne.id);
+          if (c.statut === 'PAYEE' || c.statut === 'ANNULEE') continue;
+          const [compte] = await tx
+            .select({ nb: count() })
+            .from(commandeItems)
+            .where(eq(commandeItems.commande_id, c.id));
+          const nbItems = Number(compte?.nb ?? 0);
+          // Un article ajouté entre-temps (le serveur tape pendant qu'on vide) :
+          // on refuse plutôt que d'annuler des produits sans PIN manager.
+          if (nbItems > 0 && !managerId) {
+            throw new ErreurMetier(
+              'Des produits viennent d’être ajoutés sur cette table — reprenez la libération',
+              409,
+            );
+          }
+
+          const [maj] = await tx
+            .update(commandes)
+            .set({ statut: 'ANNULEE', updated_at: new Date() })
+            .where(eq(commandes.id, c.id))
+            .returning();
+          await ecrireOutbox(tx, 'commandes', 'UPDATE', c.id, maj as unknown as Record<string, unknown>);
+          await journaliser(
+            tx,
+            nbItems > 0
+              ? {
+                  user_id: managerId,
+                  action: 'ANNULATION_COMMANDE',
+                  entite: 'commandes',
+                  entite_id: c.id,
+                  montant: c.total,
+                  motif: corps.motif ?? null,
+                  meta: {
+                    numero_ticket: Number(c.numero_ticket),
+                    table_id: id,
+                    table_numero: table.numero,
+                    liberation_table: true,
+                    demande_par: req.session!.utilisateur_id,
+                  },
+                }
+              : {
+                  user_id: req.session!.utilisateur_id,
+                  action: 'ABANDON_COMMANDE_VIDE',
+                  entite: 'commandes',
+                  entite_id: c.id,
+                  montant: 0,
+                  motif: 'Table libérée — aucun article tapé',
+                  meta: { numero_ticket: Number(c.numero_ticket), table_id: id, table_numero: table.numero },
+                },
+          );
+          if (nbItems > 0) annulees += 1;
+          else abandonnees += 1;
+          touchees.push(c.id);
+        }
+
+        await majStatutTable(tx, id, 'LIBRE');
+        // Appels client encore en attente : sans ça, une demande de facture non
+        // soldée repeignait aussitôt la table en « Addition demandée » alors
+        // qu'elle ne porte plus rien (l'état dérivé lit aussi les appels).
+        await tx
+          .update(appelsTable)
+          .set({ statut: 'TRAITE', traite_le: new Date(), traite_par: req.session!.utilisateur_id })
+          .where(and(eq(appelsTable.table_id, id), eq(appelsTable.statut, 'EN_ATTENTE')));
+
+        return { annulees, abandonnees, touchees };
+      });
+
+      for (const commandeId of resultat.touchees) app.diffuser('commande', commandeId);
+      app.diffuser('table:changee', id);
+      return {
+        liberee: true,
+        annulees: resultat.annulees,
+        abandonnees: resultat.abandonnees,
+      };
+    },
+  );
+
   // Liste des commandes client en attente de validation (repli caisse inclus)
   app.get('/api/commandes/a-valider', { preHandler: gardeSalle }, async () => {
     const lignes = await db
@@ -274,5 +432,37 @@ export function routesSalle(app: FastifyInstance): void {
       .where(and(eq(commandes.origine, 'CLIENT_QR'), eq(commandes.statut, 'OUVERTE')))
       .orderBy(desc(commandes.created_at));
     return lignes.map((l) => ({ ...l, numero_ticket: Number(l.numero_ticket), created_at: l.created_at.toISOString() }));
+  });
+
+  /**
+   * Commandes réellement PRÊTES à cet instant. La caisse affichait sa pastille
+   * « prête » depuis un état local alimenté par le WebSocket : si la cuisine ou
+   * un serveur servait la commande, la caisse gardait la notification à
+   * l'écran indéfiniment. Cette route est la SOURCE DE VÉRITÉ — la pastille
+   * disparaît dès que la commande n'est plus prête, quel que soit l'écran qui
+   * l'a servie (ou encaissée, ou annulée).
+   */
+  app.get('/api/commandes/pretes', { preHandler: gardeSalle }, async (req) => {
+    const lignes = await db
+      .select({
+        commande_id: commandes.id,
+        table_id: commandes.table_id,
+        table_numero: tablesSalle.numero,
+        serveur_id: commandes.serveur_id,
+      })
+      .from(commandes)
+      .leftJoin(tablesSalle, eq(tablesSalle.id, commandes.table_id))
+      .where(eq(commandes.statut, 'PRETE'))
+      .orderBy(desc(commandes.updated_at));
+
+    // Même règle de ciblage qu'à l'instant où la cuisine a dit « prête » : la
+    // commande appartient à son serveur s'il est connecté, à la caisse sinon
+    // (repli). Recalculée à chaque lecture : si le serveur se déconnecte, la
+    // commande retombe d'elle-même sur la caisse.
+    const pourCaisse = lignes.filter((l) => !l.serveur_id || !app.presence.estPresent(l.serveur_id));
+    const estServeur = !(await aPermission(req.session!, 'salle.voir_toutes_tables'));
+    return estServeur
+      ? lignes.filter((l) => l.serveur_id === req.session!.utilisateur_id)
+      : pourCaisse;
   });
 }

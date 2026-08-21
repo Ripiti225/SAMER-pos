@@ -10,8 +10,20 @@ export interface LignePush {
   payload: Record<string, unknown>;
 }
 
+/**
+ * Ligne que le cloud a REFUSÉE, avec la raison. Le POS ne peut pas deviner :
+ * un refus arrive dans une réponse HTTP 200 (la fonction s'est exécutée), il
+ * faut donc que le cloud dise explicitement laquelle et pourquoi.
+ */
+export interface BlocagePush {
+  seq: number;
+  table_name: string;
+  raison: string;
+}
+
 export interface ReponsePush {
   acquitte_jusqua_seq: number;
+  blocage?: BlocagePush;
 }
 
 export interface LigneDescente {
@@ -45,6 +57,14 @@ export class ErreurSync extends Error {
 }
 
 const TIMEOUT_MS = 15_000;
+
+/**
+ * L'appel HTTP a réussi (200) mais le cloud n'a appliqué AUCUNE ligne du lot.
+ * Ce n'est ni une panne réseau ni une révocation : c'est un refus côté cloud
+ * (schéma, contrainte, table inconnue). Il doit remonter comme une erreur, pas
+ * comme un succès — sinon la file n'avance plus et personne ne sait pourquoi.
+ */
+export const STATUT_REFUS_CLOUD = 200;
 
 export class ClientCloud {
   constructor(

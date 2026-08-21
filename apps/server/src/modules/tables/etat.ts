@@ -7,12 +7,23 @@
  * la table ; le statut physique tables_salle.statut (LIBRE/OCCUPEE/
  * ADDITION_DEMANDEE) reste géré comme avant pour la compatibilité.
  */
-import { and, asc, eq, notInArray } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, notInArray } from 'drizzle-orm';
 import type { BadgeTable, CommandeOuverteVue, EtatTable, TableVue } from '@pos/shared';
 import { db } from '../../db/client.js';
-import { appelsTable, commandes, tablesSalle, utilisateurs, zones } from '../../db/schema/index.js';
+import {
+  appelsTable,
+  commandeItems,
+  commandes,
+  tablesSalle,
+  utilisateurs,
+  zones,
+} from '../../db/schema/index.js';
 
-type CommandeEtat = { statut: string; origine: string };
+/**
+ * `nb_items` = nombre de lignes d'articles de la commande. Une commande à ZÉRO
+ * ligne est une table ouverte par erreur : elle n'occupe rien (voir plus bas).
+ */
+type CommandeEtat = { statut: string; origine: string; nb_items: number };
 
 export interface EtatDerive {
   etat: EtatTable;
@@ -23,9 +34,15 @@ export interface EtatDerive {
 /** Calcule l'état + badges d'une table à partir de ses commandes et appels. */
 export function deriverEtat(
   physique: string,
-  commandesActives: CommandeEtat[],
+  commandesDeLaTable: CommandeEtat[],
   appelsEnAttente: { type: string }[],
 ): { etat: EtatTable; badges: BadgeTable[] } {
+  // Une commande SANS AUCUN ARTICLE n'occupe pas la table : le caissier a
+  // ouvert la table par erreur (ou s'est trompé de numéro) et est ressorti
+  // sans rien taper. Tant que rien n'a été commandé, la table reste LIBRE —
+  // sinon le plan de salle se remplit de fausses tables occupées que personne
+  // ne peut encaisser.
+  const commandesActives = commandesDeLaTable.filter((c) => c.nb_items > 0);
   const aClientAValider = commandesActives.some(
     (c) => c.origine === 'CLIENT_QR' && c.statut === 'OUVERTE',
   );
@@ -65,7 +82,7 @@ function lireOuvertePar(table: Record<string, unknown>): string | null {
 
 /** Liste complète des tables avec état dérivé (plan de salle caisse + serveur). */
 export async function chargerTables(): Promise<TableVue[]> {
-  const [lignes, actives, appels, gens] = await Promise.all([
+  const [lignes, actives, nbItems, appels, gens] = await Promise.all([
     db
       .select({ table: tablesSalle, zone_nom: zones.nom, zone_ordre: zones.ordre })
       .from(tablesSalle)
@@ -86,6 +103,14 @@ export async function chargerTables(): Promise<TableVue[]> {
       .from(commandes)
       .where(notInArray(commandes.statut, ['PAYEE', 'ANNULEE']))
       .orderBy(asc(commandes.created_at)),
+    // Nombre de lignes par commande en cours : sert à écarter les commandes
+    // vides (table ouverte par erreur, aucun produit tapé).
+    db
+      .select({ commande_id: commandeItems.commande_id, nb: count() })
+      .from(commandeItems)
+      .innerJoin(commandes, eq(commandes.id, commandeItems.commande_id))
+      .where(notInArray(commandes.statut, ['PAYEE', 'ANNULEE']))
+      .groupBy(commandeItems.commande_id),
     db
       .select({ table_id: appelsTable.table_id, type: appelsTable.type })
       .from(appelsTable)
@@ -94,12 +119,25 @@ export async function chargerTables(): Promise<TableVue[]> {
   ]);
 
   const nomParId = new Map(gens.map((g) => [g.id, g.nom]));
+  const itemsParCommande = new Map(nbItems.map((n) => [n.commande_id, Number(n.nb)]));
 
   return lignes.map(({ table, zone_nom }) => {
-    const sesCommandes = actives.filter((c) => c.table_id === table.id);
+    // Les commandes vides (aucun article) sont écartées PARTOUT : elles ne
+    // colorent pas la table, ne s'affichent pas dans la liste des commandes
+    // d'une table virtuelle et ne se reprennent pas. Elles n'existent pas
+    // pour la salle.
+    const sesCommandes = actives.filter(
+      (c) => c.table_id === table.id && (itemsParCommande.get(c.id) ?? 0) > 0,
+    );
     const sesAppels = appels.filter((a) => a.table_id === table.id);
-    const { etat, badges } = deriverEtat(table.statut, sesCommandes, sesAppels);
-    const ouvertePar = lireOuvertePar(table);
+    const { etat, badges } = deriverEtat(
+      table.statut,
+      sesCommandes.map((c) => ({ ...c, nb_items: itemsParCommande.get(c.id) ?? 0 })),
+      sesAppels,
+    );
+    // Une table sans commande réelle n'a pas de propriétaire à afficher : le
+    // caissier qui l'avait ouverte par erreur ne doit bloquer personne.
+    const ouvertePar = sesCommandes.length > 0 ? lireOuvertePar(table) : null;
     return {
       id: table.id,
       zone_id: table.zone_id,
@@ -133,7 +171,7 @@ export async function chargerTables(): Promise<TableVue[]> {
 export async function etatDUneTable(tableId: string, physique: string): Promise<EtatTable> {
   const [actives, appels] = await Promise.all([
     db
-      .select({ statut: commandes.statut, origine: commandes.origine })
+      .select({ id: commandes.id, statut: commandes.statut, origine: commandes.origine })
       .from(commandes)
       .where(and(eq(commandes.table_id, tableId), notInArray(commandes.statut, ['PAYEE', 'ANNULEE']))),
     db
@@ -141,5 +179,15 @@ export async function etatDUneTable(tableId: string, physique: string): Promise<
       .from(appelsTable)
       .where(and(eq(appelsTable.table_id, tableId), eq(appelsTable.statut, 'EN_ATTENTE'))),
   ]);
-  return deriverEtat(physique, actives, appels).etat;
+  // Commande vide (aucun article) = table ouverte par erreur : elle ne compte pas.
+  const nbItems = actives.length
+    ? await db
+        .select({ commande_id: commandeItems.commande_id, nb: count() })
+        .from(commandeItems)
+        .where(inArray(commandeItems.commande_id, actives.map((c) => c.id)))
+        .groupBy(commandeItems.commande_id)
+    : [];
+  const itemsParCommande = new Map(nbItems.map((n) => [n.commande_id, Number(n.nb)]));
+  const avecItems = actives.map((c) => ({ ...c, nb_items: itemsParCommande.get(c.id) ?? 0 }));
+  return deriverEtat(physique, avecItems, appels).etat;
 }

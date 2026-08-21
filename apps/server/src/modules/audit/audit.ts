@@ -18,6 +18,9 @@ export type ActionAudit =
   | 'REMISE'
   | 'ANNULATION_ITEM'
   | 'ANNULATION_COMMANDE'
+  // Table ouverte par erreur, refermée sans qu'aucun article soit tapé : la
+  // commande vide est abandonnée sans PIN (rien n'a été commandé ni encaissé).
+  | 'ABANDON_COMMANDE_VIDE'
   | 'REOUVERTURE_NOTE'
   | 'PAIEMENT'
   // Kdo : repas offert, clôturé sans encaissement. Le motif accompagne

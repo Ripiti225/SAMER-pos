@@ -57,15 +57,10 @@ describe('relève de caisse : transfert des commandes en cours au caissier suiva
     expect(rep.json().erreur).toBe('PIN incorrect');
   });
 
-  it('refuse de se transférer à soi-même', async () => {
-    const rep = await app.inject({
-      method: 'POST',
-      url: '/api/services/transferer',
-      cookies: cookiesA,
-      payload: { receveur_id: donnees.caissier_id, pin_receveur: PIN_CAISSIER },
-    });
-    expect(rep.statusCode).toBe(400);
-  });
+  // Se transférer à SOI-MÊME est désormais permis (un caissier enchaîne deux
+  // tranches : 16h-00h puis 00h-08h) et ne se teste pas ici, car cela détache
+  // la commande du service et casserait la relève jouée dans ce fichier.
+  // Voir test/shift-enchaine-et-notifs.test.ts.
 
   it('transfère avec le PIN du receveur, trace dans audit_log, puis autorise la clôture', async () => {
     const rep = await app.inject({

@@ -8,6 +8,7 @@ import {
   IconSearch,
   IconSend,
   IconTag,
+  IconTrash,
   IconX,
 } from '@tabler/icons-react';
 import type { ArticleVue, CatalogueVue, CommandeItemVue, CommandeVue } from '@pos/shared';
@@ -34,6 +35,7 @@ export function Commande() {
   const [itemAAnnuler, setItemAAnnuler] = useState<CommandeItemVue | null>(null);
   const [remiseOuverte, setRemiseOuverte] = useState(false);
   const [offrirOuvert, setOffrirOuvert] = useState(false);
+  const [annulationOuverte, setAnnulationOuverte] = useState(false);
 
   const { data: catalogue } = useQuery({
     queryKey: ['catalogue'],
@@ -92,6 +94,28 @@ export function Commande() {
     },
     onError: surErreur,
   });
+  /**
+   * Annulation de TOUTE la commande : c'est le geste qui rend la table à la
+   * salle quand des produits ont déjà été tapés. PIN manager + motif, comme
+   * l'annulation d'un article envoyé — et les plats déjà lancés en cuisine
+   * repartent en RETOURS (clôture, ticket Z, Mes ventes, Supervision). Vider
+   * une table n'efface donc jamais ce qui a été produit.
+   */
+  const annulerCommande = useMutation({
+    mutationFn: ({ motif, pin }: { motif: string; pin: string }) =>
+      api<CommandeVue>(`/api/commandes/${commandeId}/annuler`, {
+        method: 'POST',
+        corps: { motif, pin_manager: pin },
+      }),
+    onSuccess: () => {
+      setAnnulationOuverte(false);
+      void queryClient.invalidateQueries({ queryKey: ['tables'] });
+      void queryClient.invalidateQueries({ queryKey: ['commandes-ouvertes'] });
+      afficherToast('Commande annulée — les plats déjà lancés restent tracés en retours');
+      aller('accueil');
+    },
+    onError: surErreur,
+  });
   // La caisse peut aussi marquer une commande SERVIE (pas seulement la cuisine).
   const servir = useMutation({
     mutationFn: () => api<CommandeVue>(`/api/commandes/${commandeId}/servir`, { method: 'POST', corps: {} }),
@@ -125,6 +149,34 @@ export function Commande() {
   const itemsActifs = commande.items.filter((i) => i.statut_cuisine !== 'ANNULE');
   const prenom = session?.utilisateur.nom_complet.split(' ')[0] ?? '';
 
+  /**
+   * Sortir d'une table où RIEN n'a été tapé la relibère : la commande vide est
+   * abandonnée côté serveur (elle ne retient ni le plan de salle, ni la
+   * clôture). Une table ouverte par erreur reste donc une table LIBRE.
+   * Le serveur revérifie qu'aucune ligne n'existe — c'est lui qui tranche.
+   */
+  const quitter = async () => {
+    if (commande.items.length === 0 && !saisie.enAttente) {
+      try {
+        await api(`/api/commandes/${commandeId}/abandonner`, { method: 'POST', corps: {} });
+      } catch {
+        // Sans réseau ni serveur, la table redevient de toute façon LIBRE :
+        // une commande sans article n'occupe rien (état dérivé serveur).
+      }
+    }
+    aller('accueil');
+  };
+
+  /**
+   * Même geste que « Accueil » quand rien n'a été tapé, mais DIT : le caissier
+   * qui veut vider une table ouverte par erreur cherche un bouton pour ça, pas
+   * une flèche de retour. Aucun PIN : il n'y a rien à cacher.
+   */
+  const libererVide = async () => {
+    await quitter();
+    afficherToast(commande.table_numero ? `Table ${commande.table_numero} libérée` : 'Commande fermée');
+  };
+
   // Code couleur du menu (§ 4.1 / § 7). La catégorie n'a pas de couleur en
   // base : elle vient de son nom, via le helper partagé — même teinte partout.
   const nomCategorie = new Map(categories.map((c) => [c.id, c.nom]));
@@ -153,7 +205,7 @@ export function Commande() {
         <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
-            onClick={() => aller('accueil')}
+            onClick={() => void quitter()}
             className="flex flex-none items-center gap-2 rounded-btn px-3 py-2 font-semibold text-ard-txt-doux transition hover:bg-ard-750 hover:text-ard-txt"
             title="Retour à l’accueil"
           >
@@ -470,12 +522,16 @@ export function Commande() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            {/* Trois actions secondaires, LOIN du bouton Encaisser : « Vider »
+                est destructif, il ne doit jamais se toucher par erreur en
+                visant l'encaissement. Il ouvre de toute façon une confirmation
+                (PIN manager + motif dès qu'un produit a été tapé). */}
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => setRemiseOuverte(true)}
                 disabled={itemsActifs.length === 0 || saisie.enAttente}
-                className="flex h-12 items-center justify-center gap-2 rounded-[13px] bg-ard-750 font-semibold text-ard-txt transition hover:bg-ard-700 disabled:opacity-40"
+                className="flex h-12 items-center justify-center gap-1.5 rounded-[13px] bg-ard-750 text-[13.5px] font-semibold text-ard-txt transition hover:bg-ard-700 disabled:opacity-40"
               >
                 <IconTag size={18} /> Remise
               </button>
@@ -483,9 +539,25 @@ export function Commande() {
                 type="button"
                 onClick={() => imprimerFacture.mutate()}
                 disabled={itemsActifs.length === 0 || imprimerFacture.isPending || saisie.enAttente}
-                className="flex h-12 items-center justify-center gap-2 rounded-[13px] bg-ard-750 font-semibold text-ard-txt transition hover:bg-ard-700 disabled:opacity-40"
+                className="flex h-12 items-center justify-center gap-1.5 rounded-[13px] bg-ard-750 text-[13.5px] font-semibold text-ard-txt transition hover:bg-ard-700 disabled:opacity-40"
               >
                 <IconPrinter size={18} /> {imprimerFacture.isPending ? '…' : 'Facture'}
+              </button>
+              {/* Rien de tapé : la commande n'existe pas pour la salle, on la
+                  referme sans rien demander. Un seul article, même pas encore
+                  parti en cuisine : c'est une annulation de commande. */}
+              <button
+                type="button"
+                onClick={() => (commande.items.length === 0 ? void libererVide() : setAnnulationOuverte(true))}
+                disabled={saisie.enAttente || annulerCommande.isPending}
+                title={
+                  commande.items.length === 0
+                    ? 'Libérer la table — aucun produit tapé'
+                    : 'Annuler la commande et libérer la table (PIN manager)'
+                }
+                className="flex h-12 items-center justify-center gap-1.5 rounded-[13px] bg-alerte/15 text-[13.5px] font-semibold text-[#ff9d9d] transition hover:bg-alerte/25 disabled:opacity-40"
+              >
+                <IconTrash size={18} /> {commande.items.length === 0 ? 'Libérer' : 'Vider'}
               </button>
             </div>
             <button
@@ -551,6 +623,18 @@ export function Commande() {
           onConfirmer={({ pin, motif, montant }) => appliquerRemise.mutate({ montant, motif, pin })}
           onFermer={() => setRemiseOuverte(false)}
           enCours={appliquerRemise.isPending}
+        />
+      )}
+
+      {/* Annulation de la commande entière : la trace (motif + manager) part au
+          journal d'audit, et c'est elle qui fait apparaître les plats déjà
+          lancés dans les RETOURS. */}
+      {annulationOuverte && (
+        <ModalePinManager
+          titre={`Vider ${commande.table_numero ? `la table ${commande.table_numero}` : 'cette commande'} — ${formatFCFA(commande.total)} annulés`}
+          onConfirmer={({ pin, motif }) => annulerCommande.mutate({ motif, pin })}
+          onFermer={() => setAnnulationOuverte(false)}
+          enCours={annulerCommande.isPending}
         />
       )}
 

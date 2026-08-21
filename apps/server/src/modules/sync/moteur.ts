@@ -72,7 +72,10 @@ export class MoteurSync {
       for (;;) {
         const r = await pousserUnLot(this.client!);
         if (r.fini) break;
-        // Pas de progrès (ligne bloquante en tête) → on stoppe pour ne pas boucler.
+        // Garde-fou : un lot sans progrès lève désormais une ErreurSync (voir
+        // montee.ts), donc on ne devrait jamais passer ici. On garde le break
+        // pour qu'un cloud qui répondrait autrement ne fasse pas tourner la
+        // boucle à vide.
         if (r.acquitte_jusqua_seq === 0) break;
       }
     } finally {

@@ -66,6 +66,18 @@ export const CloturerServiceSchema = z.object({
   modes: z.record(z.string(), MontantPositif).default({}),
 });
 
+/**
+ * Rasage de séquence (journée). Le gérant choisit LES SHIFTS qui composent la
+ * journée : une séquence contient parfois le début de la journée suivante (le
+ * créneau d'ouverture n'est pas figé) et un shift encore ouvert ne doit plus
+ * bloquer la fermeture — il repart simplement dans la séquence suivante.
+ *
+ * `service_ids` omis = tous les shifts CLÔTURÉS de la séquence (le cas normal).
+ */
+export const CloturerSequenceSchema = z.object({
+  service_ids: z.array(z.string().uuid('Shift invalide')).optional(),
+});
+
 export const CreerCommandeSchema = z
   .object({
     type: z.enum(TYPES_COMMANDE, { errorMap: () => ({ message: 'Type de commande invalide' }) }),
@@ -305,6 +317,18 @@ export const RefusCommandeSchema = z.object({
 /** Transfert d'une table à un autre serveur (caisse/manager uniquement). */
 export const TransfertTableSchema = z.object({
   serveur_id: z.string().uuid('Serveur invalide'),
+});
+
+/**
+ * Libérer une table depuis le plan de salle : elle vide la table de TOUT ce qui
+ * l'occupe encore. Motif et PIN manager sont facultatifs ICI, et EXIGÉS par le
+ * serveur dès qu'une commande porte au moins un article — c'est alors une
+ * annulation de commande, avec sa trace d'audit et son retour. Une table où
+ * rien n'a été tapé se libère sans rien demander : aucun franc n'a bougé.
+ */
+export const LibererTableSchema = z.object({
+  motif: z.string().trim().nullish(),
+  pin_manager: PinSaisiSchema.nullish(),
 });
 
 // ---------------------------------------------------------------------------

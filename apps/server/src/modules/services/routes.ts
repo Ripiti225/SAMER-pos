@@ -9,6 +9,7 @@ import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
 import { verifierPinUtilisateur } from '../auth/pin.js';
+import { abandonnerCommandesVidesDuService } from '../commandes/service.js';
 import { calculerStatsService, reconciliationAuto, retoursDuService } from './rapport.js';
 import { sequenceOuverte } from './sequences.js';
 import { totalDepenses } from '../depenses/service.js';
@@ -235,14 +236,18 @@ export function routesServices(app: FastifyInstance): void {
    * transfert en saisissant SON PIN (verrouillage anti-force brute appliqué).
    * Si le receveur n'a pas encore de service ouvert, les commandes restent
    * à lui sans service et seront rattachées à l'ouverture de son service.
+   *
+   * LE RECEVEUR PEUT ÊTRE LE DONNEUR LUI-MÊME : un caissier enchaîne parfois
+   * deux tranches (16h-00h puis 00h-08h) et doit pouvoir clôturer la première
+   * sans avoir à liquider ses tables ni à les prêter à un collègue. Ses
+   * commandes sont alors simplement DÉTACHÉES du shift qui se ferme ; elles se
+   * rattachent toutes seules au shift suivant qu'il ouvre.
    */
   app.post('/api/services/transferer', { preHandler: gardeCaisse }, async (req) => {
     const corps = valider(TransfererServiceSchema, req.body);
     const donneurId = req.session!.utilisateur_id;
+    const memeCaissier = corps.receveur_id === donneurId;
 
-    if (corps.receveur_id === donneurId) {
-      throw new ErreurMetier('Choisissez un autre caissier que vous-même', 400);
-    }
     const [receveur] = await db
       .select()
       .from(utilisateurs)
@@ -274,10 +279,15 @@ export function routesServices(app: FastifyInstance): void {
         throw new ErreurMetier('Aucune commande en cours à transférer', 409);
       }
 
-      const [serviceReceveur] = await tx
-        .select()
-        .from(servicesCaisse)
-        .where(and(eq(servicesCaisse.caissier_id, receveur.id), eq(servicesCaisse.statut, 'OUVERT')));
+      // Relève vers soi-même : le seul service ouvert du receveur EST celui
+      // qu'on est en train de vider. On détache (service_id NULL) au lieu d'y
+      // remettre les commandes, sinon la clôture resterait bloquée.
+      const [serviceReceveur] = memeCaissier
+        ? [undefined]
+        : await tx
+            .select()
+            .from(servicesCaisse)
+            .where(and(eq(servicesCaisse.caissier_id, receveur.id), eq(servicesCaisse.statut, 'OUVERT')));
 
       for (const c of enCours) {
         const [maj] = await tx
@@ -302,6 +312,9 @@ export function routesServices(app: FastifyInstance): void {
           receveur_id: receveur.id,
           receveur_nom: receveur.nom_complet,
           accepte_par_pin: true,
+          // Enchaînement de deux tranches par le même caissier : ce n'est pas
+          // une relève, il faut pouvoir le distinguer dans le journal.
+          meme_caissier: memeCaissier,
           tickets: enCours.map((c) => Number(c.numero_ticket)),
         },
       });
@@ -309,6 +322,7 @@ export function routesServices(app: FastifyInstance): void {
       return {
         nb_transferees: enCours.length,
         receveur: receveur.nom_complet,
+        meme_caissier: memeCaissier,
         tickets: enCours.map((c) => Number(c.numero_ticket)),
       };
     });
@@ -335,6 +349,21 @@ export function routesServices(app: FastifyInstance): void {
         .for('update');
       const service = lignes[0];
       if (!service) throw new ErreurMetier('Aucun service ouvert à clôturer', 409);
+
+      // Tables ouvertes par erreur : aucun article tapé, rien à encaisser.
+      // Elles sont abandonnées ici plutôt que de bloquer « J'ai fini ».
+      const vides = await abandonnerCommandesVidesDuService(tx, service.id);
+      if (vides.length > 0) {
+        await journaliser(tx, {
+          user_id: caissierId,
+          action: 'ABANDON_COMMANDE_VIDE',
+          entite: 'services_caisse',
+          entite_id: service.id,
+          montant: 0,
+          motif: 'Tables ouvertes par erreur — aucun article tapé',
+          meta: { tickets: vides.map((c) => c.numero_ticket) },
+        });
+      }
 
       const enCours = await tx
         .select({ id: commandes.id })
