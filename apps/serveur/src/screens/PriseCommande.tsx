@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { ArticleVue, CatalogueVue, CommandeVue, TableVue } from '@pos/shared';
-import { formatFCFA } from '@pos/shared';
+import { categorieVisiblePour, formatFCFA } from '@pos/shared';
 import { api, Modale } from '@pos/shared-ui';
 import { fileAttente } from '../file-attente';
 
@@ -53,7 +53,14 @@ export function PriseCommande({
     enabled: !!table?.commande_id,
   });
 
-  const categories = catalogue?.categories ?? [];
+  // Catégories réservées à un partenaire (migration 0023). Le partenaire vient
+  // de la commande en cours si elle existe, sinon de la table elle-même : les
+  // tables virtuelles Yango/Glovo/Samer Delly le portent, et c'est par elles
+  // qu'un serveur saisit une commande partenaire depuis la tablette.
+  const partenaireEnCours = commande?.partenaire ?? table?.partenaire ?? null;
+  const categories = (catalogue?.categories ?? []).filter((c) =>
+    categorieVisiblePour(c.partenaires, partenaireEnCours),
+  );
   const categorieActive = categorieId ?? categories[0]?.id ?? null;
   const articlesVisibles = (catalogue?.articles ?? []).filter((a) => a.categorie_id === categorieActive);
   const combosVisibles = categorieActive === categories[0]?.id ? catalogue?.combos ?? [] : [];
@@ -69,7 +76,7 @@ export function PriseCommande({
 
   const clicArticle = (a: ArticleVue) => {
     if (!a.disponible) return;
-    if (a.groupes_options.length > 0 || a.supplements.length > 0) {
+    if (a.options_extras.length > 0) {
       setArticleOuvert(a);
     } else {
       ajouterAuPanier({ article_id: a.id, combo_id: null, nom: a.nom, prix_affiche: a.prix_base, quantite: 1, options: [], supplements: [] });
@@ -309,56 +316,30 @@ function ModaleArticle({
   onFermer: () => void;
 }) {
   const [quantite, setQuantite] = useState(1);
-  const [choix, setChoix] = useState<Record<string, string[]>>({});
-  const [supplements, setSupplements] = useState<string[]>([]);
+  // Liste plate d'extras à cocher (migration 0020) : chaque option porte son
+  // prix, 0 = offerte. Mêmes options que la caisse — même source serveur.
+  const [choisies, setChoisies] = useState<string[]>([]);
 
-  const basculerChoix = (groupe: string, option: string, max: number) => {
-    setChoix((prev) => {
-      const actuels = prev[groupe] ?? [];
-      if (actuels.includes(option)) return { ...prev, [groupe]: actuels.filter((o) => o !== option) };
-      if (max === 1) return { ...prev, [groupe]: [option] };
-      if (actuels.length >= max) return prev;
-      return { ...prev, [groupe]: [...actuels, option] };
-    });
-  };
-
-  const supplementsChoisis = article.supplements.filter((s) => supplements.includes(s.id));
-  const prixLigne = (article.prix_base + supplementsChoisis.reduce((x, y) => x + y.prix, 0)) * quantite;
+  const optionsChoisies = article.options_extras.filter((o) => choisies.includes(o.id));
+  const prixLigne = (article.prix_base + optionsChoisies.reduce((x, y) => x + y.prix, 0)) * quantite;
 
   return (
     <Modale titre={article.nom} onFermer={onFermer} enfants={
       <div className="space-y-4">
-        {article.groupes_options.map((g) => (
-          <div key={g.id}>
-            <div className="mb-1 font-semibold">{g.nom}</div>
+        {article.options_extras.length > 0 && (
+          <div>
+            <div className="mb-1 font-semibold">Options</div>
             <div className="flex flex-wrap gap-2">
-              {g.options.map((o) => (
+              {article.options_extras.map((o) => (
                 <button
                   key={o.id}
                   type="button"
-                  className={`btn ${choix[g.nom]?.includes(o.nom) ? 'bg-marque text-white' : 'border border-bordure bg-surface'}`}
-                  onClick={() => basculerChoix(g.nom, o.nom, g.choix_max)}
-                >
-                  {o.nom}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-        {article.supplements.length > 0 && (
-          <div>
-            <div className="mb-1 font-semibold">Suppléments</div>
-            <div className="flex flex-wrap gap-2">
-              {article.supplements.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  className={`btn ${supplements.includes(s.id) ? 'bg-marque text-white' : 'border border-bordure bg-surface'}`}
+                  className={`btn ${choisies.includes(o.id) ? 'bg-marque text-white' : 'border border-bordure bg-surface'}`}
                   onClick={() =>
-                    setSupplements((prev) => (prev.includes(s.id) ? prev.filter((x) => x !== s.id) : [...prev, s.id]))
+                    setChoisies((prev) => (prev.includes(o.id) ? prev.filter((x) => x !== o.id) : [...prev, o.id]))
                   }
                 >
-                  {s.nom} +{formatFCFA(s.prix)}
+                  {o.nom} {o.prix > 0 ? `+${formatFCFA(o.prix)}` : 'offert'}
                 </button>
               ))}
             </div>
@@ -379,8 +360,8 @@ function ModaleArticle({
               nom: article.nom,
               prix_affiche: article.prix_base,
               quantite,
-              options: Object.entries(choix).map(([groupe, valeurs]) => ({ groupe, choix: valeurs })),
-              supplements: supplementsChoisis.map((s) => ({ id: s.id, nom: s.nom, prix: s.prix })),
+              options: [],
+              supplements: optionsChoisies.map((o) => ({ id: o.id, nom: o.nom, prix: o.prix })),
             })
           }
         >

@@ -105,6 +105,20 @@ Points non négociables du schéma :
 - Annulation d'un article déjà envoyé en cuisine (statut_cuisine ≠ A_PREPARER).
 - Réouverture d'une commande PAYEE.
 
+### Retours
+Un plat **déjà lancé en cuisine** qui ne sera pas vendu — parce qu'un manager a
+supprimé la ligne **ou la commande entière** — est un **RETOUR** : il a été
+produit, il n'est pas vendu. Il ne compte ni dans la vente, ni dans le tiroir,
+ni dans les sorties d'inventaire (exclu par construction). Il est en revanche
+**compté et affiché** (clôture, ticket Z, Mes ventes, Supervision) pour qu'on
+voie si un restaurant refait souvent ses plats.
+
+Discriminant : `envoye_le` renseigné ET (`statut_cuisine = 'ANNULE'` OU
+`commandes.statut = 'ANNULEE'`). Un article corrigé avant l'envoi n'est pas un
+retour. **Les deux branches sont obligatoires** : ne compter que la ligne
+laisserait la fraude la plus simple ouverte — encaisser, puis supprimer la table
+entière au lieu de l'article.
+
 ### Paiement
 - Une commande passe à PAYEE uniquement si `SUM(paiements.montant) == commandes.total` — vérifié en transaction côté serveur.
 - Paiement mixte : l'UI affiche le « Reste à payer » en très grand, mis à jour à chaque ajout ; bouton Valider désactivé tant que reste > 0.
@@ -133,8 +147,8 @@ Points non négociables du schéma :
 
 ## Seed de démonstration (`db/seed.ts`)
 
-- Restaurant : `SAMER_ANGRE7E`, « Chez Samer Angré 7E », marque SAMER.
-- Utilisateurs : 1 propriétaire (PIN 852741), 1 manager (PIN 963852), 2 caissiers, 2 serveurs.
+- Restaurant : `A_CONFIGURER`, « Restaurant à configurer », marque SAMER. **Identité neutre volontaire** : la même image de déploiement part sur les 7 sites, chaque poste prend son identité (et un `restaurant.id` neuf) via Réglages → Restaurant. Ne jamais seeder ici un restaurant réel, son `samtrackly_restaurant_id` ni son équipe — ils se retrouveraient sur tous les autres sites. L'équipe réelle du 7E reste disponible en dev via `SEED_EQUIPE_7E=1 pnpm db:seed`.
+- Utilisateurs : **exactement deux comptes PROPRIETAIRE** — `SAMER Zreik` (PIN 852741) et `Admin Willy` (PIN 2212, l'administrateur qui installe et dépanne les 7 sites). Aucun autre employé : le reste de l'équipe arrive par Réglages → Équipe ou la descente SamerTrackly, sinon les comptes du premier restaurant partiraient sur tous les autres. L'équipe réelle du 7E reste disponible en dev via `SEED_EQUIPE_7E=1 pnpm db:seed`.
 - Catalogue : 4 catégories (Chawarmas, Pizzas, Grillades, Boissons), ~15 articles avec prix FCFA réalistes (chawarma 3000, pizza 6500, jus 1500…), 1 groupe d'options (Sauce), 2 suppléments (Fromage +500, Frites +1000), 1 combo (Chawarma + Boisson 4000), surcharges `prix_canaux` Yango/Glovo, 1 promotion happy hour −20 % 17h–19h.
 - Zones : RC (6 tables), Terrasse (4), VIP (2), Livraison (3 tables virtuelles YANGO/GLOVO/SAMER_DELIV).
 

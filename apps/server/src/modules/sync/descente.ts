@@ -23,6 +23,19 @@ const CONFLIT: Record<string, string[]> = {
   utilisateurs: ['id'],
   // Barème fidélité (2.5) : le siège est maître, clé = cle.
   parametres_locaux: ['cle'],
+  // Inventaire (2026-08-17) : un plat et sa recette descendent ensemble.
+  // Sans ça, le siège diffusait un plat sur les 7 sites sans ce qu'il consomme,
+  // et l'écart d'inventaire de fin de service devenait faux partout.
+  //
+  // Clé = `id` comme le reste du catalogue, et NON la clé métier (`code`, ou le
+  // couple produit/article), bien qu'elles soient uniques en local. La raison
+  // est le lien entre les deux tables : `inventaire_consommations.produit_id`
+  // désigne un produit PAR SON ID. Si la descente laissait le local réattribuer
+  // ses propres ids, la recette d'un produit créé au siège pointerait dans le
+  // vide. En conflictant sur `id`, l'identifiant reste le même du siège
+  // jusqu'aux 7 caisses.
+  produits_inventaire: ['id'],
+  inventaire_consommations: ['id'],
 };
 
 // Colonnes propres au cloud, à retirer avant l'écriture locale.

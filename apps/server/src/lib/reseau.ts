@@ -8,6 +8,14 @@ import { networkInterfaces } from 'node:os';
 /** Port du serveur web de l'app client (mini-app téléphone /t/:token). */
 export const PORT_CLIENT_DEFAUT = 5176;
 
+/**
+ * Ports LAN des plateformes servies par le mini-PC (Vite `host: true`), pour
+ * générer les QR de connexion : un appareil du même WiFi ouvre `http://<ip>:port`.
+ * Doivent rester alignés avec les `server.port` des vite.config respectifs.
+ */
+export const PORT_KDS = 5174;
+export const PORT_SERVEUR = 5175;
+
 /** Priorité aux plages privées classiques (box/routeur du restaurant). */
 function score(ip: string): number {
   if (ip.startsWith('192.168.')) return 3;

@@ -3,7 +3,7 @@
 // exactement le même résultat (zéro doublon). Acquittement contigu par seq :
 // on n'acquitte que jusqu'au dernier seq appliqué sans trou.
 import { clientAdmin, ErreurAuth, json, verifierCleSite } from '../_shared/auth.ts';
-import { ligneAutorisee } from '../_shared/tables.ts';
+import { cibleMontee, ligneAutorisee } from '../_shared/tables.ts';
 
 interface LignePush {
   seq: number;
@@ -35,10 +35,34 @@ Deno.serve(async (req) => {
   for (const l of lignes) {
     const ligne = ligneAutorisee(l.table_name, l.payload ?? {}, l.record_id, restaurantId);
     if (!ligne) {
-      // Table inconnue : on s'arrête pour ne pas acquitter à tort la suite.
-      break;
+      // Table inconnue : on la GARE et on continue. S'arrêter ici gelait le
+      // site pour toujours — la file locale est strictement ordonnée, donc
+      // toutes les ventes derrière cette ligne ne remontaient plus jamais.
+      // Un POS plus récent que le cloud ne doit pas pouvoir arrêter un
+      // restaurant. La donnée n'est pas perdue : elle est dans `sync_rejets`,
+      // en JSONB, rejouable une fois la table créée ici.
+      const { error: erreurRejet } = await admin.from('sync_rejets').insert({
+        restaurant_id: restaurantId,
+        seq: l.seq,
+        table_name: l.table_name,
+        record_id: l.record_id,
+        operation: l.operation,
+        payload: l.payload ?? {},
+        raison: 'table inconnue de sync-push',
+      });
+      // Si même le rebut échoue (table absente sur un cloud pas à jour), on
+      // revient à l'ancien comportement : bloquer plutôt que perdre.
+      if (erreurRejet) break;
+      acquitteJusqua = l.seq;
+      continue;
     }
-    const { error } = await admin.from(l.table_name).upsert(ligne, { onConflict: 'id' });
+    // Clé composite : un site ne peut jamais réécrire la ligne d'un autre,
+    // même si les deux portent le même UUID (image de déploiement clonée).
+    // `cibleMontee` : la fiche employé envoyée par un site atterrit dans
+    // `utilisateurs_site`, jamais dans la table du siège, qui en est maître.
+    const { error } = await admin
+      .from(cibleMontee(l.table_name))
+      .upsert(ligne, { onConflict: 'restaurant_id,id' });
     if (error) break; // acquittement contigu : on ne dépasse pas la 1re erreur
     acquitteJusqua = l.seq;
   }

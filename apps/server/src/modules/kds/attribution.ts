@@ -14,7 +14,7 @@
  * collective. Si personne : attribution vide, le service continue.
  * Le KDS n'a aucune notion d'identité : tout est calculé ici, côté serveur.
  */
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { DbOuTx } from '../../db/client.js';
 import {
   articles,
@@ -29,12 +29,28 @@ import { ecrireOutbox } from '../../db/outbox.js';
 type Poste = 'CUISINIER' | 'PIZZAIOLO' | 'COMPTOIRISTE';
 const POSTE_PAR_DEFAUT: Poste = 'CUISINIER';
 
-/** Employés cuisine « en poste » maintenant, groupés par poste. */
+/**
+ * Rôles qui PRÉPARENT des plats et peuvent donc s'en voir attribuer.
+ *
+ * COMPTOIRISTE ajouté le 2026-08-17 : c'est un rôle à part entière depuis la
+ * migration 0024, et sans lui ici, les comptoiristes disparaîtraient de
+ * l'attribution — les plats du comptoir ne seraient crédités à personne.
+ * ENTRETIEN en est volontairement absent : c'était le défaut d'avant, où un
+ * agent d'entretien classé CUISINE se voyait attribuer des plats.
+ */
+const ROLES_PREPARATION = ['CUISINE', 'COMPTOIRISTE'] as const;
+
+/** Employés en cuisine « en poste » maintenant, groupés par poste. */
 async function enPosteParPoste(tx: DbOuTx): Promise<Map<Poste, string[]>> {
   const cuisine = await tx
     .select()
     .from(utilisateurs)
-    .where(and(eq(utilisateurs.role, 'CUISINE'), eq(utilisateurs.actif, true)));
+    .where(
+      and(
+        inArray(utilisateurs.role, [...ROLES_PREPARATION]),
+        eq(utilisateurs.actif, true),
+      ),
+    );
 
   // Présents = équipe du jour des services encore ouverts.
   const presents = await tx

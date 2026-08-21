@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { construireApp } from '../src/app.js';
 import { fermerDb } from '../src/db/client.js';
-import { ouvrirServiceEtCommande, PIN_CAISSIER, resetDonnees, seConnecter, type Donnees } from './aide.js';
+import { ouvrirServiceEtCommande, PIN_CAISSIER, resetDonnees, seConnecter, validerInventaire, type Donnees } from './aide.js';
 
 let app: FastifyInstance;
 let donnees: Donnees;
@@ -23,7 +23,8 @@ describe('point à valider (shift clôturé non remis)', () => {
   it('un shift clôturé pose un cloture_en_attente jusqu’à l’accusé de fin', async () => {
     const c = await ouvrirServiceEtCommande(app, cookies, donnees, 1); // 3000 F
     await app.inject({ method: 'POST', url: `/api/commandes/${c.commande_id}/paiements`, cookies, payload: { mode: 'ESPECES', montant: 3000 } });
-    const f = await app.inject({ method: 'POST', url: '/api/services/cloturer', cookies, payload: { especes_comptees: 28000, depenses: 0, livraisons: {}, modes: {} } });
+    await validerInventaire(app, cookies);
+    const f = await app.inject({ method: 'POST', url: '/api/services/cloturer', cookies, payload: { especes_comptees: 28000, livraisons: {}, modes: {} } });
     expect(f.statusCode).toBe(200);
 
     // Reconnexion : /moi renvoie le point à valider (ticket), pas de service ouvert.

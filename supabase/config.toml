@@ -13,3 +13,22 @@ verify_jwt = false
 
 [functions.sync-reconcile]
 verify_jwt = false
+
+[functions.admin-catalogue]
+verify_jwt = false
+
+# Console siège : elle s'authentifie bien par JWT Supabase, mais la
+# vérification est faite DANS la fonction (`verifierSiege`), et elle va plus
+# loin que la passerelle — celle-ci accepterait la clé anonyme, qui est
+# publique. La désactiver ici évite en prime que la requête préalable CORS
+# (OPTIONS, sans en-tête Authorization) soit rejetée avant d'atteindre le code.
+[functions.siege]
+verify_jwt = false
+
+# Pont vers SamerTrackly : appelé UNIQUEMENT par pg_cron, qui présente la clé
+# service_role. Contrairement à toutes les autres, cette fonction garde donc la
+# vérification de jeton activée — elle écrit dans la base RH du groupe et ne doit
+# être appelable ni par un site, ni par un navigateur. La ligne est explicite
+# pour qu'on voie que ce n'est pas un oubli.
+[functions.samtrackly-points]
+verify_jwt = true

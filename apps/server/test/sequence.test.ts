@@ -8,6 +8,7 @@ import {
   PIN_MANAGER,
   resetDonnees,
   seConnecter,
+  validerInventaire,
   type Donnees,
 } from './aide.js';
 
@@ -40,17 +41,27 @@ describe('réconciliation de shift', () => {
     const c = await ouvrirServiceEtCommande(app, caissier, donnees, 2); // 6000 F
     await payer(c.commande_id, 6000, caissier);
 
-    // fond 25000 + espèces 6000 → théorique 31000, compté 31000 → écart 0.
+    // fond 25000 + espèces 6000 − dépenses 1000 → théorique 30000. Compté 31000
+    // → écart +1000 (excédent) : la dépense aurait dû sortir 1000 du tiroir.
     // vente_totale = dépenses 1000 + Wave 500 + espèce 31000 − fond 25000 = 7500.
+    // Les dépenses viennent du REGISTRE (§ 6.8), plus du corps de la requête.
+    const d = await app.inject({
+      method: 'POST',
+      url: '/api/depenses',
+      cookies: caissier,
+      payload: { categorie: 'LEGUMES', libelle: 'Légumes du jour', montant: 1000 },
+    });
+    expect(d.statusCode).toBe(200);
+    await validerInventaire(app, caissier);
     const rep = await app.inject({
       method: 'POST',
       url: '/api/services/cloturer',
       cookies: caissier,
-      payload: { especes_comptees: 31000, depenses: 1000, livraisons: {}, modes: { WAVE: 500 } },
+      payload: { especes_comptees: 31000, livraisons: {}, modes: { WAVE: 500 } },
     });
     expect(rep.statusCode).toBe(200);
     const z = rep.json();
-    expect(z.ecart).toBe(0);
+    expect(z.ecart).toBe(1000);
     expect(z.total_systeme).toBe(6000);
     expect(z.vente_totale).toBe(7500);
     expect(z.diff).toBe(1500);
@@ -96,11 +107,12 @@ describe('séquence (gérant)', () => {
   it('rase la séquence une fois tous les shifts clôturés, puis refuse une 2e fois', async () => {
     // Encaisse la commande du 2e shift (3000 F) puis clôture ce shift.
     await payer(commande2, 3000, caissier);
+    await validerInventaire(app, caissier);
     const f = await app.inject({
       method: 'POST',
       url: '/api/services/cloturer',
       cookies: caissier,
-      payload: { especes_comptees: 28000, depenses: 0, livraisons: {}, modes: {} },
+      payload: { especes_comptees: 28000, livraisons: {}, modes: {} },
     });
     expect(f.statusCode).toBe(200);
 

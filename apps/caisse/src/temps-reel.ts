@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { SessionInfo } from '@pos/shared';
 import { api } from './api';
+import { consommerEcho } from './echo-mutations';
 import { sons } from './sons';
 import { useCaisse } from './stores/session';
 
@@ -27,8 +28,14 @@ export function connecterTempsReel(queryClient: QueryClient): () => void {
         // Sprint 2 : événements nommés (commande:envoyee, commande_item:annule,
         // table:addition…) — on invalide par préfixe.
         if (type.startsWith('commande')) {
-          if (id) void queryClient.invalidateQueries({ queryKey: ['commande', id] });
-          void queryClient.invalidateQueries({ queryKey: ['commandes-ouvertes'] });
+          // Écho de NOTRE propre mutation d'article : la réponse HTTP nous a
+          // déjà livré la CommandeVue complète, issue de la même transaction.
+          // Réinvalider ici écraserait la saisie en cours et provoquerait un
+          // GET inutile. On ne saute que le type `commande` nu : le KDS émet
+          // `commande:modifiee`/`commande:servie`, jamais neutralisés (voir
+          // echo-mutations.ts pour le détail des garde-fous).
+          const notreEcho = type === 'commande' && !!id && consommerEcho(id);
+          if (id && !notreEcho) void queryClient.invalidateQueries({ queryKey: ['commande', id] });
           void queryClient.invalidateQueries({ queryKey: ['tables'] });
           void queryClient.invalidateQueries({ queryKey: ['mes-ventes'] });
         }

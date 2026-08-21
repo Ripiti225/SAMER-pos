@@ -46,15 +46,22 @@ const MontantPositif = z.number().int().min(0);
 /**
  * Fermeture de shift avec réconciliation (§ brief). Le comptage aveugle est
  * préservé : `especes_comptees` est saisi sans que l'écart soit révélé avant.
- * `livraisons` (Yango/Glovo/Samer Deliv) et `modes` (électroniques) sont des
- * dictionnaires — toute clé absente vaut 0.
+ * `modes` (électroniques) est un dictionnaire — toute clé absente vaut 0.
+ *
+ * Deux champs ne sont plus lus, et restent acceptés seulement pour ne pas
+ * casser une caisse pas encore rebuildée (DESIGN_V2 § 6.8 / § 6.10) :
+ * - `depenses` : le serveur additionne le registre des dépenses ;
+ * - `livraisons` : montants partenaires non modifiables, calculés depuis les
+ *   commandes payées. Le POS est la source officielle des ventes.
  */
 export const CloturerServiceSchema = z.object({
   especes_comptees: z
     .number({ invalid_type_error: 'Le montant compté doit être un nombre' })
     .int('Le montant compté doit être un montant entier en FCFA')
     .min(0, 'Le montant compté ne peut pas être négatif'),
+  /** @deprecated ignoré — somme du registre des dépenses côté serveur. */
   depenses: MontantPositif.default(0),
+  /** @deprecated ignoré — calculé depuis les commandes payées. */
   livraisons: z.record(z.string(), MontantPositif).default({}),
   modes: z.record(z.string(), MontantPositif).default({}),
 });
@@ -95,6 +102,105 @@ export const ModifierItemSchema = z.object({
   quantite: z.number().int().min(1, 'La quantité doit être au moins 1').max(99),
 });
 
+// ---------------------------------------------------------------------------
+// Options réutilisables (migration 0020) — administration
+// ---------------------------------------------------------------------------
+
+/** Le prix est porté par l'option : 0 = gratuite (pâte à l'ail), > 0 = payante. */
+export const CreerOptionSchema = z.object({
+  nom: z.string().trim().min(1, 'Le nom de l’option est obligatoire').max(60),
+  prix: z.number().int().min(0, 'Le prix ne peut pas être négatif').max(1000000),
+});
+
+export const ModifierOptionSchema = z
+  .object({
+    nom: z.string().trim().min(1, 'Le nom de l’option est obligatoire').max(60).optional(),
+    prix: z.number().int().min(0, 'Le prix ne peut pas être négatif').max(1000000).optional(),
+    actif: z.boolean().optional(),
+    ordre: z.number().int().min(0).max(999).optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: 'Aucune modification demandée' });
+
+// ---------------------------------------------------------------------------
+// Promotions — administration (brief 4C § 2.4, livré le 2026-08-17)
+// ---------------------------------------------------------------------------
+// Les promotions s'appliquent AUTOMATIQUEMENT côté serveur dès que le jour et
+// l'heure correspondent (`catalogue/promos.ts`). Il n'existait aucun écran pour
+// les voir ni les arrêter : l'image de déploiement porte une « Happy Hour
+// −20 % » active tous les jours de 17 h à 19 h, soit le créneau le plus chargé,
+// et le seul moyen de l'éteindre était d'aller dans la base.
+
+/** `heure_debut`/`heure_fin` : « HH:MM » ou « HH:MM:SS » (type `time` en base). */
+const HeureSchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/, 'Heure invalide (attendu HH:MM)');
+
+/** Jour ISO : 1 = lundi … 7 = dimanche, comme le stocke le schéma. */
+const JoursSchema = z
+  .array(z.number().int().min(1, 'Jour invalide').max(7, 'Jour invalide'))
+  .min(1, 'Choisissez au moins un jour')
+  .max(7);
+
+const champsPromo = {
+  nom: z.string().trim().min(1, 'Le nom de la promotion est obligatoire').max(80),
+  type: z.enum(['POURCENTAGE', 'MONTANT'], { errorMap: () => ({ message: 'Type de promotion invalide' }) }),
+  valeur: z.number().int('La valeur doit être un nombre entier').min(1, 'La valeur doit être supérieure à zéro'),
+  heure_debut: HeureSchema.nullish(),
+  heure_fin: HeureSchema.nullish(),
+  jours: JoursSchema,
+  /** Promotion ciblée sur un article, ou sur toute la commande si absent. */
+  article_id: z.string().uuid('Article invalide').nullish(),
+  actif: z.boolean(),
+};
+
+/**
+ * Une remise en pourcentage au-delà de 100 % rendrait la commande négative.
+ * Vérifié ici plutôt qu'en base : le message doit être lisible par le manager.
+ * De même, une plage horaire se donne entière ou pas du tout — n'en fournir
+ * qu'une moitié laisserait `promotionActive()` ignorer l'horaire en silence et
+ * la promo tournerait 24 h sur 24.
+ */
+interface PromoBrute {
+  type: string;
+  valeur: number;
+  heure_debut?: string | null;
+  heure_fin?: string | null;
+}
+
+const remiseSensee = (v: PromoBrute): boolean => v.type !== 'POURCENTAGE' || v.valeur <= 100;
+const plageEntiere = (v: PromoBrute): boolean => !!v.heure_debut === !!v.heure_fin;
+const plageOrdonnee = (v: PromoBrute): boolean =>
+  !v.heure_debut || !v.heure_fin || v.heure_debut < v.heure_fin;
+
+const MSG_POURCENT = { message: 'Une remise en pourcentage ne peut pas dépasser 100 %', path: ['valeur'] };
+const MSG_PLAGE = { message: 'Donnez l’heure de début ET l’heure de fin, ou aucune des deux', path: ['heure_fin'] };
+const MSG_ORDRE = { message: 'L’heure de fin doit être après l’heure de début', path: ['heure_fin'] };
+
+export const CreerPromotionSchema = z
+  .object({ ...champsPromo, actif: champsPromo.actif.default(true) })
+  .refine(remiseSensee, MSG_POURCENT)
+  .refine(plageEntiere, MSG_PLAGE)
+  .refine(plageOrdonnee, MSG_ORDRE);
+
+export const ModifierPromotionSchema = z
+  .object(champsPromo)
+  .refine(remiseSensee, MSG_POURCENT)
+  .refine(plageEntiere, MSG_PLAGE)
+  .refine(plageOrdonnee, MSG_ORDRE);
+
+/** Allumer/éteindre une promotion sans toucher au reste — le geste courant. */
+export const BasculerPromotionSchema = z.object({ actif: z.boolean() });
+
+/** Une liaison vise UNE catégorie entière OU UN article, jamais les deux. */
+export const LierOptionSchema = z
+  .object({
+    categorie_id: z.string().uuid('Catégorie invalide').nullish(),
+    article_id: z.string().uuid('Article invalide').nullish(),
+  })
+  .refine((v) => !!v.categorie_id !== !!v.article_id, {
+    message: 'Choisissez une catégorie OU un article',
+  });
+
 const MotifObligatoire = z
   .string({ required_error: 'Le motif est obligatoire' })
   .trim()
@@ -127,6 +233,15 @@ export const ReouvrirSchema = z.object({
 export const AnnulerCommandeSchema = z.object({
   motif: MotifObligatoire,
   pin_manager: PinSaisiSchema,
+});
+
+/**
+ * Clôture d'un Kdo (repas offert). Pas de PIN manager — décision client : le
+ * caissier peut offrir seul — mais le motif reste OBLIGATOIRE, c'est la seule
+ * trace qui permettra de repérer un abus dans le journal d'audit.
+ */
+export const OffrirSchema = z.object({
+  motif: MotifObligatoire,
 });
 
 export const PaiementSchema = z.object({

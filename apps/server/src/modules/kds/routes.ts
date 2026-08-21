@@ -62,6 +62,7 @@ async function construireCartes(lignes: LigneCommande[]): Promise<CarteKds[]> {
       return {
         id: c.id,
         numero_ticket: Number(c.numero_ticket),
+        code_commande: c.code_commande,
         type: c.type,
         partenaire: c.partenaire,
         table_numero: c.table_numero,

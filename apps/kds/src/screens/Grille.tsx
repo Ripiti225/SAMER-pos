@@ -228,7 +228,7 @@ function CartePrete({
     <div className="carte flex flex-col border-ok p-4 shadow-e1">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <div className="text-5xl font-black leading-none text-fort">N° {carte.numero_ticket}</div>
+          <div className="text-5xl font-black leading-none text-fort">{carte.code_commande ?? `N° ${carte.numero_ticket}`}</div>
           <div className="mt-1 text-lg text-doux">
             {LIBELLES_TYPES_COMMANDE[carte.type]}
             {carte.partenaire ? ` — ${carte.partenaire}` : ''}
@@ -299,7 +299,7 @@ function Carte({
       <div className="flex items-start justify-between gap-2">
         <div>
           {/* Numéro de ticket en TRÈS grand (§A1) */}
-          <div className="text-5xl font-black leading-none text-fort">N° {carte.numero_ticket}</div>
+          <div className="text-5xl font-black leading-none text-fort">{carte.code_commande ?? `N° ${carte.numero_ticket}`}</div>
           <div className="mt-1 text-lg text-doux">
             {LIBELLES_TYPES_COMMANDE[carte.type]}
             {carte.partenaire ? ` — ${carte.partenaire}` : ''}

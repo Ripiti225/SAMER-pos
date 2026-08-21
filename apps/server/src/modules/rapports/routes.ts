@@ -4,11 +4,27 @@ import { MODES_PAIEMENT, type ModePaiement } from '@pos/shared';
 import { db } from '../../db/client.js';
 import { commandeItems, commandes, notations, paiements, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
 import { aPermission } from '../../plugins/sessions.js';
+import { retoursDepuis, retoursDuService } from '../services/rapport.js';
 
 function debutDuJour(): Date {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   return d;
+}
+
+/**
+ * Retours d'un service, montants masqués si l'utilisateur n'a pas le Rapport X :
+ * le caissier voit les plats refaits, pas le chiffre d'affaires.
+ */
+async function retoursServiceVisible(dbx: typeof db, serviceId: string, voitMontants: boolean) {
+  const r = await retoursDuService(dbx, serviceId);
+  if (voitMontants) return r;
+  return {
+    nb: r.nb,
+    montant: 0,
+    par_produit: r.par_produit.map((p) => ({ ...p, montant: 0 })),
+    detail: r.detail.map((d) => ({ ...d, montant: 0 })),
+  };
 }
 
 function debutIlYaJours(jours: number): Date {
@@ -80,6 +96,17 @@ export function routesRapports(app: FastifyInstance): void {
     return top.map((t) => ({ nom: t.nom, quantite: Number(t.quantite), total: Number(t.total) }));
   });
 
+  /**
+   * RETOURS du jour (tous services) — articles déjà partis en cuisine puis
+   * supprimés au PIN manager. Information seule : ils ne sont ni dans les
+   * ventes, ni dans le tiroir, ni dans les sorties d'inventaire. C'est le
+   * chiffre qui dit si un site refait souvent ses plats.
+   */
+  app.get('/api/rapports/retours-jour', { preHandler: gardeManager }, async () => {
+    const depuis = debutDuJour();
+    return { date: depuis.toISOString().slice(0, 10), ...(await retoursDepuis(db, depuis)) };
+  });
+
   // Ventes par heure du jour — manager / propriétaire
   app.get('/api/rapports/par-heure', { preHandler: gardeManager }, async () => {
     const depuis = debutDuJour();
@@ -113,6 +140,7 @@ export function routesRapports(app: FastifyInstance): void {
       .select({
         id: commandes.id,
         numero_ticket: commandes.numero_ticket,
+        code_commande: commandes.code_commande,
         type: commandes.type,
         statut: commandes.statut,
         total: commandes.total,
@@ -156,6 +184,10 @@ export function routesRapports(app: FastifyInstance): void {
       produits: produits.map((p) => ({ nom: p.nom, quantite: Number(p.quantite) })),
       nb_payees: lignes.filter((l) => l.statut === 'PAYEE').length,
       total_payees: voitMontants ? lignes.filter((l) => l.statut === 'PAYEE').reduce((s, l) => s + l.total, 0) : undefined,
+      // Retours du service en cours. Le caissier voit les QUANTITÉS (ce sont
+      // les plats sortis de sa cuisine) ; les montants suivent la même règle
+      // que le reste de l'écran — réservés au Rapport X.
+      retours: await retoursServiceVisible(db, service.id, voitMontants),
     };
   });
 

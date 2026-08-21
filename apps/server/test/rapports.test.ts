@@ -12,6 +12,7 @@ import {
   PIN_PROPRIO,
   resetDonnees,
   seConnecter,
+  validerInventaire,
   type Donnees,
 } from './aide.js';
 
@@ -96,6 +97,7 @@ describe('C3 — Tableau de bord propriétaire (chiffres exacts)', () => {
 
 describe('C2 — Rapport Z enrichi', () => {
   it('la clôture fige un Z avec par_type et récap partenaires', async () => {
+    await validerInventaire(app, cookiesCaissier);
     const rep = await app.inject({ method: 'POST', url: '/api/services/cloturer', cookies: cookiesCaissier, payload: { especes_comptees: 36500 } });
     expect(rep.statusCode).toBe(200);
     const z = rep.json();

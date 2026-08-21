@@ -10,6 +10,7 @@ import {
   PIN_CAISSIER2,
   resetDonnees,
   seConnecter,
+  validerInventaire,
   type Donnees,
 } from './aide.js';
 
@@ -89,6 +90,7 @@ describe('relève de caisse : transfert des commandes en cours au caissier suiva
     expect((traces[0]!.meta as { receveur_id: string }).receveur_id).toBe(donnees.caissier2_id);
 
     // Le caissier A peut maintenant clôturer : aucune vente encaissée, écart nul
+    await validerInventaire(app, cookiesA);
     const cloture = await app.inject({
       method: 'POST',
       url: '/api/services/cloturer',
@@ -131,6 +133,7 @@ describe('relève de caisse : transfert des commandes en cours au caissier suiva
     expect(paiement.statusCode).toBe(200);
     expect(paiement.json().statut).toBe('PAYEE');
 
+    await validerInventaire(app, cookiesB);
     const cloture = await app.inject({
       method: 'POST',
       url: '/api/services/cloturer',

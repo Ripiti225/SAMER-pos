@@ -1,102 +1,280 @@
 /* ===========================================================================
-   THÈME PARTAGÉ « Culinary Commerce » — caisse / KDS / serveur / client.
-   Warm Professional : fond papier chaud, hiérarchie de surfaces par tonalité,
-   élévation douce (ombres ambiantes), coins généreux, typo Work Sans.
+   THÈME PARTAGÉ « Duo contrasté » — caisse / KDS / serveur / client.
+   Ossature ardoise (barres, colonnes, panneaux) + plan de travail clair.
+   La couleur INFORME, elle ne décore pas : aplats francs, aucun dégradé,
+   aucun halo, ombres neutres sur deux niveaux, rayons 12 px.
    Rebranding Samer ↔ Al Kayan en une variable (data-marque + --marque).
-   Réf. docs/DESIGN.md.
+   Mode d'affichage : data-mode="sombre" sur <html> (réglage du POSTE).
+   Réf. docs/DESIGN_V2.md.
    =========================================================================== */
 
 @import '@fontsource-variable/work-sans/wght.css';
 
 :root {
-  /* --- Fond & surfaces (hiérarchie tonale, jamais de blanc pur en grande masse) */
-  --fond-page: #fff8f2;              /* background / surface */
-  --surface-carte: #ffffff;          /* container-lowest : cartes interactives */
-  --surface-douce: #f9f3ec;          /* container-low : zones secondaires */
-  --surface-moyenne: #f3ede6;        /* container : panneaux, barres latérales */
-  --surface-haute: #ede7e1;          /* container-high : survols, éléments actifs */
-  --surface-tres-haute: #e7e2db;     /* container-highest */
-  --bordure: #e7ddd0;                /* outline-variant, adouci */
-  --bordure-forte: #d7c3ae;          /* outline-variant net */
-  --texte-fort: #1d1b17;             /* on-surface */
-  --texte-doux: #524435;             /* on-surface-variant (chaud, contrasté) */
-  --texte-faible: #857462;           /* outline : métadonnées discrètes */
+  /* --- Ossature ardoise (chrome) : barres, colonnes, panneaux latéraux ----- */
+  --ard-900: #10151d;
+  --ard-850: #141a24;
+  --ard-800: #171d27;
+  --ard-750: #1c2431;
+  --ard-700: #212a37;
+  --ard-650: #283344;
+  --ard-600: #2e3a4b;
+  --ard-txt: #f2f5f8;
+  --ard-txt-doux: #9aa8bb;
+  --ard-txt-faible: #6b7a90;
 
-  /* --- Accent de marque (défaut : Chez Samer) */
-  --marque: #ef9f27;                 /* primary-container : CTA, états actifs */
-  --marque-foncee: #855400;          /* primary : prix, texte d'emphase */
-  --marque-tint: #fbeed6;            /* fond secondaire tinté */
-  --marque-vif: #f7912a;             /* dégradé haut des CTA */
-  --sur-marque: #ffffff;             /* texte sur aplat de marque */
+  /* --- Plan de travail (zone centrale claire) ------------------------------ */
+  --plan: #f4f6f9;
+  --carte: #ffffff;
+  --carte-douce: #eef1f6;
+  --filet: #e4e8ee;
+  --filet-fort: #d3d9e2;
+  --txt: #131820;
+  --txt-doux: #5b6675;
+  --txt-faible: #8994a5;
 
-  /* --- Couleurs FONCTIONNELLES, identiques pour les deux marques */
-  --ok: #2f8a4c;
-  --ok-tint: #e7f3e5;
-  --alerte: #ba1a1a;
-  --alerte-tint: #ffdad6;
-  --info: #2f86dc;
-  --info-tint: #e6f1fb;
+  /* --- Marque (défaut : Chez Samer) ---------------------------------------- */
+  --marque: #ef9f27; /* aplats, états actifs */
+  --marque-txt: #9a5b00; /* texte de marque sur fond CLAIR */
+  --marque-clair: #ffb95d; /* texte de marque sur fond ARDOISE */
+  --marque-tint: #fdf1de;
+  --sur-marque: #1a1205; /* texte posé sur un aplat de marque */
+  /* Tout texte de marque posé sur le plan de travail passe par CE jeton :
+     --marque brut sur fond clair tombe à ~2:1 de contraste, illisible. */
+  --marque-sur-plan: var(--marque-txt);
 
-  /* --- Élévation (ombres ambiantes chaudes, calibrées par niveau) */
-  --ombre-1: 0 1px 2px rgba(29, 27, 23, 0.04), 0 2px 6px rgba(29, 27, 23, 0.05);
-  --ombre-2: 0 4px 10px rgba(29, 27, 23, 0.08), 0 2px 6px rgba(29, 27, 23, 0.05);
-  --ombre-3: 0 16px 40px -12px rgba(101, 62, 0, 0.22), 0 4px 12px rgba(29, 27, 23, 0.08);
-  --ombre-marque: 0 6px 16px rgba(133, 84, 0, 0.28);
+  /* --- Sémantique ---------------------------------------------------------- */
+  --ok: #16a34a;
+  --ok-tint: #e7f6ec;
+  --ok-txt: #10653a;
+  --alerte: #dc2626;
+  --alerte-tint: #fdeaea;
+  --alerte-txt: #96201e;
+  --info: #3b82f6;
+  --info-tint: #e8f0fe;
+  --info-txt: #1e4a94;
+  --attente: #d97706;
+  --attente-tint: #fdf0dd;
+  --attente-txt: #7c4a04;
 
-  --rayon: 16px;
-  --rayon-btn: 13px;
-  --rayon-sm: 8px;
+  /* --- Écrans vitrine (connexion, accueil) : ils SUIVENT le mode ----------- */
+  --vitrine-fond: #f4f6f9;
+  --vitrine-surface: #ffffff;
+  --vitrine-surface-2: #eef1f6;
+  --vitrine-bordure: #e4e8ee;
+  --vitrine-txt: #131820;
+  --vitrine-txt-doux: #5b6675;
+  --vitrine-txt-faible: #8994a5;
+  --vitrine-ombre: var(--ombre-2);
+  --halo-opacite: 0.5;
 
+  /* --- Couleurs de catégorie (hors famille orange, prise par la marque) ---- */
+  --cat-chawarmas: #e2445c;
+  --cat-pizzas: #8b5cf6;
+  --cat-grillades: #14b8a6;
+  --cat-boissons: #3b82f6;
+
+  /* --- Couleurs d'opérateur de paiement ------------------------------------ */
+  --pay-especes: #16a34a;
+  --pay-wave: #1dc8ff;
+  --pay-orange: #ff7900;
+  --pay-mtn: #ffcc00;
+  --pay-moov: #0057b8;
+  --pay-carte: #64748b;
+  --pay-djamo: #6d28d9;
+
+  /* --- Élévation — NEUTRE, jamais teintée ---------------------------------- */
+  --ombre-1: 0 1px 2px rgba(16, 21, 29, 0.06), 0 2px 8px rgba(16, 21, 29, 0.05);
+  --ombre-2: 0 8px 24px rgba(16, 21, 29, 0.12), 0 2px 6px rgba(16, 21, 29, 0.06);
+  --ombre-ard: 0 10px 30px rgba(0, 0, 0, 0.35);
+
+  /* --- Formes -------------------------------------------------------------- */
+  --r: 12px;
+  --r-btn: 10px;
+  --r-sm: 7px;
+
+  /* --- Mouvement ----------------------------------------------------------- */
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-sortie: cubic-bezier(0.4, 0, 0.68, 0.5);
+  --dur: 220ms;
+  --dur-lent: 380ms;
+
+  /* -------------------------------------------------------------------------
+     Compatibilité — anciens noms de jetons (« Culinary Commerce »).
+     Le KDS, la tablette serveur et l'app client n'ont pas encore été repris :
+     ils continuent de lire ces variables, qui pointent désormais sur la
+     nouvelle palette. À supprimer quand ces trois apps auront été portées.
+     ------------------------------------------------------------------------- */
+  --fond-page: var(--plan);
+  --surface-carte: var(--carte);
+  --surface-douce: var(--carte-douce);
+  --surface-moyenne: var(--carte-douce);
+  --surface-haute: var(--filet);
+  --surface-tres-haute: var(--filet-fort);
+  --bordure: var(--filet);
+  --bordure-forte: var(--filet-fort);
+  --texte-fort: var(--txt);
+  --texte-doux: var(--txt-doux);
+  --texte-faible: var(--txt-faible);
+  --marque-foncee: var(--marque-sur-plan);
+  --marque-vif: var(--marque);
+  --ombre-3: var(--ombre-2);
+  --ombre-marque: var(--ombre-2);
+  --rayon: var(--r);
+  --rayon-btn: var(--r-btn);
+  --rayon-sm: var(--r-sm);
   --accent: var(--marque);
 }
 
+/* --- Marque Al Kayan : une seule bascule ---------------------------------- */
 :root[data-marque='AL_KAYAN'] {
   --marque: #2d7d46;
-  --marque-foncee: #175230;
-  --marque-tint: #e2f0e7;
-  --marque-vif: #2f8a4c;
-  --ombre-marque: 0 6px 16px rgba(23, 82, 48, 0.26);
+  --marque-txt: #1c5c33;
+  --marque-clair: #6fd18f;
+  --marque-tint: #e6f3ea;
+  --sur-marque: #ffffff;
+}
+
+/* ---------------------------------------------------------------------------
+   MODE SOMBRE — le duo descend d'un cran : l'ossature ne devient pas claire et
+   le plan ne devient pas noir, les deux glissent ensemble vers le bas.
+   L'ossature reste plus sombre que le plan ; les cartes restent plus claires.
+   Attribut `data-mode` (et non `data-theme`) : voir docs/DESIGN_V2.md § 3.3.
+   --------------------------------------------------------------------------- */
+:root[data-mode='sombre'] {
+  --ard-900: #05080d;
+  --ard-850: #080c12;
+  --ard-800: #0b1017;
+  --ard-750: #10161f;
+  --ard-700: #161d28;
+  --ard-650: #1d2532;
+  --ard-600: #26303f;
+
+  --plan: #171d27;
+  --carte: #212a37;
+  --carte-douce: #1a2230;
+  --filet: #2c3748;
+  --filet-fort: #3a4658;
+  --txt: #eef2f7;
+  --txt-doux: #a3b0c2;
+  --txt-faible: #7d8b9e;
+
+  --marque-sur-plan: var(--marque-clair);
+  /* Les fonds pastel n'existent pas sur ardoise : recomposés sur --carte. */
+  --marque-tint: color-mix(in srgb, var(--marque) 20%, var(--carte));
+
+  --ok-tint: color-mix(in srgb, var(--ok) 20%, var(--carte));
+  --ok-txt: #6ee7a0;
+  --alerte-tint: color-mix(in srgb, var(--alerte) 22%, var(--carte));
+  --alerte-txt: #ff9b9b;
+  --info-tint: color-mix(in srgb, var(--info) 20%, var(--carte));
+  --info-txt: #9ec8ff;
+  --attente-tint: color-mix(in srgb, var(--attente) 22%, var(--carte));
+  --attente-txt: #f5c274;
+
+  --vitrine-fond: var(--ard-900);
+  --vitrine-surface: var(--ard-800);
+  --vitrine-surface-2: var(--ard-750);
+  --vitrine-bordure: var(--ard-700);
+  --vitrine-txt: var(--ard-txt);
+  --vitrine-txt-doux: var(--ard-txt-doux);
+  --vitrine-txt-faible: var(--ard-txt-faible);
+  --vitrine-ombre: var(--ombre-ard);
+  --halo-opacite: 1;
+
+  /* Les ombres grises ne se voient pas sur du sombre. */
+  --ombre-1: 0 1px 2px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --ombre-2: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
 html {
   -webkit-tap-highlight-color: transparent;
   font-family: 'Work Sans Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: light;
+}
+:root[data-mode='sombre'] {
+  color-scheme: dark;
 }
 body {
-  background: var(--fond-page);
-  color: var(--texte-fort);
+  background: var(--plan);
+  color: var(--txt);
   font-family: inherit;
   font-synthesis-weight: none;
   -webkit-font-smoothing: antialiased;
+  /* Bascule clair/sombre : fondu sur les grandes surfaces (§ 5). */
+  transition: background-color 260ms var(--ease), color 260ms var(--ease);
 }
 
 /* ---------------------------------------------------------------------------
-   Boutons — tactiles ≥ 48 px, coins généreux, présence et profondeur.
+   Ossature — barres, colonnes de catégories/zones, panneaux latéraux.
+   Sombre dans les DEUX modes : c'est l'identité du design.
+   --------------------------------------------------------------------------- */
+.ossature {
+  background: var(--ard-800);
+  color: var(--ard-txt);
+}
+.ossature-haute {
+  background: var(--ard-850);
+  color: var(--ard-txt);
+}
+.ossature-basse {
+  background: var(--ard-900);
+  color: var(--ard-txt);
+}
+/* Élément posé SUR l'ossature (carte de zone, ligne d'addition…) */
+.sur-ossature {
+  background: var(--ard-700);
+  color: var(--ard-txt);
+  border: 1px solid var(--ard-650);
+  border-radius: var(--r);
+}
+button.sur-ossature {
+  transition: background-color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+button.sur-ossature:hover {
+  background: var(--ard-650);
+}
+button.sur-ossature[aria-pressed='true'],
+button.sur-ossature.choisi {
+  background: var(--marque);
+  border-color: var(--marque);
+  color: var(--sur-marque);
+}
+
+/* ---------------------------------------------------------------------------
+   Boutons — tactiles ≥ 48 px, APLATS FRANCS (plus aucun dégradé).
    --------------------------------------------------------------------------- */
 .btn,
 .btn-accent,
 .btn-ok,
 .btn-blanc,
 .btn-alerte {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   min-height: 48px;
-  border-radius: var(--rayon-btn);
+  border-radius: var(--r-btn);
   padding: 0 18px;
   font-size: 15px;
   font-weight: 700;
   line-height: 1.1;
-  transition: transform 0.09s ease, box-shadow 0.18s ease, filter 0.18s ease, background-color 0.18s ease;
+  overflow: hidden; /* borne l'ondulation au point de contact */
+  transition: transform 0.09s var(--ease), box-shadow var(--dur) var(--ease),
+    filter var(--dur) var(--ease), background-color var(--dur) var(--ease);
 }
-.btn { font-weight: 600; }
+.btn {
+  font-weight: 600;
+  color: var(--txt);
+}
+/* Enfoncement 1 px au contact (§ 5). */
 .btn:active,
 .btn-accent:active,
 .btn-ok:active,
 .btn-blanc:active,
 .btn-alerte:active {
-  transform: translateY(1px) scale(0.99);
+  transform: translateY(1px);
 }
 .btn:disabled,
 .btn-accent:disabled,
@@ -111,20 +289,20 @@ body {
 
 /* Action de marque (nouvelle commande, continuer…) */
 .btn-accent {
-  background: linear-gradient(180deg, var(--marque-vif), var(--marque));
-  color: #fff;
-  box-shadow: var(--ombre-marque);
+  background: var(--marque);
+  color: var(--sur-marque);
+  box-shadow: var(--ombre-1);
 }
 .btn-accent:hover {
   filter: brightness(1.04);
-  box-shadow: 0 8px 20px rgba(133, 84, 0, 0.34);
+  box-shadow: var(--ombre-2);
 }
 
 /* Valider / encaisser / prêt */
 .btn-ok {
   background: var(--ok);
   color: #fff;
-  box-shadow: 0 6px 16px rgba(47, 138, 76, 0.26);
+  box-shadow: var(--ombre-1);
 }
 .btn-ok:hover {
   filter: brightness(1.05);
@@ -134,22 +312,17 @@ body {
 .btn-alerte {
   background: var(--alerte);
   color: #fff;
-  box-shadow: 0 6px 16px rgba(186, 26, 26, 0.22);
+  box-shadow: var(--ombre-1);
 }
 .btn-alerte:hover {
   filter: brightness(1.04);
 }
 
-/* Base neutre : le fond est fourni par les écrans (bg-marque, bg-surface…). */
-.btn {
-  color: var(--texte-fort);
-}
-
-/* Secondaire : blanc, bordé, ombre légère */
+/* Secondaire : carte, bordé, ombre légère */
 .btn-blanc {
-  background: var(--surface-carte);
-  color: var(--texte-fort);
-  border: 1px solid var(--bordure);
+  background: var(--carte);
+  color: var(--txt);
+  border: 1px solid var(--filet);
   box-shadow: var(--ombre-1);
 }
 .btn-blanc:hover {
@@ -157,36 +330,62 @@ body {
   background: var(--marque-tint);
 }
 
+/* Ondulation au point de contact : la position est posée par le JS
+   (--onde-x / --onde-y), l'animation par cette classe. */
+.onde {
+  position: absolute;
+  left: var(--onde-x, 50%);
+  top: var(--onde-y, 50%);
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.28;
+  pointer-events: none;
+  animation: onde 540ms var(--ease) forwards;
+}
+@keyframes onde {
+  to {
+    transform: scale(22);
+    opacity: 0;
+  }
+}
+
 /* ---------------------------------------------------------------------------
-   Cartes — blanches, coins généreux, élévation douce.
+   Cartes — sur le plan de travail.
    --------------------------------------------------------------------------- */
 .carte {
-  background: var(--surface-carte);
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon);
+  background: var(--carte);
+  border: 1px solid var(--filet);
+  border-radius: var(--r);
   box-shadow: var(--ombre-1);
 }
 button.carte {
-  transition: transform 0.14s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  transition: transform 0.14s var(--ease), box-shadow var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
 }
 button.carte:hover {
   box-shadow: var(--ombre-2);
-  border-color: color-mix(in srgb, var(--marque) 45%, var(--bordure));
+  border-color: color-mix(in srgb, var(--marque) 45%, var(--filet));
+}
+button.carte:active {
+  transform: translateY(1px);
 }
 
 /* Champs de saisie */
 .champ {
   min-height: 48px;
   width: 100%;
-  border-radius: var(--rayon-btn);
-  background: var(--surface-carte);
-  border: 1px solid var(--bordure);
+  border-radius: var(--r-btn);
+  background: var(--carte);
+  border: 1px solid var(--filet);
   box-shadow: var(--ombre-1);
   padding: 0 16px;
   font-size: 17px;
-  color: var(--texte-fort);
+  color: var(--txt);
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
 }
 .champ:focus,
 .champ:focus-within {
@@ -194,33 +393,122 @@ button.carte:hover {
   box-shadow: 0 0 0 3px var(--marque-tint);
 }
 .champ::placeholder {
-  color: var(--texte-doux);
+  color: var(--txt-doux);
 }
 
-/* Prix : toujours en marque foncée, jamais en gris pâle */
+/* Prix : jamais en gris pâle, et jamais en --marque brut sur fond clair. */
 .prix {
-  color: var(--marque-foncee);
+  color: var(--marque-sur-plan);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
+/* Un prix posé sur l'ossature prend la variante claire. */
+.ossature .prix,
+.ossature-haute .prix,
+.ossature-basse .prix,
+.sur-ossature .prix {
+  color: var(--marque-clair);
+}
 
-/* Touche de pavé numérique tactile (PIN, montants) : grande, blanche, tactile. */
+/* Touche de pavé numérique tactile (PIN, montants). */
 .touche {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 64px;
-  border-radius: var(--rayon-btn);
-  background: var(--surface-carte);
-  color: var(--texte-fort);
+  border-radius: var(--r-btn);
+  background: var(--carte);
+  color: var(--txt);
   font-size: 24px;
   font-weight: 600;
   box-shadow: var(--ombre-1);
-  transition: transform 0.09s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.09s var(--ease), background-color 0.15s var(--ease),
+    box-shadow 0.15s var(--ease);
 }
 .touche:hover {
-  background: color-mix(in srgb, var(--marque) 7%, var(--surface-carte));
+  background: color-mix(in srgb, var(--marque) 7%, var(--carte));
 }
 .touche:active {
-  transform: translateY(1px) scale(0.98);
+  transform: translateY(1px);
+}
+
+/* ---------------------------------------------------------------------------
+   Mouvement — § 5 de DESIGN_V2.md
+   --------------------------------------------------------------------------- */
+
+/* Changement d'écran : glissement horizontal, sens selon le parcours. */
+@keyframes ecran-avant {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+@keyframes ecran-arriere {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+}
+.ecran-avant {
+  animation: ecran-avant var(--dur) var(--ease);
+}
+.ecran-arriere {
+  animation: ecran-arriere var(--dur) var(--ease);
+}
+
+/* Ligne d'addition qui vient d'être ajoutée : dépli + surlignage 700 ms. */
+@keyframes ligne-ajoutee {
+  0% {
+    background-color: color-mix(in srgb, var(--marque) 45%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+.ligne-ajoutee {
+  animation: ligne-ajoutee 700ms var(--ease);
+}
+
+/* Table prête en cuisine : SEULE animation infinie de l'interface. */
+@keyframes pulsation-ok {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 70%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 10px color-mix(in srgb, var(--ok) 0%, transparent);
+  }
+}
+.pulse-ok {
+  animation: pulsation-ok 2s var(--ease) infinite;
+}
+/* Arrivée du reste à payer à zéro : une seule pulsation. */
+.pulse-ok-une-fois {
+  animation: pulsation-ok 900ms var(--ease) 1;
+}
+
+/* Squelettes de chargement — jamais d'écran « Chargement… » vide. */
+@keyframes squelette {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.squelette {
+  background: var(--carte-douce);
+  border-radius: var(--r-sm);
+  animation: squelette 1.4s var(--ease) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

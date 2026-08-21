@@ -6,11 +6,14 @@
  *  - Promotions appliquées automatiquement selon heure/jour, montant tracé
  *    dans promo_montant. Une commande PAYEE/ANNULEE n'est plus recalculée.
  */
-import { and, eq, isNull, sql } from 'drizzle-orm';
-import type { CommandeVue, CommandeItemVue } from '@pos/shared';
+import { randomInt } from 'node:crypto';
+import { and, eq, isNull, notInArray, sql } from 'drizzle-orm';
+import type { CommandeVue, CommandeItemVue, TypeCommande } from '@pos/shared';
+import { categorieVisiblePour, libellePartenaire, PREFIXE_CODE_TYPE } from '@pos/shared';
 import type { DbOuTx } from '../../db/client.js';
 import {
   articles,
+  categories,
   combos,
   commandeItems,
   commandes,
@@ -19,17 +22,50 @@ import {
   prixCanaux,
   promotions,
   servicesCaisse,
-  supplements,
   tablesSalle,
 } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { promotionActive, type PromotionDb } from '../catalogue/promos.js';
+import { optionsAutoriseesPourArticle } from '../catalogue/options.js';
 
 export type CommandeDb = typeof commandes.$inferSelect;
 export type ItemDb = typeof commandeItems.$inferSelect;
 
 export const STATUTS_MODIFIABLES = ['OUVERTE', 'ENVOYEE_CUISINE', 'PRETE', 'SERVIE'] as const;
+
+/**
+ * Génère un code court lisible (ex. « SP215 ») : préfixe selon le type +
+ * 3 chiffres aléatoires. Unique dans le service (ou, à défaut de service —
+ * commande client QR —, parmi les commandes actives). Le numero_ticket reste
+ * la séquence continue d'audit ; ce code n'est qu'un repère opérationnel.
+ */
+export async function genererCodeCommande(
+  tx: DbOuTx,
+  type: TypeCommande,
+  serviceId: string | null,
+): Promise<string> {
+  const prefixe = PREFIXE_CODE_TYPE[type];
+  for (let essai = 0; essai < 40; essai++) {
+    // 3 chiffres après ~30 essais on élargit à 4 pour garantir la terminaison.
+    const chiffres = essai < 30 ? 1000 : 10000;
+    const candidat = `${prefixe}${String(randomInt(chiffres)).padStart(essai < 30 ? 3 : 4, '0')}`;
+    const conflits = serviceId
+      ? await tx
+          .select({ id: commandes.id })
+          .from(commandes)
+          .where(and(eq(commandes.service_id, serviceId), eq(commandes.code_commande, candidat)))
+          .limit(1)
+      : await tx
+          .select({ id: commandes.id })
+          .from(commandes)
+          .where(and(eq(commandes.code_commande, candidat), notInArray(commandes.statut, ['PAYEE', 'ANNULEE'])))
+          .limit(1);
+    if (conflits.length === 0) return candidat;
+  }
+  // Repli théoriquement inatteignable : préfixe + horodatage court.
+  return `${prefixe}${Date.now().toString().slice(-5)}`;
+}
 
 export function totalLigne(item: Pick<ItemDb, 'prix_unitaire' | 'quantite' | 'supplements'>): number {
   const suppls = (item.supplements as { nom: string; prix: number }[]) ?? [];
@@ -95,15 +131,34 @@ export async function figerNouvelItem(
     const [article] = await tx.select().from(articles).where(eq(articles.id, corps.article_id));
     if (!article || !article.actif) throw introuvable('Article');
     if (!article.disponible) throw new ErreurMetier('Cet article n’est plus disponible aujourd’hui', 409);
+
+    // Catégorie réservée à un partenaire (migration 0023) : la règle est
+    // appliquée ICI et pas seulement à l'affichage. Les trois apps masquent
+    // déjà ces catégories, mais un plat « Glovo spéciale » vendu en salle
+    // fausserait la facturation du partenaire — la carte n'est pas la même.
+    const [categorie] = await tx
+      .select({ nom: categories.nom, partenaires: categories.partenaires })
+      .from(categories)
+      .where(eq(categories.id, article.categorie_id));
+    if (!categorieVisiblePour(categorie?.partenaires, c.partenaire)) {
+      throw new ErreurMetier(
+        `« ${article.nom} » ne se vend que pour ${(categorie?.partenaires ?? []).map(libellePartenaire).join(' ou ')}`,
+        409,
+      );
+    }
     const canaux = await tx.select().from(prixCanaux).where(eq(prixCanaux.article_id, article.id));
     nomSnapshot = article.nom;
     prixUnitaire = prixSelonCanal(article.prix_base, canaux, c.type, c.partenaire);
 
+    // Extras choisis (migration 0020) : les ids viennent de options_catalogue,
+    // et sont validés contre l'ensemble EXACT que la caisse a pu proposer —
+    // options de la catégorie de l'article + options de l'article. Le prix est
+    // figé ici depuis la base, jamais depuis ce que le client a envoyé.
     if (corps.supplements.length > 0) {
-      const dispo = await tx.select().from(supplements).where(eq(supplements.article_id, article.id));
+      const autorisees = await optionsAutoriseesPourArticle(tx, article.id, article.categorie_id);
       supplementsFiges = corps.supplements.map((s) => {
-        const trouve = dispo.find((d) => d.id === s.id);
-        if (!trouve) throw new ErreurMetier('Supplément inconnu pour cet article', 400);
+        const trouve = autorisees.find((d) => d.id === s.id);
+        if (!trouve) throw new ErreurMetier('Option inconnue pour cet article', 400);
         return { nom: trouve.nom, prix: trouve.prix };
       });
     }
@@ -233,12 +288,15 @@ export async function chargerCommandeVue(dbx: DbOuTx, commandeId: string): Promi
   return {
     id: c.id,
     numero_ticket: Number(c.numero_ticket),
+    code_commande: c.code_commande,
     type: c.type,
     table_id: c.table_id,
     table_numero: tableLigne[0]?.numero ?? null,
     partenaire: c.partenaire,
     ref_partenaire: c.ref_partenaire,
     statut: c.statut,
+    offert: c.offert,
+    motif_offert: c.motif_offert,
     sous_total: c.sous_total,
     remise_montant: c.remise_montant,
     remise_motif: c.remise_motif,
@@ -281,11 +339,12 @@ export async function majStatutTable(tx: DbOuTx, tableId: string | null, statut:
  * à ENVOYEE_CUISINE. Seuls les NOUVEAUX articles partent (ajout en plusieurs
  * fois, §B2). Utilisé par la caisse ET par la validation d'une commande client.
  */
-export async function marquerEnvoiCuisine(tx: DbOuTx, commandeId: string): Promise<void> {
+export async function marquerEnvoiCuisine(tx: DbOuTx, commandeId: string): Promise<string[]> {
   const items = await tx
     .select()
     .from(commandeItems)
     .where(and(eq(commandeItems.commande_id, commandeId), isNull(commandeItems.envoye_le)));
+  const envoyes: string[] = [];
   for (const item of items) {
     if (item.statut_cuisine === 'ANNULE') continue;
     const [maj] = await tx
@@ -294,6 +353,7 @@ export async function marquerEnvoiCuisine(tx: DbOuTx, commandeId: string): Promi
       .where(eq(commandeItems.id, item.id))
       .returning();
     await ecrireOutbox(tx, 'commande_items', 'UPDATE', item.id, maj as unknown as Record<string, unknown>);
+    envoyes.push(item.id);
   }
   const [maj] = await tx
     .update(commandes)
@@ -301,6 +361,8 @@ export async function marquerEnvoiCuisine(tx: DbOuTx, commandeId: string): Promi
     .where(eq(commandes.id, commandeId))
     .returning();
   await ecrireOutbox(tx, 'commandes', 'UPDATE', commandeId, maj as unknown as Record<string, unknown>);
+  // Renvoie les ids nouvellement envoyés → l'appelant imprime les bons APRÈS commit.
+  return envoyes;
 }
 
 /** Le service ouvert du caissier courant est obligatoire pour encaisser. */

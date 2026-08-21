@@ -1,9 +1,9 @@
 /** Statistiques d'un service caisse — utilisées par le rapport Z (figé) et le rapport X (live). */
-import { and, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
-import type { ModePaiement, TypeCommande } from '@pos/shared';
-import { MODES_PAIEMENT, TYPES_COMMANDE } from '@pos/shared';
+import { and, eq, gte, inArray, isNotNull, isNull, ne, notInArray, or, sql, type SQLWrapper } from 'drizzle-orm';
+import type { ModePaiement, RetoursVue, TypeCommande } from '@pos/shared';
+import { MODES_PAIEMENT, PARTENAIRES_EXTERNES, TYPES_COMMANDE } from '@pos/shared';
 import type { DbOuTx } from '../../db/client.js';
-import { commandeItems, commandes, utilisateurs } from '../../db/schema/index.js';
+import { auditLog, commandeItems, commandes, utilisateurs } from '../../db/schema/index.js';
 import { paiements } from '../../db/schema/index.js';
 
 export interface RemiseDetail {
@@ -31,24 +31,155 @@ export interface StatsService {
   top_articles: { nom: string; quantite: number; total: number }[];
   remises_detail: RemiseDetail[];
   annulations_detail: AnnulationDetail[];
+  retours: RetoursVue;
+}
+
+/**
+ * RETOURS d'un service : plats **déjà partis en cuisine** qui ne seront pas
+ * vendus, parce qu'un manager a supprimé la ligne — ou la commande entière.
+ *
+ * Discriminant : `envoye_le` renseigné, ET
+ *   - `statut_cuisine = 'ANNULE'` (ligne supprimée une par une), OU
+ *   - `commandes.statut = 'ANNULEE'` (la commande entière a sauté).
+ *
+ * **Les deux, et c'est un point de CONTRÔLE, pas de comptage.** Ne compter que
+ * les lignes laisserait une porte ouverte : un manager encaisse, puis supprime
+ * la table entière au lieu de l'article — plus rien nulle part. En prenant
+ * aussi les commandes annulées, le geste reste visible, avec son motif et le
+ * nom de qui l'a autorisé. Ne jamais restreindre ce filtre à la ligne seule.
+ *
+ * Une ligne corrigée AVANT l'envoi en cuisine n'est pas un retour : rien n'a
+ * été produit, c'est une faute de frappe.
+ *
+ * Aucun de ces articles ne pèse sur quoi que ce soit : la vente est recalculée
+ * sans eux, les sorties d'inventaire les excluent déjà. Ce bloc ne sert qu'à
+ * les rendre VISIBLES — un site qui refait souvent ses plats se voit ici.
+ */
+export async function retoursDuService(dbx: DbOuTx, serviceId: string): Promise<RetoursVue> {
+  return construireRetours(dbx, eq(commandes.service_id, serviceId));
+}
+
+/** Mêmes retours, sur la JOURNÉE (tous services) — rapports et supervision. */
+export async function retoursDepuis(dbx: DbOuTx, depuis: Date): Promise<RetoursVue> {
+  return construireRetours(dbx, gte(commandes.created_at, depuis));
+}
+
+async function construireRetours(dbx: DbOuTx, portee: SQLWrapper): Promise<RetoursVue> {
+  const lignes = await dbx
+    .select({
+      commande_id: commandeItems.commande_id,
+      numero_ticket: commandes.numero_ticket,
+      statut_commande: commandes.statut,
+      nom: commandeItems.nom_snapshot,
+      quantite: commandeItems.quantite,
+      prix_unitaire: commandeItems.prix_unitaire,
+      motif: commandeItems.annule_motif,
+      annule_par: commandeItems.annule_par,
+    })
+    .from(commandeItems)
+    .innerJoin(commandes, eq(commandes.id, commandeItems.commande_id))
+    .where(
+      and(
+        portee,
+        isNotNull(commandeItems.envoye_le),
+        or(eq(commandeItems.statut_cuisine, 'ANNULE'), eq(commandes.statut, 'ANNULEE')),
+      ),
+    );
+
+  // Commande annulée EN ENTIER : ni le motif ni le manager ne sont sur la
+  // ligne (la route d'annulation ne touche pas les items). Ils sont dans le
+  // journal d'audit, seule trace de qui a autorisé — on va les y chercher,
+  // sinon un retour par suppression de table apparaîtrait sans responsable.
+  const commandesAnnulees = [
+    ...new Set(lignes.filter((l) => l.statut_commande === 'ANNULEE' && !l.annule_par).map((l) => l.commande_id)),
+  ];
+  const journal = commandesAnnulees.length
+    ? await dbx
+        .select({ entite_id: auditLog.entite_id, user_id: auditLog.user_id, motif: auditLog.motif })
+        .from(auditLog)
+        .where(and(eq(auditLog.action, 'ANNULATION_COMMANDE'), inArray(auditLog.entite_id, commandesAnnulees)))
+    : [];
+  const annulationParCommande = new Map(journal.map((j) => [j.entite_id!, j]));
+
+  const ids = [
+    ...new Set(
+      [...lignes.map((l) => l.annule_par), ...journal.map((j) => j.user_id)].filter((x): x is string => !!x),
+    ),
+  ];
+  const noms = ids.length
+    ? await dbx
+        .select({ id: utilisateurs.id, nom: utilisateurs.nom_complet })
+        .from(utilisateurs)
+        .where(inArray(utilisateurs.id, ids))
+    : [];
+  const nomParId = new Map(noms.map((u) => [u.id, u.nom]));
+
+  const parProduit = new Map<string, { nom: string; quantite: number; montant: number }>();
+  let nb = 0;
+  let montant = 0;
+  const detail = lignes.map((l) => {
+    const montantLigne = l.prix_unitaire * l.quantite;
+    nb += l.quantite;
+    montant += montantLigne;
+    const agr = parProduit.get(l.nom) ?? { nom: l.nom, quantite: 0, montant: 0 };
+    agr.quantite += l.quantite;
+    agr.montant += montantLigne;
+    parProduit.set(l.nom, agr);
+
+    const surCommande = l.annule_par ? null : annulationParCommande.get(l.commande_id);
+    const parId = l.annule_par ?? surCommande?.user_id ?? null;
+    return {
+      numero_ticket: Number(l.numero_ticket),
+      nom: l.nom,
+      quantite: l.quantite,
+      montant: montantLigne,
+      // « Commande annulée » est déjà une information en soi : elle distingue,
+      // à l'œil, la suppression d'un plat de celle de toute une table.
+      motif: l.motif ?? (surCommande ? `Commande annulée — ${surCommande.motif ?? 'sans motif'}` : null),
+      par_nom: parId ? (nomParId.get(parId) ?? null) : null,
+    };
+  });
+
+  return {
+    nb,
+    montant,
+    par_produit: [...parProduit.values()].sort((a, b) => b.quantite - a.quantite || a.nom.localeCompare(b.nom)),
+    detail: detail.sort((a, b) => a.numero_ticket - b.numero_ticket),
+  };
 }
 
 /**
  * Valeurs auto de réconciliation d'un shift :
- * - `modes` : somme des paiements par mode, HORS commandes de livraison
- *   (les livraisons sont comptées à part → pas de double comptage).
- * - `livraisons` : total des commandes payées par partenaire (Yango/Glovo/Deliv).
+ * - `modes` : somme des paiements par mode, HORS livraisons EXTERNES
+ *   (Yango/Glovo, réglées chez le partenaire → comptées à part). Samer Delly,
+ *   réglée au comptoir, reste dans les modes comme une vente normale.
+ * - `livraisons` : total des commandes payées par partenaire EXTERNE seulement.
+ * - `offerts` : Kdo. Ces commandes n'ont AUCUNE ligne de paiement, donc elles
+ *   sont déjà absentes de `modes` sans qu'on ait à les filtrer — le théorique
+ *   espèces les ignore par construction. On les compte ici pour les afficher
+ *   à la clôture, à côté des livraisons, car elles pèsent dans la vente du
+ *   shift : vendre 25 000 et offrir 5 000 fait bien 30 000 de vente.
  * `modes.ESPECES` sert au théorique côté serveur (jamais exposé avant comptage).
  */
 export async function reconciliationAuto(
   dbx: DbOuTx,
   serviceId: string,
-): Promise<{ modes: Record<ModePaiement, number>; livraisons: Record<string, number> }> {
+): Promise<{
+  modes: Record<ModePaiement, number>;
+  livraisons: Record<string, number>;
+  offerts: { nb: number; total: number };
+}> {
+  const externes = [...PARTENAIRES_EXTERNES];
   const lignesModes = await dbx
     .select({ mode: paiements.mode, total: sql<string>`SUM(${paiements.montant})` })
     .from(paiements)
     .innerJoin(commandes, eq(commandes.id, paiements.commande_id))
-    .where(and(eq(paiements.service_id, serviceId), isNull(commandes.partenaire)))
+    .where(
+      and(
+        eq(paiements.service_id, serviceId),
+        or(isNull(commandes.partenaire), notInArray(commandes.partenaire, externes)),
+      ),
+    )
     .groupBy(paiements.mode);
   const modes = Object.fromEntries(MODES_PAIEMENT.map((m) => [m, 0])) as Record<ModePaiement, number>;
   for (const l of lignesModes) modes[l.mode] = Number(l.total);
@@ -56,12 +187,30 @@ export async function reconciliationAuto(
   const lignesPart = await dbx
     .select({ partenaire: commandes.partenaire, total: sql<string>`SUM(${commandes.total})` })
     .from(commandes)
-    .where(and(eq(commandes.service_id, serviceId), eq(commandes.statut, 'PAYEE'), isNotNull(commandes.partenaire)))
+    .where(and(eq(commandes.service_id, serviceId), eq(commandes.statut, 'PAYEE'), inArray(commandes.partenaire, externes)))
     .groupBy(commandes.partenaire);
   const livraisons: Record<string, number> = {};
   for (const l of lignesPart) if (l.partenaire) livraisons[l.partenaire] = Number(l.total);
 
-  return { modes, livraisons };
+  const [ligneOfferts] = await dbx
+    .select({
+      nb: sql<string>`COUNT(*)`,
+      total: sql<string>`COALESCE(SUM(${commandes.total}), 0)`,
+    })
+    .from(commandes)
+    .where(
+      and(
+        eq(commandes.service_id, serviceId),
+        eq(commandes.statut, 'PAYEE'),
+        eq(commandes.offert, true),
+      ),
+    );
+  const offerts = {
+    nb: Number(ligneOfferts?.nb ?? 0),
+    total: Number(ligneOfferts?.total ?? 0),
+  };
+
+  return { modes, livraisons, offerts };
 }
 
 export async function calculerStatsService(dbx: DbOuTx, serviceId: string): Promise<StatsService> {
@@ -149,5 +298,6 @@ export async function calculerStatsService(dbx: DbOuTx, serviceId: string): Prom
     partenaires,
     remises_detail: remisesDetail,
     annulations_detail: annulationsDetail,
+    retours: await retoursDuService(dbx, serviceId),
   };
 }

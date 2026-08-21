@@ -1,0 +1,40 @@
+{
+  "name": "@pos/desktop",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Fenêtre desktop (Electron, plein écran kiosque) pour la caisse POS Samer.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.samer.pos.caisse",
+    "productName": "PosSamer",
+    "asar": true,
+    "electronVersion": "33.4.11",
+    "electronDist": "../../node_modules/electron/dist",
+    "npmRebuild": false,
+    "files": [
+      "main.js",
+      "preload-bouton.js",
+      "build/icon.png",
+      "package.json"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "build/icon.ico"
+    },
+    "portable": {
+      "artifactName": "PosSamer.exe",
+      "unpackDirName": "PosSamerApp"
+    },
+    "directories": {
+      "output": "release"
+    }
+  }
+}

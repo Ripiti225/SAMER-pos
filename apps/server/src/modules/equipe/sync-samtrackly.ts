@@ -27,8 +27,8 @@ interface TravailleurST {
   actif: boolean | null;
 }
 
-type RolePos = 'MANAGER' | 'CAISSIER' | 'SERVEUR' | 'CUISINE';
-type PosteCuisine = 'CUISINIER' | 'PIZZAIOLO' | null;
+type RolePos = 'MANAGER' | 'CAISSIER' | 'SERVEUR' | 'CUISINE' | 'COMPTOIRISTE' | 'ENTRETIEN';
+type PosteCuisine = 'CUISINIER' | 'PIZZAIOLO' | 'COMPTOIRISTE' | null;
 type Disponibilite = 'PRESENT' | 'MALADE' | 'CONGE' | 'PERMISSION';
 
 const CODE_VALIDE_JOURS = 30;
@@ -41,15 +41,37 @@ function mapTypeConge(type: string | null): Disponibilite {
   return 'CONGE'; // congé (défaut pour toute absence planifiée)
 }
 
-/** Déduit le rôle POS + poste cuisine à partir de l'intitulé RH SamerTrackly. */
+/**
+ * Déduit le rôle POS + poste cuisine à partir de l'intitulé RH SamerTrackly.
+ *
+ * L'ORDRE DES RÈGLES EST SIGNIFIANT : la première qui correspond gagne. Deux
+ * pièges corrigés le 2026-08-17, tous deux causés par un ordre trop permissif —
+ * ils sont la raison pour laquelle entretien et comptoir passent EN PREMIER :
+ *
+ *  * « Plongeuse » tombait dans `/plong/` de la règle cuisine ;
+ *  * « Comptoiriste » tombait dans `/comptoir/` de la règle caisse, ce qui
+ *    donnait à 18 personnes le droit d'encaisser, de faire une remise et de
+ *    rouvrir une commande payée.
+ *
+ * Attention en modifiant : `/m[ée]nag/` vise « ménagère » et ne doit PAS
+ * attraper « manager » (m-a-n-a-g) — d'où la classe [ée] en deuxième lettre.
+ */
 export function mapPosteRole(poste: string | null): { role: RolePos; posteCuisine: PosteCuisine } {
   const p = (poste ?? '').toLowerCase();
+  // Entretien et plonge : aucun accès applicatif. AVANT la règle cuisine, qui
+  // capturerait « plongeuse » et ferait créditer des plats à ces employés.
+  if (/surface|m[ée]nag|plong/.test(p)) return { role: 'ENTRETIEN', posteCuisine: null };
   if (/pizza/.test(p)) return { role: 'CUISINE', posteCuisine: 'PIZZAIOLO' };
-  if (/cuisin|plong|aide|chef.?cuis/.test(p)) return { role: 'CUISINE', posteCuisine: 'CUISINIER' };
+  // Comptoir : AVANT la règle caisse. Le poste de cuisine est renseigné, c'est
+  // lui qui déclenche l'attribution des plats du comptoir.
+  if (/comptoir/.test(p)) return { role: 'COMPTOIRISTE', posteCuisine: 'COMPTOIRISTE' };
+  if (/cuisin|aide|chef.?cuis/.test(p)) return { role: 'CUISINE', posteCuisine: 'CUISINIER' };
   if (/serveu/.test(p)) return { role: 'SERVEUR', posteCuisine: null };
-  if (/caiss|comptoir/.test(p)) return { role: 'CAISSIER', posteCuisine: null };
+  if (/caiss/.test(p)) return { role: 'CAISSIER', posteCuisine: null };
   if (/g[ée]rant|manager|responsable/.test(p)) return { role: 'MANAGER', posteCuisine: null };
-  // Technicien de surface, ménagère, autres postes non-caisse : back-office.
+  // Intitulé inconnu (ex. « Barman ») : cuisine, comme avant. Volontairement
+  // inchangé — basculer le défaut vers ENTRETIEN priverait d'un coup d'accès
+  // des postes légitimes que personne n'aurait vus passer.
   return { role: 'CUISINE', posteCuisine: null };
 }
 

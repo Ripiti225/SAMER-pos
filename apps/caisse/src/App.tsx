@@ -8,6 +8,8 @@ import { VerrouInactivite } from './components/VerrouInactivite';
 import { Accueil } from './screens/Accueil';
 import { Cloture } from './screens/Cloture';
 import { Commande } from './screens/Commande';
+import { Depenses } from './screens/Depenses';
+import { Inventaire } from './screens/Inventaire';
 import { Login } from './screens/Login';
 import { MesVentes } from './screens/MesVentes';
 import { OuvertureService } from './screens/OuvertureService';
@@ -16,6 +18,7 @@ import { Reglages } from './screens/Reglages';
 import { Sequence } from './screens/Sequence';
 import { Supervision } from './screens/Supervision';
 import { Tables } from './screens/Tables';
+import { useAffichage } from './stores/affichage';
 import { useCaisse, type Ecran } from './stores/session';
 import { connecterTempsReel } from './temps-reel';
 
@@ -23,6 +26,14 @@ export function App() {
   const { session, ecran, toast, poserSession } = useCaisse();
   const [chargement, setChargement] = useState(true);
   const queryClient = useQueryClient();
+  const chargerAffichage = useAffichage((e) => e.charger);
+
+  // Mode d'affichage du poste : lu AVANT la connexion (l'écran de connexion
+  // suit le mode, sinon « mode clair » ne veut rien dire pour quelqu'un qui
+  // n'ouvre que la connexion et l'accueil).
+  useEffect(() => {
+    void chargerAffichage();
+  }, [chargerAffichage]);
 
   // Reprise de session au démarrage (cookie httpOnly côté serveur)
   useEffect(() => {
@@ -60,7 +71,9 @@ export function App() {
   // superviseur sur son tableau de bord, la consultation des rapports, la
   // clôture et les réglages ne passent jamais par l'ouverture de service.
   const doitEncaisser = !!session?.permissions.includes('caisse.encaisser');
-  const ecransDeVente: Ecran[] = ['accueil', 'commande', 'paiement', 'tables'];
+  // Dépenses et Inventaire portent sur LE service en cours : sans shift ouvert
+  // ils n'ont rien à montrer, et le serveur répondrait 409 à chaque appel.
+  const ecransDeVente: Ecran[] = ['accueil', 'commande', 'paiement', 'tables', 'depenses', 'inventaire'];
 
   let contenu: JSX.Element;
   if (!session) {
@@ -80,6 +93,8 @@ export function App() {
       paiement: <Paiement />,
       tables: <Tables />,
       'mes-ventes': <MesVentes />,
+      depenses: <Depenses />,
+      inventaire: <Inventaire />,
       cloture: <Cloture />,
       sequence: <Sequence />,
       reglages: <Reglages />,

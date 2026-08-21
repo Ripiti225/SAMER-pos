@@ -1,19 +1,21 @@
 import type { FastifyInstance } from 'fastify';
-import { and, eq, isNull, notInArray } from 'drizzle-orm';
+import { and, eq, isNull, notInArray, sql } from 'drizzle-orm';
 import { CloturerServiceSchema, OuvrirServiceSchema, TransfererServiceSchema } from '@pos/shared';
 import type { RapportZ } from '@pos/shared';
 import { db } from '../../db/client.js';
-import { commandes, equipeService, parametresLocaux, roles, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
+import { commandes, depenses, equipeService, parametresLocaux, roles, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
 import { verifierPinUtilisateur } from '../auth/pin.js';
-import { calculerStatsService, reconciliationAuto } from './rapport.js';
+import { calculerStatsService, reconciliationAuto, retoursDuService } from './rapport.js';
 import { sequenceOuverte } from './sequences.js';
+import { totalDepenses } from '../depenses/service.js';
+import { etatInventaire } from '../inventaire/service.js';
 import { aPermission } from '../../plugins/sessions.js';
 import { permissionsDuRole } from '../roles/service.js';
-import type { ReconciliationPreview } from '@pos/shared';
+import type { OccupationCaisse, ReconciliationPreview } from '@pos/shared';
 
 /** Vue publique d'un service : ne contient JAMAIS especes_theorique tant que non clôturé. */
 function vueService(s: typeof servicesCaisse.$inferSelect) {
@@ -25,8 +27,35 @@ function vueService(s: typeof servicesCaisse.$inferSelect) {
   };
 }
 
+/** Shifts actuellement OUVERTS, avec le nom du caissier (un seul attendu). */
+async function servicesOuverts(): Promise<{ id: string; caissier_id: string; caissier: string; ouvert_le: Date }[]> {
+  const lignes = await db
+    .select({
+      id: servicesCaisse.id,
+      caissier_id: servicesCaisse.caissier_id,
+      caissier: utilisateurs.nom_complet,
+      ouvert_le: servicesCaisse.ouvert_le,
+    })
+    .from(servicesCaisse)
+    .leftJoin(utilisateurs, eq(utilisateurs.id, servicesCaisse.caissier_id))
+    .where(eq(servicesCaisse.statut, 'OUVERT'));
+  return lignes.map((l) => ({ ...l, caissier: l.caissier ?? 'Un collègue' }));
+}
+
 export function routesServices(app: FastifyInstance): void {
   const gardeCaisse = app.exigePermission('caisse.service.ouvrir');
+
+  /**
+   * Caisse occupée ? Renvoie le shift ouvert par QUELQU'UN D'AUTRE, pour que
+   * l'écran d'ouverture explique le blocage au lieu d'attendre l'erreur 409.
+   * N'expose aucun montant (comptage à l'aveugle intact).
+   */
+  app.get('/api/services/occupation', { preHandler: app.exigerAuth }, async (req): Promise<OccupationCaisse> => {
+    const autre = (await servicesOuverts()).find((s) => s.caissier_id !== req.session!.utilisateur_id);
+    return autre
+      ? { occupee: true, caissier: autre.caissier, ouvert_le: autre.ouvert_le.toISOString() }
+      : { occupee: false, caissier: null, ouvert_le: null };
+  });
 
   // Employés actifs proposés pour l'équipe du jour, avec un poste par défaut.
   app.get('/api/services/equipe-proposee', { preHandler: gardeCaisse }, async () => {
@@ -54,12 +83,19 @@ export function routesServices(app: FastifyInstance): void {
     const corps = valider(OuvrirServiceSchema, req.body);
     const caissierId = req.session!.utilisateur_id;
 
-    const [dejaOuvert] = await db
-      .select()
-      .from(servicesCaisse)
-      .where(and(eq(servicesCaisse.caissier_id, caissierId), eq(servicesCaisse.statut, 'OUVERT')));
-    if (dejaOuvert) {
+    const ouverts = await servicesOuverts();
+    if (ouverts.some((s) => s.caissier_id === caissierId)) {
       throw new ErreurMetier('Vous avez déjà un service ouvert — terminez-le avant d’en ouvrir un autre', 409);
+    }
+    // Un seul shift à la fois sur la caisse : tant que la collègue en poste n'a
+    // pas fait « J'ai fini », personne d'autre ne peut ouvrir le sien (un seul
+    // tiroir, un seul comptage). La relève passe par « Transférer ».
+    const autre = ouverts[0];
+    if (autre) {
+      throw new ErreurMetier(
+        `${autre.caissier} a encore un shift en cours — il doit d’abord le clôturer (« J’ai fini »)`,
+        409,
+      );
     }
 
     const service = await db.transaction(async (tx) => {
@@ -79,10 +115,19 @@ export function routesServices(app: FastifyInstance): void {
       });
 
       // Équipe du jour : présents + poste du jour (remonte au back-office).
+      // Cocher quelqu'un ici, c'est déclarer qu'il EST là : son arrivée est
+      // datée de l'ouverture (§ 6.7). Les retardataires sont pointés ensuite
+      // depuis le bandeau de l'accueil, à l'heure de leur propre clic.
+      const ouvertureLe = new Date();
       for (const m of corps.equipe ?? []) {
         const [membre] = await tx
           .insert(equipeService)
-          .values({ service_id: s!.id, utilisateur_id: m.utilisateur_id, poste_jour: m.poste_jour })
+          .values({
+            service_id: s!.id,
+            utilisateur_id: m.utilisateur_id,
+            poste_jour: m.poste_jour,
+            pointe_le: ouvertureLe,
+          })
           .onConflictDoNothing()
           .returning();
         if (membre) await ecrireOutbox(tx, 'equipe_service', 'INSERT', membre.id, membre as unknown as Record<string, unknown>);
@@ -139,7 +184,33 @@ export function routesServices(app: FastifyInstance): void {
     const auto = await reconciliationAuto(db, service.id);
     const modes = { ...auto.modes };
     delete (modes as Record<string, number>).ESPECES; // jamais révélé avant comptage
-    return { fond_de_caisse: service.fond_de_caisse, livraisons: auto.livraisons, modes };
+    const inventaire = await db.transaction(async (tx) => etatInventaire(tx, service.id));
+    const [compteDepenses] = await db
+      .select({ n: sql<string>`COUNT(*)` })
+      .from(depenses)
+      .where(eq(depenses.service_id, service.id));
+    // Les offerts sont affichés pour information : le caissier ne peut rien y
+    // saisir (aucun encaissement), mais il doit les voir pour comprendre l'écart
+    // entre ce qu'il a vendu et ce qu'il a dans le tiroir.
+    return {
+      fond_de_caisse: service.fond_de_caisse,
+      livraisons: auto.livraisons,
+      offerts: auto.offerts,
+      modes,
+      depenses: {
+        total: await totalDepenses(db, service.id),
+        nb_lignes: Number(compteDepenses?.n ?? 0),
+      },
+      inventaire: {
+        valide: inventaire.inventaire.valide,
+        debloque: inventaire.inventaire.debloque_par !== null,
+        restants_a_compter: inventaire.bilan.a_compter,
+      },
+      // Retours : information, en lecture seule comme les dépenses. Le caissier
+      // n'a rien à saisir — la liste vient des annulations d'articles déjà
+      // partis en cuisine, chacune faite au PIN manager.
+      retours: await retoursDuService(db, service.id),
+    };
   });
 
   // Accusé de fin : le caissier valide son ticket (bouton « Terminer »). Le shift
@@ -278,19 +349,82 @@ export function routesServices(app: FastifyInstance): void {
         );
       }
 
+      /**
+       * Verrou d'inventaire (§ 6.10) : sans inventaire validé, pas de clôture.
+       * Appliqué ICI, côté serveur — l'encart rouge de l'écran ne fait que le
+       * refléter, et une caisse qui contournerait l'UI se heurte au même mur.
+       * Le déblocage manager (PIN + motif, tracé) est la seule dérogation.
+       */
+      const inventaire = await etatInventaire(tx, service.id);
+      if (!inventaire.cloture_autorisee) {
+        throw new ErreurMetier(
+          `Inventaire non validé : il reste ${inventaire.bilan.a_compter} produit(s) à compter — ` +
+            'comptez-les, ou faites débloquer par un manager',
+          409,
+        );
+      }
+
+      /**
+       * Départs (§ 6.8) : à la clôture, toute personne non marquée « Reste »
+       * est enregistrée comme PARTIE. Le caissier ne marque que les exceptions,
+       * le cas courant ne lui demande aucun geste.
+       */
+      await tx
+        .update(equipeService)
+        .set({ reste: false })
+        .where(and(eq(equipeService.service_id, service.id), isNull(equipeService.reste)));
+      const membres = await tx
+        .select({ reste: equipeService.reste, pointe_le: equipeService.pointe_le })
+        .from(equipeService)
+        .where(eq(equipeService.service_id, service.id));
+      const equipe = {
+        presents: membres.filter((m) => m.pointe_le !== null).length,
+        restent: membres.filter((m) => m.reste === true).length,
+        partis: membres.filter((m) => m.reste === false).length,
+      };
+
       const stats = await calculerStatsService(tx, service.id);
       const auto = await reconciliationAuto(tx, service.id);
-      // Théorique = fond + espèces système HORS livraison (comptage aveugle).
-      const especesTheorique = service.fond_de_caisse + auto.modes.ESPECES;
+      /**
+       * Dépenses : SOMME du registre (§ 6.8), calculée ici. La valeur envoyée
+       * par la caisse n'est plus lue — la ligne est en lecture seule à l'écran,
+       * et un total saisi à la main pouvait diverger de ses propres lignes.
+       */
+      const montantDepenses = await totalDepenses(tx, service.id);
+      // Théorique = fond + espèces encaissées (HORS livraisons externes) − les
+      // dépenses payées en espèces depuis le tiroir. L'argent du tiroir est
+      // fongible : une dépense sort du tiroir (fond ou recette), donc sans la
+      // déduire une dépense légitime apparaîtrait comme un manquant. Comptage
+      // aveugle préservé (le théorique n'est jamais exposé avant la saisie).
+      const especesTheorique = service.fond_de_caisse + auto.modes.ESPECES - montantDepenses;
       const ecart = corps.especes_comptees - especesTheorique;
       const clotureLe = new Date();
 
-      // Réconciliation : livraisons + modes électroniques déclarés (clé absente = 0).
-      const livraisons = corps.livraisons ?? {};
+      /**
+       * Livraisons partenaires : NON MODIFIABLES (décision du 2026-08-15). Le
+       * POS est la source officielle des ventes ; un montant retouché à la
+       * clôture créerait un écart entre le ticket Z et les commandes réellement
+       * enregistrées. On prend donc le calcul serveur et on ignore ce que la
+       * caisse envoie — appliquer la règle côté UI seulement laisserait un appel
+       * direct à l'API la contourner.
+       */
+      const livraisons = auto.livraisons;
       const modesDeclares = corps.modes ?? {};
       const somme = (o: Record<string, number>) => Object.values(o).reduce((s, v) => s + (Number(v) || 0), 0);
+      // Les Kdo entrent dans la vente du shift au même titre qu'une livraison
+      // Yango — vendre 25 000 et offrir 5 000 fait 30 000 de vente — mais ils
+      // ne se DÉCLARENT pas : aucun argent n'a été reçu, le caissier n'a rien à
+      // saisir. C'est donc le serveur qui les ajoute, depuis les commandes
+      // marquées offertes. Sans cette ligne, chaque cadeau creusait un faux
+      // écart de réconciliation, le total système les comptant déjà.
+      const offerts = auto.offerts;
       const venteTotale =
-        corps.depenses + somme(livraisons) + somme(modesDeclares) + corps.especes_comptees - service.fond_de_caisse;
+        montantDepenses +
+        somme(livraisons) +
+        somme(modesDeclares) +
+        offerts.total +
+        corps.especes_comptees -
+        service.fond_de_caisse;
       const totalSysteme = stats.total_ventes;
       const diff = venteTotale - totalSysteme;
       const sequenceId = service.sequence_id ?? (await sequenceOuverte(tx));
@@ -304,12 +438,23 @@ export function routesServices(app: FastifyInstance): void {
         especes_comptees: corps.especes_comptees,
         especes_theorique: especesTheorique,
         ecart,
-        depenses: corps.depenses,
+        depenses: montantDepenses,
         livraisons,
+        offerts,
         modes_declares: modesDeclares,
         vente_totale: venteTotale,
         total_systeme: totalSysteme,
         diff,
+        // Bloc Inventaire (§ 6.10) : information manager, SANS effet sur la
+        // vente ni sur l'écart de caisse.
+        inventaire: {
+          valide: inventaire.inventaire.valide,
+          debloque: inventaire.inventaire.debloque_par !== null,
+          manquants: inventaire.bilan.manquants,
+          surplus: inventaire.bilan.surplus,
+          montant_manquant: inventaire.bilan.montant,
+        },
+        equipe,
         ...stats,
       };
 
@@ -322,8 +467,8 @@ export function routesServices(app: FastifyInstance): void {
           especes_comptees: corps.especes_comptees,
           especes_theorique: especesTheorique,
           ecart,
-          depenses: corps.depenses,
-          reconciliation: { livraisons, modes: modesDeclares },
+          depenses: montantDepenses,
+          reconciliation: { livraisons, offerts, modes: modesDeclares },
           vente_totale: venteTotale,
           total_systeme: totalSysteme,
           rapport_z: rapportZ,

@@ -25,6 +25,7 @@ import {
   verrouillerCommande,
 } from '../commandes/service.js';
 import { calculerDestinataire } from '../routage/routage.js';
+import { imprimerBonsEnvoi } from '../../printer/bons.js';
 import { exigerAccesTable, ouvrirTablePar } from '../tables/propriete.js';
 import { aPermission } from '../../plugins/sessions.js';
 import { permissionsDuRole } from '../roles/service.js';
@@ -109,7 +110,7 @@ export function routesSalle(app: FastifyInstance): void {
     // tables devient responsable de celle qu'il ouvre (caisse/manager : accès total).
     const estServeur = !(await aPermission(req.session!, 'salle.voir_toutes_tables'));
 
-    const vue = await db.transaction(async (tx) => {
+    const { vue, envoyes } = await db.transaction(async (tx) => {
       const c = await verrouillerCommande(tx, id);
       await exigerAccesTable(tx, req.session!, c.table_id);
       if (c.origine !== 'CLIENT_QR') {
@@ -127,7 +128,7 @@ export function routesSalle(app: FastifyInstance): void {
         .where(eq(commandes.id, id))
         .returning();
       await ecrireOutbox(tx, 'commandes', 'UPDATE', id, maj as unknown as Record<string, unknown>);
-      await marquerEnvoiCuisine(tx, id); // → ENVOYEE_CUISINE (cuisine, enfin)
+      const ids = await marquerEnvoiCuisine(tx, id); // → ENVOYEE_CUISINE (cuisine, enfin)
       await majStatutTable(tx, c.table_id, 'OCCUPEE');
       await journaliser(tx, {
         user_id: req.session!.utilisateur_id,
@@ -136,9 +137,10 @@ export function routesSalle(app: FastifyInstance): void {
         entite_id: id,
         meta: { validation_client: true },
       });
-      return chargerCommandeVue(tx, id);
+      return { vue: await chargerCommandeVue(tx, id), envoyes: ids };
     });
 
+    await imprimerBonsEnvoi(app, id, envoyes);
     app.diffuser('commande:envoyee', id);
     app.diffuser('commande', id);
     if (vue.table_id) app.diffuser('table:changee', vue.table_id);

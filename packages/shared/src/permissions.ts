@@ -45,6 +45,32 @@ export const SECTIONS_PERMISSIONS: SectionPermissions[] = [
     libelle: 'Cuisine',
     permissions: [{ cle: 'cuisine.avancer', libelle: 'Avancer les commandes (KDS)' }],
   },
+  /**
+   * Dépenses, inventaire et pointage (DESIGN_V2 § 6.7 à § 6.10) — rattachés au
+   * système de permissions le 2026-08-17.
+   *
+   * Ces trois modules étaient tous gardés par `caisse.service.ouvrir`. Ils
+   * n'apparaissaient donc PAS dans « Rôles & accès » : impossible de les
+   * accorder ou de les retirer. Et surtout, quiconque pouvait ouvrir un service
+   * pouvait sortir de l'argent du tiroir — enregistrer un salaire, un
+   * encouragement — et faire passer une clôture sans inventaire conforme.
+   *
+   * Le découpage sépare la SAISIE courante (le travail du caissier) des actes
+   * d'encadrement : payer un salaire et débloquer un inventaire.
+   */
+  {
+    cle: 'depenses',
+    libelle: 'Dépenses & inventaire',
+    permissions: [
+      { cle: 'depenses.saisir', libelle: 'Enregistrer une dépense' },
+      { cle: 'depenses.supprimer', libelle: 'Supprimer une dépense' },
+      { cle: 'depenses.paie', libelle: 'Payer un salaire ou un encouragement' },
+      { cle: 'inventaire.saisir', libelle: "Saisir l'inventaire et les entrées de stock" },
+      { cle: 'inventaire.valider', libelle: "Valider l'inventaire" },
+      { cle: 'inventaire.debloquer', libelle: 'Débloquer une clôture sans inventaire' },
+      { cle: 'pointage.gerer', libelle: 'Pointages (arrivées et départs)' },
+    ],
+  },
   {
     cle: 'rapports',
     libelle: 'Rapports',
@@ -92,6 +118,12 @@ export const ROLES_SYSTEME = [
   'CAISSIER',
   'SERVEUR',
   'CUISINE',
+  // Ajoutés le 2026-08-17 (migration 0024). Ils existaient dans la réalité du
+  // restaurant mais pas dans le POS : la descente SamerTrackly rangeait un
+  // comptoiriste avec les CAISSIERS (donc encaissement, remise, réouverture
+  // d'une commande payée) et un agent d'entretien avec la CUISINE.
+  'COMPTOIRISTE',
+  'ENTRETIEN',
 ] as const;
 export type RoleSysteme = (typeof ROLES_SYSTEME)[number];
 
@@ -111,6 +143,9 @@ export const PERMISSIONS_DEFAUT: Record<RoleSysteme, string[]> = {
     'caisse.rouvrir', 'caisse.cloturer', 'caisse.fermer_sequence', 'caisse.imprimer_note',
     // Salle
     'salle.commande', 'salle.envoyer_cuisine', 'salle.transferer_table', 'salle.voir_toutes_tables',
+    // Dépenses & inventaire
+    'depenses.saisir', 'depenses.supprimer', 'depenses.paie',
+    'inventaire.saisir', 'inventaire.valider', 'inventaire.debloquer', 'pointage.gerer',
     // Rapports (sauf tableau de bord propriétaire)
     'rapports.x', 'rapports.z', 'rapports.notation',
     // Réglages (2.2 : tout sauf catalogue, fidélité, rôles)
@@ -122,11 +157,42 @@ export const PERMISSIONS_DEFAUT: Record<RoleSysteme, string[]> = {
     'caisse.service.ouvrir', 'caisse.encaisser', 'caisse.remise', 'caisse.annuler_envoye',
     'caisse.rouvrir', 'caisse.cloturer', 'caisse.imprimer_note',
     'salle.commande', 'salle.envoyer_cuisine', 'salle.transferer_table', 'salle.voir_toutes_tables',
+    /**
+     * Dépenses & inventaire : le caissier les avait TOUTES avant le
+     * 2026-08-17, puisque le seul garde était `caisse.service.ouvrir`. On les
+     * lui laisse pour que personne ne perde d'accès du jour au lendemain —
+     * règle du sprint 4B (« les employés existants conservent exactement leurs
+     * accès »). C'est maintenant un réglage : décocher « Payer un salaire » et
+     * « Débloquer une clôture sans inventaire » sur le rôle CAISSIER est le
+     * durcissement à faire, et il se fait en deux clics dans Rôles & accès.
+     */
+    'depenses.saisir', 'depenses.supprimer', 'depenses.paie',
+    'inventaire.saisir', 'inventaire.valider', 'inventaire.debloquer', 'pointage.gerer',
   ],
 
   SERVEUR: ['salle.commande', 'salle.envoyer_cuisine'],
 
   CUISINE: ['cuisine.avancer'],
+
+  /**
+   * COMPTOIRISTE — écran cuisine uniquement (tranché le 2026-08-17).
+   * Mêmes droits que CUISINE : il prépare au comptoir et fait avancer ses
+   * plats. Ce qui le distingue n'est pas la permission mais son
+   * `poste_cuisine = COMPTOIRISTE`, qui lui fait attribuer les plats du
+   * comptoir. Il n'a AUCUNE permission hors cuisine, donc `peutAccederCaisse()`
+   * lui refuse la connexion à la caisse — côté serveur, pas côté écran.
+   */
+  COMPTOIRISTE: ['cuisine.avancer'],
+
+  /**
+   * ENTRETIEN (technicien de surface, ménagère, plonge) — aucune application.
+   * La liste vide est le réglage voulu : le compte existe pour l'équipe du jour
+   * et les présences, mais ne se connecte nulle part. Il ne doit surtout pas
+   * rester en CUISINE : `attribution.ts` ne retient que les rôles cuisine, et
+   * un `poste_cuisine` vide se rabat sur CUISINIER — l'agent d'entretien se
+   * voyait donc créditer des plats qu'il n'a jamais préparés.
+   */
+  ENTRETIEN: [],
 };
 
 /** Rôles système dont les permissions sont VERROUILLÉES (toujours tout, 1.3/2.8). */
@@ -182,6 +248,17 @@ export const PARAMETRES_EDITABLES: ParametreEditable[] = [
   { cle: 'ticket_pied', libelle: 'Pied du ticket', type: 'texte', defaut: '' },
   { cle: 'url_base_client', libelle: 'Adresse web des QR clients', type: 'texte', defaut: '' },
   { cle: 'imprimante_thermique_queue', libelle: 'Imprimante thermique (file CUPS)', type: 'texte', defaut: '' },
+  /**
+   * Mot de passe de l'ÉCRAN CUISINE (le KDS s'identifie par un jeton
+   * d'appareil, jamais par un PIN humain — correction 3). Éditable ici depuis
+   * le 2026-08-16 : `preparer-base-master.sql` supprime volontairement cette
+   * clé de l'image (un site ne doit pas hériter du jeton d'un autre), et sans
+   * elle le serveur refusait TOUT jeton, y compris le bon — l'installation de
+   * la cuisine était bloquée sans aucune valeur à trouver nulle part.
+   * À l'installation : poser une valeur ici, la taper une fois sur l'écran
+   * cuisine. Vide = aucun écran cuisine autorisé.
+   */
+  { cle: 'kds_jeton_appareil', libelle: 'Jeton de l’écran cuisine (à saisir une fois sur le KDS)', type: 'texte', defaut: '' },
 ];
 
 export const CLES_PARAMETRES_EDITABLES: string[] = PARAMETRES_EDITABLES.map((p) => p.cle);

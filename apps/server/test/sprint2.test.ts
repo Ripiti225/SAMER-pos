@@ -13,6 +13,7 @@ import {
   PIN_SERVEUR,
   resetDonnees,
   seConnecter,
+  validerInventaire,
   type Donnees,
 } from './aide.js';
 

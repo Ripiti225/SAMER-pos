@@ -18,7 +18,13 @@ export class MoteurSync {
   private arrete = false;
   private monteeEnCours = false;
 
+  /** Synchro cloud réellement branchée sur ce poste (site enrôlé + URL). */
+  get actif(): boolean {
+    return this.client !== null;
+  }
+
   async demarrer(): Promise<void> {
+    this.arrete = false; // redémarrage possible après un arreter() (ré-enrôlement)
     const cfg = await chargerConfigSync();
     if (!cfg.actif || !cfg.url || !cfg.cleSite) {
       console.log('Synchro cloud désactivée (SUPABASE_SYNC_URL / CLE_SITE manquants).');
@@ -38,8 +44,14 @@ export class MoteurSync {
     });
   }
 
+  /**
+   * Stoppe les boucles ET oublie la clé de site : appelé aussi quand le poste
+   * change d'identité (Réglages → Restaurant), où continuer à pousser avec
+   * l'ancienne clé attribuerait les ventes au restaurant précédent.
+   */
   arreter(): void {
     this.arrete = true;
+    this.client = null;
     for (const t of this.timers) clearTimeout(t);
     this.timers = [];
     this.tacheReconcile?.stop();

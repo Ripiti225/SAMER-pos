@@ -1,12 +1,16 @@
 /**
  * Seed de démonstration (voir CLAUDE.md).
- * Réinitialise les données puis insère le restaurant SAMER_ANGRE7E complet.
+ * Réinitialise les données puis insère un site NEUTRE (identité à configurer
+ * dans Réglages → Restaurant) : catalogue + rôles + compte propriétaire.
+ * Rien de propre à un restaurant précis — l'image est copiée sur les 7 sites.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import '../env.js';
 import argon2 from 'argon2';
 import { sql } from 'drizzle-orm';
+import { TABLE_KDO } from '@pos/shared';
 import { db, fermerDb } from './client.js';
 import {
   articles,
@@ -18,6 +22,7 @@ import {
   options,
   parametresLocaux,
   prixCanaux,
+  produitsInventaire,
   promotions,
   restaurant,
   supplements,
@@ -26,8 +31,11 @@ import {
   zones,
 } from './schema/index.js';
 
+import { CATALOGUE_INVENTAIRE } from './catalogue-inventaire.js';
 import { etablirRolesSysteme } from '../modules/roles/service.js';
 import { genererQrToken } from '../modules/salle/qr.js';
+import { appliquerRoutageDefaut } from '../modules/reglages/routage-defaut.js';
+import { appliquerRecettesDefaut } from '../modules/inventaire/recettes-defaut.js';
 
 export async function hacherPin(pin: string): Promise<string> {
   return argon2.hash(pin, { type: argon2.argon2id });
@@ -48,9 +56,13 @@ export async function seed(): Promise<void> {
   `);
   await db.execute(sql`ALTER SEQUENCE seq_numero_ticket RESTART WITH 1`);
 
+  // Identité NEUTRE : la même image de déploiement part sur les 7 sites. Chaque
+  // poste prend son identité (code, nom, marque, couleur, id) à l'étape
+  // Réglages → Restaurant. Tant qu'elle n'est pas faite, la caisse affiche
+  // « Restaurant à configurer » : l'oubli se voit tout de suite.
   await db.insert(restaurant).values({
-    code: 'SAMER_ANGRE7E',
-    nom: 'Chez Samer Angré 7E',
+    code: 'A_CONFIGURER',
+    nom: 'Restaurant à configurer',
     marque: 'SAMER',
     couleur_hex: '#EF9F27',
   });
@@ -76,28 +88,45 @@ export async function seed(): Promise<void> {
     // Vide = le serveur détecte l'IP LAN automatiquement (joignable depuis un
     // téléphone). On ne renseigne ici que pour figer un domaine/IP en prod.
     { cle: 'url_base_client', valeur: '' },
-    // SamerTrackly : id du restaurant « Samer Angré 7E » pour la synchro équipe.
-    { cle: 'samtrackly_restaurant_id', valeur: '2f09688d-a4b9-4b14-8c45-943543953379' },
+    // SamerTrackly : PAS de restaurant par défaut. L'image de déploiement est
+    // copiée telle quelle (même `data/pgdata`) sur tous les postes : un id seedé
+    // ici ferait descendre l'équipe de CE restaurant-là sur TOUS les sites.
+    // Le paramètre est posé par Réglages → Restaurant (étape 4 du déploiement) ;
+    // tant qu'il est absent, la synchro équipe se saute d'elle-même.
     // Facture : contact sous le logo + message de pied (éditables dans Réglages).
-    { cle: 'ticket_entete', valeur: 'Angré 7e Tranche, Abidjan' },
-    { cle: 'ticket_pied', valeur: 'Merci de votre visite — à bientôt chez Samer !' },
-    // Imprimante thermique ESC/POS : nom de la file CUPS (spécifique à la
-    // machine, modifiable dans Réglages). Vide = repli console.
-    { cle: 'imprimante_thermique_queue', valeur: 'Xprinter_USB_Printer_P_2' },
+    // Entête VIDE : l'adresse est propre à chaque site (image commune).
+    { cle: 'ticket_entete', valeur: '' },
+    // Pied VIDE lui aussi : l'image commune sert des sites Chez Samer ET des
+    // sites Al Kayan. Un « à bientôt chez Samer ! » seedé ici s'imprimerait sur
+    // les tickets de l'autre marque. Chaque site pose le sien dans Réglages.
+    { cle: 'ticket_pied', valeur: '' },
+    // Imprimante thermique ESC/POS : NOM de l'imprimante Windows, propre à
+    // chaque poste (modifiable dans Réglages). Vide = repli console, ce qui est
+    // le bon défaut : un nom seedé ici n'existerait sur aucun autre PC et la
+    // caisse se croirait configurée sans jamais rien imprimer.
+    { cle: 'imprimante_thermique_queue', valeur: '' },
   ]);
 
   // --- Rôles système (sprint 4B+4C) puis utilisateurs raccordés ---
   const roleIdParNom = await etablirRolesSysteme(db);
   const rid = (nom: string) => roleIdParNom.get(nom)!;
 
-  // --- Seul le compte propriétaire est conservé (à modifier/supprimer ensuite).
+  // --- DEUX comptes propriétaire, et eux seuls, dans l'image de déploiement :
+  // le patron et l'administrateur qui installe/dépanne les 7 sites. Tous les
+  // autres employés arrivent ensuite par Réglages → Équipe (ou la descente
+  // SamerTrackly) : les seeder ici les enverrait sur tous les restaurants.
   await db.insert(utilisateurs).values([
-    { nom_complet: 'Samer El Khoury', role: 'PROPRIETAIRE', role_id: rid('PROPRIETAIRE'), pin_hash: await hacherPin('852741'), telephone: '+2250700000001' },
+    { nom_complet: 'SAMER Zreik', role: 'PROPRIETAIRE', role_id: rid('PROPRIETAIRE'), pin_hash: await hacherPin('852741'), telephone: '+2250700000001' },
+    { nom_complet: 'Admin Willy', role: 'PROPRIETAIRE', role_id: rid('PROPRIETAIRE'), pin_hash: await hacherPin('2212'), telephone: '+2250700000002' },
   ]);
 
   // --- Équipe RÉELLE « Samer Angré 7E » (source : docs/effectifs-par-restaurant.md)
-  // Photos Supabase, intitulé de poste conservé. Chaque employé doit poser son
-  // PIN (code temporaire) — les codes seront réattribués par l'encadrant.
+  // NE FAIT PAS PARTIE DE L'IMAGE DE DÉPLOIEMENT : le dossier master est copié
+  // tel quel sur les 7 sites, donc seeder cette équipe installerait les comptes
+  // (noms, téléphones, photos et PIN utilisables) du 7E chez tous les autres
+  // restaurants. Sur un site neuf, l'équipe arrive de SamerTrackly après
+  // Réglages → Restaurant. Pour retrouver ces comptes en local (dev, ou
+  // réinstallation du 7E hors ligne) : `SEED_EQUIPE_7E=1 pnpm db:seed`.
   const PHOTO = 'https://wlwotzxnzowbkbfcpnyi.supabase.co/storage/v1/object/public/photos';
   type Recrue = {
     nom: string;
@@ -123,22 +152,24 @@ export async function seed(): Promise<void> {
     { nom: 'TRAORÉ ZAWELA MICHAEL', role: 'CAISSIER', pc: null, poste: 'Caissier/re', tel: '0565121801', photo: `${PHOTO}/travailleurs/1778514165178_olleere5s6i.jpg`, code: '240112' },
     { nom: 'YAO KOUAME JULSON DARIN', role: 'CUISINE', pc: 'CUISINIER', poste: 'Cuisinier', tel: '0105340894', photo: `${PHOTO}/travailleurs/1778514338713_zz8cwrxohk.jpg`, code: '240113' },
   ];
-  await db.insert(utilisateurs).values(
-    await Promise.all(
-      equipe7E.map(async (e) => ({
-        nom_complet: e.nom,
-        role: e.role,
-        role_id: rid(e.role),
-        poste_cuisine: e.pc,
-        poste: e.poste,
-        photo_url: e.photo,
-        telephone: e.tel,
-        // Code de connexion connu (le compte est directement utilisable).
-        pin_hash: await hacherPin(e.code),
-        doit_definir_pin: false,
-      })),
-    ),
-  );
+  if (process.env.SEED_EQUIPE_7E === '1') {
+    await db.insert(utilisateurs).values(
+      await Promise.all(
+        equipe7E.map(async (e) => ({
+          nom_complet: e.nom,
+          role: e.role,
+          role_id: rid(e.role),
+          poste_cuisine: e.pc,
+          poste: e.poste,
+          photo_url: e.photo,
+          telephone: e.tel,
+          // Code de connexion connu (le compte est directement utilisable).
+          pin_hash: await hacherPin(e.code),
+          doit_definir_pin: false,
+        })),
+      ),
+    );
+  }
 
   // --- Catalogue RÉEL (export Supabase mobmgbedyyqeggxjpbrk) ---
   // Le catalogue de démo a été remplacé par le vrai menu (15 catégories,
@@ -220,6 +251,10 @@ export async function seed(): Promise<void> {
     { poste_cuisine: 'COMPTOIRISTE', categorie_id: catParNom.get('Jus Naturels')!.id },
   ]);
 
+  // Routage d'impression par défaut (Cuisine/Caisse/Bar par catégorie) — général,
+  // modifiable ensuite dans Réglages › Routage impression.
+  await appliquerRoutageDefaut(db);
+
   // Happy hour −20 % sur tout le menu, 17 h à 19 h, tous les jours
   await db.insert(promotions).values({
     nom: 'Happy Hour −20 %',
@@ -249,17 +284,33 @@ export async function seed(): Promise<void> {
     ...Array.from({ length: 6 }, (_, i) => ({ zone_id: zoneRC!.id, numero: `T${i + 1}`, qr_token: jeton(`T${i + 1}`) })),
     ...Array.from({ length: 4 }, (_, i) => ({ zone_id: zoneTerrasse!.id, numero: `TE${i + 1}`, qr_token: jeton(`TE${i + 1}`) })),
     ...Array.from({ length: 2 }, (_, i) => ({ zone_id: zoneVIP!.id, numero: `VIP${i + 1}`, qr_token: jeton(`VIP${i + 1}`) })),
+    // Table du Kdo (repas offert) : en RC, car le cadeau se consomme sur place
+    // — contrairement aux tables virtuelles de livraison ci-dessous.
+    { zone_id: zoneRC!.id, numero: TABLE_KDO, partenaire: TABLE_KDO },
     { zone_id: zoneLivraison!.id, numero: 'YANGO', partenaire: 'YANGO' },
     { zone_id: zoneLivraison!.id, numero: 'GLOVO', partenaire: 'GLOVO' },
-    { zone_id: zoneLivraison!.id, numero: 'SAMER DELIV', partenaire: 'SAMER_DELIV' },
+    { zone_id: zoneLivraison!.id, numero: 'SAMER DELLY', partenaire: 'SAMER_DELLY' },
   ]);
+
+  // Catalogue de comptage de l'inventaire (§ 6.9). Il est réinséré ICI parce
+  // que le TRUNCATE ... articles ... CASCADE plus haut emporte
+  // `produits_inventaire` : sans cette ligne, `db:migrate && db:seed` laissait
+  // un inventaire VIDE, donc validable sans rien compter — le verrou de clôture
+  // n'aurait plus rien verrouillé.
+  await db.insert(produitsInventaire).values(CATALOGUE_INVENTAIRE).onConflictDoNothing();
+
+  // Recettes d'inventaire par défaut (migration 0022) : sans elles, les sorties
+  // resteraient à 0 et le théorique se réduirait à initial + entrées. Ne couvre
+  // que les liaisons lisibles dans le nom de l'article ; le reste se règle dans
+  // Réglages › Recettes d'inventaire.
+  await appliquerRecettesDefaut(db);
 }
 
 const lanceEnScript = process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;
 if (lanceEnScript) {
   await seed();
   console.log('Seed inséré ✔');
-  console.log('Propriétaire : PIN 852741 (seul compte de base — à modifier/supprimer ensuite).');
+  console.log('Propriétaires : SAMER Zreik PIN 852741 · Admin Willy PIN 2212 (seuls comptes de base).');
   console.log('Équipe 7E : PIN 240101 → 240113 dans l’ordre de la liste (cf. seed.ts / Réglages › Équipe).');
   await fermerDb();
 }

@@ -1,8 +1,18 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import {
+  IconArrowBackUp,
+  IconCheck,
+  IconMoon,
+  IconPower,
+  IconSun,
+  IconToolsKitchen2,
+  IconUser,
+} from '@tabler/icons-react';
 import type { SessionInfo, UtilisateurPublic } from '@pos/shared';
 import { PINS_INTERDITS } from '@pos/shared';
 import { api } from '../api';
+import { useAffichage, type ModeAffichage } from '../stores/affichage';
 import { useCaisse } from '../stores/session';
 
 const LIBELLES_ROLES: Record<string, string> = {
@@ -13,11 +23,43 @@ const LIBELLES_ROLES: Record<string, string> = {
   CUISINE: 'Cuisine',
 };
 
-/** Rôles « encadrants » : avatar en accent de marque. */
+/** Rôles « encadrants » : avatar et badge en accent de marque. */
 const ROLES_ACCENT = new Set(['PROPRIETAIRE', 'SUPERVISEUR', 'MANAGER']);
+
+/**
+ * Couleurs d'avatar (maquette § 6.1 : chaque profil a la sienne). Hors famille
+ * orange, réservée à la marque. Tirée du NOM et non du rang dans la liste :
+ * une embauche ne doit pas repeindre les avatars de toute l'équipe.
+ *
+ * Un encadrant prend l'accent de marque — mais JAMAIS `--marque` brut comme
+ * couleur de texte : sur fond clair il tombe à ~2:1 de contraste, d'où
+ * `--marque-sur-plan` (voir packages/theme/theme.css).
+ */
+const COULEURS_PROFIL = ['#e2445c', '#8b5cf6', '#3b82f6', '#14b8a6', '#0ea5e9', '#d946ef'];
+
+interface CouleurProfil {
+  fond: string;
+  texte: string;
+}
+
+function couleurProfil(nom: string, accent: boolean): CouleurProfil {
+  if (accent) return { fond: 'var(--marque-tint)', texte: 'var(--marque-sur-plan)' };
+  let somme = 0;
+  for (let i = 0; i < nom.length; i += 1) somme = (somme * 31 + nom.charCodeAt(i)) % 100_000;
+  const c = COULEURS_PROFIL[somme % COULEURS_PROFIL.length]!;
+  return { fond: `color-mix(in srgb, ${c} 18%, var(--vitrine-surface))`, texte: c };
+}
 
 /** Sous-étapes du premier accès (l'employé pose son PIN avec un code temporaire). */
 type EtapeDef = 'code' | 'pin' | 'confirmation';
+
+/** État du poste affiché en pied d'écran (route publique). */
+interface EtatPoste {
+  restaurant: { nom: string; marque: string; couleur_hex: string } | null;
+  reseau: boolean;
+  imprimante_configuree: boolean;
+  cloud: { actif: boolean; en_attente: number };
+}
 
 function initiales(nom: string): string {
   return nom
@@ -28,28 +70,72 @@ function initiales(nom: string): string {
     .join('');
 }
 
+/**
+ * Badge de rôle. Les rôles de base sont stockés en capitales (`PROPRIETAIRE`)
+ * jusque dans la table `roles` : on les rhabille ici, un rôle créé sur mesure
+ * dans Réglages gardant en revanche son libellé tel qu'il a été saisi.
+ */
 function libelleRole(u: UtilisateurPublic): string {
-  return u.role_nom ?? (u.role ? LIBELLES_ROLES[u.role] ?? u.role : '');
+  const brut = u.role_nom ?? u.role ?? '';
+  return LIBELLES_ROLES[brut] ?? brut;
 }
 
+/**
+ * Pont fourni par la coquille desktop (PosSamer.exe) via son preload :
+ * `window.posSamer.fermer()`. Absent dans un navigateur normal (dev, KDS,
+ * serveur) → le bouton « Fermer l'application » ne s'affiche alors pas.
+ */
+function fermetureBureau(): (() => void) | null {
+  const pont = (window as unknown as { posSamer?: { fermer?: () => void } }).posSamer;
+  return typeof pont?.fermer === 'function' ? () => pont.fermer!() : null;
+}
+
+/**
+ * Écran de connexion — DESIGN_V2 § 6.1. Écran « vitrine » : il SUIT le mode
+ * clair/sombre du poste (jetons `vitrine-*`), contrairement aux écrans de
+ * travail dont l'ossature reste ardoise dans les deux modes.
+ *
+ * Deux colonnes : profils à gauche (la caisse est partagée, on se nomme avant
+ * de taper), pavé PIN à droite. Le pavé refuse la validation tant qu'aucun
+ * profil n'est choisi.
+ */
 export function Login() {
-  const { poserSession, afficherToast, session } = useCaisse();
+  const { poserSession, afficherToast } = useCaisse();
   const queryClient = useQueryClient();
   const [choisi, setChoisi] = useState<UtilisateurPublic | null>(null);
   const [pin, setPin] = useState('');
   const [enCours, setEnCours] = useState(false);
+  const [secousse, setSecousse] = useState(0);
+  // Bouton « Fermer l'application » : uniquement dans la coquille kiosque.
+  const fermerApp = fermetureBureau();
+  const [confirmerFermeture, setConfirmerFermeture] = useState(false);
   // Premier accès : pose du PIN
   const [etapeDef, setEtapeDef] = useState<EtapeDef>('code');
   const [code, setCode] = useState('');
   const [nouveauPin, setNouveauPin] = useState('');
   const [confirmation, setConfirmation] = useState('');
 
-  const { data: utilisateurs } = useQuery({
+  const { data: utilisateurs, isError: reseauKo } = useQuery({
     queryKey: ['utilisateurs-login'],
     queryFn: () => api<UtilisateurPublic[]>('/api/auth/utilisateurs'),
   });
 
-  const nomResto = session?.restaurant.nom ?? 'Chez Samer';
+  const { data: etatPoste } = useQuery({
+    queryKey: ['poste-etat'],
+    queryFn: () => api<EtatPoste>('/api/poste/etat'),
+    refetchInterval: 60_000,
+  });
+
+  // Identité du site appliquée AVANT toute session : sans elle, les deux
+  // restaurants Al Kayan (KMS et Yop) ouvraient sur « Chez Samer » en orange.
+  const resto = etatPoste?.restaurant ?? null;
+  useEffect(() => {
+    if (!resto) return;
+    document.documentElement.dataset.marque = resto.marque;
+    document.documentElement.style.setProperty('--marque', resto.couleur_hex);
+  }, [resto]);
+
+  const nomResto = resto?.nom ?? 'Chez Samer';
 
   const choisirUtilisateur = (u: UtilisateurPublic) => {
     setChoisi(u);
@@ -69,6 +155,12 @@ export function Login() {
     setEtapeDef('code');
   };
 
+  /** Refus : le bloc PIN tremble (§ 5) et le champ se vide. */
+  const refuser = (message: string) => {
+    setSecousse((n) => n + 1);
+    afficherToast(message);
+  };
+
   const connecter = async (utilisateurId: string, pinSaisi: string) => {
     setEnCours(true);
     try {
@@ -78,7 +170,7 @@ export function Login() {
       });
       poserSession(s);
     } catch (e) {
-      afficherToast((e as Error).message);
+      refuser((e as Error).message);
       setPin('');
     } finally {
       setEnCours(false);
@@ -89,7 +181,7 @@ export function Login() {
   const definirPin = async () => {
     if (!choisi) return;
     if (confirmation !== nouveauPin) {
-      afficherToast('Les deux PIN ne correspondent pas');
+      refuser('Les deux PIN ne correspondent pas');
       setConfirmation('');
       setNouveauPin('');
       setEtapeDef('pin');
@@ -110,7 +202,7 @@ export function Login() {
       await queryClient.invalidateQueries({ queryKey: ['utilisateurs-login'] });
       await connecter(choisi.id, nouveauPin);
     } catch (e) {
-      afficherToast((e as Error).message);
+      refuser((e as Error).message);
       setCode('');
       setNouveauPin('');
       setConfirmation('');
@@ -120,44 +212,72 @@ export function Login() {
   };
 
   return (
-    <div className="relative flex min-h-full items-start justify-center overflow-y-auto p-4 md:items-center md:p-6">
-      {/* Atmosphère : halos chauds diffus */}
-      <div className="pointer-events-none fixed inset-0 z-0 opacity-25">
-        <div className="absolute -left-[8%] -top-[10%] h-[45%] w-[45%] rounded-full bg-marque-tint blur-[120px]" />
-        <div className="absolute -bottom-[10%] -right-[8%] h-[45%] w-[45%] rounded-full bg-marque blur-[140px]" />
-      </div>
+    <div className="relative flex h-full flex-col overflow-hidden bg-vitrine-fond text-vitrine-txt">
+      {/* Halo de marque — seule concession décorative du design, réservée aux
+          écrans vitrine (connexion, accueil). */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          opacity: 'var(--halo-opacite)',
+          background:
+            'radial-gradient(58% 55% at 78% 8%, color-mix(in srgb, var(--marque) 22%, transparent), transparent 70%),' +
+            'radial-gradient(50% 50% at 12% 92%, rgba(59, 130, 246, .14), transparent 70%)',
+        }}
+      />
 
-      <main className="relative z-10 grid h-auto w-full max-w-6xl grid-cols-1 overflow-hidden rounded-[32px] bg-surface-douce shadow-e3 md:h-[86vh] md:grid-cols-12">
+      {/* Deux colonnes de la maquette : profils / pavé PIN de 380 px. Pas de
+          repli responsive — le poste est un kiosque de largeur connue (1024). */}
+      {/* `items-stretch` (défaut) et non `items-center` : la grille de profils
+          doit pouvoir défiler à l'intérieur de sa colonne quand l'équipe est
+          nombreuse, au lieu de pousser le pied hors de l'écran. */}
+      <div className="relative z-10 mx-auto grid min-h-0 w-full max-w-[1180px] flex-1 grid-cols-[1fr_380px] gap-12 px-8 py-6">
         {/* ------- Gauche : marque + choix du profil ------- */}
-        <section className="flex min-h-0 flex-col overflow-hidden border-bordure/60 p-8 md:col-span-7 md:border-r lg:p-12">
-          <header className="mb-8 lg:mb-10">
-            <h1 className="text-3xl font-bold tracking-tight text-marque-fonce lg:text-4xl">{nomResto}</h1>
-            <p className="mt-2 text-base text-doux">
-              Bienvenue sur votre espace de vente. Sélectionnez votre profil.
-            </p>
+        {/* Pas de `justify-center` : la colonne part du haut. La grille en
+            dessous prend tout l'espace restant, donc un centrage n'aurait de
+            toute façon d'effet qu'avec une équipe minuscule — et créerait
+            précisément l'écart de présentation qu'on ne veut pas. */}
+        <section className="flex min-h-0 flex-col">
+          <header className="mb-1.5 flex flex-none items-center gap-3.5">
+            <span className="flex h-[50px] w-[50px] flex-none items-center justify-center rounded-[15px] bg-marque text-sur-marque shadow-e1">
+              <IconToolsKitchen2 size={26} />
+            </span>
+            <h1 className="truncate text-[30px] font-bold tracking-[-0.025em]">{nomResto}</h1>
           </header>
+          <p className="mb-[18px] flex-none text-[15px] text-vitrine-txt-doux">
+            Caisse — sélectionnez votre profil.
+          </p>
 
+          {/* La grille commence SOUS le titre et ne se centre pas : la mise en
+              page doit être la même à 2 comptes qu'à 16. Un centrage vertical
+              (essayé le 2026-08-17) creusait un vide en haut avec une petite
+              équipe, et se dissolvait dès que la liste remplissait la colonne —
+              l'écran n'avait donc pas la même allure d'un site à l'autre. */}
           <div className="-mr-2 min-h-0 flex-1 overflow-y-auto pr-2">
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <div className="grid grid-cols-3 gap-3">
               {(utilisateurs ?? []).map((u) => {
                 const actif = choisi?.id === u.id;
                 const accent = ROLES_ACCENT.has(u.role ?? '');
+                const couleur = couleurProfil(u.nom_complet, accent);
                 return (
                   <button
                     key={u.id}
                     type="button"
                     onClick={() => choisirUtilisateur(u)}
-                    className={`flex min-h-[152px] flex-col items-center justify-between gap-2 rounded-[18px] border-2 bg-surface p-4 text-center transition active:scale-[0.97] ${
-                      actif ? 'border-marque shadow-e2' : 'border-transparent shadow-e1 hover:shadow-e2'
+                    // 128 px (et non 152) : la hauteur suffit à un nom sur une
+                    // ligne, et un nom long fait grandir la carte tout seul.
+                    className={`flex min-h-[128px] flex-col items-center justify-between gap-2 rounded-[16px] border-2 bg-vitrine-surface px-3 py-3.5 text-center shadow-e1 transition duration-150 hover:-translate-y-0.5 hover:shadow-e2 active:translate-y-0 active:scale-[0.985] ${
+                      actif ? 'border-marque shadow-e2' : 'border-transparent'
                     }`}
                   >
-                    <div className="flex flex-col items-center gap-2">
-                      <AvatarProfil nom={u.nom_complet} photo={u.photo_url ?? null} accent={accent} />
-                      <span className="line-clamp-2 text-sm font-semibold leading-tight text-fort">{u.nom_complet}</span>
-                    </div>
+                    <span className="flex flex-col items-center gap-2">
+                      <AvatarProfil nom={u.nom_complet} photo={u.photo_url ?? null} couleur={couleur} />
+                      <span className="line-clamp-2 text-[13.5px] font-semibold leading-[1.3]">{u.nom_complet}</span>
+                    </span>
                     <span
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                        u.doit_definir_pin || accent ? 'bg-marque/10 text-marque-fonce' : 'bg-surface-tres-haute text-doux'
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                        u.doit_definir_pin || accent
+                          ? 'bg-marque-tint text-marque-sur-plan'
+                          : 'bg-vitrine-surface-2 text-vitrine-txt-doux'
                       }`}
                     >
                       {u.doit_definir_pin ? 'PIN à définir' : libelleRole(u)}
@@ -165,195 +285,358 @@ export function Login() {
                   </button>
                 );
               })}
+              {(utilisateurs ?? []).length === 0 && (
+                <p className="col-span-3 py-10 text-center text-vitrine-txt-faible">
+                  {reseauKo ? 'Poste injoignable — vérifiez le réseau local.' : 'Aucun compte actif sur ce poste.'}
+                </p>
+              )}
             </div>
           </div>
-
-          <footer className="mt-8 flex items-center gap-3 border-t border-bordure/60 pt-6 text-doux">
-            <IconeWifi className="h-5 w-5" />
-            <span className="text-sm font-medium">{nomResto} · Réseau local</span>
-          </footer>
         </section>
 
-        {/* ------- Droite : PIN / pavé ------- */}
-        <section className="min-h-0 overflow-y-auto bg-surface-haute md:col-span-5">
-          <div className="flex min-h-full flex-col items-center p-8 lg:p-12">
-          {!choisi ? (
-            <div className="max-w-[300px] text-center text-doux">
-              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-surface-tres-haute text-faible">
-                <IconePersonne className="h-8 w-8" />
-              </div>
-              <p className="text-lg font-semibold text-fort">Choisissez un profil</p>
-              <p className="mt-1 text-sm">Sélectionnez votre nom à gauche pour saisir votre code PIN.</p>
-            </div>
-          ) : choisi.doit_definir_pin ? (
-            etapeDef === 'code' ? (
-              <PavePin
-                titre={choisi.nom_complet}
-                sousTitre="Premier accès — code temporaire à 6 chiffres"
-                valeur={code}
-                onChange={setCode}
-                minLongueur={6}
-                longueurMax={6}
-                libelle="Continuer"
-                onValider={() => setEtapeDef('pin')}
-                onAnnuler={deselectionner}
-              />
-            ) : etapeDef === 'pin' ? (
-              <PavePin
-                titre={choisi.nom_complet}
-                sousTitre="Choisissez votre PIN (4 à 6 chiffres)"
-                valeur={nouveauPin}
-                onChange={setNouveauPin}
-                minLongueur={4}
-                longueurMax={6}
-                libelle="Continuer"
-                onValider={() => {
-                  if (PINS_INTERDITS.includes(nouveauPin)) {
-                    afficherToast('Ce PIN est trop facile à deviner');
-                    setNouveauPin('');
-                    return;
-                  }
-                  setEtapeDef('confirmation');
-                }}
-                onAnnuler={deselectionner}
-              />
+        {/* ------- Droite : pavé PIN ------- */}
+        <BlocPin
+          secousse={secousse}
+          entete={
+            choisi ? (
+              <>
+                <span
+                  className="flex h-[46px] w-[46px] items-center justify-center rounded-full text-[15px] font-bold"
+                  style={{
+                    background: couleurProfil(choisi.nom_complet, ROLES_ACCENT.has(choisi.role ?? '')).fond,
+                    color: couleurProfil(choisi.nom_complet, ROLES_ACCENT.has(choisi.role ?? '')).texte,
+                  }}
+                >
+                  {initiales(choisi.nom_complet)}
+                </span>
+                <span className="text-[17px] font-bold tracking-[-0.01em]">{choisi.nom_complet}</span>
+              </>
             ) : (
-              <PavePin
-                titre={choisi.nom_complet}
-                sousTitre="Confirmez votre PIN"
-                valeur={confirmation}
-                onChange={setConfirmation}
-                minLongueur={nouveauPin.length}
-                longueurMax={6}
-                libelle={enCours ? 'Validation…' : 'Valider mon PIN'}
-                enCours={enCours}
-                onValider={definirPin}
-                onAnnuler={deselectionner}
-              />
+              <>
+                <span className="flex h-[46px] w-[46px] items-center justify-center rounded-full bg-vitrine-surface-2 text-vitrine-txt-faible">
+                  <IconUser size={24} />
+                </span>
+                <p className="max-w-[250px] text-[14px] leading-[1.5] text-vitrine-txt-faible">
+                  Sélectionnez votre nom à gauche pour saisir votre code.
+                </p>
+              </>
             )
-          ) : (
-            <PavePin
-              titre={choisi.nom_complet}
-              sousTitre="Authentification"
-              valeur={pin}
-              onChange={setPin}
-              minLongueur={4}
-              longueurMax={6}
-              libelle={enCours ? 'Connexion…' : 'Se connecter'}
-              enCours={enCours}
-              onValider={() => connecter(choisi.id, pin)}
-              onAnnuler={deselectionner}
-            />
+          }
+          {...(!choisi
+            ? {
+                // Aucun profil : le pavé se tape mais refuse la validation.
+                titre: null,
+                valeur: '',
+                onChange: () => undefined,
+                minLongueur: 4,
+                onValider: () => refuser('Sélectionnez d’abord votre nom.'),
+                aide: '4 à 6 chiffres · 5 essais avant blocage',
+              }
+            : choisi.doit_definir_pin
+              ? etapeDef === 'code'
+                ? {
+                    titre: 'Premier accès — code temporaire',
+                    valeur: code,
+                    onChange: setCode,
+                    minLongueur: 6,
+                    onValider: () => setEtapeDef('pin'),
+                    aide: '6 chiffres remis par le manager',
+                  }
+                : etapeDef === 'pin'
+                  ? {
+                      titre: 'Choisissez votre PIN',
+                      valeur: nouveauPin,
+                      onChange: setNouveauPin,
+                      minLongueur: 4,
+                      onValider: () => {
+                        if (PINS_INTERDITS.includes(nouveauPin)) {
+                          refuser('Ce PIN est trop facile à deviner');
+                          setNouveauPin('');
+                          return;
+                        }
+                        setEtapeDef('confirmation');
+                      },
+                      aide: '4 à 6 chiffres · ni 1234, ni 0000',
+                    }
+                  : {
+                      titre: 'Confirmez votre PIN',
+                      valeur: confirmation,
+                      onChange: setConfirmation,
+                      minLongueur: nouveauPin.length,
+                      onValider: definirPin,
+                      aide: enCours ? 'Validation…' : 'Retapez le même code',
+                    }
+              : {
+                  titre: null,
+                  valeur: pin,
+                  onChange: setPin,
+                  minLongueur: 4,
+                  onValider: () => connecter(choisi.id, pin),
+                  aide: enCours ? 'Connexion…' : '4 à 6 chiffres · 5 essais avant blocage',
+                })}
+          enCours={enCours}
+          onAnnuler={choisi ? deselectionner : null}
+        />
+      </div>
+
+      {/* ------- Pied : états du poste + réglage d'affichage ------- */}
+      <footer className="relative z-10 flex flex-none items-center justify-between gap-6 border-t border-vitrine-bordure px-8 py-[13px]">
+        <div className="flex flex-wrap items-center gap-[18px]">
+          <Etat
+            couleur={reseauKo ? 'var(--alerte)' : 'var(--ok)'}
+            libelle={reseauKo ? 'Réseau local injoignable' : 'Réseau local'}
+          />
+          <Etat
+            couleur={etatPoste?.imprimante_configuree ? 'var(--ok)' : 'var(--attente)'}
+            libelle={etatPoste?.imprimante_configuree ? 'Imprimante' : 'Imprimante non configurée'}
+          />
+          <Etat
+            couleur={
+              !etatPoste?.cloud.actif
+                ? 'var(--vitrine-txt-faible)'
+                : etatPoste.cloud.en_attente > 0
+                  ? 'var(--attente)'
+                  : 'var(--ok)'
+            }
+            libelle={
+              !etatPoste?.cloud.actif
+                ? 'Cloud non configuré'
+                : etatPoste.cloud.en_attente > 0
+                  ? `Cloud : ${etatPoste.cloud.en_attente} en attente`
+                  : 'Cloud à jour'
+            }
+          />
+          {/* Fermeture de l'app : seulement dans la coquille kiosque ET au
+              moment de choisir l'utilisateur (masqué pendant la saisie du PIN). */}
+          {fermerApp && !choisi && (
+            confirmerFermeture ? (
+              <span className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-alerte">Fermer&nbsp;?</span>
+                <button
+                  type="button"
+                  onClick={() => fermerApp()}
+                  className="rounded-btn bg-alerte px-3 py-1.5 text-xs font-bold text-white transition hover:brightness-110"
+                >
+                  Oui, fermer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmerFermeture(false)}
+                  className="rounded-btn border border-vitrine-bordure px-3 py-1.5 text-xs font-semibold text-vitrine-txt-doux transition hover:text-vitrine-txt"
+                >
+                  Annuler
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmerFermeture(true)}
+                className="flex items-center gap-2 rounded-btn border border-vitrine-bordure px-3 py-1.5 text-xs font-semibold text-vitrine-txt-doux transition hover:border-alerte hover:text-alerte"
+              >
+                <IconPower size={15} />
+                Fermer l’application
+              </button>
+            )
           )}
-          </div>
-        </section>
-      </main>
+        </div>
+
+        <ReglageAffichage />
+      </footer>
+    </div>
+  );
+}
+
+/** Voyant du pied : pastille de couleur + libellé. */
+function Etat({ couleur, libelle }: { couleur: string; libelle: string }) {
+  return (
+    <span className="flex items-center gap-2 text-[12.5px] font-medium text-vitrine-txt-doux">
+      <span className="h-2 w-2 flex-none rounded-full" style={{ background: couleur }} />
+      {libelle}
+    </span>
+  );
+}
+
+/**
+ * Réglage clair/sombre posé sur l'écran de connexion (§ 6.1). La miniature est
+ * peinte avec les JETONS RÉELS : elle change en même temps que le choix, donc
+ * le caissier voit ce qu'il choisit avant d'ouvrir un écran de travail.
+ */
+function ReglageAffichage() {
+  const mode = useAffichage((e) => e.mode);
+  const poserMode = useAffichage((e) => e.poserMode);
+  const choix: { cle: ModeAffichage; libelle: string; icone: JSX.Element }[] = [
+    { cle: 'clair', libelle: 'Clair', icone: <IconSun size={17} /> },
+    { cle: 'sombre', libelle: 'Sombre', icone: <IconMoon size={17} /> },
+  ];
+
+  return (
+    <div className="flex flex-none items-center gap-3.5">
+      <div className="flex h-11 w-[132px] overflow-hidden rounded-[10px] border border-vitrine-bordure">
+        <span className="w-7 bg-ard-850 transition-colors duration-[260ms]" />
+        <span className="grid flex-1 grid-cols-2 gap-[5px] bg-plan p-[7px] transition-colors duration-[260ms]">
+          <span className="rounded-[4px] border border-filet bg-carte" />
+          <span className="rounded-[4px] border border-filet bg-carte" />
+        </span>
+        <span className="w-[52px] bg-ard-850 transition-colors duration-[260ms]" />
+      </div>
+      <div className="flex items-center gap-3.5">
+        <p className="whitespace-nowrap text-[10.5px] font-bold uppercase tracking-[0.1em] text-vitrine-txt-faible">
+          Affichage
+        </p>
+        <div className="inline-flex gap-1 rounded-full border border-vitrine-bordure bg-vitrine-surface-2 p-1">
+          {choix.map((c) => (
+            <button
+              key={c.cle}
+              type="button"
+              onClick={() => poserMode(c.cle)}
+              className={`inline-flex items-center gap-2 rounded-full px-[17px] py-2.5 text-[13.5px] font-semibold transition ${
+                mode === c.cle
+                  ? 'bg-marque text-sur-marque'
+                  : 'text-vitrine-txt-doux hover:text-vitrine-txt'
+              }`}
+            >
+              {c.icone}
+              {c.libelle}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Pavé PIN : titre + points + clavier tactile + bouton d'action. Support du
-// clavier physique (dev). Réutilisé pour la saisie et la définition de PIN.
+// Bloc PIN : entête (avatar + nom, ou invite), six points, pavé, aide.
+// Le pavé se tape toujours ; c'est la VALIDATION qui refuse sans profil.
 // ---------------------------------------------------------------------------
-interface PaveProps {
-  titre: string;
-  sousTitre: string;
+interface BlocPinProps {
+  entete: JSX.Element;
+  titre: string | null;
   valeur: string;
   onChange: (v: string) => void;
   minLongueur: number;
-  longueurMax: number;
-  libelle: string;
-  enCours?: boolean;
   onValider: () => void;
-  onAnnuler: () => void;
+  aide: string;
+  enCours: boolean;
+  /** Null tant qu'aucun profil n'est choisi (rien à annuler). */
+  onAnnuler: (() => void) | null;
+  /** Incrémenté à chaque refus : déclenche la secousse. */
+  secousse: number;
 }
 
-function PavePin({ titre, sousTitre, valeur, onChange, minLongueur, longueurMax, libelle, enCours, onValider, onAnnuler }: PaveProps) {
+const LONGUEUR_MAX = 6;
+
+function BlocPin({
+  entete,
+  titre,
+  valeur,
+  onChange,
+  minLongueur,
+  onValider,
+  aide,
+  enCours,
+  onAnnuler,
+  secousse,
+}: BlocPinProps) {
   const pret = valeur.length >= minLongueur && !enCours;
   const taper = (c: string) => {
-    if (valeur.length >= longueurMax) return;
+    if (valeur.length >= LONGUEUR_MAX) return;
     onChange(valeur + c);
   };
-  const effacerDernier = () => onChange(valeur.slice(0, -1));
 
+  // Clavier physique (poste de dev, et clavier USB en secours sur un site).
   useEffect(() => {
     const gerer = (e: KeyboardEvent) => {
       if (/^\d$/.test(e.key)) {
         e.preventDefault();
-        if (valeur.length < longueurMax) onChange(valeur + e.key);
+        if (valeur.length < LONGUEUR_MAX) onChange(valeur + e.key);
       } else if (e.key === 'Backspace') {
         e.preventDefault();
         onChange(valeur.slice(0, -1));
       } else if (e.key === 'Escape') {
         e.preventDefault();
         onChange('');
-      } else if (e.key === 'Enter' && valeur.length >= minLongueur && !enCours) {
+      } else if (e.key === 'Enter' && !enCours) {
         e.preventDefault();
         onValider();
       }
     };
     window.addEventListener('keydown', gerer);
     return () => window.removeEventListener('keydown', gerer);
-  }, [valeur, onChange, onValider, minLongueur, longueurMax, enCours]);
-
-  const nbPoints = Math.min(longueurMax, Math.max(minLongueur, valeur.length));
+  }, [valeur, onChange, onValider, enCours]);
 
   return (
-    <div className="flex w-full max-w-[320px] flex-col items-center">
-      <div className="mb-5 text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-marque-fonce">{sousTitre}</p>
-        <h2 className="mt-1 text-2xl font-semibold text-fort">{titre}</h2>
-        <div className="mt-4 flex justify-center gap-3">
-          {Array.from({ length: nbPoints }).map((_, i) => (
-            <span
-              key={i}
-              className={`h-3.5 w-3.5 rounded-full border-2 transition ${
-                i < valeur.length ? 'border-marque bg-marque' : 'border-bordure-forte bg-surface-tres-haute'
-              }`}
-            />
-          ))}
-        </div>
+    <section
+      // `key` : remonter le bloc rejoue l'animation de secousse à chaque refus.
+      key={secousse}
+      className={`w-full max-w-[380px] self-center justify-self-center rounded-[20px] border border-vitrine-bordure bg-vitrine-surface p-[30px] shadow-[var(--vitrine-ombre)] ${
+        secousse > 0 ? 'secousse' : ''
+      }`}
+    >
+      <div className="flex min-h-[74px] flex-col items-center justify-center gap-2.5 text-center">{entete}</div>
+
+      {titre && <p className="mt-2 text-center text-[15px] font-semibold text-vitrine-txt-doux">{titre}</p>}
+
+      {/* Six points, toujours : la longueur du PIN ne se lit pas à l'écran. */}
+      <div className="my-[22px] flex justify-center gap-[13px]">
+        {Array.from({ length: LONGUEUR_MAX }).map((_, i) => (
+          <span
+            key={i}
+            className={`h-[15px] w-[15px] rounded-full border transition duration-150 ${
+              i < valeur.length
+                ? 'scale-[1.18] border-marque bg-marque'
+                : 'border-vitrine-bordure bg-vitrine-surface-2'
+            }`}
+          />
+        ))}
       </div>
 
-      <div className="grid w-full grid-cols-3 gap-2.5 [&>button]:min-h-[52px]">
+      <div className="grid grid-cols-3 gap-2.5">
         {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((c) => (
-          <button key={c} type="button" onClick={() => taper(c)} className="touche">
+          <button key={c} type="button" onClick={() => taper(c)} className="touche-vitrine">
             {c}
           </button>
         ))}
-        <button type="button" onClick={() => onChange('')} className="touche text-sm font-semibold text-alerte">
-          EFFACER
+        <button
+          type="button"
+          onClick={() => onChange(valeur.slice(0, -1))}
+          className="touche-vitrine"
+          aria-label="Effacer un chiffre"
+        >
+          <IconArrowBackUp size={24} />
         </button>
-        <button type="button" onClick={() => taper('0')} className="touche">
+        <button type="button" onClick={() => taper('0')} className="touche-vitrine">
           0
         </button>
-        <button type="button" onClick={effacerDernier} className="touche" aria-label="Effacer un chiffre">
-          <IconeRetourArriere className="h-6 w-6 text-doux" />
+        <button
+          type="button"
+          onClick={onValider}
+          disabled={enCours}
+          aria-label="Valider"
+          className={`flex min-h-[62px] items-center justify-center rounded-btn bg-marque text-sur-marque transition active:translate-y-px ${
+            pret ? 'hover:brightness-105' : 'opacity-45'
+          }`}
+        >
+          <IconCheck size={26} stroke={2.4} />
         </button>
       </div>
 
-      <button
-        type="button"
-        onClick={onValider}
-        disabled={!pret}
-        className={`mt-5 h-14 w-full rounded-[13px] text-lg font-semibold transition ${
-          pret
-            ? 'bg-marque text-sur-marque shadow-e2 active:translate-y-px'
-            : 'cursor-not-allowed bg-surface-tres-haute text-faible'
-        }`}
-      >
-        {libelle}
-      </button>
-      <button type="button" onClick={onAnnuler} className="mt-3 text-sm font-medium text-doux hover:text-fort">
-        ← Changer d’utilisateur
-      </button>
-    </div>
+      <p className="mt-[18px] text-center text-[12.5px] text-vitrine-txt-faible">{aide}</p>
+      {onAnnuler && (
+        <button
+          type="button"
+          onClick={onAnnuler}
+          className="mt-2 w-full text-center text-[12.5px] font-semibold text-vitrine-txt-doux transition hover:text-vitrine-txt"
+        >
+          ← Changer d’utilisateur
+        </button>
+      )}
+    </section>
   );
 }
 
 /** Avatar de profil : photo de l'employé si dispo, sinon initiales (repli si l'URL casse). */
-function AvatarProfil({ nom, photo, accent }: { nom: string; photo: string | null; accent: boolean }) {
+function AvatarProfil({ nom, photo, couleur }: { nom: string; photo: string | null; couleur: CouleurProfil }) {
   const [casse, setCasse] = useState(false);
   if (photo && !casse) {
     return (
@@ -362,48 +645,16 @@ function AvatarProfil({ nom, photo, accent }: { nom: string; photo: string | nul
         alt=""
         loading="lazy"
         onError={() => setCasse(true)}
-        className="h-14 w-14 rounded-full border border-bordure object-cover"
+        className="h-[46px] w-[46px] rounded-full border border-vitrine-bordure object-cover"
       />
     );
   }
   return (
-    <div
-      className={`flex h-14 w-14 items-center justify-center rounded-full text-lg font-bold ${
-        accent ? 'bg-marque-tint text-marque-fonce' : 'bg-surface-tres-haute text-doux'
-      }`}
+    <span
+      className="flex h-[46px] w-[46px] items-center justify-center rounded-full text-[15px] font-bold tracking-[0.02em]"
+      style={{ background: couleur.fond, color: couleur.texte }}
     >
       {initiales(nom)}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Icônes inline (aucun CDN — l'app tourne hors-ligne)
-// ---------------------------------------------------------------------------
-function IconeWifi({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M5 12.55a11 11 0 0 1 14 0" />
-      <path d="M1.42 9a16 16 0 0 1 21.16 0" />
-      <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
-      <line x1="12" y1="20" x2="12.01" y2="20" />
-    </svg>
-  );
-}
-function IconePersonne({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  );
-}
-function IconeRetourArriere({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z" />
-      <line x1="18" y1="9" x2="12" y2="15" />
-      <line x1="12" y1="9" x2="18" y2="15" />
-    </svg>
+    </span>
   );
 }

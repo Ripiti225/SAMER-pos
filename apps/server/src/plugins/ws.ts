@@ -20,7 +20,11 @@ export type EvenementWs =
   | 'appel:nouveau'
   | 'service'
   | 'catalogue'
-  | 'permissions';
+  | 'permissions'
+  // DESIGN_V2 : le bandeau d'équipe et l'écran d'inventaire suivent le service
+  // en cours, quel que soit le poste qui a saisi (§ 6.7, § 6.9).
+  | 'pointage'
+  | 'inventaire';
 
 /**
  * Présence des serveurs (point 1b) : un serveur est « présent » s'il a une

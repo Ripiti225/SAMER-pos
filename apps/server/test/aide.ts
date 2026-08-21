@@ -50,6 +50,10 @@ export interface Donnees {
   table_qr: string;
   table2_id: string;
   table2_qr: string;
+  /** Table virtuelle des repas offerts (zone RC). */
+  table_kdo_id: string;
+  /** Table virtuelle Yango (zone Livraison). */
+  table_yango_id: string;
   zone_id: string;
   roles: Record<string, string>;
 }
@@ -59,6 +63,7 @@ export async function resetDonnees(): Promise<Donnees> {
   await db.execute(sql`
     TRUNCATE TABLE appels_table, actions_recues, points_fidelite, clients_fidelite,
       notations, sync_etat, sync_outbox, audit_log, paiements, notes_split, equipe_service,
+      depenses, entrees_stock, inventaire_lignes, inventaires_service, produits_inventaire,
       commande_items, commandes, services_caisse, tables_salle, zones,
       promotions, mapping_poste_categorie, combo_articles, combos, supplements,
       options, groupes_options, prix_canaux, articles, categories,
@@ -126,11 +131,16 @@ export async function resetDonnees(): Promise<Donnees> {
   ]);
 
   const [zone] = await db.insert(zones).values({ nom: 'RC', ordre: 1 }).returning();
-  const [table, table2] = await db
+  // Tables VIRTUELLES : le Kdo vit en RC (le cadeau se consomme sur place),
+  // Yango dans la zone Livraison — comme en production.
+  const [zoneLivraison] = await db.insert(zones).values({ nom: 'Livraison', ordre: 4 }).returning();
+  const [table, table2, tableKdo, tableYango] = await db
     .insert(tablesSalle)
     .values([
       { zone_id: zone!.id, numero: 'T1', qr_token: 'QR-T1-TEST' },
       { zone_id: zone!.id, numero: 'T2', qr_token: 'QR-T2-TEST' },
+      { zone_id: zone!.id, numero: 'KDO', partenaire: 'KDO' },
+      { zone_id: zoneLivraison!.id, numero: 'YANGO', partenaire: 'YANGO' },
     ])
     .returning();
 
@@ -149,6 +159,8 @@ export async function resetDonnees(): Promise<Donnees> {
     table_qr: table!.qr_token!,
     table2_id: table2!.id,
     table2_qr: table2!.qr_token!,
+    table_kdo_id: tableKdo!.id,
+    table_yango_id: tableYango!.id,
     zone_id: zone!.id,
     roles: Object.fromEntries(roleIdParNom),
   };
@@ -171,6 +183,44 @@ export async function seConnecter(
   const cookie = rep.cookies.find((c) => c.name === 'pos_session');
   if (!cookie) throw new Error('Cookie de session absent');
   return { pos_session: cookie.value };
+}
+
+/**
+ * Valide l'inventaire du service en cours — indispensable avant toute clôture
+ * depuis DESIGN_V2 § 6.10 (« sans inventaire validé, pas de clôture »).
+ *
+ * Compte chaque produit restant À SON THÉORIQUE (écart nul), puis valide. Le
+ * catalogue de comptage est vidé par `resetDonnees` (TRUNCATE ... CASCADE le
+ * fait tomber avec `articles`), donc dans la plupart des tests il n'y a rien à
+ * compter et l'appel se réduit à la validation. Les tests qui veulent exercer
+ * le calcul seedent leurs propres produits (voir inventaire.test.ts).
+ */
+export async function validerInventaire(
+  app: FastifyInstance,
+  cookies: Record<string, string>,
+): Promise<void> {
+  const etat = await app.inject({ method: 'GET', url: '/api/inventaire', cookies });
+  if (etat.statusCode !== 200) throw new Error(`Lecture inventaire: ${etat.body}`);
+  const lignes = etat.json().lignes as {
+    produit_id: string;
+    a_compter: boolean;
+    stock_compte: number | null;
+    theorique: number;
+  }[];
+
+  for (const l of lignes) {
+    if (!l.a_compter || l.stock_compte !== null) continue;
+    const rep = await app.inject({
+      method: 'PUT',
+      url: `/api/inventaire/lignes/${l.produit_id}`,
+      cookies,
+      payload: { stock_compte: l.theorique },
+    });
+    if (rep.statusCode !== 200) throw new Error(`Comptage inventaire: ${rep.body}`);
+  }
+
+  const validation = await app.inject({ method: 'POST', url: '/api/inventaire/valider', cookies });
+  if (validation.statusCode !== 200) throw new Error(`Validation inventaire: ${validation.body}`);
 }
 
 /** Ouvre un service et crée une commande à emporter avec 1 article. */

@@ -42,3 +42,78 @@ export function json(corps: unknown, statut = 200): Response {
     headers: { 'content-type': 'application/json' },
   });
 }
+
+// ---------------------------------------------------------------------------
+// CONSOLE SIÈGE (2026-08-17) — authentification par HUMAIN, pas par machine.
+//
+// Les 4 fonctions de synchro s'authentifient par `cle_site` : un poste prouve
+// qu'il est un poste. La console, elle, est ouverte par une personne depuis un
+// navigateur quelconque : il lui faut une vraie identité. On délègue à Supabase
+// Auth (mot de passe, réinitialisation, expiration du jeton) et on ne garde ici
+// que l'autorisation : ce compte a-t-il le droit d'entrer, et pour quoi faire.
+// ---------------------------------------------------------------------------
+
+export interface Siege {
+  userId: string;
+  nomComplet: string;
+  niveau: 'ADMIN' | 'LECTURE';
+}
+
+/**
+ * Vérifie le jeton porteur et renvoie l'utilisateur siège.
+ *
+ * Le contrôle en DEUX temps est délibéré. `auth.getUser()` seul ne suffit pas :
+ * la clé anonyme du projet EST un JWT valide, et elle est publique par
+ * construction (elle vit dans le JavaScript de la console). Le passage par
+ * `siege_utilisateurs` est donc ce qui autorise réellement — sans lui,
+ * n'importe qui ayant ouvert la page aurait accès aux ventes du groupe.
+ */
+export async function verifierSiege(admin: SupabaseClient, req: Request): Promise<Siege> {
+  const entete = req.headers.get('Authorization') ?? '';
+  const jeton = entete.startsWith('Bearer ') ? entete.slice(7) : '';
+  if (!jeton) throw new ErreurAuth('Connexion requise');
+
+  const { data: auth, error } = await admin.auth.getUser(jeton);
+  if (error || !auth?.user) throw new ErreurAuth('Session expirée, reconnectez-vous');
+
+  const { data, error: e2 } = await admin
+    .from('siege_utilisateurs')
+    .select('user_id, nom_complet, niveau, actif')
+    .eq('user_id', auth.user.id)
+    .maybeSingle();
+  if (e2) throw new ErreurAuth('Vérification impossible');
+  if (!data || !data.actif) throw new ErreurAuth("Ce compte n'a pas accès à la console du siège");
+
+  return {
+    userId: data.user_id as string,
+    nomComplet: data.nom_complet as string,
+    niveau: data.niveau as 'ADMIN' | 'LECTURE',
+  };
+}
+
+/** Le niveau LECTURE voit tout mais n'écrit rien. */
+export function exigeAdmin(siege: Siege): void {
+  if (siege.niveau !== 'ADMIN') {
+    throw new ErreurAuth('Votre compte est en lecture seule');
+  }
+}
+
+/**
+ * CORS — la console est servie depuis une autre origine que les fonctions
+ * (localhost en développement, le domaine du siège ensuite). Les fonctions de
+ * synchro n'en ont jamais eu besoin : elles sont appelées par un serveur Node,
+ * pas par un navigateur.
+ */
+export const ENTETES_CORS: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+/** Réponse JSON avec CORS (console siège). */
+export function jsonCors(corps: unknown, statut = 200): Response {
+  return new Response(JSON.stringify(corps), {
+    status: statut,
+    headers: { 'content-type': 'application/json', ...ENTETES_CORS },
+  });
+}

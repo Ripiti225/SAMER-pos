@@ -20,6 +20,9 @@ export type ActionAudit =
   | 'ANNULATION_COMMANDE'
   | 'REOUVERTURE_NOTE'
   | 'PAIEMENT'
+  // Kdo : repas offert, clôturé sans encaissement. Le motif accompagne
+  // toujours l'entrée — sans lui, un cadeau est indiscernable d'un vol.
+  | 'COMMANDE_OFFERTE'
   | 'SPLIT_NOTE'
   | 'TRANSFERT_TABLE'
   | 'ECART_RECONCILIATION'
@@ -39,9 +42,26 @@ export type ActionAudit =
   | 'MODIF_DISPONIBILITE'
   | 'MODIF_PARAMETRE'
   | 'MODIF_CATALOGUE'
+  // Allumer ou éteindre une promotion change ce que paient les clients sur tout
+  // un créneau : l'entrée est nommée, et non noyée dans MODIF_CATALOGUE, pour
+  // qu'on retrouve la bascule sans lire le `meta` de chaque ligne.
+  | 'PROMO_ACTIVEE'
+  | 'PROMO_DESACTIVEE'
   | 'MODIF_FIDELITE'
   | 'FACTURE_IMPRIMEE'
-  | 'ACCES_PROTEGE_REFUSE';
+  | 'ACCES_PROTEGE_REFUSE'
+  // DESIGN_V2 — dépenses, pointage, inventaire (§ 6.7 à § 6.10).
+  // Les paiements réels (salaire, encouragement) et le déblocage d'inventaire
+  // sont les entrées qui comptent : de l'argent sort du tiroir, ou une clôture
+  // passe sans comptage.
+  | 'DEPENSE'
+  | 'DEPENSE_SUPPRIMEE'
+  | 'PAIEMENT_SALAIRE'
+  | 'ENCOURAGEMENT'
+  | 'POINTAGE_ARRIVEE'
+  | 'MARQUAGE_DEPART'
+  | 'VALIDATION_INVENTAIRE'
+  | 'DEBLOCAGE_INVENTAIRE';
 
 export interface EntreeAudit {
   user_id?: string | null;

@@ -44,6 +44,8 @@ CREATE TABLE parametres_locaux (        -- LOCAL UNIQUEMENT
 
 CREATE TYPE role_pos AS ENUM ('PROPRIETAIRE','MANAGER','CAISSIER','SERVEUR','CUISINE');
 CREATE TYPE poste_cuisine AS ENUM ('CUISINIER','PIZZAIOLO','COMPTOIRISTE');
+-- Poste d'impression (routage des tickets) : chaque poste ↔ une imprimante locale.
+CREATE TYPE poste_impression AS ENUM ('CAISSE','CUISINE','BAR');
 
 -- Sprint 4B+4C : rôles composés de permissions (roles + role_permissions).
 CREATE TABLE roles (
@@ -68,6 +70,9 @@ CREATE TABLE utilisateurs (
   poste_cuisine   poste_cuisine,                -- NULL sauf cuisine
   pin_hash        TEXT NOT NULL,                -- argon2id, jamais le PIN en clair
   telephone       TEXT,                         -- pour pointage SMS
+  -- Salaire journalier proposé au paiement (§6.8). Modifiable au moment de
+  -- payer, mais tout écart au taux de la fiche exige un motif.
+  taux_journalier INTEGER CHECK (taux_journalier IS NULL OR taux_journalier >= 0),
   actif           BOOLEAN NOT NULL DEFAULT TRUE,
   -- anti-force brute (§14.1)
   tentatives_pin  SMALLINT NOT NULL DEFAULT 0,
@@ -116,7 +121,7 @@ CREATE TABLE disponibilite_locale (
 CREATE TABLE prix_canaux (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   article_id  UUID NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
-  canal       TEXT NOT NULL,     -- 'YANGO','GLOVO','SAMER_DELIV','EMPORTER'...
+  canal       TEXT NOT NULL,     -- 'YANGO','GLOVO','SAMER_DELLY','EMPORTER'...
   prix        INTEGER NOT NULL CHECK (prix >= 0),
   UNIQUE (article_id, canal)
 );
@@ -144,6 +149,38 @@ CREATE TABLE supplements (
   prix        INTEGER NOT NULL CHECK (prix >= 0)
 );
 
+-- Options reutilisables (migration 0020). Remplacent groupes_options/options
+-- et supplements, qui restent en place uniquement parce que la descente cloud
+-- les alimente encore : plus aucune lecture applicative ne passe par eux.
+-- Tables LOCALES, volontairement HORS descente (cf. sync/descente.ts) : une
+-- synchro du siege ne les ecrase jamais. Prix unique porte par l'option.
+CREATE TABLE options_catalogue (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nom         TEXT NOT NULL CHECK (length(btrim(nom)) > 0),
+  prix        INTEGER NOT NULL DEFAULT 0 CHECK (prix >= 0),  -- 0 = option gratuite
+  actif       BOOLEAN NOT NULL DEFAULT TRUE,
+  ordre       SMALLINT NOT NULL DEFAULT 0,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- Unicite sur (nom, prix) : le meme nom peut exister a deux prix, la reprise
+-- de l'existant ne doit jamais fusionner deux prix de vente differents.
+CREATE UNIQUE INDEX options_catalogue_nom_prix_idx
+  ON options_catalogue (lower(btrim(nom)), prix);
+
+-- Liaison d'une option a une CATEGORIE entiere OU a un ARTICLE precis.
+-- Les options d'un article = celles de sa categorie UNION les siennes.
+CREATE TABLE options_liaisons (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  option_id     UUID NOT NULL REFERENCES options_catalogue(id) ON DELETE CASCADE,
+  categorie_id  UUID REFERENCES categories(id) ON DELETE CASCADE,
+  article_id    UUID REFERENCES articles(id) ON DELETE CASCADE,
+  CHECK ((categorie_id IS NULL) <> (article_id IS NULL))
+);
+CREATE UNIQUE INDEX options_liaisons_categorie_idx
+  ON options_liaisons (option_id, categorie_id) WHERE categorie_id IS NOT NULL;
+CREATE UNIQUE INDEX options_liaisons_article_idx
+  ON options_liaisons (option_id, article_id) WHERE article_id IS NOT NULL;
+
 -- Combos / menus à prix packagé
 CREATE TABLE combos (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -166,6 +203,19 @@ CREATE TABLE mapping_poste_categorie (
   poste_cuisine  poste_cuisine NOT NULL,
   categorie_id   UUID NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
   PRIMARY KEY (poste_cuisine, categorie_id)
+);
+
+-- Routage d'impression LOCAL (jamais écrasé par une descente catalogue cloud,
+-- comme disponibilite_locale). Résolution : article ?? catégorie ?? CUISINE.
+CREATE TABLE routage_categorie (
+  categorie_id  UUID PRIMARY KEY REFERENCES categories(id) ON DELETE CASCADE,
+  poste         poste_impression NOT NULL,
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE routage_article (
+  article_id    UUID PRIMARY KEY REFERENCES articles(id) ON DELETE CASCADE,
+  poste         poste_impression NOT NULL,
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Promotions automatiques (§5.5) : happy hour, promo du jour
@@ -196,8 +246,10 @@ CREATE TABLE tables_salle (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   zone_id     UUID NOT NULL REFERENCES zones(id),
   numero      TEXT NOT NULL,           -- 'T1', 'VIP3'...
-  -- tables virtuelles partenaires (§5.1) : zone 'Livraison'
-  partenaire  TEXT,                    -- NULL, ou 'YANGO','GLOVO','SAMER_DELIV'
+  -- Marqueur de table VIRTUELLE (§5.1) : livraisons en zone 'Livraison'
+  -- ('YANGO','GLOVO','SAMER_DELLY') et cadeaux en zone RC ('KDO' — le repas
+  -- offert se consomme sur place). NULL = vraie table physique.
+  partenaire  TEXT,
   statut      TEXT NOT NULL DEFAULT 'LIBRE'
               CHECK (statut IN ('LIBRE','OCCUPEE','ADDITION_DEMANDEE')),
   qr_token    TEXT UNIQUE,             -- token du QR de notation collé sur la table
@@ -239,6 +291,9 @@ CREATE TABLE services_caisse (
   especes_comptees   INTEGER,
   especes_theorique  INTEGER,
   ecart              INTEGER,          -- comptees - theorique, calculé à la clôture
+  -- Verrou de clôture (§6.10) : sans inventaire validé, pas de clôture.
+  -- Appliqué CÔTÉ SERVEUR — l'UI ne fait que le refléter.
+  inventaire_valide  BOOLEAN NOT NULL DEFAULT FALSE,
   rapport_z          JSONB             -- snapshot figé du rapport Z
 );
 CREATE UNIQUE INDEX un_service_ouvert_par_caissier
@@ -251,9 +306,45 @@ CREATE TABLE equipe_service (
   service_id     UUID NOT NULL REFERENCES services_caisse(id) ON DELETE CASCADE,
   utilisateur_id UUID NOT NULL REFERENCES utilisateurs(id),
   poste_jour     TEXT NOT NULL,
+  -- Heure d'ARRIVÉE = heure du clic sur « Pointer » (§6.7). Une heure saisie à
+  -- la main est une heure négociable ; le clic, lui, est daté par le système.
+  pointe_le      TIMESTAMPTZ,
+  -- Départ (§6.8) : NULL = pas encore tranché, TRUE = reste, FALSE = parti.
+  -- À la clôture, tout ce qui n'est pas TRUE est enregistré comme PARTI — le
+  -- caissier ne marque donc que les exceptions.
+  reste          BOOLEAN,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (service_id, utilisateur_id)
 );
+
+-- Registre des dépenses du service (§6.8) : services_caisse.depenses en est la
+-- SOMME, la caissière ne retape aucun total.
+CREATE TABLE depenses (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  service_id  UUID NOT NULL REFERENCES services_caisse(id) ON DELETE CASCADE,
+  categorie   TEXT NOT NULL CHECK (categorie IN
+              ('MARCHE','LEGUMES','FRUITS','ANNEXES','SALAIRES','ENCOURAGEMENTS')),
+  libelle     TEXT NOT NULL CHECK (length(btrim(libelle)) > 0),
+  montant     INTEGER NOT NULL CHECK (montant > 0),
+  agent_id    UUID REFERENCES utilisateurs(id),   -- qui a été payé (salaire/encouragement)
+  saisi_par   UUID NOT NULL REFERENCES utilisateurs(id),
+  -- Ligne née d'un paiement réel : NON SUPPRIMABLE. L'effacer ferait
+  -- disparaître de l'argent réellement sorti du tiroir.
+  auto        BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Obligatoire quand le montant payé s'écarte du taux de la fiche : seul
+  -- moyen pour le manager de comprendre un écart de paie.
+  motif       TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- Un salaire ou un encouragement dit toujours QUI a été payé.
+  CONSTRAINT depenses_agent_check CHECK (
+    categorie NOT IN ('SALAIRES','ENCOURAGEMENTS') OR agent_id IS NOT NULL)
+);
+CREATE INDEX idx_depenses_service ON depenses (service_id);
+
+-- Un même agent n'est payé qu'une fois par service (le bouton « Payer »
+-- disparaît ensuite). Un encouragement reste possible en plus du salaire.
+CREATE UNIQUE INDEX un_salaire_par_agent_et_service
+  ON depenses (service_id, agent_id) WHERE categorie = 'SALAIRES';
 
 -- ============================================================================
 -- 5. COMMANDES (§5.1) — cœur du sprint 1
@@ -269,9 +360,13 @@ CREATE TYPE statut_commande AS ENUM
 CREATE TABLE commandes (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   numero_ticket  BIGINT NOT NULL UNIQUE DEFAULT nextval('seq_numero_ticket'),
+  -- Code court lisible (ex. « SP215 »), imprimé sur reçu + bons cuisine ;
+  -- préfixe type + 3 chiffres aléatoires, unique dans le service. Le
+  -- numero_ticket reste la référence continue d'audit.
+  code_commande  TEXT,
   type           type_commande NOT NULL,
   table_id       UUID REFERENCES tables_salle(id),
-  partenaire     TEXT,                              -- YANGO/GLOVO/SAMER_DELIV si livraison
+  partenaire     TEXT,                              -- YANGO/GLOVO/SAMER_DELLY si livraison
   ref_partenaire TEXT,                              -- n° de commande côté partenaire
   service_id     UUID REFERENCES services_caisse(id),
   caissier_id    UUID REFERENCES utilisateurs(id),
@@ -292,16 +387,26 @@ CREATE TABLE commandes (
   remise_montant INTEGER NOT NULL DEFAULT 0,
   remise_par     UUID REFERENCES utilisateurs(id),  -- manager/proprio uniquement
   remise_motif   TEXT,                              -- obligatoire si remise
+  -- Kdo (repas offert, table virtuelle KDO en zone RC) : clôturé PAYEE SANS
+  -- aucune ligne de paiement. Compte dans la vente du shift comme une livraison
+  -- Yango, mais jamais dans le théorique espèces (calculé sur les paiements).
+  offert         BOOLEAN NOT NULL DEFAULT false,
+  motif_offert   TEXT,                              -- obligatoire à la clôture
   promo_id       UUID REFERENCES promotions(id),
   promo_montant  INTEGER NOT NULL DEFAULT 0,
   total          INTEGER NOT NULL DEFAULT 0,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT remise_motif_obligatoire
-    CHECK (remise_montant = 0 OR (remise_motif IS NOT NULL AND remise_par IS NOT NULL))
+    CHECK (remise_montant = 0 OR (remise_motif IS NOT NULL AND remise_par IS NOT NULL)),
+  CONSTRAINT motif_offert_obligatoire
+    CHECK (offert = false OR statut <> 'PAYEE' OR motif_offert IS NOT NULL)
 );
 CREATE INDEX idx_commandes_service ON commandes (service_id);
 CREATE INDEX idx_commandes_jour ON commandes (created_at);
+-- Code court unique dans un même service (retry serveur en cas de collision).
+CREATE UNIQUE INDEX uniq_code_commande_service
+  ON commandes (service_id, code_commande) WHERE code_commande IS NOT NULL;
 
 CREATE TABLE commande_items (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -436,8 +541,9 @@ CREATE TABLE notations (
 );
 
 -- ============================================================================
--- 10. (Pointage retiré — allègement. Présence gérée par l'équipe du jour,
---     voir la table equipe_service ci-dessus.)
+-- 10. (Pas de table de pointage dédiée. La présence reste portée par l'équipe
+--     du jour : equipe_service.pointe_le pour l'arrivée, .reste pour le
+--     départ — DESIGN_V2 §6.7/6.8. Toujours aucun chronométrage.)
 -- ============================================================================
 
 -- ============================================================================
@@ -456,9 +562,105 @@ CREATE TABLE points_fidelite (
   client_id   UUID NOT NULL REFERENCES clients_fidelite(id),
   commande_id UUID REFERENCES commandes(id),
   points      INTEGER NOT NULL,          -- positif = gain, négatif = utilisation
-  source      TEXT NOT NULL DEFAULT 'POS',   -- 'POS' | 'SAMER_DELIV'
+  source      TEXT NOT NULL DEFAULT 'POS',   -- 'POS' | 'SAMER_DELLY'
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ============================================================================
+-- 12. INVENTAIRE DE SERVICE (DESIGN_V2 §6.9) — LOCAL UNIQUEMENT
+-- ============================================================================
+-- Ces tables ne figurent ni dans la descente de synchro (le siège ne les
+-- écrase jamais) ni dans sync_outbox : le cloud n'a pas encore les tables
+-- correspondantes, et publier vers une table absente ferait échouer toute la
+-- remontée du site.
+--
+-- ⚠ Les QUANTITÉS sont numériques et non entières : le fromage se compte en
+-- grammes, la glace en pots (4,5) et les frites en sachets. Seuls les MONTANTS
+-- restent des entiers FCFA (règle du projet).
+
+-- Catalogue de comptage — celui de SamerTrackly, identique sur les 7 sites.
+-- Distinct du catalogue de VENTE (articles) : les lignes de consommation
+-- (« Manaïche (100g) ») et les totaux dérivés (« Total Fromage ») ne sont pas
+-- vendables. Le pont vers les ventes est la table inventaire_consommations
+-- (migration 0022) : les sorties automatiques en viennent.
+CREATE TABLE produits_inventaire (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code        TEXT NOT NULL UNIQUE,
+  categorie   TEXT NOT NULL CHECK (categorie IN
+              ('PAIN','POUL','APER','PLAT','FROM','BOIS','GLAC','FRIT')),
+  nom         TEXT NOT NULL,
+  prix        INTEGER NOT NULL DEFAULT 0 CHECK (prix >= 0),  -- chiffre le manquant
+  unite       TEXT NOT NULL DEFAULT 'u',
+  role        TEXT NOT NULL DEFAULT 'COMPTE' CHECK (role IN
+              ('COMPTE','ENTREE','AUTO_ENT',
+               'CONSO','CONSO_POULET','CONSO_FROMAGE','CONSO_GLACE','CONSO_FRITES',
+               'TOTAL_POULET','TOTAL_FROMAGE','TOTAL_GLACE','TOTAL_FRITES','DARINA')),
+  -- Sens du ratio selon le rôle : grammes de fromage, boules de glace,
+  -- portions par sachet de frites. NULL pour les lignes simples.
+  ratio       NUMERIC(12,3),
+  ordre       SMALLINT NOT NULL DEFAULT 0,
+  actif       BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+-- RECETTES (migration 0022) : ce qu'un article de vente consomme.
+-- Le lien est un-à-plusieurs DANS LES DEUX SENS — « Pain chawarma » sort avec
+-- les 6 Chawarmas ; un « Poulet Pané + Frites » consomme poulet, frites ET pain.
+-- quantite = unités du produit par article vendu ; elle se COMPOSE avec ratio
+-- (conversion SamerTrackly : grammes, boules, portions par sachet).
+CREATE TABLE inventaire_consommations (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  produit_id  UUID NOT NULL REFERENCES produits_inventaire(id) ON DELETE CASCADE,
+  article_id  UUID NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+  quantite    NUMERIC(12,3) NOT NULL DEFAULT 1 CHECK (quantite > 0),
+  UNIQUE (produit_id, article_id)
+);
+CREATE INDEX idx_inventaire_consommations_article ON inventaire_consommations (article_id);
+
+-- Un inventaire par service. valide verrouille tout en lecture seule.
+CREATE TABLE inventaires_service (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  service_id       UUID NOT NULL UNIQUE REFERENCES services_caisse(id) ON DELETE CASCADE,
+  valide           BOOLEAN NOT NULL DEFAULT FALSE,
+  valide_le        TIMESTAMPTZ,
+  valide_par       UUID REFERENCES utilisateurs(id),
+  -- Issue de secours : sans elle, un caissier bloqué à 2 h du matin ne peut
+  -- plus fermer sa caisse. Le déblocage est tracé (audit DEBLOCAGE_INVENTAIRE).
+  debloque_par     UUID REFERENCES utilisateurs(id),
+  debloque_le      TIMESTAMPTZ,
+  debloque_motif   TEXT,
+  -- Manquant non expliqué, chiffré en FCFA. INFORMATION pour le manager :
+  -- jamais déduit de la caisse (contrairement à SamerTrackly).
+  montant_manquant INTEGER NOT NULL DEFAULT 0 CHECK (montant_manquant >= 0),
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT inventaires_service_deblocage_check CHECK (
+    debloque_par IS NULL OR debloque_motif IS NOT NULL)
+);
+
+CREATE TABLE inventaire_lignes (
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  inventaire_id      UUID NOT NULL REFERENCES inventaires_service(id) ON DELETE CASCADE,
+  produit_id         UUID NOT NULL REFERENCES produits_inventaire(id) ON DELETE CASCADE,
+  stock_initial      NUMERIC(12,2) NOT NULL DEFAULT 0,  -- repris du service précédent
+  entrees            NUMERIC(12,2) NOT NULL DEFAULT 0,
+  sorties            NUMERIC(12,2) NOT NULL DEFAULT 0,
+  -- La SEULE donnée que le caissier saisit. NULL = pas encore compté.
+  stock_compte       NUMERIC(12,2),
+  ecart              NUMERIC(12,2),
+  quantite_expliquee NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (quantite_expliquee >= 0),
+  explication        TEXT,
+  UNIQUE (inventaire_id, produit_id)
+);
+
+CREATE TABLE entrees_stock (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  inventaire_id UUID NOT NULL REFERENCES inventaires_service(id) ON DELETE CASCADE,
+  produit_id    UUID NOT NULL REFERENCES produits_inventaire(id) ON DELETE CASCADE,
+  quantite      NUMERIC(12,2) NOT NULL CHECK (quantite > 0),
+  fournisseur   TEXT,
+  saisi_par     UUID REFERENCES utilisateurs(id),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_entrees_stock_inventaire ON entrees_stock (inventaire_id);
 
 -- ============================================================================
 -- FIN — Tables sprint 1 : restaurant, parametres_locaux, utilisateurs,
@@ -466,4 +668,7 @@ CREATE TABLE points_fidelite (
 -- combos, combo_articles, promotions, zones, tables_salle, services_caisse,
 -- commandes, commande_items, notes_split, paiements, audit_log,
 -- sync_outbox (structure seule), sync_etat.
+-- Ajouts DESIGN_V2 (migration 0021) : depenses, produits_inventaire,
+-- inventaires_service, inventaire_lignes, entrees_stock.
+-- Migration 0022 : inventaire_consommations (recettes d'inventaire).
 -- ============================================================================

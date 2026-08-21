@@ -44,6 +44,16 @@ export interface SessionInfo {
   cloture_en_attente?: RapportZ | null;
 }
 
+/**
+ * Caisse occupée par le shift d'un AUTRE employé. Sert à expliquer le blocage
+ * (un seul shift ouvert à la fois) sans révéler le moindre montant.
+ */
+export interface OccupationCaisse {
+  occupee: boolean;
+  caissier: string | null;
+  ouvert_le: string | null;
+}
+
 /** Vue du service en cours — ne contient JAMAIS le théorique (§14.3). */
 export interface ServiceOuvertVue {
   id: string;
@@ -56,6 +66,12 @@ export interface CategorieVue {
   id: string;
   nom: string;
   ordre: number;
+  /**
+   * Catégorie réservée à des partenaires de livraison (migration 0023).
+   * `null` = catégorie normale, visible partout. Sinon elle n'apparaît que sur
+   * une commande dont le partenaire figure dans la liste.
+   */
+  partenaires: string[] | null;
 }
 
 export interface OptionVue {
@@ -86,8 +102,20 @@ export interface ArticleVue {
   image_url: string | null;
   disponible: boolean;
   prix_canaux: Record<string, number>;
-  groupes_options: GroupeOptionsVue[];
-  supplements: SupplementVue[];
+  /**
+   * Extras proposés pour cet article : options de sa CATÉGORIE + les siennes
+   * (migration 0020). Remplace les anciens `groupes_options` (choix gratuits
+   * groupés) et `supplements` (extras payants), tous deux liés à un seul
+   * article. `prix: 0` = option gratuite.
+   */
+  options_extras: OptionExtraVue[];
+}
+
+/** Option proposée à la vente. Le prix est porté par l'option elle-même. */
+export interface OptionExtraVue {
+  id: string;
+  nom: string;
+  prix: number;
 }
 
 export interface ComboVue {
@@ -117,6 +145,17 @@ export interface CatalogueVue {
   promotions: PromotionVue[];
 }
 
+/** Commande en cours listée sur une table (choix rapide au plan de salle). */
+export interface CommandeOuverteVue {
+  id: string;
+  code_commande: string | null;
+  numero_ticket: number;
+  statut: StatutCommande;
+  total: number;
+  offert: boolean;
+  created_at: string;
+}
+
 export interface TableVue {
   id: string;
   zone_id: string;
@@ -125,6 +164,13 @@ export interface TableVue {
   partenaire: string | null;
   statut: 'LIBRE' | 'OCCUPEE' | 'ADDITION_DEMANDEE';
   commande_id: string | null;
+  /**
+   * TOUTES les commandes en cours sur la table, pas seulement la première.
+   * Indispensable sur les tables virtuelles (Yango, Glovo, Samer Delly, Kdo)
+   * où plusieurs commandes coexistent pendant un rush : le plan de salle les
+   * liste pour qu'on entre dans la bonne et y ajoute des produits.
+   */
+  commandes_ouvertes: CommandeOuverteVue[];
   // CORRECTIONS3 point 4 : état dérivé côté serveur, identique partout
   etat: import('./constantes.js').EtatTable;
   badges: import('./constantes.js').BadgeTable[];
@@ -199,12 +245,17 @@ export interface NoteSplitVue {
 export interface CommandeVue {
   id: string;
   numero_ticket: number;
+  /** Code court affiché/imprimé (ex. « SP215 ») ; le numéro reste l'audit. */
+  code_commande: string | null;
   type: TypeCommande;
   table_id: string | null;
   table_numero: string | null;
   partenaire: Partenaire | string | null;
   ref_partenaire: string | null;
   statut: StatutCommande;
+  /** Kdo : repas offert, clôturé sans encaissement. Motif obligatoire. */
+  offert: boolean;
+  motif_offert: string | null;
   sous_total: number;
   remise_montant: number;
   remise_motif: string | null;
@@ -238,6 +289,7 @@ export interface CarteKdsItem {
 export interface CarteKds {
   id: string;
   numero_ticket: number;
+  code_commande: string | null;
   type: TypeCommande;
   partenaire: string | null;
   table_numero: string | null;
@@ -283,10 +335,63 @@ export interface RapportZ {
   // Réconciliation de fermeture (déclarés par le caissier + calculés).
   depenses: number;
   livraisons: Record<string, number>;
+  /**
+   * Kdo : valeur des repas offerts du shift. Comptée dans `vente_totale` au
+   * même titre qu'une livraison Yango, jamais dans les espèces attendues.
+   */
+  offerts: { nb: number; total: number };
   modes_declares: Record<string, number>;
   vente_totale: number;
   total_systeme: number;
   diff: number;
+  /**
+   * Bloc Inventaire du ticket Z (DESIGN_V2 § 6.10) : conforme, ou nombre de
+   * produits manquants et montant. INFORMATION MANAGER — le montant n'entre
+   * ni dans la vente, ni dans l'écart de caisse, et n'est jamais une retenue.
+   * `debloque` = clôture passée sans comptage complet, sur PIN manager.
+   */
+  inventaire: {
+    valide: boolean;
+    debloque: boolean;
+    manquants: number;
+    surplus: number;
+    montant_manquant: number;
+  };
+  /**
+   * Décompte de l'équipe du jour (§ 6.8) : toute personne non marquée « Reste »
+   * est enregistrée comme PARTIE à la clôture.
+   */
+  equipe: { presents: number; restent: number; partis: number };
+  /**
+   * RETOURS : plats **déjà lancés en cuisine** qui ne seront pas vendus, parce
+   * qu'un manager a supprimé la ligne — ou la commande entière (PIN + motif
+   * obligatoires dans les deux cas). Compter les deux est un point de contrôle :
+   * sinon, encaisser puis supprimer la table entière effacerait toute trace.
+   *
+   * INFORMATION PURE, comme le bloc Inventaire : un retour n'entre ni dans la
+   * vente, ni dans le tiroir, ni dans les sorties d'inventaire — il en est
+   * exclu par construction, puisque la ligne est annulée. Il est ici pour qu'on
+   * le VOIE : c'est le seul chiffre qui dit si un restaurant refait souvent ses
+   * plats. Un article corrigé AVANT l'envoi en cuisine n'est pas un retour.
+   */
+  retours: RetoursVue;
+}
+
+/** Bloc Retours — agrégé par produit pour le ticket, détaillé pour l'écran. */
+export interface RetoursVue {
+  /** Nombre d'articles retournés (somme des quantités). */
+  nb: number;
+  /** Valeur au prix figé de la ligne, en FCFA. */
+  montant: number;
+  par_produit: { nom: string; quantite: number; montant: number }[];
+  detail: {
+    numero_ticket: number;
+    nom: string;
+    quantite: number;
+    montant: number;
+    motif: string | null;
+    par_nom: string | null;
+  }[];
 }
 
 /**
@@ -297,7 +402,23 @@ export interface RapportZ {
 export interface ReconciliationPreview {
   fond_de_caisse: number;
   livraisons: Record<string, number>;
+  /** Repas offerts (Kdo) du shift : affichés pour information, non encaissables. */
+  offerts: { nb: number; total: number };
   modes: Record<ModePaiement, number>;
+  /**
+   * Dépenses du service (DESIGN_V2 § 6.8) : SOMME du registre, en LECTURE
+   * SEULE à la clôture. La caissière ne retape rien — un total saisi à la main
+   * pouvait diverger des lignes qui le composent.
+   */
+  depenses: { total: number; nb_lignes: number };
+  /** Verrou de clôture (§ 6.10) : l'UI le reflète, le serveur l'applique. */
+  inventaire: { valide: boolean; debloque: boolean; restants_a_compter: number };
+  /**
+   * Retours du service — articles déjà partis en cuisine puis supprimés au PIN
+   * manager. En LECTURE SEULE comme les dépenses : rien à saisir, et aucune
+   * incidence sur la vente, le tiroir ou l'inventaire.
+   */
+  retours: RetoursVue;
 }
 
 /** Détail d'un shift dans une séquence (vue gérant). */
@@ -314,6 +435,8 @@ export interface ShiftSequence {
   total_systeme: number | null;
   depenses: number;
   livraisons: Record<string, number>;
+  /** Kdo du shift. Absent des shifts clôturés avant les Kdo → { nb: 0, total: 0 }. */
+  offerts: { nb: number; total: number };
   modes_declares: Record<string, number>;
 }
 
@@ -335,6 +458,8 @@ export interface RecapSequence {
   depenses: number;
   ecart_especes: number;
   livraisons: Record<string, number>;
+  /** Total des repas offerts (Kdo) de la séquence : compté en vente, jamais en espèces. */
+  offerts: { nb: number; total: number };
   modes: Record<string, number>;
 }
 

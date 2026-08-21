@@ -9,9 +9,10 @@ import {
   IconCirclePlus,
   IconCreditCard,
   IconDeviceMobile,
+  IconTruckDelivery,
 } from '@tabler/icons-react';
 import type { CommandeVue, ModePaiement } from '@pos/shared';
-import { formatFCFA, LIBELLES_MODES, MODES_PAIEMENT } from '@pos/shared';
+import { estLivraisonSansEncaissement, formatFCFA, LIBELLES_MODES, MODES_PAIEMENT } from '@pos/shared';
 import { api } from '../api';
 import { Modale } from '../components/Modale';
 import { Fidelite } from '../components/Fidelite';
@@ -24,6 +25,22 @@ function iconeMode(mode: ModePaiement) {
   if (mode === 'CARTE') return IconCreditCard;
   return IconDeviceMobile; // Wave, Orange Money, MTN MoMo, Moov
 }
+
+/**
+ * La VRAIE couleur de l'opérateur (DESIGN_V2 § 4.2) : le caissier reconnaît
+ * Wave au violet et Orange Money à l'orange avant même de lire le libellé —
+ * c'est ce qui évite d'enregistrer un paiement sur le mauvais mode dans un
+ * rush. Les jetons sont définis dans packages/theme/theme.css.
+ */
+const COULEUR_MODE: Record<ModePaiement, string> = {
+  ESPECES: 'var(--pay-especes)',
+  WAVE: 'var(--pay-wave)',
+  ORANGE_MONEY: 'var(--pay-orange)',
+  MTN_MOMO: 'var(--pay-mtn)',
+  MOOV_MONEY: 'var(--pay-moov)',
+  CARTE: 'var(--pay-carte)',
+  DJAMO: 'var(--pay-djamo)',
+};
 
 export function Paiement() {
   const { commandeId, aller, afficherToast } = useCaisse();
@@ -61,6 +78,17 @@ export function Paiement() {
     onError: (e: Error) => afficherToast(e.message),
   });
 
+  // Livraison externe (Yango/Glovo) : réglée chez le partenaire, aucune saisie
+  // de mode de paiement — un seul bouton clôture la commande en PAYEE.
+  const cloturerLivraison = useMutation({
+    mutationFn: () => api<CommandeVue>(`/api/commandes/${commandeId}/cloturer-livraison`, { method: 'POST' }),
+    onSuccess: (vue) => {
+      rafraichir(vue);
+      afficherToast(`Livraison ${vue.partenaire ?? ''} validée ✔ — reçu imprimé`);
+    },
+    onError: (e: Error) => afficherToast(e.message),
+  });
+
   const commandePrete = !!commande;
   const estPayee = commande?.statut === 'PAYEE';
 
@@ -82,6 +110,7 @@ export function Paiement() {
     return <div className="flex min-h-full items-center justify-center text-doux">Chargement…</div>;
   }
 
+  const sansEncaissement = estLivraisonSansEncaissement(commande.partenaire);
   const noteActive = commande.notes.find((n) => n.id === noteId) ?? null;
   const resteCible = noteActive ? noteActive.reste : commande.reste;
   const montantSaisi = montant === '' ? resteCible : Number(montant);
@@ -131,7 +160,7 @@ export function Paiement() {
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-bold">Résumé du ticket</h3>
               <span className="rounded-full bg-marque-tint px-3 py-1 text-xs font-bold text-marque-fonce">
-                N° {commande.numero_ticket}
+                {commande.code_commande ?? `N° ${commande.numero_ticket}`}
               </span>
             </div>
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
@@ -159,11 +188,11 @@ export function Paiement() {
             </div>
           </div>
 
-          {!estPayee && (
+          {!estPayee && !sansEncaissement && (
             <Fidelite commande={commande} onMaj={rafraichir} />
           )}
 
-          {splitPossible && (
+          {splitPossible && !sansEncaissement && (
             <div className="rounded-2xl bg-surface-moyenne p-5 shadow-e1">
               <div className="mb-3 flex items-center gap-2">
                 <IconArrowsSplit2 size={22} className="text-marque-fonce" />
@@ -206,7 +235,31 @@ export function Paiement() {
             </div>
           )}
 
-          {!estPayee && (
+          {!estPayee && sansEncaissement && (
+            <div className="carte flex min-h-0 flex-1 flex-col items-center justify-center gap-5 p-8 text-center">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-info-tint text-info">
+                <IconTruckDelivery size={44} />
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold">Livraison {commande.partenaire}</h3>
+                <p className="mt-2 max-w-xs text-doux">
+                  Le client règle chez {commande.partenaire} — aucun encaissement en caisse.
+                  Validez la livraison pour clôturer la commande et imprimer le reçu.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => cloturerLivraison.mutate()}
+                disabled={cloturerLivraison.isPending}
+                className="flex h-16 w-full max-w-sm items-center justify-center gap-2 rounded-[13px] bg-marque text-xl font-bold text-sur-marque shadow-e2 transition hover:brightness-105 active:translate-y-px disabled:opacity-40"
+              >
+                <IconTruckDelivery size={24} />
+                {cloturerLivraison.isPending ? 'Validation…' : `Valider la livraison · ${formatFCFA(commande.total)}`}
+              </button>
+            </div>
+          )}
+
+          {!estPayee && !sansEncaissement && (
             <>
               <div className="carte p-5">
                 <h3 className="mb-4 text-lg font-bold">Mode de paiement</h3>
@@ -214,14 +267,18 @@ export function Paiement() {
                   {MODES_PAIEMENT.map((m) => {
                     const Icone = iconeMode(m);
                     const actif = mode === m;
+                    const couleur = COULEUR_MODE[m];
                     return (
                       <button
                         key={m}
                         type="button"
                         onClick={() => setMode(m)}
-                        className={`flex min-h-[84px] flex-col items-center justify-center gap-2 rounded-xl border-2 p-3 text-center transition ${
-                          actif ? 'border-marque bg-marque/10 text-marque-fonce' : 'border-bordure text-doux hover:border-marque hover:text-marque-fonce'
-                        }`}
+                        className="flex min-h-[84px] flex-col items-center justify-center gap-2 rounded-xl border-2 p-3 text-center transition"
+                        style={
+                          actif
+                            ? { borderColor: couleur, background: `color-mix(in srgb, ${couleur} 12%, var(--carte))`, color: couleur }
+                            : { borderColor: 'var(--filet)', color: 'var(--texte-doux)' }
+                        }
                       >
                         <Icone size={30} />
                         <span className="text-xs font-semibold leading-tight">{LIBELLES_MODES[m]}</span>
@@ -294,28 +351,36 @@ export function Paiement() {
 
         {/* Colonne droite : reste + paiements + validation */}
         <div className="col-span-12 flex min-h-0 flex-col gap-4 lg:col-span-3">
-          <div className={`flex h-44 flex-none flex-col items-center justify-center rounded-2xl border-4 p-4 text-center shadow-e2 ${estPayee ? 'border-ok bg-fort' : 'border-marque bg-fort'}`}>
-            <span className="text-xs font-bold uppercase tracking-widest text-fond/70">
-              {estPayee ? 'Encaissé' : noteActive ? `Reste — ${noteActive.libelle}` : 'Reste à payer'}
+          {/* Récapitulatif ARDOISE (§ 6.5) : le Reste à payer en très grand,
+              détaché du plan de travail clair — c'est le seul chiffre que le
+              caissier cherche des yeux pendant un paiement mixte. */}
+          <div
+            className="flex h-44 flex-none flex-col items-center justify-center rounded-2xl border-4 bg-ard-900 p-4 text-center shadow-ard"
+            style={{ borderColor: estPayee ? 'var(--ok)' : 'var(--marque)' }}
+          >
+            <span className="text-xs font-bold uppercase tracking-widest text-ard-txt-faible">
+              {estPayee ? 'Encaissé' : sansEncaissement ? `À régler chez ${commande.partenaire}` : noteActive ? `Reste — ${noteActive.libelle}` : 'Reste à payer'}
             </span>
-            <div className={`mt-1 text-5xl font-extrabold tabular-nums ${estPayee ? 'text-ok' : 'text-fond'}`}>
+            <div className={`mt-1 text-5xl font-extrabold tabular-nums ${estPayee ? 'text-ok' : 'text-ard-txt'}`}>
               {formatFCFA(resteCible)}
             </div>
-            <span className="mt-1 text-xs text-fond/60">Total {formatFCFA(commande.total)} · payé {formatFCFA(commande.paye)}</span>
+            <span className="mt-1 text-xs text-ard-txt-faible">Total {formatFCFA(commande.total)} · payé {formatFCFA(commande.paye)}</span>
           </div>
 
-          <div className="carte flex min-h-0 flex-1 flex-col p-5">
-            <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-doux">Paiements enregistrés</h3>
+          <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-ard-850 p-5 text-ard-txt shadow-ard">
+            <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-ard-txt-faible">Paiements enregistrés</h3>
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
               {commande.paiements.length === 0 && (
-                <div className="py-10 text-center text-sm italic text-doux/60">Aucun paiement saisi</div>
+                <div className="py-10 text-center text-sm italic text-ard-txt-faible">
+                  {sansEncaissement ? `Réglé par ${commande.partenaire} — pas d’encaissement en caisse` : 'Aucun paiement saisi'}
+                </div>
               )}
               {commande.paiements.map((p) => {
                 const Icone = iconeMode(p.mode);
                 return (
-                  <div key={p.id} className="flex items-center justify-between rounded-xl border border-bordure bg-surface-douce p-3">
+                  <div key={p.id} className="flex items-center justify-between rounded-xl bg-ard-800 p-3">
                     <span className="flex items-center gap-2 font-semibold">
-                      <Icone size={18} className="text-marque-fonce" /> {LIBELLES_MODES[p.mode]}
+                      <Icone size={18} style={{ color: COULEUR_MODE[p.mode] }} /> {LIBELLES_MODES[p.mode]}
                     </span>
                     <span className="font-bold tabular-nums">{formatFCFA(p.montant)}</span>
                   </div>
@@ -324,29 +389,36 @@ export function Paiement() {
             </div>
           </div>
 
-          {!estPayee && (
+          {!estPayee && !sansEncaissement && (
             <button
               type="button"
               onClick={ajouter}
               disabled={!peutAjouter}
-              className="flex h-14 flex-none items-center justify-center gap-2 rounded-[13px] bg-marque-tint text-lg font-bold text-marque-fonce shadow-e1 transition hover:brightness-95 disabled:opacity-40"
+              // Le bouton d'ajout porte la couleur du mode sélectionné : on voit
+              // sur QUOI on encaisse au moment où on appuie (§ 4.2).
+              style={{ background: `color-mix(in srgb, ${COULEUR_MODE[mode]} 16%, var(--carte))`, color: COULEUR_MODE[mode] }}
+              className="flex h-14 flex-none items-center justify-center gap-2 rounded-[13px] text-lg font-bold shadow-e1 transition hover:brightness-95 disabled:opacity-40"
             >
               <IconCirclePlus size={22} /> {encaisser.isPending ? 'Encaissement…' : `Ajouter ${LIBELLES_MODES[mode]}`}
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => aller('accueil')}
-            disabled={commande.reste > 0}
-            className={`h-16 flex-none rounded-[13px] text-xl font-bold transition ${
-              commande.reste > 0
-                ? 'cursor-not-allowed border-2 border-dashed border-bordure-forte bg-surface-tres-haute text-doux/50'
-                : 'bg-marque text-sur-marque shadow-e2 hover:brightness-105 active:translate-y-px'
-            }`}
-          >
-            {estPayee ? 'Terminer' : 'Valider la vente'}
-          </button>
-          {commande.reste > 0 && (
+          {/* La clôture d'une livraison externe passe par le bouton dédié (colonne
+              du milieu) : ici on n'affiche « Terminer » qu'une fois clôturée. */}
+          {(estPayee || !sansEncaissement) && (
+            <button
+              type="button"
+              onClick={() => aller('accueil')}
+              disabled={!estPayee && commande.reste > 0}
+              className={`h-16 flex-none rounded-[13px] text-xl font-bold transition ${
+                !estPayee && commande.reste > 0
+                  ? 'cursor-not-allowed border-2 border-dashed border-bordure-forte bg-surface-tres-haute text-doux/50'
+                  : 'bg-marque text-sur-marque shadow-e2 hover:brightness-105 active:translate-y-px'
+              }`}
+            >
+              {estPayee ? 'Terminer' : 'Valider la vente'}
+            </button>
+          )}
+          {!estPayee && commande.reste > 0 && !sansEncaissement && (
             <p className="flex-none text-center text-xs font-bold uppercase leading-tight text-alerte">
               Soldez la totalité avant de valider
             </p>

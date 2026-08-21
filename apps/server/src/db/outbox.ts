@@ -24,7 +24,30 @@ export type TableSynchronisee =
   | 'role_permissions'
   | 'utilisateurs'
   // Sprint 4C : disponibilité locale (remonte au cloud à titre d'information).
-  | 'disponibilite_locale';
+  | 'disponibilite_locale'
+  // Migration 0020 : options réutilisables. Locales pour l'instant (le siège ne
+  // les redescend pas), mais la remontée est préparée dès maintenant — c'est
+  // tout l'intérêt d'écrire l'outbox sans attendre le branchement cloud.
+  | 'options_catalogue'
+  | 'options_liaisons'
+  /**
+   * 2026-08-16 — ce que le caissier saisit doit arriver dans SamerTrackly sans
+   * ressaisie (décision du boss). Le rapport Z figé porte déjà le RÉSUMÉ du
+   * point de caisse ; ces tables portent le DÉTAIL : quelle dépense, quel
+   * produit compté, combien manquait.
+   *
+   * ⚠ Ne JAMAIS ajouter une table ici avant qu'elle existe côté cloud, dans
+   * `supabase/functions/_shared/tables.ts` ET dans le schéma : `sync-push`
+   * acquitte de façon contiguë, donc une table inconnue bloquait toute la file
+   * du site. (Depuis le 2026-08-16 elle est garée dans `sync_rejets` au lieu
+   * de bloquer — mais la donnée n'arrive pas pour autant à destination.)
+   * Le catalogue de comptage et les recettes ne remontent PAS : le siège les
+   * connaît déjà, ils sont identiques sur les 7 sites.
+   */
+  | 'depenses'
+  | 'inventaires_service'
+  | 'inventaire_lignes'
+  | 'entrees_stock';
 
 export async function ecrireOutbox(
   tx: DbOuTx,

@@ -6,6 +6,7 @@
     "dev": "pnpm --parallel --recursive dev",
     "build": "pnpm --recursive build",
     "test": "pnpm --recursive test",
+    "test:functions": "node --test supabase/functions/_shared/*.test.ts",
     "db:migrate": "pnpm --filter @pos/server db:migrate",
     "db:seed": "pnpm --filter @pos/server db:seed",
     "site:enroler": "pnpm --filter @pos/server site:enroler",

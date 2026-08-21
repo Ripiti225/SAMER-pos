@@ -18,9 +18,11 @@ import { valider } from '../../lib/valider.js';
 import {
   chargerCommandeVue,
   figerNouvelItem,
+  genererCodeCommande,
   recalculerTotaux,
 } from '../commandes/service.js';
 import { exigerAccesTable, ouvrirTablePar } from '../tables/propriete.js';
+import { imprimerBonsEnvoi } from '../../printer/bons.js';
 import type { DbOuTx } from '../../db/client.js';
 
 /**
@@ -76,12 +78,15 @@ export function routesServeur(app: FastifyInstance): void {
         )
         .orderBy(desc(commandes.created_at));
       let commande = ouvertes[0];
+      const envoyes: string[] = [];
 
       if (!commande) {
+        const code = await genererCodeCommande(tx, 'SUR_PLACE', null);
         const [creee] = await tx
           .insert(commandes)
           .values({
             type: 'SUR_PLACE',
+            code_commande: code,
             table_id: table.id,
             serveur_id: req.session!.utilisateur_id,
           })
@@ -91,7 +96,8 @@ export function routesServeur(app: FastifyInstance): void {
       }
 
       for (const item of corps.items) {
-        await figerNouvelItem(tx, commande, item, true); // envoyé immédiatement
+        const cree = await figerNouvelItem(tx, commande, item, true); // envoyé immédiatement
+        envoyes.push(cree.id);
       }
 
       const [maj] = await tx
@@ -108,10 +114,11 @@ export function routesServeur(app: FastifyInstance): void {
       // Le serveur devient propriétaire de la table (première commande)
       await ouvrirTablePar(tx, table.id, req.session!.utilisateur_id);
 
-      return { deja_traitee: false as const, commande_id: commande.id };
+      return { deja_traitee: false as const, commande_id: commande.id, envoyes };
     });
 
     if (!resultat.deja_traitee && resultat.commande_id) {
+      await imprimerBonsEnvoi(app, resultat.commande_id, resultat.envoyes ?? []);
       app.diffuser('commande:envoyee', resultat.commande_id);
       app.diffuser('commande', resultat.commande_id);
       return { ok: true, ...resultat, commande: await chargerCommandeVue(db, resultat.commande_id) };

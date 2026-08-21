@@ -9,6 +9,7 @@ import {
   PIN_CAISSIER,
   resetDonnees,
   seConnecter,
+  validerInventaire,
   type Donnees,
 } from './aide.js';
 
@@ -70,6 +71,7 @@ describe('comptage à l’aveugle (§14.3)', () => {
 
     // Théorique attendu : 25 000 (fond) + 6 000 (espèces) = 31 000.
     // Comptage 28 000 → écart -3 000, au-delà du seuil de 2 000.
+    await validerInventaire(app, cookies); // § 6.10 : pas de clôture sans inventaire
     const rep = await app.inject({
       method: 'POST',
       url: '/api/services/cloturer',
