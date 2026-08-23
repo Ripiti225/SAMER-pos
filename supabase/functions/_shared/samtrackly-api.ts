@@ -103,12 +103,19 @@ export function patch(
 }
 
 /**
- * Suppression. `chemin` inclut la table et le filtre PostgREST — jamais un
- * DELETE sans filtre, PostgREST le refuse de toute façon sans `Prefer:
- * return=minimal` explicite ici, donc une faute de filtre échoue fort plutôt
- * que de vider une table.
+ * Suppression. `chemin` inclut la table et le filtre PostgREST obligatoire
+ * (ex. `'inventaire_lignes?inventaire_id=eq.<uuid>'`). ATTENTION : PostgREST
+ * ne refuse pas les DELETE sans filtre — il supprimerait silencieusement TOUTE
+ * la table. Cette fonction valide que `chemin` contient un filtre (? + =)
+ * et rejette sinon pour éviter la catastrophe.
  */
 export function supprimer(chemin: string): Promise<void> {
+  // Vérifier la présence d'un filtre PostgREST
+  if (!chemin.includes('?') || !chemin.includes('=')) {
+    throw new ErreurSamtrackly(
+      `supprimer() refuse un DELETE sans filtre — risque de vider toute la table. chemin fourni: ${chemin}`,
+    );
+  }
   return appeler(
     chemin,
     { method: 'DELETE', headers: entetes({ Prefer: 'return=minimal' }) },
