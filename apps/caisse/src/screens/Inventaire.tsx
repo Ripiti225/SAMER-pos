@@ -297,6 +297,11 @@ function CarteProduit({
     });
 
   const ecart = ligne.ecart;
+  // Même règle que le serveur (`expliqueeInvalide`) : l'écran prévient, le
+  // serveur refuse. La règle n'est jamais appliquée « côté UI seulement ».
+  const tropExplique =
+    ecart !== null && ecart < 0 && explique.trim() !== ''
+    && Number(explique) > Math.abs(ecart) + 0.001;
   const couleurEcart =
     ecart === null ? 'text-doux' : ecart === 0 ? 'text-ok' : ecart < 0 ? 'text-alerte' : 'text-info';
   const bordure =
@@ -336,9 +341,6 @@ function CarteProduit({
       {ecart !== null && (
         <div className={`mt-3 text-sm font-bold ${couleurEcart}`}>
           {ecart === 0 ? 'Aucun écart' : ecart < 0 ? `Manque ${qte(Math.abs(ecart))}` : `Surplus ${qte(ecart)}`}
-          {ligne.manque_chiffre > 0 && (
-            <span className="ml-2 font-medium text-doux">soit {fcfa(ligne.manque_chiffre)} non expliqués</span>
-          )}
         </div>
       )}
 
@@ -346,17 +348,28 @@ function CarteProduit({
       {ecart !== null && ecart < 0 && !verrouille && (
         <div className="mt-3 grid gap-2 rounded-jeton bg-surface-douce p-3 sm:grid-cols-[140px_1fr]">
           <div>
-            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-doux">Quantité expliquée</div>
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-doux">
+              Quantité expliquée <span className="text-doux/70">(unités)</span>
+            </div>
             <input
               type="number"
               inputMode="decimal"
               step="any"
               min={0}
+              max={Math.abs(ecart)}
               value={explique}
               onChange={(e) => setExplique(e.target.value)}
               onBlur={envoyer}
-              className="w-full rounded-btn border border-bordure bg-surface px-3 py-2 tabular-nums outline-none focus:border-marque"
+              className={`w-full rounded-btn border bg-surface px-3 py-2 tabular-nums outline-none ${
+                tropExplique ? 'border-alerte focus:border-alerte' : 'border-bordure focus:border-marque'
+              }`}
             />
+            <div className="mt-1 text-[11px] text-doux">sur {qte(Math.abs(ecart))} manquante(s)</div>
+            {tropExplique && (
+              <div className="mt-1 text-[11px] font-semibold text-alerte">
+                Plus que ce qui manque. Saisissez un nombre d’unités, pas un montant.
+              </div>
+            )}
           </div>
           <div>
             <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-doux">Explication</div>
@@ -369,6 +382,15 @@ function CarteProduit({
               className="w-full rounded-btn border border-bordure bg-surface px-3 py-2 outline-none focus:border-marque"
             />
           </div>
+        </div>
+      )}
+
+      {/* Le montant est affiché APRÈS la saisie, et nommé « montant » : placé
+          juste au-dessus du champ, il se faisait recopier dedans (constaté au
+          7E le 2026-08-23 — « manquant 3, expliqué 24 000 »). */}
+      {ligne.manque_chiffre > 0 && (
+        <div className="mt-2 text-xs font-medium text-doux">
+          Montant du manquant non justifié : {fcfa(ligne.manque_chiffre)}
         </div>
       )}
     </div>

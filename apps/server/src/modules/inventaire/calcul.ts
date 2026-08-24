@@ -250,3 +250,24 @@ export function bilan(lignes: LigneCalculee[]): Bilan {
   }
   return { a_compter: aCompter, justes, manquants, surplus, montant };
 }
+
+/**
+ * Une explication ne peut pas couvrir plus d'unités qu'il n'en manque.
+ *
+ * Constaté en production le 2026-08-23 : « Total poulet, manquant 3, expliqué
+ * 24 000 ». Le caissier avait saisi le MONTANT (3 × 8 000) dans un champ qui
+ * attend un nombre d'unités — l'écran affiche « soit 24 000 F non expliqués »
+ * juste au-dessus, il recopie ce nombre. Le manquant passait alors pour
+ * entièrement justifié et la retenue tombait à zéro.
+ *
+ * Ne concerne QUE les manquants : un surplus (écart positif) n'entre dans aucun
+ * calcul de retenue, une valeur saisie là est sans effet.
+ *
+ * La tolérance absorbe les arrondis des quantités fractionnaires (sachets de
+ * frites, boules de glace) : expliquer 0,65 pour un manquant de 0,65 doit
+ * passer, malgré la virgule flottante.
+ */
+export function expliqueeInvalide(ecart: number | null, quantiteExpliquee: number): boolean {
+  if (ecart === null || ecart >= 0) return false;
+  return quantiteExpliquee > Math.abs(ecart) + 0.001;
+}

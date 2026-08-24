@@ -28,6 +28,7 @@ import { journaliser } from '../audit/audit.js';
 import { verifierPinManager } from '../auth/pin.js';
 import { serviceOuvertCourant } from '../depenses/service.js';
 import { etatInventaire } from './service.js';
+import { expliqueeInvalide } from './calcul.js';
 
 /** Quantité d'inventaire : jamais un entier — fromage en grammes, glace en pots. */
 const Quantite = z
@@ -144,6 +145,21 @@ export function routesInventaire(app: FastifyInstance): void {
 
       // Recalcul complet : un total dérivé bouge quand une consommation bouge.
       const apres = await etatInventaire(tx, service.id);
+
+      // Garde-fou (2026-08-23) : on ne justifie pas plus d'unités qu'il n'en
+      // manque. Vérifié APRÈS le recalcul — c'est le seul endroit où l'écart
+      // définitif est connu, `stock_compte` venant d'être modifié dans le même
+      // appel. Le `throw` annule la transaction, donc rien n'est écrit.
+      const ligneApres = apres.lignes.find((l) => l.produit_id === produitId);
+      if (ligneApres && expliqueeInvalide(ligneApres.ecart, ligneApres.quantite_expliquee)) {
+        const manque = Math.abs(ligneApres.ecart ?? 0);
+        throw new ErreurMetier(
+          `Vous justifiez ${ligneApres.quantite_expliquee} unités alors qu'il n'en manque que ${manque}. `
+          + `Ce champ attend un NOMBRE D'UNITÉS, pas un montant en francs.`,
+          400,
+        );
+      }
+
       app.diffuser('inventaire', service.id);
       return {
         ligne: apres.lignes.find((l) => l.produit_id === produitId) ?? null,
