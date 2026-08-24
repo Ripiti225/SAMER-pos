@@ -191,7 +191,15 @@ export interface LigneInventaireDetail {
   nombre_explique: number | null;
   explication: string | null;
   montant_deduit: number;
-  explication_statut?: 'en_attente';
+  /**
+   * TOUJOURS présente, `null` quand il n'y a rien à revoir — jamais absente.
+   * PostgREST insère un lot en une requête et exige des objets STRICTEMENT
+   * homogènes : une clé posée sur certaines lignes seulement fait rejeter tout
+   * le lot avec PGRST102 « All object keys must match ». C'est ce qui a bloqué
+   * les inventaires du 2026-08-22 au 24 — un seul produit expliqué parmi 34
+   * suffisait à faire refuser les 34.
+   */
+  explication_statut: 'en_attente' | null;
 }
 
 /**
@@ -251,6 +259,7 @@ export function construireLignesInventaire(
       nombre_explique: nOuNull(l.quantite_expliquee),
       explication: l.explication ?? null,
       montant_deduit: montantDeduit,
+      explication_statut: null,
     };
 
     // Le déblocage manager évite la retenue automatique (ci-dessus), il ne
