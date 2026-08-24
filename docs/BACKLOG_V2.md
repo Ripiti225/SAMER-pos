@@ -42,3 +42,25 @@ Toute idée hors périmètre du sprint 1 est notée ici, jamais implémentée en
   existantes.
 - Horaires prévus des employés (retards vs planning) : champ texte simple en
   v2, planning complet reporté.
+
+## Parcours client au QR — livré le 24/08/2026 (briques 1 et 2)
+Demande du patron : le client qui scanne le QR de sa table s'identifie par
+téléphone et repart avec un reçu PDF + ses points. Deux briques sur trois sont
+implémentées et testées (`apps/server/test/client-qr-fidelite-recu.test.ts`) :
+
+- **Téléphone facultatif à la commande** — `CommandeClientSchema.telephone`
+  (vide = absent), rattachement `trouverOuCreer()` + `client_fidelite_id` dans
+  la transaction de création. Le libellé du bouton passe à « Commander sans
+  points » quand le champ est vide : le renoncement est un choix, pas un oubli.
+- **Reçu PDF client** — `GET /api/client/:qr_token/recu/:commande_id`
+  (`apps/server/src/printer/recu-pdf.ts`), servi seulement pour une commande de
+  la table du jeton, PAYEE, dans les 45 min. Les commandes payées restent dans
+  le suivi pendant cette même fenêtre pour l'écran « Vous venez de payer… ».
+
+**Reste à faire — points bidirectionnels POS ↔ SAMER DELIV.** Le socle est là
+(id client local par téléphone, remontée `sync_outbox`, règle des 24 h de
+`soldeVerifiable()`), mais la réconciliation par téléphone côté cloud manque —
+voir « Fidélité — rapprochement cloud (fusions_clients) » plus haut. Tant
+qu'elle n'existe pas, un client connu de l'app SAMER DELIV aura deux soldes
+séparés, et l'écran de confirmation dit « ajoutés à votre compte Samer Delly »
+sans que la fusion soit réellement faite. À traiter au jalon SAMER DELIV.

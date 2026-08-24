@@ -224,6 +224,12 @@ export interface SuiviCommandeClient {
   refus_motif: string | null;
   total: number;
   articles: { nom: string; quantite: number }[];
+  /**
+   * Fidélité vue du client : `points` est ce que la vente rapporte (ou aurait
+   * rapporté). Quand `rattache` est faux, l'écran s'en sert pour montrer au
+   * client ce qu'il perd faute d'avoir donné son numéro.
+   */
+  fidelite: { rattache: boolean; points: number };
 }
 
 /** Vue publique d'une table pour la page client (portée à SA table). */

@@ -304,9 +304,28 @@ export const AppelClientSchema = z.object({
   }),
 });
 
+// ---------------------------------------------------------------------------
+// SPRINT 4 — Fidélité (§9)
+// ---------------------------------------------------------------------------
+
+/** Numéro de téléphone du client fidélité (saisi au paiement). */
+export const TelephoneFideliteSchema = z
+  .string()
+  .trim()
+  .regex(/^[+0-9][0-9 ]{5,19}$/, 'Numéro de téléphone invalide');
+
 /** Proposition de commande depuis le téléphone client (jamais envoyée en cuisine directement). */
 export const CommandeClientSchema = z.object({
   items: z.array(AjouterItemSchema).min(1, 'Ajoutez au moins un article'),
+  /**
+   * Téléphone FACULTATIF : on le demande toujours, on ne bloque jamais la
+   * commande. Un champ laissé vide vaut « pas de numéro » — le client perd ses
+   * points et l'écran le lui dit, mais sa commande part quand même.
+   */
+  telephone: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+    TelephoneFideliteSchema.optional(),
+  ),
 });
 
 /** Refus d'une commande client (message obligatoire montré au client). */
@@ -330,16 +349,6 @@ export const LibererTableSchema = z.object({
   motif: z.string().trim().nullish(),
   pin_manager: PinSaisiSchema.nullish(),
 });
-
-// ---------------------------------------------------------------------------
-// SPRINT 4 — Fidélité (§9)
-// ---------------------------------------------------------------------------
-
-/** Numéro de téléphone du client fidélité (saisi au paiement). */
-export const TelephoneFideliteSchema = z
-  .string()
-  .trim()
-  .regex(/^[+0-9][0-9 ]{5,19}$/, 'Numéro de téléphone invalide');
 
 // ---------------------------------------------------------------------------
 // SPRINT 4B/4C — Administration (Réglages)

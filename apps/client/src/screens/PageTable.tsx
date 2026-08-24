@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { CatalogueVue, TableClientVue } from '@pos/shared';
 import { formatFCFA, LIBELLES_ETAT_TABLE } from '@pos/shared';
 import { api } from '../api';
+import { ConfirmationPaiement } from './ConfirmationPaiement';
 import { SuiviCommandes } from './SuiviCommandes';
 
 interface LignePanier {
@@ -28,6 +29,7 @@ export function PageTable({ jeton, table }: { jeton: string; table: TableClientV
   const queryClient = useQueryClient();
   const [categorieId, setCategorieId] = useState<string | null>(null);
   const [panier, setPanier] = useState<LignePanier[]>([]);
+  const [telephone, setTelephone] = useState('');
   const [message, setMessage] = useState<string | null>(null);
 
   const { data: catalogue } = useQuery({
@@ -52,7 +54,11 @@ export function PageTable({ jeton, table }: { jeton: string; table: TableClientV
     mutationFn: () =>
       api<{ confirmation: string }>(`/api/client/${jeton}/commande`, {
         method: 'POST',
-        corps: { items: panier.map((l) => ({ article_id: l.article_id, quantite: l.quantite, options: [], supplements: [] })) },
+        corps: {
+          items: panier.map((l) => ({ article_id: l.article_id, quantite: l.quantite, options: [], supplements: [] })),
+          // Champ vide = pas de numéro : le serveur l'accepte, sans fidélité.
+          telephone: telephone.trim(),
+        },
       }),
     onSuccess: (r) => {
       setPanier([]);
@@ -183,13 +189,34 @@ export function PageTable({ jeton, table }: { jeton: string; table: TableClientV
               </div>
             ))}
           </div>
+          {/* Numéro TOUJOURS demandé, JAMAIS obligatoire : sans lui la commande
+              part quand même, et le libellé du bouton dit ce qui est perdu. */}
+          <label className="mb-3 block">
+            <span className="mb-1 block text-sm font-semibold">
+              Votre numéro pour cumuler vos points de fidélité
+            </span>
+            <input
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="07 00 00 00 00"
+              value={telephone}
+              onChange={(e) => setTelephone(e.target.value)}
+              className="min-h-[52px] w-full rounded-[13px] border-2 border-bordure bg-fond px-4 text-lg tabular-nums outline-none focus:border-marque"
+            />
+            <span className="mt-1 block text-xs text-doux">
+              Facultatif — sans numéro, pas de points sur cette commande.
+            </span>
+          </label>
           <button
             type="button"
             className="flex min-h-[56px] w-full items-center justify-center rounded-[13px] bg-marque text-lg font-bold text-sur-marque shadow-e2 transition active:translate-y-px disabled:opacity-40"
             disabled={envoyer.isPending}
             onClick={() => envoyer.mutate()}
           >
-            Envoyer à mon serveur · {formatFCFA(totalPanier)}
+            {telephone.trim()
+              ? `Envoyer à mon serveur · ${formatFCFA(totalPanier)}`
+              : `Commander sans points · ${formatFCFA(totalPanier)}`}
           </button>
           <p className="mt-2 text-center text-xs text-doux">Votre serveur validera la commande avant la cuisine.</p>
         </div>
@@ -200,6 +227,8 @@ export function PageTable({ jeton, table }: { jeton: string; table: TableClientV
           {message}
         </div>
       )}
+
+      <ConfirmationPaiement jeton={jeton} />
     </div>
   );
 }

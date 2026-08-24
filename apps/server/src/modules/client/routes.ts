@@ -10,7 +10,7 @@
  * la table du qr_token — un jeton ne voit et ne touche QUE sa propre table.
  */
 import type { FastifyInstance } from 'fastify';
-import { and, desc, eq, notInArray } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, inArray, or, sql } from 'drizzle-orm';
 import {
   AppelClientSchema,
   CommandeClientSchema,
@@ -24,6 +24,8 @@ import {
   appelsTable,
   commandeItems,
   commandes,
+  parametresLocaux,
+  pointsFidelite,
   restaurant,
   tablesSalle,
   zones,
@@ -32,9 +34,24 @@ import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
 import { chargerCatalogueClient } from '../catalogue/service.js';
-import { figerNouvelItem, genererCodeCommande, recalculerTotaux } from '../commandes/service.js';
+import {
+  chargerCommandeVue,
+  figerNouvelItem,
+  genererCodeCommande,
+  recalculerTotaux,
+} from '../commandes/service.js';
+import { lireBareme, pointsGagnes, soldePoints, trouverOuCreer } from '../fidelite/service.js';
 import { calculerDestinataire } from '../routage/routage.js';
 import { etatDUneTable } from '../tables/etat.js';
+import { construireRecuPdf } from '../../printer/recu-pdf.js';
+
+/**
+ * Durée pendant laquelle une commande payée reste accessible au téléphone qui
+ * l'a passée (écran « Vous venez de payer… » + reçu PDF). Assez long pour un
+ * client qui range son téléphone avant de le ressortir, assez court pour que la
+ * table suivante ne récupère rien.
+ */
+const FENETRE_RECU_MS = 45 * 60 * 1000;
 
 /** Limiteur de débit simple par (jeton, action) — anti-abus (§1a). */
 const dernierAppel = new Map<string, number>();
@@ -95,10 +112,21 @@ export function routesClient(app: FastifyInstance): void {
   app.get('/api/client/:qr_token/commandes', async (req): Promise<SuiviCommandeClient[]> => {
     const { qr_token } = req.params as { qr_token: string };
     const table = await tableParJeton(qr_token);
+    // Les commandes payées restent visibles le temps de la FENETRE_RECU : c'est
+    // ce qui permet à l'écran d'annoncer « Vous venez de payer… » et de servir
+    // le reçu. Au-delà, elles disparaissent — la table sera à quelqu'un d'autre.
     const lignes = await db
       .select()
       .from(commandes)
-      .where(and(eq(commandes.table_id, table.id), notInArray(commandes.statut, ['PAYEE'])))
+      .where(
+        and(
+          eq(commandes.table_id, table.id),
+          or(
+            sql`${commandes.statut} <> 'PAYEE'`,
+            gte(commandes.updated_at, new Date(Date.now() - FENETRE_RECU_MS)),
+          ),
+        ),
+      )
       .orderBy(desc(commandes.created_at));
     if (lignes.length === 0) return [];
 
@@ -121,6 +149,19 @@ export function routesClient(app: FastifyInstance): void {
       parCommande.set(it.commande_id, arr);
     }
 
+    // Points réellement crédités, par commande (une seule requête).
+    const credits = await db
+      .select({ commande_id: pointsFidelite.commande_id, points: pointsFidelite.points })
+      .from(pointsFidelite)
+      .where(
+        and(
+          inArray(pointsFidelite.commande_id, lignes.map((c) => c.id)),
+          gt(pointsFidelite.points, 0),
+        ),
+      );
+    const creditParCommande = new Map(credits.map((c) => [c.commande_id, c.points]));
+    const bareme = await lireBareme(db);
+
     return lignes.map((c) => ({
       id: c.id,
       numero_ticket: Number(c.numero_ticket),
@@ -129,7 +170,67 @@ export function routesClient(app: FastifyInstance): void {
       refus_motif: c.refus_motif,
       total: c.total,
       articles: parCommande.get(c.id) ?? [],
+      fidelite: {
+        rattache: c.client_fidelite_id !== null,
+        // Payée : ce qui a été crédité. Pas encore payée (ou pas de numéro) :
+        // ce que la vente rapporte au barème — c'est le manque à montrer.
+        points: creditParCommande.get(c.id) ?? pointsGagnes(bareme, c.total),
+      },
     }));
+  });
+
+  /**
+   * Reçu PDF de SA commande payée. Route ouverte, donc verrouillée par trois
+   * conditions cumulatives : la commande appartient à la table du jeton, elle
+   * est PAYEE, et le paiement date de moins de FENETRE_RECU_MS. Sans la fenêtre,
+   * le client suivant assis à la même table pourrait rejouer d'anciens reçus.
+   */
+  app.get('/api/client/:qr_token/recu/:commande_id', async (req, rep) => {
+    const { qr_token, commande_id } = req.params as { qr_token: string; commande_id: string };
+    const table = await tableParJeton(qr_token);
+
+    const [c] = await db.select().from(commandes).where(eq(commandes.id, commande_id));
+    // Une commande d'une AUTRE table est traitée comme inexistante : le jeton ne
+    // doit rien apprendre du reste de la salle.
+    if (!c || c.table_id !== table.id) throw introuvable('Commande');
+    if (c.statut !== 'PAYEE') throw new ErreurMetier('Cette commande n’est pas encore payée', 409);
+    if (Date.now() - new Date(c.updated_at).getTime() > FENETRE_RECU_MS) {
+      throw new ErreurMetier('Ce reçu n’est plus disponible, demandez-le à votre serveur', 410);
+    }
+
+    const vue = await chargerCommandeVue(db, commande_id);
+    const params = await db.select().from(parametresLocaux);
+    const texte = (cle: string): string => {
+      const p = params.find((x) => x.cle === cle);
+      return typeof p?.valeur === 'string' ? p.valeur : '';
+    };
+    const [resto] = await db.select().from(restaurant).limit(1);
+
+    const [credit] = await db
+      .select({ points: pointsFidelite.points })
+      .from(pointsFidelite)
+      .where(and(eq(pointsFidelite.commande_id, commande_id), gt(pointsFidelite.points, 0)));
+    const bareme = await lireBareme(db);
+    const pdf = await construireRecuPdf(
+      vue,
+      {
+        nom: resto?.nom ?? '',
+        entete: texte('ticket_entete'),
+        pied: texte('ticket_pied'),
+        couleur_hex: resto?.couleur_hex ?? '#EF9F27',
+      },
+      {
+        points: credit?.points ?? pointsGagnes(bareme, vue.total),
+        rattache: c.client_fidelite_id !== null,
+        solde: c.client_fidelite_id ? await soldePoints(db, c.client_fidelite_id) : null,
+      },
+    );
+
+    return rep
+      .type('application/pdf')
+      .header('Content-Disposition', `attachment; filename="recu-${c.numero_ticket}.pdf"`)
+      .header('Cache-Control', 'no-store')
+      .send(pdf);
   });
 
   // « Appeler le serveur » / « Demander la facture »
@@ -189,12 +290,22 @@ export function routesClient(app: FastifyInstance): void {
     const table = await tableParJeton(qr_token);
     if (table.partenaire) throw new ErreurMetier('Cette table ne prend pas de commande', 400);
 
-    const { commandeId, destinataire } = await db.transaction(async (tx) => {
+    const { commandeId, destinataire, rattache } = await db.transaction(async (tx) => {
       await tx.select().from(tablesSalle).where(eq(tablesSalle.id, table.id)).for('update');
       const code = await genererCodeCommande(tx, 'SUR_PLACE', null);
+      // Téléphone facultatif : donné, il crée (ou retrouve) le client fidélité
+      // et le rattache DANS la même transaction que la commande. Absent, la
+      // commande part quand même — le client a juste renoncé à ses points.
+      const client = corps.telephone ? await trouverOuCreer(tx, corps.telephone) : null;
       const [commande] = await tx
         .insert(commandes)
-        .values({ type: 'SUR_PLACE', code_commande: code, table_id: table.id, origine: 'CLIENT_QR' })
+        .values({
+          type: 'SUR_PLACE',
+          code_commande: code,
+          table_id: table.id,
+          origine: 'CLIENT_QR',
+          client_fidelite_id: client?.id ?? null,
+        })
         .returning();
       await ecrireOutbox(tx, 'commandes', 'INSERT', commande!.id, commande as unknown as Record<string, unknown>);
       for (const item of corps.items) {
@@ -202,7 +313,7 @@ export function routesClient(app: FastifyInstance): void {
       }
       await recalculerTotaux(tx, commande!.id);
       const dest = await calculerDestinataire(tx, app.presence, table.id);
-      return { commandeId: commande!.id, destinataire: dest };
+      return { commandeId: commande!.id, destinataire: dest, rattache: client !== null };
     });
 
     // Routage : la proposition va au serveur cible (ou caisse en repli),
@@ -216,6 +327,11 @@ export function routesClient(app: FastifyInstance): void {
     });
     app.diffuser('table:changee', table.id);
 
-    return { ok: true, commande_id: commandeId, confirmation: 'Commande envoyée à votre serveur' };
+    return {
+      ok: true,
+      commande_id: commandeId,
+      confirmation: 'Commande envoyée à votre serveur',
+      fidelite: { rattache },
+    };
   });
 }

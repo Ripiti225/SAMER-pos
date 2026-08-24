@@ -34,6 +34,21 @@ export function SuiviCommandes({ jeton }: { jeton: string }) {
               <div className="font-bold">Commande refusée</div>
               {c.refus_motif && <div className="text-sm">{c.refus_motif}</div>}
             </div>
+          ) : c.etat === 'PAYEE' ? (
+            // Une commande réglée n'est plus sur la jauge (elle n'a plus
+            // d'étape à parcourir) : elle affiche son solde de points et le
+            // lien vers le reçu, tant que la fenêtre côté serveur le permet.
+            <div className="flex items-center justify-between rounded-[13px] bg-ok/10 px-3 py-2">
+              <span className="font-bold text-ok">{LIBELLES_SUIVI_CLIENT.PAYEE}</span>
+              <a
+                href={`/api/client/${jeton}/recu/${c.id}`}
+                target="_blank"
+                rel="noopener"
+                className="text-sm font-semibold text-marque-fonce underline"
+              >
+                Reçu PDF
+              </a>
+            </div>
           ) : (
             <Jauge etat={c.etat} />
           )}
