@@ -170,6 +170,22 @@ describe('construireLignesInventaire — le détail par produit', () => {
     assert.equal(l.montant_deduit, 16_000);
   });
 
+  test('produit_nom est repris du snapshot : la colonne est NOT NULL côté Samtrackly', () => {
+    const lignes = [
+      { produit_id: 'uuid-p1', produit_code: 'p1', produit_nom: 'Pain chawarma', produit_prix: 2_500, stock_initial: '10', entrees: '0', sorties: '8', stock_compte: '2', ecart: '0', quantite_expliquee: '0', explication: null },
+    ];
+    const [l] = construireLignesInventaire(lignes, 'inv-shift-1', true);
+    assert.equal(l.produit_nom, 'Pain chawarma');
+  });
+
+  test('snapshot sans nom (cas limite) → repli sur le code, jamais null', () => {
+    const lignes = [
+      { produit_id: 'uuid-x', produit_code: 'x9', produit_nom: null, produit_prix: 0, stock_initial: '0', entrees: '0', sorties: '0', stock_compte: '0', ecart: '0', quantite_expliquee: '0', explication: null },
+    ];
+    const [l] = construireLignesInventaire(lignes, 'inv-shift-1', true);
+    assert.equal(l.produit_nom, 'x9');
+  });
+
   test('entrees est reprise telle quelle depuis la ligne figée du POS', () => {
     const lignes = [
       { produit_id: 'uuid-p1', produit_code: 'p1', produit_nom: 'Pain chawarma', produit_prix: 2_500, stock_initial: '10', entrees: '5', sorties: '8', stock_compte: '7', ecart: '0', quantite_expliquee: '0', explication: null },

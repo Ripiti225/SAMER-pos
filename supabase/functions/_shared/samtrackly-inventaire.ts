@@ -175,6 +175,14 @@ export interface LigneInventairePosCloud {
 export interface LigneInventaireDetail {
   inventaire_id: string;
   produit_id: string;
+  /**
+   * NOT NULL côté Samtrackly, et c'est ce qui a fait rejeter tous les inserts
+   * du 2026-08-22 au 24 : l'en-tête passait, les 34 lignes étaient refusées, le
+   * service repartait en échec toutes les 5 minutes en réécrivant l'en-tête.
+   * L'app Samtrackly le remplit toujours (app/inventaire.js:525) — le pont doit
+   * faire pareil.
+   */
+  produit_nom: string;
   stock_initial: number;
   entrees: number;
   sorties: number;
@@ -234,6 +242,7 @@ export function construireLignesInventaire(
     const ligne: LigneInventaireDetail = {
       inventaire_id: invShiftId,
       produit_id: l.produit_code,
+      produit_nom: l.produit_nom ?? l.produit_code,
       stock_initial: n(l.stock_initial),
       entrees: n(l.entrees),
       sorties: n(l.sorties),
