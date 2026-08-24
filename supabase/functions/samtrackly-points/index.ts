@@ -46,6 +46,8 @@ import { ErreurSamtrackly, lire, inserer, upsert, patch, supprimer, samtracklyCo
 import {
   servicesARattraper,
   construireJournalRattrapage,
+  doitAlerterEchec,
+  construireAlerteEchec,
   type TransfertPresencesIgnorees,
 } from '../_shared/samtrackly-rattrapage.ts';
 import {
@@ -433,7 +435,12 @@ Deno.serve(async (req) => {
 
   const idsRattrapes = new Set<string>();
   const ignoresAvant = new Map<string, number>();
-  const journalRattrapages: ReturnType<typeof construireJournalRattrapage>[] = [];
+  // Rattrapages ET alertes d'échec : deux traces différentes, une seule
+  // écriture groupée au journal en fin de passage.
+  const journalRattrapages: (
+    | ReturnType<typeof construireJournalRattrapage>
+    | ReturnType<typeof construireAlerteEchec>
+  )[] = [];
   try {
     const { data: enAttentePresences } = await admin
       .from('samtrackly_transferts')
@@ -541,6 +548,10 @@ Deno.serve(async (req) => {
         vente_shift: r.vente,
         nb_depenses: r.nbDep,
         nb_presences: r.nbPres,
+        // Remis à zéro : `tentatives` compte les échecs CONSÉCUTIFS. Sans ça,
+        // une série d'échecs plus tard ne franchirait plus jamais le seuil
+        // d'alerte, le compteur étant déjà au-dessus.
+        tentatives: 0,
         // Vide plutôt que NULL : la vue de suivi distingue « aucune présence
         // écartée » d'un transfert antérieur à cette colonne.
         presences_ignorees: r.ignores,
@@ -586,14 +597,26 @@ Deno.serve(async (req) => {
         .eq('service_id', service.id)
         .maybeSingle();
 
+      const tentatives = (precedent?.tentatives ?? 0) + 1;
       await admin.from('samtrackly_transferts').upsert({
         service_id: service.id,
         restaurant_id: service.restaurant_id,
         transfere_le: null,
-        tentatives: (precedent?.tentatives ?? 0) + 1,
+        tentatives,
         derniere_erreur: message.slice(0, 500),
         derniere_tentative: new Date().toISOString(),
       });
+
+      // Une panne qui dure doit se voir sans que personne pense à consulter
+      // `samtrackly_transferts` — c'est la leçon des 400 tentatives passées
+      // inaperçues pendant trois jours (2026-08-21 au 24). Une seule ligne, au
+      // franchissement du seuil.
+      if (doitAlerterEchec(tentatives)) {
+        journalRattrapages.push(
+          construireAlerteEchec(service.id, restaurantStId, tentatives, message),
+        );
+      }
+
       bilan.echecs++;
       bilan.details.push({ service: service.id, resultat: `ÉCHEC — ${message.slice(0, 120)}` });
     }

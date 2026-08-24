@@ -74,3 +74,64 @@ export function construireJournalRattrapage(
     user_nom: 'Pont POS',
   };
 }
+
+// ---------------------------------------------------------------------------
+// Alerte : un service qui échoue en boucle
+// ---------------------------------------------------------------------------
+
+/**
+ * Nombre d'échecs CONSÉCUTIFS avant d'alerter. Le cron passe toutes les 5
+ * minutes : 3 tentatives = 15 minutes. Assez pour ignorer une coupure réseau
+ * passagère (elle se répare seule au passage suivant), assez tôt pour qu'une
+ * panne durable ne passe pas la nuit.
+ *
+ * Le 2026-08-21, sept services ont échoué 400 fois chacun pendant trois jours
+ * sans que personne le sache : tout était pourtant écrit dans
+ * `samtrackly_transferts.derniere_erreur`, mais personne ne regarde cette
+ * table. Une panne silencieuse est une panne qui dure.
+ */
+export const SEUIL_ALERTE_ECHEC = 3;
+
+/**
+ * Alerter EXACTEMENT une fois par série d'échecs, au franchissement du seuil —
+ * pas à chaque passage, sinon 400 tentatives donneraient 400 lignes de journal
+ * et l'alerte deviendrait le bruit qu'elle est censée percer.
+ *
+ * Repose sur `tentatives` remis à 0 par le succès et par `rejouer_transferts()`
+ * : c'est ce qui permet à une NOUVELLE série d'échecs de réalerter plus tard.
+ */
+export function doitAlerterEchec(tentatives: number, seuil: number = SEUIL_ALERTE_ECHEC): boolean {
+  return tentatives === seuil;
+}
+
+export interface LigneAlerteEchec {
+  action: string;
+  details: {
+    service_id: string;
+    tentatives: number;
+    erreur: string;
+  };
+  restaurant_id: string;
+  point_id: string | null;
+  user_nom: string;
+}
+
+/** La trace laissée au journal de SamerTrackly quand un service coince. */
+export function construireAlerteEchec(
+  serviceId: string,
+  restaurantSamtracklyId: string,
+  tentatives: number,
+  message: string,
+): LigneAlerteEchec {
+  return {
+    action: 'echec_transfert_pos',
+    details: {
+      service_id: serviceId,
+      tentatives,
+      erreur: message.slice(0, 300),
+    },
+    restaurant_id: restaurantSamtracklyId,
+    point_id: null,
+    user_nom: 'Pont POS',
+  };
+}

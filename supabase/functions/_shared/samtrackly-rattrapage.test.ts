@@ -12,7 +12,13 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { servicesARattraper, construireJournalRattrapage, type TransfertPresencesIgnorees } from './samtrackly-rattrapage.ts';
+import {
+  servicesARattraper,
+  construireJournalRattrapage,
+  doitAlerterEchec,
+  construireAlerteEchec,
+  type TransfertPresencesIgnorees,
+} from './samtrackly-rattrapage.ts';
 
 describe('servicesARattraper — qui rejouer maintenant que des fiches RH sont apparues', () => {
 
@@ -95,5 +101,57 @@ describe('construireJournalRattrapage — la trace laissée au journal Samtrackl
       presences_ignorees: ['pos-a'],
     };
     assert.equal(construireJournalRattrapage(t, 0).details.presences_recuperees, 0);
+  });
+});
+
+describe('doitAlerterEchec — alerter une fois, pas quatre cents', () => {
+  test('avant le seuil, on se tait : une coupure réseau se répare seule', () => {
+    assert.equal(doitAlerterEchec(1), false);
+    assert.equal(doitAlerterEchec(2), false);
+  });
+
+  test('au seuil exact (15 min de panne), on alerte', () => {
+    assert.equal(doitAlerterEchec(3), true);
+  });
+
+  test('au-delà du seuil, plus rien : sinon 400 tentatives = 400 lignes de journal', () => {
+    assert.equal(doitAlerterEchec(4), false);
+    assert.equal(doitAlerterEchec(400), false);
+  });
+
+  test('seuil réglable', () => {
+    assert.equal(doitAlerterEchec(5, 5), true);
+    assert.equal(doitAlerterEchec(3, 5), false);
+  });
+});
+
+describe('construireAlerteEchec — la trace au journal', () => {
+  test('porte le restaurant SamerTrackly, pas celui du POS', () => {
+    const l = construireAlerteEchec('svc-1', 'resto-st-1', 3, 'PGRST102 All object keys must match');
+    assert.equal(l.restaurant_id, 'resto-st-1');
+    assert.equal(l.action, 'echec_transfert_pos');
+    assert.equal(l.user_nom, 'Pont POS');
+    assert.equal(l.details.service_id, 'svc-1');
+    assert.equal(l.details.tentatives, 3);
+  });
+
+  test('un message d’erreur à rallonge est tronqué, jamais rejeté', () => {
+    const l = construireAlerteEchec('svc-1', 'resto-st-1', 3, 'x'.repeat(900));
+    assert.equal(l.details.erreur.length, 300);
+  });
+});
+
+describe('journal_activite — les deux formes voyagent dans le même lot', () => {
+  test('rattrapage et alerte ont EXACTEMENT les mêmes clés de premier niveau', () => {
+    const rattrapage = construireJournalRattrapage(
+      { service_id: 's1', restaurant_id: 'r1', point_id: 'p1', journee: '2026-08-24', presences_ignorees: [] },
+      2,
+    );
+    const alerte = construireAlerteEchec('s2', 'r1', 3, 'boum');
+    assert.equal(
+      Object.keys(rattrapage).sort().join(','),
+      Object.keys(alerte).sort().join(','),
+      'PostgREST rejette tout le lot (PGRST102) si les objets diffèrent — `details` est du jsonb, son contenu peut varier, pas les clés du dessus',
+    );
   });
 });
