@@ -202,6 +202,23 @@ des guillemets casse en PowerShell). Cela n'affecte pas l'app, qui se connecte e
 
 ---
 
+## 10. Après l'enrôlement cloud : republier les rôles
+
+**Une fois la synchro active** (`docs/DEPLOIEMENT_CLOUD.md`, étape 3), sur le
+poste du restaurant :
+
+```powershell
+pnpm roles:republier
+```
+
+La montée ne publie que les **changements** : les rôles, eux, naissent dans des
+migrations SQL et n'ont donc jamais été publiés. Sans cette commande, la console
+du siège affiche « aucun rôle » et ne peut rien diffuser — sans aucun message
+d'erreur nulle part. Détail et cas du catalogue : `docs/DEPLOIEMENT_CLOUD.md`,
+étape 4 bis.
+
+---
+
 ## Récapitulatif express (poste de dev)
 
 ```powershell

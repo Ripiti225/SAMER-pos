@@ -66,6 +66,48 @@ SYNC_ACTIF=1
 
 Redémarre le serveur (`pnpm dev`). La montée démarre automatiquement.
 
+## Étape 4 bis — Republier ce qui est né AVANT l'enrôlement
+
+**À faire à chaque installation, une fois la synchro active.** C'est le piège le
+plus discret du déploiement : il ne produit aucune erreur, seulement des écrans
+vides au siège, des semaines plus tard.
+
+```bash
+pnpm roles:republier
+```
+
+### Pourquoi
+
+La montée repose sur `sync_outbox`, qui n'enregistre que les **changements**.
+Tout ce qui existe déjà au moment de l'enrôlement n'a donc jamais été publié :
+
+| Donnée | Née où | Publiée à l'enrôlement ? |
+|---|---|---|
+| Rôles et permissions | migrations SQL `0006`, `0024` (`INSERT INTO roles …`) | **non** — une migration n'écrit pas dans l'outbox |
+| Catalogue (catégories, articles) | `pnpm catalogue:importer`, en local | **non** — et par conception : le catalogue ne remonte jamais |
+| Ventes, clôtures, dépenses | à l'usage, après l'enrôlement | oui |
+
+`pnpm roles:republier` remet tous les rôles et leurs permissions dans l'outbox
+sans rien modifier en local. Ils montent au cycle suivant (30 s), et l'onglet
+**Paramètres** de la console du siège se remplit. Le script est rejouable :
+`sync-push` écrit côté cloud en UPSERT sur `(restaurant_id, id)`.
+
+Sans lui, la console affiche « aucun rôle » et diffuser des accès depuis le
+siège est impossible — il n'y a rien à viser.
+
+### Le catalogue, lui, ne se republie pas
+
+C'est voulu, pas un oubli : **le cloud est maître du catalogue**, il ne fait que
+descendre. Un site dont le catalogue a été importé en local reste donc invisible
+du siège, et le restera. Pour qu'un article créé au siège arrive sur ce site, il
+faut d'abord y créer la catégorie **depuis la console** (onglet Catégories) :
+elle descendra, et l'onglet Menu pourra y ranger des articles.
+
+Conséquence à connaître : `categories.nom` n'est pas unique côté site. Créer au
+siège une catégorie dont le nom existe déjà en local en donnera **deux** à la
+caisse. La console avertit sur ce qu'elle voit — mais elle ne voit pas le
+catalogue local du site.
+
 ## Étape 5 — Vérifier
 
 - Encaisser une vente → elle apparaît dans la table cloud `commandes` en < 60 s.
@@ -73,6 +115,8 @@ Redémarre le serveur (`pnpm dev`). La montée démarre automatiquement.
 - Page santé manager : voyant **Internet/Synchro** vert, dernières lignes
   acquittées, dernière réconciliation.
 - Réconciliation à la demande : `pnpm sync:reconcile -- --jour=AAAA-MM-JJ`.
+- **Console du siège, onglet Paramètres** : les rôles du site y apparaissent.
+  S'ils manquent, l'étape 4 bis n'a pas été faite.
 
 ## Révoquer un site (vol de matériel)
 
