@@ -14,6 +14,13 @@ await app.sessions.charger().catch((e) => app.log.error({ e }, 'Rechargement des
 await app.listen({ port: PORT, host: '0.0.0.0' });
 console.log(`Serveur POS démarré sur le port ${PORT}`);
 
+// Ordres du siège : le moteur ne connaît pas Fastify, on lui passe de quoi
+// sortir le papier du gérant et rafraîchir les écrans. AVANT demarrer().
+moteurSync.brancherOrdres({
+  imprimerRapportSequence: (rapport) => app.imprimante.imprimerRapportSequence(rapport as never),
+  diffuser: (canal, id) => app.diffuser(canal as never, id),
+});
+
 // Synchro cloud en tâche de fond (n'empêche jamais la caisse de fonctionner).
 void moteurSync.demarrer();
 

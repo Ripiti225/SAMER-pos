@@ -18,6 +18,9 @@ export const COLONNES_VENTES: Record<string, string[]> = {
   services_caisse: [
     'id', 'caissier_id', 'fond_de_caisse', 'ouvert_le', 'cloture_le', 'statut',
     'especes_comptees', 'especes_theorique', 'ecart', 'rapport_z',
+    // 2026-08-25 — sans lui, rien ne relie un shift à sa séquence côté cloud :
+    // la console du siège ne pourrait pas montrer ce qu'elle s'apprête à raser.
+    'sequence_id',
   ],
   audit_log: ['id', 'seq', 'user_id', 'action', 'entite', 'entite_id', 'montant', 'motif', 'meta', 'created_at'],
   // Sprint 4 : présences + fidélité remontent aussi (SamerTrackly).

@@ -11,13 +11,15 @@ import { Equipe } from './screens/Equipe';
 import { Categories } from './screens/Categories';
 import { Menu } from './screens/Menu';
 import { Parametres } from './screens/Parametres';
+import { Sequences } from './screens/Sequences';
 import { TableauBord } from './screens/TableauBord';
 
-type Ecran = 'tableau-bord' | 'clotures' | 'menu' | 'categories' | 'equipe' | 'parametres';
+type Ecran = 'tableau-bord' | 'clotures' | 'sequences' | 'menu' | 'categories' | 'equipe' | 'parametres';
 
 const SECTIONS: { cle: Ecran; libelle: string }[] = [
   { cle: 'tableau-bord', libelle: 'Tableau de bord' },
   { cle: 'clotures', libelle: 'Clôtures' },
+  { cle: 'sequences', libelle: 'Séquences' },
   { cle: 'menu', libelle: 'Menu' },
   { cle: 'categories', libelle: 'Catégories' },
   { cle: 'equipe', libelle: 'Équipe' },
@@ -157,6 +159,7 @@ export function App() {
         <main className="min-w-0 overflow-y-auto bg-plan p-6">
           {ecran === 'tableau-bord' && <TableauBord filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'clotures' && <Clotures filtre={filtreResto} onFiltre={setFiltreResto} />}
+          {ecran === 'sequences' && <Sequences filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'menu' && <Menu filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'categories' && <Categories filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'equipe' && <Equipe filtre={filtreResto} onFiltre={setFiltreResto} />}

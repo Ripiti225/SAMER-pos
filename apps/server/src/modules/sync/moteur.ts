@@ -8,6 +8,7 @@ import { chargerConfigSync, prochainBackoff } from './config.js';
 import { ClientCloud, ErreurSync } from './cloud-client.js';
 import { compterEnAttente, pousserUnLot, purgerOutbox } from './montee.js';
 import { tirerCatalogue } from './descente.js';
+import { executerOrdre, type EffetsOrdre } from './ordres.js';
 import { hier, reconcilierJour } from './reconcile.js';
 import { etatSync } from './etat.js';
 
@@ -17,10 +18,23 @@ export class MoteurSync {
   private tacheReconcile: ScheduledTask | null = null;
   private arrete = false;
   private monteeEnCours = false;
+  /**
+   * Imprimante et diffusion temps réel, branchées au démarrage du serveur : le
+   * moteur ne connaît pas Fastify, et un ordre du siège doit pourtant sortir le
+   * papier du gérant. Sans elles, la boucle d'ordres ne démarre pas — un script
+   * qui lance le moteur hors serveur n'exécutera donc aucun ordre, ce qui est
+   * exactement ce qu'on veut.
+   */
+  private effetsOrdres: EffetsOrdre | null = null;
 
   /** Synchro cloud réellement branchée sur ce poste (site enrôlé + URL). */
   get actif(): boolean {
     return this.client !== null;
+  }
+
+  /** À appeler AVANT `demarrer()` (voir index.ts). */
+  brancherOrdres(effets: EffetsOrdre): void {
+    this.effetsOrdres = effets;
   }
 
   async demarrer(): Promise<void> {
@@ -37,6 +51,9 @@ export class MoteurSync {
     this.boucleMontee(cfg.intervalleMonteeMs);
     this.boucleDescente(cfg.intervalleDescenteMs);
     this.bouclePurge();
+    // Cadence de la MONTÉE (30 s) et non de la descente : un gérant qui rase
+    // depuis le siège ne va pas attendre cinq minutes devant sa caisse.
+    if (this.effetsOrdres) this.boucleOrdres(cfg.intervalleMonteeMs);
 
     // Réconciliation quotidienne à 03h00 (heure locale du mini-PC).
     this.tacheReconcile = schedule('0 3 * * *', () => {
@@ -125,6 +142,38 @@ export class MoteurSync {
         await tirerCatalogue(this.client!);
       } catch {
         /* la descente n'est pas critique : on réessaie au prochain cycle */
+      }
+      this.planifier(() => void tick(), base);
+    };
+    this.planifier(() => void tick(), base);
+  }
+
+  /**
+   * Va chercher les ordres du siège, les exécute, rend compte.
+   *
+   * Chaque ordre est traité indépendamment : un ordre qui échoue est acquitté
+   * en ECHEC avec son motif — le siège doit voir POURQUOI — et le suivant est
+   * traité quand même. Un acquittement qui n'arrive pas n'est pas grave :
+   * `actions_recues` empêche la seconde exécution au prochain passage.
+   */
+  private boucleOrdres(base: number): void {
+    const tick = async () => {
+      try {
+        const { ordres } = await this.client!.ordres();
+        for (const ordre of ordres) {
+          const acquittement = await executerOrdre(ordre, this.effetsOrdres!);
+          if (!acquittement) continue; // déjà traité lors d'un passage précédent
+          await this.client!
+            .acquitterOrdre(ordre.id, acquittement.statut, {
+              resultat: acquittement.resultat,
+              erreur: acquittement.erreur,
+            })
+            .catch(() => {
+              /* le siège le reverra EN_ATTENTE ; l'anti-doublon tiendra */
+            });
+        }
+      } catch {
+        /* cloud injoignable : on repassera. Rien de critique pour la caisse. */
       }
       this.planifier(() => void tick(), base);
     };

@@ -582,6 +582,118 @@ Deno.serve(async (req) => {
         });
       }
 
+      // -- SÉQUENCES : où en est la journée de chaque restaurant.
+      // --
+      // -- Une séquence ouverte depuis douze heures, c'est un gérant qui a
+      // -- oublié de raser. C'est ce que cet écran vient montrer — et les
+      // -- shifts qu'elle contient, parce qu'on ne rase pas ce qu'on ne voit pas.
+      case 'sequences_groupe': {
+        const [seqs, shifts, ordres] = await Promise.all([
+          admin
+            .from('sequences_caisse')
+            .select('restaurant_id, id, ouverte_le, cloturee_le, statut')
+            .eq('statut', 'OUVERTE'),
+          admin
+            .from('services_caisse')
+            .select('restaurant_id, id, sequence_id, caissier_id, ouvert_le, cloture_le, statut, ecart, rapport_z'),
+          admin
+            .from('ordres_site')
+            .select('id, restaurant_id, type, params, demandeur, statut, cree_le, execute_le, erreur')
+            .order('cree_le', { ascending: false })
+            .limit(50),
+        ]);
+        if (seqs.error) throw new Error('Lecture des séquences impossible');
+        if (shifts.error) throw new Error('Lecture des shifts impossible');
+        if (ordres.error) throw new Error('Lecture des ordres impossible');
+
+        // Le total d'un shift se lit dans son rapport Z figé : le cloud n'a pas
+        // de colonne de vente sur `services_caisse`, et refaire la somme des
+        // paiements ici donnerait un chiffre qui pourrait différer du ticket.
+        type Shift = {
+          restaurant_id: string;
+          id: string;
+          sequence_id: string | null;
+          caissier_id: string | null;
+          ouvert_le: string;
+          cloture_le: string | null;
+          statut: string;
+          ecart: number | null;
+          rapport_z: { caissier?: string; vente_totale?: number } | null;
+        };
+
+        return jsonCors({
+          sequences: (seqs.data ?? []).map((sq) => ({
+            restaurant_id: sq.restaurant_id,
+            sequence_id: sq.id,
+            ouverte_le: sq.ouverte_le,
+            shifts: ((shifts.data ?? []) as Shift[])
+              .filter((s) => s.restaurant_id === sq.restaurant_id && s.sequence_id === sq.id)
+              .map((s) => ({
+                service_id: s.id,
+                caissier: s.rapport_z?.caissier ?? null,
+                ouvert_le: s.ouvert_le,
+                cloture_le: s.cloture_le,
+                statut: s.statut,
+                ecart: s.ecart,
+                vente_totale: s.rapport_z?.vente_totale ?? null,
+              })),
+          })),
+          ordres: ordres.data ?? [],
+        });
+      }
+
+      // -- Créer un ORDRE pour un site. Rien n'est exécuté ici : la ligne est
+      // -- posée dans la file, le site viendra la chercher à son prochain cycle
+      // -- (30 s) et rendra compte. Le siège ne peut pas joindre un mini-PC
+      // -- derrière la box d'un restaurant.
+      case 'ordre_creer': {
+        exigeAdmin(siege);
+
+        const restaurantId = String(corps.restaurant_id ?? '');
+        const type = String(corps.type ?? '');
+        if (!restaurantId) return jsonCors({ erreur: 'Restaurant non précisé' }, 400);
+        if (type !== 'RASER_SEQUENCE') return jsonCors({ erreur: `Ordre inconnu : ${type}` }, 400);
+
+        const sequenceId = String((corps.params as Record<string, unknown>)?.sequence_id ?? '');
+        if (!sequenceId) {
+          return jsonCors({ erreur: 'La séquence à raser doit être précisée' }, 400);
+        }
+
+        // Un seul ordre de rasage en attente par site : deux ordres empilés, le
+        // second raserait la séquence SUIVANTE. Le garde-fou d'obsolescence
+        // côté POS le refuserait, mais mieux vaut ne pas le créer.
+        const { data: dejaEnAttente } = await admin
+          .from('ordres_site')
+          .select('id')
+          .eq('restaurant_id', restaurantId)
+          .eq('type', 'RASER_SEQUENCE')
+          .eq('statut', 'EN_ATTENTE')
+          .limit(1);
+        if (dejaEnAttente && dejaEnAttente.length > 0) {
+          return jsonCors({ erreur: 'Un rasage est déjà en attente pour ce restaurant' }, 409);
+        }
+
+        const id = crypto.randomUUID();
+        const { error } = await admin.from('ordres_site').insert({
+          id,
+          restaurant_id: restaurantId,
+          type,
+          params: corps.params ?? {},
+          demandeur: siege.nomComplet,
+          demandeur_id: siege.userId,
+        });
+        if (error) throw new Error(`Création de l’ordre impossible : ${error.message}`);
+
+        await tracer(admin, siege, 'ORDRE_RASER_SEQUENCE', {
+          entite: 'ordres_site',
+          entiteId: id,
+          portee: [restaurantId],
+          meta: { sequence_id: sequenceId, service_ids: (corps.params as Record<string, unknown>)?.service_ids ?? null },
+        });
+
+        return jsonCors({ ordre_id: id });
+      }
+
       default:
         return jsonCors({ erreur: `Action inconnue : ${action}` }, 400);
     }

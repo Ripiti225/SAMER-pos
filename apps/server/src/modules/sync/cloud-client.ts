@@ -66,6 +66,17 @@ const TIMEOUT_MS = 15_000;
  */
 export const STATUT_REFUS_CLOUD = 200;
 
+/** Un ordre du siège, tel que la fonction `ordres` le sert. */
+export interface OrdreSiege {
+  id: string;
+  type: string;
+  params: Record<string, unknown>;
+  demandeur: string;
+  demandeur_id: string | null;
+  cree_le: string;
+  expire_le: string;
+}
+
 export class ClientCloud {
   constructor(
     private readonly url: string,
@@ -111,6 +122,24 @@ export class ClientCloud {
 
   reconcile(jour: string, local: { nb_payees: number; total_ventes: number; par_mode: Record<string, number> }): Promise<ReponseReconcile> {
     return this.appeler<ReponseReconcile>('sync-reconcile', { jour, local });
+  }
+
+  /**
+   * ORDRES du siège en attente pour ce site (raser une séquence, aujourd'hui).
+   * Le site vient les CHERCHER : un mini-PC derrière la box d'un restaurant
+   * n'est pas joignable depuis l'extérieur, le cloud ne peut rien lui pousser.
+   */
+  ordres(): Promise<{ ordres: OrdreSiege[] }> {
+    return this.appeler<{ ordres: OrdreSiege[] }>('ordres', { action: 'lister' });
+  }
+
+  /** Rend compte au siège : exécuté (avec le rapport) ou refusé (avec le motif). */
+  acquitterOrdre(
+    id: string,
+    statut: 'EXECUTE' | 'ECHEC',
+    detail: { resultat?: unknown; erreur?: string },
+  ): Promise<{ ok: true }> {
+    return this.appeler<{ ok: true }>('ordres', { action: 'acquitter', id, statut, ...detail });
   }
 
   /**
