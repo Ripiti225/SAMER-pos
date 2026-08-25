@@ -5,9 +5,20 @@
  * conflit, le cloud gagne.
  */
 import { pool } from '../../db/client.js';
+import { invaliderCachePermissions } from '../roles/service.js';
 import type { ClientCloud, LigneDescente } from './cloud-client.js';
 
-const FLUX = ['CATALOGUE', 'PROMOTIONS', 'UTILISATEURS', 'PARAMETRES'] as const;
+/**
+ * ROLES (2026-08-25) : le siège change les accès d'un rôle pour plusieurs
+ * restaurants d'un coup. Seule `role_permissions` descend, **jamais la table
+ * `roles`** : son `nom` est UNIQUE en local, et un site qui a « CAISSIER » sous
+ * son propre uuid recevrait un INSERT au nom identique — violation d'unicité,
+ * transaction annulée, et c'est TOUTE la descente du site qui s'arrête, catalogue
+ * compris. Le siège résout donc le rôle par son NOM, restaurant par restaurant,
+ * et n'envoie que le jeu de permissions de l'id local (même idiome que la
+ * catégorie d'un article diffusé).
+ */
+const FLUX = ['CATALOGUE', 'PROMOTIONS', 'UTILISATEURS', 'PARAMETRES', 'ROLES'] as const;
 
 /** Cible de conflit par table (id sauf combo_articles et parametres_locaux). */
 const CONFLIT: Record<string, string[]> = {
@@ -36,6 +47,8 @@ const CONFLIT: Record<string, string[]> = {
   // jusqu'aux 7 caisses.
   produits_inventaire: ['id'],
   inventaire_consommations: ['id'],
+  // `role_permissions` n'est PAS dans cette table : elle ne s'applique pas par
+  // UPSERT mais par REMPLACEMENT — voir `appliquerPermissionsRole`.
 };
 
 // Colonnes propres au cloud, à retirer avant l'écriture locale.
@@ -51,10 +64,62 @@ function nettoyer(table: string, row: Record<string, unknown>): Record<string, u
   return propre;
 }
 
+/**
+ * Applique un jeu de permissions descendu du siège.
+ *
+ * REMPLACEMENT, et non upsert : le cloud porte la liste complète des clés dans
+ * un tableau JSONB, là où le local a une ligne par couple (rôle, permission).
+ * Un simple INSERT ne saurait qu'AJOUTER — retirer une permission au siège ne
+ * serait jamais appliqué sur le site, et l'écran mentirait. On efface donc les
+ * couples du rôle avant d'écrire les nouveaux.
+ *
+ * Deux gardes, parce qu'une erreur ici annule toute la transaction de descente
+ * et gèlerait aussi le catalogue :
+ *   - rôle inconnu en local → on ignore la ligne (le siège a visé un id qui
+ *     n'existe pas ici) plutôt que de violer la clé étrangère ;
+ *   - les rôles VERROUILLÉS (propriétaire, superviseur) sont refusés côté siège,
+ *     mais on ne s'en remet pas à lui : un site ne doit pas pouvoir se faire
+ *     retirer son propriétaire par une ligne de synchro.
+ */
+const ROLES_NON_DESCENDABLES = ['PROPRIETAIRE', 'SUPERVISEUR'];
+
+async function appliquerPermissionsRole(
+  clientPg: { query: (t: string, v?: unknown[]) => Promise<unknown> },
+  row: Record<string, unknown>,
+): Promise<boolean> {
+  const roleId = typeof row.role_id === 'string' ? row.role_id : typeof row.id === 'string' ? row.id : null;
+  if (!roleId) return false;
+  const brutes = Array.isArray(row.permissions) ? (row.permissions as unknown[]) : [];
+  const permissions = [...new Set(brutes.filter((p): p is string => typeof p === 'string'))];
+
+  const existe = (await clientPg.query(
+    `SELECT nom FROM roles WHERE id = $1`,
+    [roleId],
+  )) as { rows: { nom: string }[] };
+  const nom = existe.rows[0]?.nom;
+  if (!nom) return false;
+  if (ROLES_NON_DESCENDABLES.includes(nom)) return false;
+
+  await clientPg.query(`DELETE FROM role_permissions WHERE role_id = $1`, [roleId]);
+  if (permissions.length > 0) {
+    await clientPg.query(
+      `INSERT INTO role_permissions (role_id, permission_cle)
+       SELECT $1, unnest($2::text[])
+       ON CONFLICT DO NOTHING`,
+      [roleId, permissions],
+    );
+  }
+  return true;
+}
+
 async function appliquerLigne(
   clientPg: { query: (t: string, v?: unknown[]) => Promise<unknown> },
   ligne: LigneDescente,
 ): Promise<void> {
+  if (ligne.table_name === 'role_permissions') {
+    await appliquerPermissionsRole(clientPg, ligne.row);
+    return;
+  }
   const pk = CONFLIT[ligne.table_name];
   if (!pk) return; // table inconnue → ignorée
   const row = nettoyer(ligne.table_name, ligne.row);
@@ -90,6 +155,7 @@ export async function tirerCatalogue(client: ClientCloud): Promise<number> {
 
   const clientPg = await pool.connect();
   let applique = 0;
+  let permissionsTouchees = false;
   try {
     await clientPg.query('BEGIN');
     for (const f of FLUX) {
@@ -97,6 +163,7 @@ export async function tirerCatalogue(client: ClientCloud): Promise<number> {
       if (!bloc) continue;
       for (const ligne of bloc.lignes) {
         await appliquerLigne(clientPg, ligne);
+        if (ligne.table_name === 'role_permissions') permissionsTouchees = true;
         applique += 1;
       }
       // Mise à jour de la version du flux dans la même transaction
@@ -107,6 +174,10 @@ export async function tirerCatalogue(client: ClientCloud): Promise<number> {
       );
     }
     await clientPg.query('COMMIT');
+    // Le cache des permissions est en mémoire : sans cette invalidation, le
+    // site continuerait de servir les anciens accès jusqu'à son redémarrage.
+    // APRÈS le commit, comme le font les routes de gestion des rôles.
+    if (permissionsTouchees) invaliderCachePermissions();
   } catch (e) {
     await clientPg.query('ROLLBACK');
     throw e;

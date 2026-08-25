@@ -117,6 +117,11 @@ export const FLUX_DESCENTE: Record<string, string[]> = {
     'produits_inventaire', 'inventaire_consommations',
   ],
   PROMOTIONS: ['promotions'],
+  // 2026-08-25 — le siège change les accès d'un rôle sur plusieurs restaurants
+  // d'un coup. SEULE `role_permissions` descend : la table `roles` porte un
+  // `nom` UNIQUE côté site, et y pousser une ligne d'un autre uuid ferait
+  // échouer toute la descente, catalogue compris.
+  ROLES: ['role_permissions'],
   UTILISATEURS: ['utilisateurs'],
   // Sprint 4C : barème fidélité (2.5) — édité au siège, redescend comme le catalogue.
   PARAMETRES: ['parametres_locaux'],

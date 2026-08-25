@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Le thème « Duo contrasté » (@pos/theme/theme.css) est importé dans main.tsx.
+   Ici : seulement ce qui est propre à la console. */
+
+html,
+body,
+#racine {
+  height: 100%;
+}
+
+body {
+  @apply antialiased;
+}
+
+/* Chiffres alignés partout où l'on compare des montants d'un restaurant à
+   l'autre : sans cela les colonnes de FCFA ne s'alignent pas verticalement. */
+.chiffres {
+  font-variant-numeric: tabular-nums;
+}
