@@ -11,7 +11,8 @@
     "db:seed": "pnpm --filter @pos/server db:seed",
     "site:enroler": "pnpm --filter @pos/server site:enroler",
     "sync:reconcile": "pnpm --filter @pos/server sync:reconcile",
-    "catalogue:importer": "pnpm --filter @pos/server catalogue:importer"
+    "catalogue:importer": "pnpm --filter @pos/server catalogue:importer",
+    "roles:republier": "pnpm --filter @pos/server roles:republier"
   },
   "packageManager": "pnpm@11.9.0",
   "engines": {
