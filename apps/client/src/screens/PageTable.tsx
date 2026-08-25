@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { CatalogueVue, TableClientVue } from '@pos/shared';
-import { formatFCFA, LIBELLES_ETAT_TABLE } from '@pos/shared';
+import { formatFCFA, LIBELLES_ETAT_TABLE, uuidLocal } from '@pos/shared';
 import { api } from '../api';
 import { ConfirmationPaiement } from './ConfirmationPaiement';
 import { SuiviCommandes } from './SuiviCommandes';
@@ -12,17 +12,6 @@ interface LignePanier {
   nom: string;
   prix: number;
   quantite: number;
-}
-
-/**
- * Identifiant de ligne (clé React). `crypto.randomUUID()` n'existe QUE en
- * contexte sécurisé : sur un téléphone qui ouvre l'app en http://IP-LAN (QR de
- * table), il est absent → repli sans plantage.
- */
-function nouvelleCle(): string {
-  const c = globalThis.crypto;
-  if (c && typeof c.randomUUID === 'function') return c.randomUUID();
-  return `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export function PageTable({ jeton, table }: { jeton: string; table: TableClientVue }) {
@@ -77,7 +66,7 @@ export function PageTable({ jeton, table }: { jeton: string; table: TableClientV
     setPanier((p) => {
       const existe = p.find((l) => l.article_id === id);
       if (existe) return p.map((l) => (l.article_id === id ? { ...l, quantite: l.quantite + 1 } : l));
-      return [...p, { cle: nouvelleCle(), article_id: id, nom, prix, quantite: 1 }];
+      return [...p, { cle: uuidLocal(), article_id: id, nom, prix, quantite: 1 }];
     });
   };
 

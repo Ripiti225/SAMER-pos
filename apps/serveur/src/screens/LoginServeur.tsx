@@ -39,52 +39,56 @@ export function LoginServeur({ onConnecte }: { onConnecte: (s: SessionInfo) => v
   };
 
   return (
-    <div className="flex min-h-full flex-col items-center justify-center gap-6 p-6">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-marque-fonce">Serveur de salle</h1>
-        <p className="mt-1 text-doux">Connexion par PIN</p>
-      </div>
-
-      {!choisi ? (
-        <div className="grid w-full max-w-xl grid-cols-2 gap-3 sm:grid-cols-3">
-          {utilisateurs.map((u) => (
-            <button
-              key={u.id}
-              type="button"
-              className="carte flex min-h-[92px] flex-col items-center justify-center gap-1 p-4 text-center shadow-e1 transition hover:shadow-e2"
-              onClick={() => setChoisi(u)}
-            >
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-marque-tint text-sm font-bold text-marque-fonce">
-                {u.nom_complet.split(/\s+/).filter(Boolean).slice(0, 2).map((m) => m[0]!.toUpperCase()).join('')}
-              </div>
-              <div className="text-sm font-semibold leading-tight">{u.nom_complet}</div>
-              <div className="rounded-full bg-surface-tres-haute px-2 py-0.5 text-[11px] font-medium text-doux">
-                {u.role === 'SERVEUR' ? 'Serveur' : u.role === 'MANAGER' ? 'Manager' : 'Propriétaire'}
-              </div>
-            </button>
-          ))}
+    // Conteneur scrollable + contenu centré : `justify-center` seul écrête le
+    // haut de la liste dès qu'elle déborde (petit téléphone, équipe nombreuse).
+    <div className="h-full overflow-y-auto">
+      <div className="marge-sure-bas flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-6">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-marque-fonce sm:text-3xl">Serveur de salle</h1>
+          <p className="mt-1 text-doux">Connexion par PIN</p>
         </div>
-      ) : (
-        <div className="carte w-full max-w-xs space-y-3 p-6 shadow-e2">
-          <div className="text-center text-lg font-semibold text-fort">{choisi.nom_complet}</div>
-          <div className="champ flex items-center justify-center text-3xl tracking-[0.5em]">
-            {'•'.repeat(pin.length) || <span className="text-base tracking-normal text-doux">PIN</span>}
+
+        {!choisi ? (
+          <div className="grid w-full max-w-xl grid-cols-2 gap-3 sm:grid-cols-3">
+            {utilisateurs.map((u) => (
+              <button
+                key={u.id}
+                type="button"
+                className="carte flex min-h-[92px] flex-col items-center justify-center gap-1 p-4 text-center shadow-e1 transition hover:shadow-e2"
+                onClick={() => setChoisi(u)}
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-marque-tint text-sm font-bold text-marque-fonce">
+                  {u.nom_complet.split(/\s+/).filter(Boolean).slice(0, 2).map((m) => m[0]!.toUpperCase()).join('')}
+                </div>
+                <div className="text-sm font-semibold leading-tight">{u.nom_complet}</div>
+                <div className="rounded-full bg-surface-tres-haute px-2 py-0.5 text-[11px] font-medium text-doux">
+                  {u.role === 'SERVEUR' ? 'Serveur' : u.role === 'MANAGER' ? 'Manager' : 'Propriétaire'}
+                </div>
+              </button>
+            ))}
           </div>
-          <Numpad
-            valeur={pin}
-            onChange={setPin}
-            longueurMax={6}
-            onValider={seConnecter}
-            libelleValider={enCours ? 'Connexion…' : 'Se connecter'}
-            validerDesactive={pin.length < 4 || enCours}
-          />
-          <button type="button" className="btn-blanc w-full" onClick={() => { setChoisi(null); setPin(''); }}>
-            ← Changer d’utilisateur
-          </button>
-        </div>
-      )}
+        ) : (
+          <div className="carte w-full max-w-xs space-y-3 p-6 shadow-e2">
+            <div className="text-center text-lg font-semibold text-fort">{choisi.nom_complet}</div>
+            <div className="champ flex items-center justify-center text-3xl tracking-[0.5em]">
+              {'•'.repeat(pin.length) || <span className="text-base tracking-normal text-doux">PIN</span>}
+            </div>
+            <Numpad
+              valeur={pin}
+              onChange={setPin}
+              longueurMax={6}
+              onValider={seConnecter}
+              libelleValider={enCours ? 'Connexion…' : 'Se connecter'}
+              validerDesactive={pin.length < 4 || enCours}
+            />
+            <button type="button" className="btn-blanc w-full" onClick={() => { setChoisi(null); setPin(''); }}>
+              ← Changer d’utilisateur
+            </button>
+          </div>
+        )}
 
-      {erreur && <div className="rounded-[13px] bg-alerte-tint px-5 py-3 font-medium text-alerte">{erreur}</div>}
+        {erreur && <div className="rounded-[13px] bg-alerte-tint px-5 py-3 font-medium text-alerte">{erreur}</div>}
+      </div>
     </div>
   );
 }

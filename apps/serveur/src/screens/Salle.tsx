@@ -45,7 +45,7 @@ export function Salle({
   }, [queryClient]);
 
   return (
-    <div className="p-4">
+    <div className="marge-sure-cotes marge-sure-bas h-full overflow-y-auto p-3 sm:p-4">
       <PlanSalle
         tables={tables ?? []}
         onTable={(t) => onTable(t.id)}

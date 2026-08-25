@@ -367,3 +367,39 @@ export const PINS_INTERDITS: readonly string[] = [
 export function formatFCFA(montant: number): string {
   return `${montant.toLocaleString('fr-FR').replace(/ | /g, ' ')} F`;
 }
+
+/**
+ * UUID v4 utilisable EN CONTEXTE NON SÉCURISÉ.
+ *
+ * Piège réel, vu en salle : `crypto.randomUUID()` n'existe qu'en contexte
+ * sécurisé (https ou localhost). Un serveur qui sort son téléphone ouvre l'app
+ * en `http://192.168.x.x` → la fonction est ABSENTE, et l'appel lève une
+ * TypeError. Quand cet appel se trouve dans un updater `setState`, React le
+ * rejoue pendant le rendu : l'erreur devient une erreur de rendu et l'arbre
+ * entier est démonté — écran blanc au milieu du service.
+ *
+ * `crypto.getRandomValues()`, lui, reste disponible partout : c'est la source
+ * d'aléa du repli. Le format v4 est respecté au bit près, car `action_uuid`
+ * est validé `z.string().uuid()` côté serveur (idempotence anti-doublon de la
+ * file d'attente) : un identifiant approximatif serait rejeté.
+ */
+export function uuidLocal(): string {
+  // Type structurel : `packages/shared` est compilé sans la lib DOM (il sert
+  // aussi au serveur Node), le type global `Crypto` n'y existe pas.
+  const c = (globalThis as {
+    crypto?: { randomUUID?: () => string; getRandomValues?: (a: Uint8Array) => Uint8Array };
+  }).crypto;
+  if (typeof c?.randomUUID === 'function') return c.randomUUID();
+
+  const o = new Uint8Array(16);
+  if (typeof c?.getRandomValues === 'function') {
+    c.getRandomValues(o);
+  } else {
+    // Dernier recours (navigateur très ancien) : moins bon aléa, format valide.
+    for (let i = 0; i < 16; i++) o[i] = Math.floor(Math.random() * 256);
+  }
+  o[6] = (o[6]! & 0x0f) | 0x40; // version 4
+  o[8] = (o[8]! & 0x3f) | 0x80; // variante RFC 4122
+  const h = [...o].map((b) => b.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}

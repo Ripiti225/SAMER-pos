@@ -11,7 +11,7 @@ export function Modale({ titre, enfants, onFermer, large }: Props) {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4" onClick={onFermer}>
       <div
-        className={`carte w-full ${large ? 'max-w-2xl' : 'max-w-md'} max-h-[90vh] overflow-y-auto p-5`}
+        className={`carte w-full ${large ? 'max-w-2xl' : 'max-w-md'} max-h-[90dvh] overflow-y-auto p-5`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">

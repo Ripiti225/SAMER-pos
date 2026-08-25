@@ -55,34 +55,36 @@ export function VerrouInactivite({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-fond/95 p-6">
-      <div className="text-center">
-        <div className="text-3xl font-bold">Tablette verrouillée</div>
-        <div className="mt-1 text-doux">{session.utilisateur.nom_complet} — saisissez votre PIN</div>
-      </div>
-      <div className="w-full max-w-xs space-y-3">
-        <div className="champ flex items-center justify-center text-3xl tracking-[0.5em]">
-          {'•'.repeat(pin.length) || <span className="text-base tracking-normal text-doux">PIN</span>}
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-fond/95">
+      <div className="marge-sure-bas flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-6">
+        <div className="text-center">
+          <div className="text-2xl font-bold sm:text-3xl">Terminal verrouillé</div>
+          <div className="mt-1 text-doux">{session.utilisateur.nom_complet} — saisissez votre PIN</div>
         </div>
-        <Numpad
-          valeur={pin}
-          onChange={setPin}
-          longueurMax={6}
-          onValider={deverrouiller}
-          libelleValider={enCours ? 'Vérification…' : 'Déverrouiller'}
-          validerDesactive={pin.length < 4 || enCours}
-        />
-        {erreur && <div className="text-center text-alerte">{erreur}</div>}
-        <button
-          type="button"
-          className="btn-blanc w-full"
-          onClick={async () => {
-            try { await api('/api/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
-            onDeconnexion();
-          }}
-        >
-          Se déconnecter
-        </button>
+        <div className="w-full max-w-xs space-y-3">
+          <div className="champ flex items-center justify-center text-3xl tracking-[0.5em]">
+            {'•'.repeat(pin.length) || <span className="text-base tracking-normal text-doux">PIN</span>}
+          </div>
+          <Numpad
+            valeur={pin}
+            onChange={setPin}
+            longueurMax={6}
+            onValider={deverrouiller}
+            libelleValider={enCours ? 'Vérification…' : 'Déverrouiller'}
+            validerDesactive={pin.length < 4 || enCours}
+          />
+          {erreur && <div className="text-center text-alerte">{erreur}</div>}
+          <button
+            type="button"
+            className="btn-blanc w-full"
+            onClick={async () => {
+              try { await api('/api/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
+              onDeconnexion();
+            }}
+          >
+            Se déconnecter
+          </button>
+        </div>
       </div>
     </div>
   );

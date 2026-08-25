@@ -3,15 +3,55 @@
 @tailwind utilities;
 
 /* Le thème clair partagé (@pos/theme/theme.css) est importé dans main.tsx.
-   Ici : seulement les réglages propres à la tablette serveur. */
+   Ici : seulement les réglages propres au terminal du serveur de salle —
+   tablette ET téléphone (un serveur sort souvent son propre téléphone). */
 
 html,
-body,
+body {
+  height: 100%;
+}
+
+/* 100dvh : sur mobile la barre d'adresse se rétracte, `100vh` déborderait et
+   pousserait la barre « Envoyer en cuisine » hors de l'écran. */
 #racine {
   height: 100%;
+  height: 100dvh;
 }
 
 body {
   @apply antialiased select-none;
   touch-action: manipulation;
+  overscroll-behavior: none; /* pas de « pull to refresh » en plein service */
+  overflow: hidden; /* le défilement se fait dans les colonnes, jamais la page */
+}
+
+/* Encoche / barre gestuelle : rien d'actionnable ne doit finir dessous. */
+.marge-sure-bas {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+.marge-sure-cotes {
+  padding-left: max(0.5rem, env(safe-area-inset-left));
+  padding-right: max(0.5rem, env(safe-area-inset-right));
+}
+
+/* Bandeau de catégories horizontal (téléphone) : on masque la barre native. */
+.defile-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.defile-x::-webkit-scrollbar {
+  display: none;
+}
+
+/* Éléments flottants (toast, notifications) : sur téléphone ils doivent passer
+   AU-DESSUS de la barre panier de la prise de commande — barre qui n'existe
+   que sur cet écran, d'où le marqueur `data-barre-basse` posé par App.tsx. */
+.au-dessus-barre {
+  bottom: max(1rem, env(safe-area-inset-bottom));
+}
+@media (max-width: 1023.98px) {
+  [data-barre-basse='1'] .au-dessus-barre {
+    bottom: calc(9.5rem + env(safe-area-inset-bottom));
+  }
 }

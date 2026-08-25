@@ -7,3 +7,8 @@ dev-dist/
 
 # SQL cloud du catalogue : régénéré (porte le restaurant_id du seed)
 sql/cloud/catalogue_import.sql
+
+# Résidus d'outils, pas du code du projet.
+# `supabase/.temp/linked-project.json` reste suivi : il désigne le projet cloud.
+deno.lock
+supabase/.temp/cli-latest

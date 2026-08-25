@@ -64,3 +64,23 @@ voir « Fidélité — rapprochement cloud (fusions_clients) » plus haut. Tant
 qu'elle n'existe pas, un client connu de l'app SAMER DELIV aura deux soldes
 séparés, et l'écran de confirmation dit « ajoutés à votre compte Samer Delly »
 sans que la fusion soit réellement faite. À traiter au jalon SAMER DELIV.
+
+## HTTPS sur le réseau local des sites
+Les PWA (caisse, tablette serveur, téléphone client via QR, KDS) sont servies en
+`http://IP-LAN`. Le navigateur classe ces pages en **contexte non sécurisé** et
+leur retire une famille d'API : `crypto.randomUUID()`, `crypto.subtle`, et plus
+tard tout ce qui touche à la géolocalisation, aux notifications push ou à
+l'accès caméra si un besoin apparaît (scan de code-barres à la réception, par
+exemple).
+
+Le piège s'est déjà refermé trois fois sur `crypto.randomUUID()` — la dernière
+en date virait l'écran de la tablette serveur au blanc dès qu'on touchait un
+produit. Il est désormais neutralisé par `uuidLocal()` (@pos/shared) et par le
+garde-fou `apps/server/test/garde-contexte-non-securise.test.ts`, mais cela
+traite les symptômes un à un, pas la cause.
+
+Servir les PWA en HTTPS (certificat local, nom de domaine interne du site)
+supprimerait la classe de problèmes entière et rouvrirait ces API. Chantier
+d'infrastructure : génération et renouvellement du certificat, distribution de
+l'autorité sur chaque terminal, adaptation du reverse-proxy local. À arbitrer
+avec le déploiement des 7 sites.

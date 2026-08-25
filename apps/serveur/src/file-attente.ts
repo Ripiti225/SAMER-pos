@@ -7,6 +7,8 @@
  * file est rejouée dans l'ordre. L'idempotence est garantie côté serveur par
  * l'UUID d'action (table actions_recues) : rejouer ne crée jamais de doublon.
  */
+
+import { uuidLocal } from '@pos/shared';
 import { openDB, type IDBPDatabase } from 'idb';
 import { api, ErreurApi } from '@pos/shared-ui';
 
@@ -58,7 +60,7 @@ class FileAttente {
   /** Écrit l'action en local PUIS tente l'envoi — jamais l'inverse. */
   async enfiler(type: ActionEnFile['type'], corps: Record<string, unknown>): Promise<void> {
     const action: ActionEnFile = {
-      uuid: (corps.action_uuid as string) ?? crypto.randomUUID(),
+      uuid: (corps.action_uuid as string) ?? uuidLocal(),
       type,
       corps,
       cree_le: Date.now(),

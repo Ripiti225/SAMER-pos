@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { ArticleVue, CatalogueVue, CommandeVue, TableVue } from '@pos/shared';
-import { categorieVisiblePour, formatFCFA } from '@pos/shared';
+import { categorieVisiblePour, formatFCFA, uuidLocal } from '@pos/shared';
 import { api, Modale } from '@pos/shared-ui';
 import { fileAttente } from '../file-attente';
 
@@ -17,10 +17,17 @@ interface LignePanier {
 }
 
 /**
- * Prise de commande serveur (§B2) : panier LOCAL sur la tablette, puis un seul
+ * Prise de commande serveur (§B2) : panier LOCAL sur le terminal, puis un seul
  * bouton « Envoyer en cuisine ». L'envoi passe par la file anti-coupure :
  * même WiFi coupé, la commande part dès la reconnexion, sans doublon.
  * Ajout en plusieurs fois : chaque envoi ne contient que les nouveaux articles.
+ *
+ * Deux mises en page, même code :
+ * - téléphone (< lg) : catégories en bandeau horizontal, articles en pleine
+ *   largeur, panier en tiroir bas appelé par la barre « Envoyer en cuisine » ;
+ * - tablette (≥ lg) : les trois colonnes historiques (catégories / articles /
+ *   panier). En dessous de 1024 px les 464 px de colonnes fixes ne laissaient
+ *   plus rien aux articles — c'était le défaut sur téléphone.
  */
 export function PriseCommande({
   tableId,
@@ -34,6 +41,7 @@ export function PriseCommande({
   const [categorieId, setCategorieId] = useState<string | null>(null);
   const [articleOuvert, setArticleOuvert] = useState<ArticleVue | null>(null);
   const [panier, setPanier] = useState<LignePanier[]>([]);
+  const [tiroirPanier, setTiroirPanier] = useState(false);
 
   const { data: catalogue } = useQuery({
     queryKey: ['catalogue'],
@@ -69,9 +77,10 @@ export function PriseCommande({
     (s, l) => s + (l.prix_affiche + l.supplements.reduce((x, y) => x + y.prix, 0)) * l.quantite,
     0,
   );
+  const nbArticles = panier.reduce((s, l) => s + l.quantite, 0);
 
   const ajouterAuPanier = (ligne: Omit<LignePanier, 'cle'>) => {
-    setPanier((p) => [...p, { ...ligne, cle: crypto.randomUUID() }]);
+    setPanier((p) => [...p, { ...ligne, cle: uuidLocal() }]);
   };
 
   const clicArticle = (a: ArticleVue) => {
@@ -86,7 +95,7 @@ export function PriseCommande({
   const envoyerEnCuisine = async () => {
     if (panier.length === 0) return;
     await fileAttente.enfiler('ENVOYER_CUISINE', {
-      action_uuid: crypto.randomUUID(),
+      action_uuid: uuidLocal(),
       table_id: tableId,
       items: panier.map((l) => ({
         article_id: l.article_id,
@@ -97,12 +106,13 @@ export function PriseCommande({
       })),
     });
     setPanier([]);
+    setTiroirPanier(false);
     afficherToast('Envoyé en cuisine ✔ (livraison garantie même si le WiFi coupe)');
   };
 
   const demanderAddition = async () => {
     await fileAttente.enfiler('DEMANDER_ADDITION', {
-      action_uuid: crypto.randomUUID(),
+      action_uuid: uuidLocal(),
       table_id: tableId,
     });
     afficherToast('Addition demandée — la caisse est prévenue');
@@ -121,44 +131,80 @@ export function PriseCommande({
     }
   };
 
+  const modifierQuantite = (cle: string, delta: number) =>
+    setPanier((p) => p.map((x) => (x.cle === cle ? { ...x, quantite: Math.max(1, x.quantite + delta) } : x)));
+  const retirer = (cle: string) => setPanier((p) => p.filter((x) => x.cle !== cle));
+
+  const boutonEnvoyer = (
+    <button
+      type="button"
+      className="flex h-14 w-full items-center justify-center gap-2 rounded-[13px] bg-marque text-lg font-bold text-sur-marque shadow-e2 transition hover:brightness-105 active:translate-y-px disabled:opacity-40 sm:h-16 sm:text-xl"
+      disabled={panier.length === 0}
+      onClick={() => void envoyerEnCuisine()}
+    >
+      Envoyer en cuisine {panier.length > 0 ? `· ${formatFCFA(totalPanier)}` : ''}
+    </button>
+  );
+
   return (
-    <div className="flex h-[calc(100vh-57px)] flex-col">
-      <div className="flex flex-none items-center gap-3 border-b border-bordure bg-surface p-3 shadow-e1">
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Barre de table — les actions passent à la ligne sur écran étroit. */}
+      <div className="marge-sure-cotes flex flex-none flex-wrap items-center gap-2 border-b border-bordure bg-surface p-2 shadow-e1 sm:p-3">
         <button
           type="button"
           onClick={onRetour}
           title="Retour à la salle"
-          className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-surface-douce text-doux transition hover:bg-marque-tint hover:text-marque-fonce"
+          className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-surface-douce text-doux transition hover:bg-marque-tint hover:text-marque-fonce"
         >
           ←
         </button>
-        <span className="text-xl font-bold text-marque-fonce">Table {table?.numero ?? '…'}</span>
+        <span className="text-lg font-bold text-marque-fonce sm:text-xl">Table {table?.numero ?? '…'}</span>
         {commande && (
-          <span className="rounded-full bg-info-tint px-3 py-1 text-sm font-medium text-info">
-            Ticket n° {commande.numero_ticket} · {formatFCFA(commande.total)}
+          <span className="rounded-full bg-info-tint px-2.5 py-1 text-xs font-medium text-info sm:px-3 sm:text-sm">
+            N° {commande.numero_ticket} · {formatFCFA(commande.total)}
           </span>
         )}
-        {commande?.statut === 'PRETE' && (
+        <div className="ml-auto flex flex-none items-center gap-2">
+          {commande?.statut === 'PRETE' && (
+            <button
+              type="button"
+              className="min-h-[44px] rounded-[13px] bg-ok px-3 font-bold text-white shadow-e1 transition hover:brightness-105 active:translate-y-px sm:px-4"
+              onClick={() => void servir()}
+            >
+              Servi ✔
+            </button>
+          )}
           <button
             type="button"
-            className="ml-auto rounded-[13px] bg-ok px-4 py-2 font-bold text-white shadow-e1 transition hover:brightness-105 active:translate-y-px"
-            onClick={() => void servir()}
+            className="min-h-[44px] rounded-[13px] border border-bordure-forte px-3 font-semibold text-marque-fonce transition hover:bg-marque/5 disabled:opacity-40 sm:px-4"
+            disabled={!table?.commande_id && panier.length === 0}
+            onClick={() => void demanderAddition()}
           >
-            Servi ✔
+            <span className="hidden sm:inline">Demander l’addition</span>
+            <span className="sm:hidden">Addition</span>
           </button>
-        )}
-        <button
-          type="button"
-          className={`rounded-[13px] border border-bordure-forte px-4 py-2 font-semibold text-marque-fonce transition hover:bg-marque/5 disabled:opacity-40 ${commande?.statut === 'PRETE' ? '' : 'ml-auto'}`}
-          disabled={!table?.commande_id && panier.length === 0}
-          onClick={() => void demanderAddition()}
-        >
-          Demander l’addition
-        </button>
+        </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        <nav className="w-36 shrink-0 space-y-2 overflow-y-auto border-r border-bordure bg-surface-douce p-2">
+      {/* Catégories en bandeau horizontal — téléphone et tablette portrait. */}
+      <nav className="defile-x flex flex-none gap-2 border-b border-bordure bg-surface-douce p-2 lg:hidden">
+        {categories.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            className={`min-h-[44px] flex-none whitespace-nowrap rounded-[13px] px-4 text-sm font-semibold transition ${
+              c.id === categorieActive ? 'bg-marque text-sur-marque shadow-e1' : 'border border-bordure bg-surface text-doux'
+            }`}
+            onClick={() => setCategorieId(c.id)}
+          >
+            {c.nom}
+          </button>
+        ))}
+      </nav>
+
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* Colonne catégories : uniquement quand l'écran est assez large. */}
+        <nav className="hidden w-36 shrink-0 space-y-2 overflow-y-auto border-r border-bordure bg-surface-douce p-2 lg:block">
           {categories.map((c) => (
             <button
               key={c.id}
@@ -173,7 +219,7 @@ export function PriseCommande({
           ))}
         </nav>
 
-        <main className="grid flex-1 auto-rows-min grid-cols-2 gap-3 overflow-y-auto p-3 md:grid-cols-3">
+        <main className="grid flex-1 auto-rows-min grid-cols-2 gap-2 overflow-y-auto p-2 sm:grid-cols-3 sm:gap-3 sm:p-3 lg:grid-cols-3 xl:grid-cols-4">
           {combosVisibles.map((combo) => (
             <button
               key={combo.id}
@@ -184,7 +230,7 @@ export function PriseCommande({
                 ajouterAuPanier({ article_id: null, combo_id: combo.id, nom: combo.nom, prix_affiche: combo.prix, quantite: 1, options: [], supplements: [] })
               }
             >
-              <div className="font-semibold">{combo.nom}</div>
+              <div className="text-sm font-semibold leading-tight sm:text-base">{combo.nom}</div>
               <div className="font-bold text-marque-fonce">{formatFCFA(combo.prix)}</div>
             </button>
           ))}
@@ -218,79 +264,62 @@ export function PriseCommande({
           ))}
         </main>
 
-        <aside className="flex w-80 shrink-0 flex-col border-l border-bordure">
-          <div className="flex-1 space-y-2 overflow-y-auto p-3">
-            {commande && commande.items.length > 0 && (
-              <div className="mb-2">
-                <div className="mb-1 text-xs font-semibold text-doux">Déjà en cuisine</div>
-                {commande.items.map((i) => (
-                  <div
-                    key={i.id}
-                    className={`text-sm ${i.statut_cuisine === 'ANNULE' ? 'text-alerte line-through' : 'text-doux'}`}
-                  >
-                    {i.quantite} × {i.nom_snapshot}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="text-xs font-semibold text-doux">Nouveaux articles</div>
-            {panier.length === 0 && <div className="pt-2 text-sm text-doux">Touchez un article…</div>}
-            {panier.map((l) => (
-              <div key={l.cle} className="carte p-3">
-                <div className="flex justify-between">
-                  <div className="font-semibold">{l.nom}</div>
-                  <div className="font-bold">
-                    {formatFCFA((l.prix_affiche + l.supplements.reduce((x, y) => x + y.prix, 0)) * l.quantite)}
-                  </div>
-                </div>
-                {l.supplements.map((s) => (
-                  <div key={s.id} className="text-xs text-doux">+ {s.nom}</div>
-                ))}
-                {l.options.filter((o) => o.choix.length > 0).map((o) => (
-                  <div key={o.groupe} className="text-xs text-doux">{o.groupe} : {o.choix.join(', ')}</div>
-                ))}
-                <div className="mt-2 flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="btn-blanc h-12 w-12 p-0 text-xl"
-                    onClick={() =>
-                      setPanier((p) =>
-                        p.map((x) => (x.cle === l.cle ? { ...x, quantite: Math.max(1, x.quantite - 1) } : x)),
-                      )
-                    }
-                  >
-                    −
-                  </button>
-                  <span className="w-8 text-center font-bold">{l.quantite}</span>
-                  <button
-                    type="button"
-                    className="btn-blanc h-12 w-12 p-0 text-xl"
-                    onClick={() => setPanier((p) => p.map((x) => (x.cle === l.cle ? { ...x, quantite: x.quantite + 1 } : x)))}
-                  >
-                    +
-                  </button>
-                  <button type="button" className="btn-alerte ml-auto px-3" onClick={() => setPanier((p) => p.filter((x) => x.cle !== l.cle))}>
-                    ✕
-                  </button>
-                </div>
-              </div>
-            ))}
+        {/* Panier en colonne : tablette et plus. */}
+        <aside className="hidden w-80 shrink-0 flex-col border-l border-bordure lg:flex">
+          <div className="flex-1 overflow-y-auto p-3">
+            <ContenuPanier
+              commande={commande}
+              panier={panier}
+              onQuantite={modifierQuantite}
+              onRetirer={retirer}
+            />
           </div>
-
-          <div className="border-t border-bordure p-3">
-            {/* Bouton UNIQUE « Envoyer en cuisine » (§B2) — pas d'encaissement ici */}
-            <button
-              type="button"
-              className="flex h-16 w-full items-center justify-center gap-2 rounded-[13px] bg-marque text-xl font-bold text-sur-marque shadow-e2 transition hover:brightness-105 active:translate-y-px disabled:opacity-40"
-              disabled={panier.length === 0}
-              onClick={() => void envoyerEnCuisine()}
-            >
-              Envoyer en cuisine {panier.length > 0 ? `· ${formatFCFA(totalPanier)}` : ''}
-            </button>
-          </div>
+          {/* Bouton UNIQUE « Envoyer en cuisine » (§B2) — pas d'encaissement ici */}
+          <div className="border-t border-bordure p-3">{boutonEnvoyer}</div>
         </aside>
       </div>
+
+      {/* Barre panier collante — téléphone : le panier reste à un pouce. */}
+      <div className="marge-sure-bas marge-sure-cotes flex flex-none flex-col gap-2 border-t border-bordure bg-surface p-2 pt-2 shadow-e2 lg:hidden">
+        <button
+          type="button"
+          className="flex min-h-[44px] items-center justify-between rounded-[13px] bg-surface-douce px-3 text-left transition active:translate-y-px"
+          onClick={() => setTiroirPanier(true)}
+        >
+          <span className="font-semibold text-doux">
+            {nbArticles > 0 ? `Panier · ${nbArticles} article${nbArticles > 1 ? 's' : ''}` : 'Panier vide'}
+            {commande && commande.items.length > 0 ? ' · voir la cuisine' : ''}
+          </span>
+          <span className="font-bold text-marque-fonce">{formatFCFA(totalPanier)} ▲</span>
+        </button>
+        {boutonEnvoyer}
+      </div>
+
+      {/* Tiroir bas : détail du panier + quantités (téléphone). */}
+      {tiroirPanier && (
+        <div className="fixed inset-0 z-40 flex flex-col justify-end bg-black/40 lg:hidden" onClick={() => setTiroirPanier(false)}>
+          <div
+            className="marge-sure-bas flex max-h-[80dvh] flex-col rounded-t-2xl border-t border-bordure bg-surface"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-none items-center justify-between border-b border-bordure p-3">
+              <h2 className="text-lg font-bold">Panier — Table {table?.numero ?? '…'}</h2>
+              <button type="button" className="btn-blanc min-h-[44px] px-4" onClick={() => setTiroirPanier(false)}>
+                ✕
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              <ContenuPanier
+                commande={commande}
+                panier={panier}
+                onQuantite={modifierQuantite}
+                onRetirer={retirer}
+              />
+            </div>
+            <div className="flex-none border-t border-bordure p-3">{boutonEnvoyer}</div>
+          </div>
+        </div>
+      )}
 
       {articleOuvert && (
         <ModaleArticle
@@ -302,6 +331,68 @@ export function PriseCommande({
           onFermer={() => setArticleOuvert(null)}
         />
       )}
+    </div>
+  );
+}
+
+/** Détail du panier — partagé par la colonne (tablette) et le tiroir (téléphone). */
+function ContenuPanier({
+  commande,
+  panier,
+  onQuantite,
+  onRetirer,
+}: {
+  commande: CommandeVue | undefined;
+  panier: LignePanier[];
+  onQuantite: (cle: string, delta: number) => void;
+  onRetirer: (cle: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      {commande && commande.items.length > 0 && (
+        <div className="mb-2">
+          <div className="mb-1 text-xs font-semibold text-doux">Déjà en cuisine</div>
+          {commande.items.map((i) => (
+            <div
+              key={i.id}
+              className={`text-sm ${i.statut_cuisine === 'ANNULE' ? 'text-alerte line-through' : 'text-doux'}`}
+            >
+              {i.quantite} × {i.nom_snapshot}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="text-xs font-semibold text-doux">Nouveaux articles</div>
+      {panier.length === 0 && <div className="pt-2 text-sm text-doux">Touchez un article…</div>}
+      {panier.map((l) => (
+        <div key={l.cle} className="carte p-3">
+          <div className="flex justify-between gap-2">
+            <div className="min-w-0 font-semibold">{l.nom}</div>
+            <div className="flex-none font-bold">
+              {formatFCFA((l.prix_affiche + l.supplements.reduce((x, y) => x + y.prix, 0)) * l.quantite)}
+            </div>
+          </div>
+          {l.supplements.map((s) => (
+            <div key={s.id} className="text-xs text-doux">+ {s.nom}</div>
+          ))}
+          {l.options.filter((o) => o.choix.length > 0).map((o) => (
+            <div key={o.groupe} className="text-xs text-doux">{o.groupe} : {o.choix.join(', ')}</div>
+          ))}
+          <div className="mt-2 flex items-center gap-2">
+            <button type="button" className="btn-blanc h-12 w-12 p-0 text-xl" onClick={() => onQuantite(l.cle, -1)}>
+              −
+            </button>
+            <span className="w-8 text-center font-bold">{l.quantite}</span>
+            <button type="button" className="btn-blanc h-12 w-12 p-0 text-xl" onClick={() => onQuantite(l.cle, 1)}>
+              +
+            </button>
+            <button type="button" className="btn-alerte ml-auto px-3" onClick={() => onRetirer(l.cle)}>
+              ✕
+            </button>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

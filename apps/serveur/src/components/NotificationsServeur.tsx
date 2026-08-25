@@ -121,7 +121,7 @@ export function NotificationsServeur({ session, afficherToast }: { session: Sess
   if (rien) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-[55] w-80 space-y-2">
+    <div className="au-dessus-barre fixed left-2 right-2 z-[55] max-h-[45dvh] space-y-2 overflow-y-auto sm:left-auto sm:right-4 sm:w-80">
       {pretes.map((p) => (
         <div key={p.commande_id} className="carte border-2 border-ok bg-ok-tint p-3">
           <div className="font-bold text-ok">Table {p.table_numero} — commande prête</div>
