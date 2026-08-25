@@ -127,6 +127,123 @@ function agreger(shifts: ShiftSequence[]): RecapSequence {
   return { vente_totale, total_systeme, diff: vente_totale - total_systeme, especes_comptees, depenses, ecart_especes, livraisons, offerts, modes };
 }
 
+/**
+ * Rase la séquence ouverte et rend le rapport figé.
+ *
+ * Extraite de la route pour que l'ORDRE VENU DU SIÈGE emprunte exactement le
+ * même chemin que le gérant devant sa caisse : mêmes règles, même rapport,
+ * même écriture au journal. Une seconde implémentation aurait dérivé, et
+ * c'est un geste qui fige la journée d'un restaurant.
+ *
+ * `auteurId` est NULL pour un ordre du siège : la colonne `cloturee_par`
+ * référence `utilisateurs`, et le demandeur n'a pas de compte sur ce site. Son
+ * nom part dans le rapport (`cloturee_par`, une chaîne) et dans le journal,
+ * pour que le papier dise qui a rasé.
+ */
+export async function raserSequence({
+  serviceIds,
+  auteurId,
+  auteurNom,
+  origine = 'CAISSE',
+}: {
+  serviceIds?: string[];
+  auteurId: string | null;
+  auteurNom: string;
+  origine?: 'CAISSE' | 'SIEGE';
+}): Promise<RapportSequence> {
+  const rapport = await db.transaction(async (tx) => {
+    const [seq] = await tx
+      .select()
+      .from(sequencesCaisse)
+      .where(eq(sequencesCaisse.statut, 'OUVERTE'))
+      .limit(1)
+      .for('update');
+    if (!seq) throw new ErreurMetier('Aucune séquence ouverte à fermer', 409);
+
+    const tous = await detailShifts(tx, seq.id);
+    const clotures = tous.filter((s) => s.statut === 'CLOTURE');
+
+    let retenus: ShiftSequence[];
+    if (serviceIds) {
+      const demandes = new Set(serviceIds);
+      const connus = new Set(tous.map((s) => s.service_id));
+      for (const id of demandes) {
+        if (!connus.has(id)) throw new ErreurMetier('Un des shifts choisis n’appartient pas à cette séquence', 400);
+      }
+      const ouvertChoisi = tous.find((s) => demandes.has(s.service_id) && s.statut !== 'CLOTURE');
+      if (ouvertChoisi) {
+        throw new ErreurMetier(
+          `Le shift de ${ouvertChoisi.caissier} est encore ouvert : il ne peut pas être rasé, seulement laissé pour la séquence suivante`,
+          409,
+        );
+      }
+      retenus = clotures.filter((s) => demandes.has(s.service_id));
+    } else {
+      retenus = clotures;
+    }
+
+    if (retenus.length === 0) {
+      throw new ErreurMetier('Aucun shift clôturé à raser — la séquence serait vide', 409);
+    }
+
+    const retenusIds = new Set(retenus.map((s) => s.service_id));
+    const reportes = tous.filter((s) => !retenusIds.has(s.service_id));
+
+    const recap = agreger(retenus);
+    const clotureeLe = new Date();
+    const rapportSeq: RapportSequence = {
+      ...recap,
+      sequence_id: seq.id,
+      ouverte_le: seq.ouverte_le.toISOString(),
+      cloturee_le: clotureeLe.toISOString(),
+      cloturee_par: auteurNom,
+      nb_shifts: retenus.length,
+      shifts_reportes: reportes.length,
+      shifts: retenus,
+    };
+
+    const [maj] = await tx
+      .update(sequencesCaisse)
+      .set({ statut: 'CLOTUREE', cloturee_le: clotureeLe, cloturee_par: auteurId, rapport: rapportSeq })
+      .where(eq(sequencesCaisse.id, seq.id))
+      .returning();
+    await ecrireOutbox(tx, 'sequences_caisse', 'UPDATE', seq.id, maj as unknown as Record<string, unknown>);
+
+    // Report : la séquence suivante s'ouvre TOUT DE SUITE et récupère les
+    // shifts laissés. Après la mise à jour ci-dessus, sinon l'index unique
+    // « une seule séquence OUVERTE » refuserait l'insertion.
+    if (reportes.length > 0) {
+      const [suivante] = await tx.insert(sequencesCaisse).values({}).returning();
+      await ecrireOutbox(tx, 'sequences_caisse', 'INSERT', suivante!.id, suivante as unknown as Record<string, unknown>);
+      const deplaces = await tx
+        .update(servicesCaisse)
+        .set({ sequence_id: suivante!.id })
+        .where(inArray(servicesCaisse.id, reportes.map((s) => s.service_id)))
+        .returning();
+      for (const s of deplaces) {
+        await ecrireOutbox(tx, 'services_caisse', 'UPDATE', s.id, s as unknown as Record<string, unknown>);
+      }
+    }
+
+    await journaliser(tx, {
+      user_id: auteurId,
+      action: 'CLOTURE_SEQUENCE',
+      entite: 'sequences_caisse',
+      entite_id: seq.id,
+      montant: recap.vente_totale,
+      meta: {
+        nb_shifts: retenus.length,
+        diff: recap.diff,
+        shifts_reportes: reportes.map((s) => ({ service_id: s.service_id, caissier: s.caissier, statut: s.statut })),
+        choix_manuel: serviceIds !== undefined,
+        origine,
+      },
+    });
+    return rapportSeq;
+  });
+  return rapport;
+}
+
 export function routesSequences(app: FastifyInstance): void {
   const garde = app.exigePermission('caisse.fermer_sequence');
 
@@ -174,95 +291,10 @@ export function routesSequences(app: FastifyInstance): void {
    */
   app.post('/api/sequences/cloturer', { preHandler: garde }, async (req): Promise<RapportSequence> => {
     const corps = valider(CloturerSequenceSchema, req.body ?? {});
-
-    const rapport = await db.transaction(async (tx) => {
-      const [seq] = await tx
-        .select()
-        .from(sequencesCaisse)
-        .where(eq(sequencesCaisse.statut, 'OUVERTE'))
-        .limit(1)
-        .for('update');
-      if (!seq) throw new ErreurMetier('Aucune séquence ouverte à fermer', 409);
-
-      const tous = await detailShifts(tx, seq.id);
-      const clotures = tous.filter((s) => s.statut === 'CLOTURE');
-
-      let retenus: ShiftSequence[];
-      if (corps.service_ids) {
-        const demandes = new Set(corps.service_ids);
-        const connus = new Set(tous.map((s) => s.service_id));
-        for (const id of demandes) {
-          if (!connus.has(id)) throw new ErreurMetier('Un des shifts choisis n’appartient pas à cette séquence', 400);
-        }
-        const ouvertChoisi = tous.find((s) => demandes.has(s.service_id) && s.statut !== 'CLOTURE');
-        if (ouvertChoisi) {
-          throw new ErreurMetier(
-            `Le shift de ${ouvertChoisi.caissier} est encore ouvert : il ne peut pas être rasé, seulement laissé pour la séquence suivante`,
-            409,
-          );
-        }
-        retenus = clotures.filter((s) => demandes.has(s.service_id));
-      } else {
-        retenus = clotures;
-      }
-
-      if (retenus.length === 0) {
-        throw new ErreurMetier('Aucun shift clôturé à raser — la séquence serait vide', 409);
-      }
-
-      const retenusIds = new Set(retenus.map((s) => s.service_id));
-      const reportes = tous.filter((s) => !retenusIds.has(s.service_id));
-
-      const recap = agreger(retenus);
-      const clotureeLe = new Date();
-      const rapportSeq: RapportSequence = {
-        ...recap,
-        sequence_id: seq.id,
-        ouverte_le: seq.ouverte_le.toISOString(),
-        cloturee_le: clotureeLe.toISOString(),
-        cloturee_par: req.session!.nom_complet,
-        nb_shifts: retenus.length,
-        shifts_reportes: reportes.length,
-        shifts: retenus,
-      };
-
-      const [maj] = await tx
-        .update(sequencesCaisse)
-        .set({ statut: 'CLOTUREE', cloturee_le: clotureeLe, cloturee_par: req.session!.utilisateur_id, rapport: rapportSeq })
-        .where(eq(sequencesCaisse.id, seq.id))
-        .returning();
-      await ecrireOutbox(tx, 'sequences_caisse', 'UPDATE', seq.id, maj as unknown as Record<string, unknown>);
-
-      // Report : la séquence suivante s'ouvre TOUT DE SUITE et récupère les
-      // shifts laissés. Après la mise à jour ci-dessus, sinon l'index unique
-      // « une seule séquence OUVERTE » refuserait l'insertion.
-      if (reportes.length > 0) {
-        const [suivante] = await tx.insert(sequencesCaisse).values({}).returning();
-        await ecrireOutbox(tx, 'sequences_caisse', 'INSERT', suivante!.id, suivante as unknown as Record<string, unknown>);
-        const deplaces = await tx
-          .update(servicesCaisse)
-          .set({ sequence_id: suivante!.id })
-          .where(inArray(servicesCaisse.id, reportes.map((s) => s.service_id)))
-          .returning();
-        for (const s of deplaces) {
-          await ecrireOutbox(tx, 'services_caisse', 'UPDATE', s.id, s as unknown as Record<string, unknown>);
-        }
-      }
-
-      await journaliser(tx, {
-        user_id: req.session!.utilisateur_id,
-        action: 'CLOTURE_SEQUENCE',
-        entite: 'sequences_caisse',
-        entite_id: seq.id,
-        montant: recap.vente_totale,
-        meta: {
-          nb_shifts: retenus.length,
-          diff: recap.diff,
-          shifts_reportes: reportes.map((s) => ({ service_id: s.service_id, caissier: s.caissier, statut: s.statut })),
-          choix_manuel: corps.service_ids !== undefined,
-        },
-      });
-      return rapportSeq;
+    const rapport = await raserSequence({
+      serviceIds: corps.service_ids,
+      auteurId: req.session!.utilisateur_id,
+      auteurNom: req.session!.nom_complet,
     });
 
     // Le gérant repart avec le papier : détail de chaque shift + totaux du jour.
