@@ -54,6 +54,31 @@ export default {
         'marque-sur-plan': 'var(--marque-sur-plan)',
         'sur-marque': 'var(--sur-marque)',
 
+        // --- Séries de graphique : une teinte par restaurant. L'ordre est le
+        // mécanisme de sûreté daltonisme (voir packages/theme/theme.css).
+        serie: {
+          1: 'var(--serie-1)',
+          2: 'var(--serie-2)',
+          3: 'var(--serie-3)',
+          4: 'var(--serie-4)',
+          5: 'var(--serie-5)',
+          6: 'var(--serie-6)',
+          7: 'var(--serie-7)',
+          8: 'var(--serie-8)',
+        },
+
+        // --- Couleurs d'opérateur de paiement : déjà définies par le thème,
+        // le caissier les reconnaît avant de lire le mot. Ne pas en inventer.
+        pay: {
+          especes: 'var(--pay-especes)',
+          wave: 'var(--pay-wave)',
+          orange: 'var(--pay-orange)',
+          mtn: 'var(--pay-mtn)',
+          moov: 'var(--pay-moov)',
+          carte: 'var(--pay-carte)',
+          djamo: 'var(--pay-djamo)',
+        },
+
         // --- Sémantique
         ok: 'var(--ok)',
         'ok-tint': 'var(--ok-tint)',

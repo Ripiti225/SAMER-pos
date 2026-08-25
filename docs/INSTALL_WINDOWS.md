@@ -209,6 +209,7 @@ poste du restaurant :
 
 ```powershell
 pnpm roles:republier
+pnpm salle:republier
 ```
 
 La montée ne publie que les **changements** : les rôles, eux, naissent dans des

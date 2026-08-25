@@ -74,6 +74,7 @@ vides au siège, des semaines plus tard.
 
 ```bash
 pnpm roles:republier
+pnpm salle:republier
 ```
 
 ### Pourquoi
@@ -84,6 +85,7 @@ Tout ce qui existe déjà au moment de l'enrôlement n'a donc jamais été publi
 | Donnée | Née où | Publiée à l'enrôlement ? |
 |---|---|---|
 | Rôles et permissions | migrations SQL `0006`, `0024` (`INSERT INTO roles …`) | **non** — une migration n'écrit pas dans l'outbox |
+| Zones et tables de salle | seed / installation, avant l'enrôlement | **non** — et un plan de salle ne change presque jamais ensuite |
 | Catalogue (catégories, articles) | `pnpm catalogue:importer`, en local | **non** — et par conception : le catalogue ne remonte jamais |
 | Ventes, clôtures, dépenses | à l'usage, après l'enrôlement | oui |
 
@@ -94,6 +96,11 @@ sans rien modifier en local. Ils montent au cycle suivant (30 s), et l'onglet
 
 Sans lui, la console affiche « aucun rôle » et diffuser des accès depuis le
 siège est impossible — il n'y a rien à viser.
+
+`pnpm salle:republier` fait la même chose pour les **zones et les tables**. Sans
+lui, le cloud reçoit `commandes.table_id` — un uuid qu'il ne sait traduire avec
+rien — et le tableau de bord ne peut pas dire quelle table travaille le plus.
+La console détecte ce cas et l'écrit à l'écran.
 
 ### Le catalogue, lui, ne se republie pas
 

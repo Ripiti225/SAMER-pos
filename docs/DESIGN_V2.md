@@ -249,6 +249,43 @@ inventer d'autres valeurs.
 
 Badges : `APPEL` 🔔, `FACTURE` 🧾, `PRETE` ✅.
 
+### 4.4 Séries de graphique — la palette catégorielle
+
+Une teinte par **restaurant** sur un même graphe. Distincte des couleurs de
+catégorie (§ 4.1) et d'opérateur (§ 4.2), qui répondent à d'autres questions.
+
+| Créneau | Teinte | Clair | Sombre |
+|---|---|---|---|
+| 1 | bleu | `#2a78d6` | `#3987e5` |
+| 2 | orange | `#eb6834` | `#d95926` |
+| 3 | aqua | `#1baf7a` | `#199e70` |
+| 4 | jaune | `#eda100` | `#c98500` |
+| 5 | magenta | `#e87ba4` | `#d55181` |
+| 6 | vert | `#008300` | `#008300` |
+| 7 | violet | `#4a3aa7` | `#9085e9` |
+| 8 | rouge | `#e34948` | `#e66767` |
+
+**L'ordre est le mécanisme de sûreté daltonisme, pas un choix esthétique.** Il a
+été retenu parce qu'il passe les seuils sur les paires VOISINES — celles que
+l'œil compare dans des barres empilées ou groupées. Réordonner, c'est repasser
+le validateur.
+
+Vérifié le 2026-08-25 contre les surfaces réelles de la console (`--carte` :
+`#ffffff` en clair, `#212a37` en sombre) :
+
+- clair — pire paire voisine ΔE 9.1 (protanopie), vision normale 19.6 ;
+- sombre — pire paire voisine ΔE 8.4 (protanopie), vision normale 19.3.
+
+Trois teintes claires (aqua, jaune, magenta) et le vert en sombre passent sous
+3:1 sur leur fond : la **légende est donc toujours présente dès deux séries**, et
+le tableau de détail reste sous le graphe. L'identité d'une série ne repose
+jamais sur la couleur seule.
+
+**La couleur suit le restaurant, jamais son rang.** L'index est pris sur la liste
+complète et stable des restaurants : filtrer sur l'un d'eux ne doit pas repeindre
+les autres. Au-delà de huit restaurants, on ne génère pas une neuvième teinte —
+on regroupe ou on facette.
+
 ---
 
 ## 5. Mouvement
@@ -554,16 +591,23 @@ Ce qui change par rapport à la caisse, et pourquoi :
 - **Boutons à 40 px** et non 48 : souris et clavier, pas de doigt sur un écran
   gras.
 
-**Le graphique de tendance porte UNE seule série** — le chiffre d'affaires du
-groupe, jour par jour. Sept lignes superposées demanderaient une palette
-catégorielle de sept teintes validée pour le daltonisme, que ce document ne
-définit pas ; le détail par restaurant est juste en dessous, en clair, dans le
-tableau. Une série unique ne prend pas de légende : le titre la nomme. Les
-barres sont remplies en `--marque`, mais **les chiffres portent les jetons de
-texte** — `--marque` sur fond clair tombe à ~2:1 (§ 3.3), illisible en texte.
-Étiquette directe sur le seul meilleur jour, jamais un nombre sur chaque barre ;
-un jour isolé n'affiche aucun graphique, une barre solitaire ne montre pas
-d'évolution.
+**Le tableau de bord porte une série par restaurant** (§ 4.4). Les barres du
+chiffre d'affaires quotidien sont **empilées** et non groupées : trente jours ×
+sept restaurants font 210 barres larges de deux pixels, illisibles. Empilé, on
+lit le total du groupe ET sa composition d'un coup, ce qui est la question posée.
+Le détail vient au survol, jamais en écrivant un nombre sur chaque pile.
+
+Les **heures de pic** gardent une série unique — superposer sept restaurants sur
+vingt-quatre heures donnerait une bouillie. L'heure de pointe est en aplat plein
+et porte son étiquette, les autres sont en retrait. Le graphe ne montre que les
+heures réellement travaillées : un restaurant qui ouvre à 10 h n'affiche pas dix
+colonnes vides.
+
+Dans tous les cas, **les chiffres portent les jetons de texte** — `--marque` sur
+fond clair tombe à ~2:1 (§ 3.3), illisible en texte.
+
+*(Jusqu'au 2026-08-25, ce paragraphe imposait une série unique faute de palette
+catégorielle. Elle est désormais définie et validée : § 4.4.)*
 
 **Le filtre par restaurant est sur TOUS les onglets**, et sur ceux qu'on
 ajoutera — c'est la question permanente du siège (« et chez Angré, ça donne
@@ -723,3 +767,4 @@ Une ligne par modification de la maquette. **À tenir à jour à chaque changeme
 | 2026-08-24 | Console du siège : **filtre par restaurant sur tous les onglets**, tenu dans `App` et conservé d'un onglet à l'autre. Règle valable pour les onglets à venir. |
 | 2026-08-24 | Console du siège : **ticket Z rendu lisible** — blocs nommés reprenant l'ordre du ticket imprimé, tous les champs affichés zéros compris, bloc « Autres valeurs » pour les champs inconnus et JSON brut dépliable. Il s'affichait en JSON nu. |
 | 2026-08-25 | Ticket Z du siège : **montant d'annulation toujours affiché** (0 F compris, rouge au-dessus de 0, avec un total annulé), et bloc **Équipe nominatif** — nom, poste, arrivée, départ, salaire, Reste/Parti. Départ = heure de paie pour qui est payé à la journée, heure de clôture sinon, dite comme telle. |
+| 2026-08-25 | **Tableau de bord du siège refondu** : six chiffres d'appel avec variation contre la période précédente, CA quotidien empilé par restaurant, heures de pic, comparaisons entre restaurants, puis ce que seul le POS voit — top des plats, modes de paiement, tables, canaux, retours, écarts par caissier, remises, annulations, inventaire, équipe et heures travaillées. Palette catégorielle définie et validée (§ 4.4) : la règle « une seule série » du § 6.12 est levée. |

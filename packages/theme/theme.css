@@ -83,6 +83,33 @@
   --pay-carte: #64748b;
   --pay-djamo: #6d28d9;
 
+  /* --- Séries de graphique (console du siège) -------------------------------
+     Palette CATÉGORIELLE : une teinte par restaurant sur un même graphe.
+     Distincte des couleurs de catégorie et d'opérateur ci-dessus, qui répondent
+     à d'autres questions.
+
+     L'ORDRE est le mécanisme de sûreté daltonisme, pas un choix esthétique :
+     il a été retenu parce qu'il passe les seuils sur les paires VOISINES, celles
+     que l'œil compare dans des barres groupées ou des lignes superposées.
+     Réordonner, c'est repasser le validateur.
+
+     Vérifié le 2026-08-25 contre les surfaces réelles de la console
+     (--carte : #ffffff en clair, #212a37 en sombre) :
+       clair  — pire paire voisine ΔE 9.1 (protan), vision normale 19.6
+       sombre — pire paire voisine ΔE 8.4 (protan), vision normale 19.3
+     Trois teintes claires (aqua, jaune, magenta) et le vert en sombre passent
+     sous 3:1 sur leur fond : la LÉGENDE est donc toujours présente et une vue
+     tableau existe — l'identité d'une série ne repose jamais sur la couleur seule.
+     ------------------------------------------------------------------------- */
+  --serie-1: #2a78d6; /* bleu */
+  --serie-2: #eb6834; /* orange */
+  --serie-3: #1baf7a; /* aqua */
+  --serie-4: #eda100; /* jaune */
+  --serie-5: #e87ba4; /* magenta */
+  --serie-6: #008300; /* vert */
+  --serie-7: #4a3aa7; /* violet */
+  --serie-8: #e34948; /* rouge */
+
   /* --- Élévation — NEUTRE, jamais teintée ---------------------------------- */
   --ombre-1: 0 1px 2px rgba(16, 21, 29, 0.06), 0 2px 8px rgba(16, 21, 29, 0.05);
   --ombre-2: 0 8px 24px rgba(16, 21, 29, 0.12), 0 2px 6px rgba(16, 21, 29, 0.06);
@@ -181,6 +208,18 @@
   --vitrine-txt-faible: var(--ard-txt-faible);
   --vitrine-ombre: var(--ombre-ard);
   --halo-opacite: 1;
+
+  /* Les séries redescendent d'un cran pour le fond sombre : mêmes huit teintes,
+     autres marches, validées comme un jeu contre --carte sombre. Jamais un
+     éclaircissement automatique du jeu clair. */
+  --serie-1: #3987e5;
+  --serie-2: #d95926;
+  --serie-3: #199e70;
+  --serie-4: #c98500;
+  --serie-5: #d55181;
+  --serie-6: #008300;
+  --serie-7: #9085e9;
+  --serie-8: #e66767;
 
   /* Les ombres grises ne se voient pas sur du sombre. */
   --ombre-1: 0 1px 2px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);

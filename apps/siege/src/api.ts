@@ -82,6 +82,54 @@ export interface LigneTableauBord extends RestoGroupe {
   panier_moyen: number;
 }
 
+/**
+ * Réponse de l'action `tableau_bord`. Chaque tableau vient d'une fonction SQL
+ * `siege_*` : l'agrégation se fait dans PostgreSQL, jamais dans la fonction
+ * Deno ni ici. Un bloc dont la fonction manque (migration pas encore passée)
+ * arrive VIDE plutôt que de faire échouer tout l'écran.
+ */
+export interface Bord {
+  periode: { debut: string; fin: string; debut_precedent: string };
+  total: number;
+  total_precedent: number;
+  restaurants: (RestoGroupe & {
+    nb_commandes: number;
+    ca: number;
+    nb_annulees: number;
+    remises: number;
+    panier_moyen: number;
+    ca_precedent: number;
+    nb_commandes_precedent: number;
+  })[];
+  tendance: { restaurant_id: string; jour: string; ca: number; nb_commandes: number }[];
+  heures: { restaurant_id: string; heure: number; nb: number; ca: number }[];
+  plats: { restaurant_id: string; nom: string; quantite: number; total: number }[];
+  modes: { restaurant_id: string; mode: string; montant: number; nb: number }[];
+  types: { restaurant_id: string; type: string; partenaire: string | null; nb: number; total: number }[];
+  /** `numero` est NULL tant que `pnpm salle:republier` n'a pas tourné sur le site. */
+  tables: { restaurant_id: string; table_id: string; numero: string | null; zone: string | null; nb: number; total: number }[];
+  retours: { restaurant_id: string; nom: string; quantite: number; montant: number }[];
+  depenses: { restaurant_id: string; categorie: string; montant: number; nb: number }[];
+  ecarts: { restaurant_id: string; caissier: string; ecart: number; nb_services: number }[];
+  equipe: {
+    restaurant_id: string;
+    utilisateur_id: string;
+    nom: string;
+    poste: string | null;
+    nb_services: number;
+    minutes: number;
+    salaire: number;
+  }[];
+  remises: { restaurant_id: string; numero_ticket: number; montant: number; motif: string | null; created_at: string }[];
+  annulations: { restaurant_id: string; numero_ticket: number; total: number; created_at: string }[];
+  inventaire: { restaurant_id: string; nb_inventaires: number; montant_manquant: number; nb_debloques: number }[];
+  /** État COURANT de la fiche employé, jamais un historique. */
+  absents: { id: string; restaurant_id: string; nom_complet: string; poste: string | null; disponibilite: string }[];
+  aucun_site_enrole: boolean;
+  /** Les tables remontent sans nom : le référentiel de salle n'a pas été republié. */
+  salle_non_publiee: boolean;
+}
+
 export interface TableauBord {
   periode: { debut: string; fin: string };
   total: number;

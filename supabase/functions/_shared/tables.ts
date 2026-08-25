@@ -7,6 +7,9 @@ export const COLONNES_VENTES: Record<string, string[]> = {
     'service_id', 'caissier_id', 'serveur_id', 'statut', 'origine', 'refus_motif',
     'sous_total', 'remise_montant', 'remise_par', 'remise_motif', 'promo_id',
     'promo_montant', 'total', 'created_at', 'updated_at',
+    // 2026-08-25 — les Kdo étaient comptés dans `total` sans être
+    // identifiables : ils gonflaient le CA du siège en silence.
+    'offert', 'motif_offert',
   ],
   commande_items: [
     'id', 'commande_id', 'article_id', 'combo_id', 'nom_snapshot', 'prix_unitaire',
@@ -41,6 +44,11 @@ export const COLONNES_VENTES: Record<string, string[]> = {
   // Le POS envoie la LISTE ENTIÈRE des permissions du rôle, `record_id` = role_id.
   role_permissions: ['id', 'role_id', 'permissions'],
   disponibilite_locale: ['id', 'article_id', 'disponible'],
+  // 2026-08-25 — référentiel de salle, pour traduire `commandes.table_id`.
+  // `statut`, `qr_token` et `ouverte_par` sont volontairement absents : le
+  // statut change toutes les minutes, et le jeton QR est un secret du site.
+  zones: ['id', 'nom', 'couleur', 'ordre'],
+  tables_salle: ['id', 'zone_id', 'numero', 'partenaire', 'actif'],
   options_catalogue: ['id', 'nom', 'prix', 'actif', 'ordre', 'updated_at'],
   options_liaisons: ['id', 'option_id', 'categorie_id', 'article_id'],
   // `utilisateurs` : le POS publie la fiche employé quand elle change sur site.

@@ -173,19 +173,68 @@ Deno.serve(async (req) => {
         return jsonCors({ restaurants: await restaurantsGroupe(admin) });
       }
 
-      // -- Tableau de bord : les 7 restaurants sur une période, plus la
-      // -- tendance jour par jour. Les sites non enrôlés sortent à zéro, avec
-      // -- le drapeau qui explique pourquoi.
+      /**
+       * Tableau de bord — TOUT en une requête.
+       *
+       * Chaque bloc est une fonction SQL `siege_*` : l'agrégation se fait dans
+       * PostgreSQL, jamais ici. Un mois de ventes sur 7 restaurants fait
+       * ~10 000 lignes de `commandes` ; les remonter dans Deno pour les
+       * additionner en JavaScript serait lent et exposé à la troncature de
+       * PostgREST. Agrégées, elles tiennent en quelques dizaines de lignes.
+       *
+       * La PÉRIODE PRÉCÉDENTE est calculée en même temps, de même durée : sans
+       * elle, un chiffre d'affaires est un nombre sans repère. C'est le seul
+       * calcul de comparaison que fait cet écran — aucune soustraction entre CA
+       * et dépenses n'est faite nulle part, le POS ne connaît que les sorties
+       * de caisse et un « bénéfice » calculé ici serait toujours optimiste.
+       */
       case 'tableau_bord': {
         const { debut, fin } = periode(corps);
+        const duree = new Date(fin).getTime() - new Date(debut).getTime();
+        const debutPrec = new Date(new Date(debut).getTime() - duree).toISOString();
+
+        const bornes = { p_debut: debut, p_fin: fin };
         const restos = await restaurantsGroupe(admin);
 
-        const [ventes, parJour] = await Promise.all([
-          admin.rpc('siege_ventes', { p_debut: debut, p_fin: fin }),
-          admin.rpc('siege_ventes_jour', { p_debut: debut, p_fin: fin }),
+        const [
+          ventes, parJour, ventesPrec, heures, plats, modes, types,
+          tables, retours, depenses, ecarts, equipe, remises, annulations, inventaire,
+        ] = await Promise.all([
+          admin.rpc('siege_ventes', bornes),
+          admin.rpc('siege_ventes_jour', bornes),
+          admin.rpc('siege_ventes', { p_debut: debutPrec, p_fin: debut }),
+          admin.rpc('siege_ventes_heure', bornes),
+          admin.rpc('siege_top_plats', bornes),
+          admin.rpc('siege_par_mode', bornes),
+          admin.rpc('siege_par_type', bornes),
+          admin.rpc('siege_tables', bornes),
+          admin.rpc('siege_retours', bornes),
+          admin.rpc('siege_depenses', bornes),
+          admin.rpc('siege_ecarts_caissier', bornes),
+          admin.rpc('siege_equipe_periode', bornes),
+          admin.rpc('siege_remises', bornes),
+          admin.rpc('siege_annulations', bornes),
+          admin.rpc('siege_inventaire', bornes),
         ]);
+
+        // Absents : état COURANT de la fiche employé, pas un historique — le
+        // POS ne garde pas trace des disponibilités passées. L'écran le dit,
+        // plutôt que de laisser croire à une absence sur toute la période.
+        const absents = await admin
+          .from('utilisateurs_site')
+          .select('id, restaurant_id, nom_complet, poste, disponibilite')
+          .neq('disponibilite', 'PRESENT')
+          .not('disponibilite', 'is', null)
+          .eq('actif', true)
+          .limit(200);
+
+        // Une fonction absente (migration pas encore passée) ne doit pas faire
+        // échouer TOUT l'écran : le bloc concerné sort vide, le reste s'affiche.
+        // Le siège verra un trou, pas une page d'erreur.
+        const lignesDe = (r: { data: unknown; error: unknown }): Record<string, unknown>[] =>
+          r.error ? [] : ((r.data ?? []) as Record<string, unknown>[]);
+
         if (ventes.error) throw new Error('Lecture des ventes impossible');
-        if (parJour.error) throw new Error('Lecture de la tendance impossible');
 
         type LigneVente = {
           restaurant_id: string;
@@ -197,9 +246,14 @@ Deno.serve(async (req) => {
         };
         const parResto = new Map<string, LigneVente>();
         for (const v of (ventes.data ?? []) as LigneVente[]) parResto.set(v.restaurant_id, v);
+        const precParResto = new Map<string, LigneVente>();
+        for (const v of ((ventesPrec.error ? [] : ventesPrec.data) ?? []) as LigneVente[]) {
+          precParResto.set(v.restaurant_id, v);
+        }
 
         const lignes = restos.map((r) => {
           const v = r.restaurant_id ? parResto.get(r.restaurant_id) : undefined;
+          const p = r.restaurant_id ? precParResto.get(r.restaurant_id) : undefined;
           return {
             ...r,
             nb_commandes: v?.nb_commandes ?? 0,
@@ -207,17 +261,37 @@ Deno.serve(async (req) => {
             nb_annulees: v?.nb_annulees ?? 0,
             remises: v?.remises ?? 0,
             panier_moyen: v?.panier_moyen ?? 0,
+            ca_precedent: p?.ca ?? 0,
+            nb_commandes_precedent: p?.nb_commandes ?? 0,
           };
         });
 
         return jsonCors({
-          periode: { debut, fin },
+          periode: { debut, fin, debut_precedent: debutPrec },
           total: lignes.reduce((s, l) => s + l.ca, 0),
+          total_precedent: lignes.reduce((s, l) => s + l.ca_precedent, 0),
           restaurants: lignes,
-          tendance: parJour.data ?? [],
+          tendance: lignesDe(parJour),
+          heures: lignesDe(heures),
+          plats: lignesDe(plats),
+          modes: lignesDe(modes),
+          types: lignesDe(types),
+          tables: lignesDe(tables),
+          retours: lignesDe(retours),
+          depenses: lignesDe(depenses),
+          ecarts: lignesDe(ecarts),
+          equipe: lignesDe(equipe),
+          remises: lignesDe(remises),
+          annulations: lignesDe(annulations),
+          inventaire: lignesDe(inventaire),
+          absents: absents.error ? [] : (absents.data ?? []),
           // Ce que la console doit dire à l'écran plutôt que d'afficher 0 F sans
           // explication : personne ne synchronise encore.
           aucun_site_enrole: lignes.every((l) => !l.enrole),
+          // Le référentiel de salle ne monte qu'après `pnpm salle:republier` :
+          // sans lui, `siege_tables` rend des `numero` NULL. On le dit au front
+          // plutôt que de lui laisser afficher des uuid.
+          salle_non_publiee: lignesDe(tables).length > 0 && lignesDe(tables).every((t) => !t.numero),
         });
       }
 
@@ -593,9 +667,13 @@ Deno.serve(async (req) => {
             .from('sequences_caisse')
             .select('restaurant_id, id, ouverte_le, cloturee_le, statut')
             .eq('statut', 'OUVERTE'),
+          // Borné : sans limite, PostgREST tronque en silence sur un site qui
+          // tourne depuis des mois, et la séquence perdrait des shifts.
           admin
             .from('services_caisse')
-            .select('restaurant_id, id, sequence_id, caissier_id, ouvert_le, cloture_le, statut, ecart, rapport_z'),
+            .select('restaurant_id, id, sequence_id, caissier_id, ouvert_le, cloture_le, statut, ecart, rapport_z')
+            .order('ouvert_le', { ascending: false })
+            .limit(500),
           admin
             .from('ordres_site')
             .select('id, restaurant_id, type, params, demandeur, statut, cree_le, execute_le, erreur')

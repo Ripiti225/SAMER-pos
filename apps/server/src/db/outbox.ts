@@ -25,6 +25,17 @@ export type TableSynchronisee =
   | 'utilisateurs'
   // Sprint 4C : disponibilité locale (remonte au cloud à titre d'information).
   | 'disponibilite_locale'
+  /**
+   * 2026-08-25 — référentiel de salle. Sans lui, le cloud reçoit
+   * `commandes.table_id`, un uuid qu'il ne sait traduire avec rien : le siège
+   * ne peut pas dire quelle table travaille le plus.
+   *
+   * Le STATUT de table ne monte pas (colonne absente de la liste blanche) : il
+   * change toutes les minutes et ferait remonter la table à chaque service,
+   * pour une information qui n'a aucun sens au siège une fois le service fini.
+   */
+  | 'zones'
+  | 'tables_salle'
   // Migration 0020 : options réutilisables. Locales pour l'instant (le siège ne
   // les redescend pas), mais la remontée est préparée dès maintenant — c'est
   // tout l'intérêt d'écrire l'outbox sans attendre le branchement cloud.

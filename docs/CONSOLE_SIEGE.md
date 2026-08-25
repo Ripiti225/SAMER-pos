@@ -85,9 +85,36 @@ maintenant, au design « Duo contrasté » (DESIGN_V2 § 6.12).
 | Écran | Ce qu'il montre | Action appelée |
 |---|---|---|
 | Connexion | e-mail + mot de passe Supabase | — |
-| Tableau de bord | CA du groupe, tendance jour par jour, détail par restaurant (CA, commandes, panier moyen, remises, annulées) | `moi`, `tableau_bord` |
+| Tableau de bord | **Refondu le 2026-08-25** — six chiffres d'appel avec variation, CA quotidien empilé par restaurant, heures de pic, comparaisons, top des plats, modes de paiement, tables, canaux, retours, écarts par caissier, dépenses, remises, annulations, inventaire, équipe et heures travaillées | `moi`, `tableau_bord` |
 | Clôtures | fond, compté, théorique, **écart** coloré au-delà de 2 000 F, ticket Z complet à la demande (blocs nommés, tous les champs, JSON brut dépliable) | `restaurants`, `clotures`, `rapport_z` |
 | Équipe | les travailleurs du groupe, filtrables par restaurant, **en lecture seule** | `equipe` |
+
+### Le tableau de bord
+
+Tout est agrégé **en SQL** (fonctions `siege_*` de
+`20260825020000_tableau_bord_siege.sql`), jamais dans l'Edge Function : un mois
+de ventes sur 7 restaurants fait ~10 000 lignes de `commandes`, les remonter
+dans Deno pour les additionner serait lent et exposé à la troncature de
+PostgREST. Une action, une réponse, quinze agrégats.
+
+Un bloc dont la fonction SQL manque encore arrive **vide** au lieu de faire
+échouer l'écran : le siège voit un trou, pas une page d'erreur.
+
+Deux limites à connaître, toutes deux écrites à l'écran :
+
+- **Les absents** sont l'état COURANT de la fiche employé, pas un historique. On
+  peut dire « qui est absent aujourd'hui », jamais « qui l'était mardi dernier » :
+  le POS ne garde pas trace des disponibilités passées.
+- **Les tables** remontent sans nom tant que `pnpm salle:republier` n'a pas
+  tourné sur le site — le référentiel de salle ne monte pas tout seul (voir
+  `docs/DEPLOIEMENT_CLOUD.md`, étape 4 bis). La console le détecte et le dit.
+
+**Aucun bénéfice n'est calculé.** CA et dépenses sont montrés côte à côte,
+jamais soustraits : le POS ne connaît que les sorties de caisse (marché,
+légumes, fruits, annexes, salaires), ni loyer ni facture fournisseur payée hors
+caisse. Un « bénéfice » calculé ici serait systématiquement optimiste, et
+quelqu'un déciderait dessus. Le bénéfice reste l'affaire de SamerTrackly, qui a
+la structure de coûts complète.
 
 L'action **`equipe_service`** (ajoutée le 2026-08-24, déployée le 2026-08-25)
 rend l'équipe NOMINATIVE d'un service : nom, poste, heure d'arrivée, heure de
