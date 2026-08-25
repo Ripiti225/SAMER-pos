@@ -15,7 +15,7 @@
 > c'est ce document qui est mis à jour, le jour même.
 >
 > **Portage** : fait pour la caisse (connexion, accueil, tables, commande,
-> paiement, clôture, dépenses, inventaire). Le KDS, la tablette serveur et l'app
+> paiement, clôture, dépenses, inventaire, administration). Le KDS, la tablette serveur et l'app
 > client tournent encore sur les anciens jetons (alias de compatibilité dans
 > `packages/theme/theme.css`).
 
@@ -490,6 +490,110 @@ SamerTrackly qui déduit, le POS présente le chiffre au manager, qui tranche.
    de la Supervision : c'est le chiffre qui dit si un restaurant refait souvent
    ses plats, et qui les refait.
 
+### 6.11 Administration (Réglages)
+
+**Le seul écran de la caisse qui n'était jamais passé en v2.** La maquette n'en
+porte qu'un bouton, pas d'écran : le design est posé ici, pas relevé sur elle.
+
+L'écran avait déjà la forme que le duo attend — une barre, une colonne latérale,
+une zone de travail. Il tournait pourtant encore sur l'ancien idiome : aucune
+ossature, et **quatorze couleurs Tailwind brutes** (`bg-emerald-100`,
+`text-amber-900`, `bg-blue-50`…) qui ignorent le mode sombre — les seules du
+dossier `apps/caisse`, tous les autres écrans portés n'en ont aucune.
+
+- **Barre ardoise** (`ard-900`, 62 px) identique à celle de l'écran de commande :
+  retour Accueil, « Administration », puis le restaurant et le nom de la
+  personne connectée, pilule de synchro à droite.
+- **Colonne des sections en ardoise** (`ard-800`, 214 px), des libellés et non un
+  rail d'icônes. Les quatorze sections sont **groupées par famille** — Équipe &
+  accès, Carte, Salle & clients, Impression, Établissement : à plat, c'est un mur
+  de quatorze libellés de même poids où l'on cherche « Rôles & accès » à la
+  lecture. Un groupe que les permissions vident entièrement ne s'affiche pas.
+- **La section ouverte** porte un liseré de marque de 3 px à gauche, en plus de
+  l'aplat `ard-700`. L'aplat seul (sur `ard-800`) se distingue mal de loin, et un
+  point coloré n'aurait rien dit : ici la couleur ne classe rien, elle situe.
+- **Zone de travail claire** (`bg-plan`), cartes, champs et boutons du système.
+
+Il reste 706 px sous la barre sur le kiosque 1024 × 768, et quatorze entrées en
+font ~735 : le propriétaire, seul à toutes les voir, fait défiler d'un cran. La
+colonne est donc en `overflow-y-auto` — le groupement rend la liste lisible, il
+ne la fait pas tenir.
+
+**Correspondance des couleurs hors système** (aucune n'est reconduite) :
+
+| Avant | Après | Emploi |
+|---|---|---|
+| `bg-emerald-100` / `text-emerald-900`, `text-emerald-700` | `ok-tint` / `ok-txt` | succès, article disponible, rôle actif |
+| `bg-red-100` / `text-red-900`, `text-red-700` | `alerte-tint` / `alerte-txt` | erreur, table désactivée, hors ligne |
+| `bg-amber-100` / `text-amber-900`, `amber-500`, `amber-600` | `attente-tint` / `attente-txt` | code temporaire, QR injoignables |
+| `bg-blue-50` / `text-blue-900` | `info-tint` / `info-txt` | bandeaux explicatifs |
+
+Les 24 `rounded-xl` de l'écran valaient **24 px** dans ce thème (`borderRadius.xl`
+= 1.5 rem) — le rayon « bonbon » que le § 2 a écarté. Tous passés à
+`rounded-jeton` (12 px), comme les écrans portés en dernier.
+
+---
+
+### 6.12 Console du siège
+
+Une application à part (`apps/siege`), pas un écran de la caisse : elle regarde
+les 7 restaurants depuis un bureau connecté. Elle reprend l'ossature du duo —
+barre `ard-900`, colonne d'écrans `ard-800` avec liseré de marque sur l'écran
+ouvert, plan de travail clair — pour qu'on reconnaisse la même maison.
+
+Ce qui change par rapport à la caisse, et pourquoi :
+
+- **Pas de PWA, pas de service worker.** Aucun intérêt hors ligne, donc aucun
+  cache à purger : le piège du kiosque (une version figée dans le worker) ne
+  s'applique pas ici.
+- **Connexion par e-mail et mot de passe**, pas par grille de profils et PIN. Les
+  comptes du siège se comptent sur une main et n'appartiennent pas à un poste.
+  L'écran reste « vitrine » : il suit le mode clair/sombre.
+- **Le mode d'affichage vit dans le navigateur** (`localStorage`), pas dans
+  `parametres_locaux` : le siège se regarde depuis plusieurs machines.
+- **Boutons à 40 px** et non 48 : souris et clavier, pas de doigt sur un écran
+  gras.
+
+**Le graphique de tendance porte UNE seule série** — le chiffre d'affaires du
+groupe, jour par jour. Sept lignes superposées demanderaient une palette
+catégorielle de sept teintes validée pour le daltonisme, que ce document ne
+définit pas ; le détail par restaurant est juste en dessous, en clair, dans le
+tableau. Une série unique ne prend pas de légende : le titre la nomme. Les
+barres sont remplies en `--marque`, mais **les chiffres portent les jetons de
+texte** — `--marque` sur fond clair tombe à ~2:1 (§ 3.3), illisible en texte.
+Étiquette directe sur le seul meilleur jour, jamais un nombre sur chaque barre ;
+un jour isolé n'affiche aucun graphique, une barre solitaire ne montre pas
+d'évolution.
+
+**Le filtre par restaurant est sur TOUS les onglets**, et sur ceux qu'on
+ajoutera — c'est la question permanente du siège (« et chez Angré, ça donne
+quoi ? »), elle ne doit jamais demander de changer d'écran. Le choix vit dans
+`App` et **survit au changement d'onglet** : on suit un restaurant du tableau de
+bord à ses clôtures sans le resélectionner. Il transporte le `samtrackly_id` et
+non l'UUID POS, sinon un site non enrôlé — qui n'en a pas — disparaîtrait du
+filtre alors qu'il existe.
+
+**Le ticket Z se lit, il ne se décode pas — et RIEN n'y saute.** Le rapport est
+figé en JSONB à la clôture ; la console le rend en blocs nommés (réconciliation
+dans l'ordre exact du ticket imprimé sur le site, ventes, encaissements par
+mode, par type, top articles, inventaire, retours, remises, annulations,
+équipe), et **affiche tous les champs, les zéros compris** : « personne n'a payé
+par Wave ce jour-là » est une information, pas du bruit à filtrer. Les valeurs
+nulles passent en `--txt-faible` — l'œil les saute, elles restent lisibles.
+
+Deux filets, parce qu'un ticket de six mois a la forme qu'avait le POS ce
+jour-là : tout champ que la console ne sait pas nommer tombe dans un bloc
+**« Autres valeurs »** au lieu de disparaître, et le **ticket brut reste
+dépliable** en bas de l'écran, pour vérifier la source ou copier une valeur.
+
+**Ce que l'écran doit dire quand il n'y a rien à dire** : tant qu'aucun site
+n'est enrôlé, les ventes valent zéro parce que le cloud ne reçoit rien — la
+console l'écrit, plutôt que de laisser croire à une journée blanche. De même,
+un restaurant non enrôlé **reste dans la liste**, marqué comme tel : le masquer
+laisserait croire que le groupe fait deux restaurants au lieu de sept.
+
+---
+
 ---
 
 ## 7. Visuels des plats
@@ -614,3 +718,8 @@ Une ligne par modification de la maquette. **À tenir à jour à chaque changeme
 | 2026-08-15 | Réconciliation : ajout des **livraisons partenaires** et des **Kdo offerts**, qui figuraient au ticket Z sans être réconciliés. |
 | 2026-08-15 | Bandeau d'équipe déplié : **une seule ligne de 4 noms** qui défile horizontalement. Les tuiles de l'accueil restent statiques (un premier essai les avait mises en carrousel — c'était l'équipe qui devait défiler). |
 | 2026-08-15 | Paie : onglet **Paie & départs** ouvert à toute l'équipe, bouton **+ Encouragement** (prime), sélecteur **Parti / Reste**, et règle « sans Reste = parti » appliquée à la clôture. |
+| 2026-08-24 | **Administration (Réglages)** portée en v2 (§ 6.11) : barre et colonne en ardoise, quatorze sections groupées par famille avec liseré de marque sur la section ouverte, plan de travail clair. Les 14 couleurs Tailwind brutes passent aux jetons sémantiques (ok / alerte / attente / info) — elles ignoraient le mode sombre — et les 24 rayons de 24 px reviennent à 12 px. |
+| 2026-08-24 | **Console du siège** (§ 6.12) : front `apps/siege` rebâti — il n'existait nulle part, seuls la fonction et la migration étaient au dépôt. Ossature du duo, connexion e-mail, Tableau de bord (CA du groupe, tendance une série, détail par restaurant), Clôtures avec écarts et ticket Z, Équipe en lecture. |
+| 2026-08-24 | Console du siège : **filtre par restaurant sur tous les onglets**, tenu dans `App` et conservé d'un onglet à l'autre. Règle valable pour les onglets à venir. |
+| 2026-08-24 | Console du siège : **ticket Z rendu lisible** — blocs nommés reprenant l'ordre du ticket imprimé, tous les champs affichés zéros compris, bloc « Autres valeurs » pour les champs inconnus et JSON brut dépliable. Il s'affichait en JSON nu. |
+| 2026-08-25 | Ticket Z du siège : **montant d'annulation toujours affiché** (0 F compris, rouge au-dessus de 0, avec un total annulé), et bloc **Équipe nominatif** — nom, poste, arrivée, départ, salaire, Reste/Parti. Départ = heure de paie pour qui est payé à la journée, heure de clôture sinon, dite comme telle. |

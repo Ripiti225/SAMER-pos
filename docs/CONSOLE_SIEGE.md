@@ -75,9 +75,56 @@ d'un nom de restaurant.
    `niveau` : `ADMIN` voit et écrit, `LECTURE` voit seulement (comptable, associé).
 5. **`.env`** — `apps/siege/.env`, adresse du projet + clé `anon`.
 
+## Le front
+
+**Rebâti le 2026-08-24.** Il n'existait nulle part — ni dans le dépôt, ni sur
+aucune branche locale ou distante, ni sur la clé POSSAMER : seuls la fonction
+`siege` et la migration étaient versionnés. Ce qui suit décrit ce qui est là
+maintenant, au design « Duo contrasté » (DESIGN_V2 § 6.12).
+
+| Écran | Ce qu'il montre | Action appelée |
+|---|---|---|
+| Connexion | e-mail + mot de passe Supabase | — |
+| Tableau de bord | CA du groupe, tendance jour par jour, détail par restaurant (CA, commandes, panier moyen, remises, annulées) | `moi`, `tableau_bord` |
+| Clôtures | fond, compté, théorique, **écart** coloré au-delà de 2 000 F, ticket Z complet à la demande (blocs nommés, tous les champs, JSON brut dépliable) | `restaurants`, `clotures`, `rapport_z` |
+| Équipe | les travailleurs du groupe, filtrables par restaurant, **en lecture seule** | `equipe` |
+
+L'action **`equipe_service`** (ajoutée le 2026-08-24, déployée le 2026-08-25)
+rend l'équipe NOMINATIVE d'un service : nom, poste, heure d'arrivée, heure de
+départ, salaire payé, Reste/Parti. Elle croise `equipe_service` (qui remonte),
+`utilisateurs_site` pour les noms, et les lignes de dépense catégorie
+`SALAIRES` pour l'heure de paie.
+
+**L'heure de départ n'existe nulle part en base** — seul `reste` (booléen) est
+enregistré. La règle appliquée, donnée le 2026-08-24 :
+
+- payé à la journée → **l'heure de paie**, celle de la ligne de dépense
+  `SALAIRES`, datée par le système au clic sur « Payer » ;
+- sinon → **l'heure de clôture** du service, affichée « *(clôture)* » : elle est
+  présumée, pas pointée, et l'écran ne doit pas laisser croire l'inverse.
+
+Le ticket Z lit cette action à l'ouverture plutôt que de figer la liste dans
+`rapport_z` : ainsi elle vaut aussi pour les **clôtures déjà passées**.
+
+**Tous les onglets portent un filtre par restaurant** — et ceux qu'on ajoutera
+aussi. Le choix est tenu dans `App` et conservé d'un onglet à l'autre : on suit
+un restaurant du tableau de bord à ses clôtures puis à son équipe sans jamais le
+resélectionner. Il transporte le `samtrackly_id`, seul identifiant que possèdent
+les 7 restaurants — un site non enrôlé n'a pas d'UUID POS et doit rester
+sélectionnable.
+
+Le seuil de 2 000 F est celui du POS (`parametres_locaux.seuil_alerte_ecart_caisse`),
+repris tel quel : la console ne doit pas alerter sur un autre seuil que celui qui
+a déclenché l'entrée d'audit `ECART_CAISSE` sur le site.
+
+L'écran Équipe porte à l'écran la raison de sa lecture seule, pour qu'on ne
+cherche pas un bouton « Ajouter » qui manquerait par oubli.
+
 ## Lancer
 
 ```
+cp apps/siege/.env.example apps/siege/.env   # puis y coller la clé anon
+pnpm install
 pnpm --filter @pos/siege dev        # http://localhost:5180
 ```
 
