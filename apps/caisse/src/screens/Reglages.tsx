@@ -4,9 +4,24 @@ import { IconArrowLeft, IconLock } from '@tabler/icons-react';
 import { DISPONIBILITES, type Disponibilite, formatFCFA, LIBELLES_DISPONIBILITE, LIBELLES_POSTE_IMPRESSION, POSTES_IMPRESSION, type PosteImpression, SECTIONS_PERMISSIONS, PERMISSION_PROTEGEE, type SessionInfo } from '@pos/shared';
 import { api } from '../api';
 import { Modale } from '../components/Modale';
+import { PiluleSync } from '../components/SanteSync';
 import { useCaisse } from '../stores/session';
 
-/** Espace Administration (sprint 4C). Sections visibles selon les permissions. */
+/**
+ * Espace Administration (sprint 4C), au design « Duo contrasté » (DESIGN_V2 § 6.11).
+ *
+ * L'écran avait déjà la forme que le duo attend — une barre, une colonne
+ * latérale, une zone de travail : la barre et la colonne passent en ardoise,
+ * sombres dans les deux modes comme sur l'écran de commande et le plan de
+ * salle, et le centre devient le plan de travail clair.
+ *
+ * Les quatorze sections sont REGROUPÉES par famille : à plat, la colonne est
+ * un mur de quatorze libellés de même poids où l'on cherche « Rôles & accès »
+ * à la lecture. Sur le kiosque 1024 × 768 il reste 706 px sous la barre, et
+ * quatorze entrées en font ~735 : le propriétaire, seul à toutes les voir,
+ * fait défiler d'un cran — d'où l'`overflow-y-auto`. Un groupe dont les
+ * permissions écartent toutes les sections ne s'affiche pas.
+ */
 export function Reglages() {
   const { session, rentrer } = useCaisse();
   const perms = session?.permissions ?? [];
@@ -15,57 +30,91 @@ export function Reglages() {
   const sections = useMemo(
     () =>
       [
-        { cle: 'reglages.equipe', libelle: 'Équipe', rendu: () => <Equipe /> },
-        { cle: 'reglages.salle', libelle: 'Salle & QR', rendu: () => <Salle /> },
-        { cle: 'reglages.disponibilite', libelle: 'Plats du jour', rendu: () => <Disponibilite /> },
-        { cle: 'reglages.catalogue', libelle: 'Catalogue', rendu: () => <Catalogue /> },
-        { cle: 'options', perm: 'reglages.catalogue', libelle: 'Options', rendu: () => <Options /> },
-        { cle: 'promotions', perm: 'reglages.catalogue', libelle: 'Promotions', rendu: () => <Promotions /> },
-        { cle: 'reglages.fidelite', libelle: 'Fidélité', rendu: () => <Fidelite /> },
-        { cle: 'imprimante', perm: 'reglages.parametres', libelle: 'Imprimantes', rendu: () => <Imprimante /> },
-        { cle: 'routage', perm: 'reglages.parametres', libelle: 'Routage impression', rendu: () => <RoutageImpression /> },
-        { cle: 'recettes', perm: 'reglages.parametres', libelle: 'Recettes d’inventaire', rendu: () => <RecettesInventaire /> },
-        { cle: 'reglages.parametres', libelle: 'Paramètres', rendu: () => <Parametres /> },
-        { cle: 'reglages.restaurant', libelle: 'Restaurant', rendu: () => <ConfigRestaurant /> },
-        { cle: 'reglages.audit', libelle: "Journal d'audit", rendu: () => <Audit /> },
-        { cle: 'roles.gerer', libelle: 'Rôles & accès', rendu: () => <Roles /> },
+        { cle: 'reglages.equipe', groupe: 'Équipe & accès', libelle: 'Équipe', rendu: () => <Equipe /> },
+        { cle: 'roles.gerer', groupe: 'Équipe & accès', libelle: 'Rôles & accès', rendu: () => <Roles /> },
+        { cle: 'reglages.catalogue', groupe: 'Carte', libelle: 'Catalogue', rendu: () => <Catalogue /> },
+        { cle: 'options', perm: 'reglages.catalogue', groupe: 'Carte', libelle: 'Options', rendu: () => <Options /> },
+        { cle: 'promotions', perm: 'reglages.catalogue', groupe: 'Carte', libelle: 'Promotions', rendu: () => <Promotions /> },
+        { cle: 'reglages.disponibilite', groupe: 'Carte', libelle: 'Plats du jour', rendu: () => <Disponibilite /> },
+        { cle: 'reglages.salle', groupe: 'Salle & clients', libelle: 'Salle & QR', rendu: () => <Salle /> },
+        { cle: 'reglages.fidelite', groupe: 'Salle & clients', libelle: 'Fidélité', rendu: () => <Fidelite /> },
+        { cle: 'imprimante', perm: 'reglages.parametres', groupe: 'Impression', libelle: 'Imprimantes', rendu: () => <Imprimante /> },
+        { cle: 'routage', perm: 'reglages.parametres', groupe: 'Impression', libelle: 'Routage impression', rendu: () => <RoutageImpression /> },
+        { cle: 'reglages.restaurant', groupe: 'Établissement', libelle: 'Restaurant', rendu: () => <ConfigRestaurant /> },
+        { cle: 'reglages.parametres', groupe: 'Établissement', libelle: 'Paramètres', rendu: () => <Parametres /> },
+        { cle: 'recettes', perm: 'reglages.parametres', groupe: 'Établissement', libelle: 'Recettes d’inventaire', rendu: () => <RecettesInventaire /> },
+        { cle: 'reglages.audit', groupe: 'Établissement', libelle: "Journal d'audit", rendu: () => <Audit /> },
       ].filter((s) => a(s.perm ?? s.cle)),
     [perms.join(',')],
   );
+
+  /** Familles dans l'ordre de la colonne ; celles que les permissions vident disparaissent. */
+  const groupes = useMemo(() => {
+    const ordre: string[] = [];
+    for (const s of sections) if (!ordre.includes(s.groupe)) ordre.push(s.groupe);
+    return ordre.map((nom) => ({ nom, items: sections.filter((s) => s.groupe === nom) }));
+  }, [sections]);
 
   const [active, setActive] = useState(sections[0]?.cle ?? '');
   const sectionActive = sections.find((s) => s.cle === active) ?? sections[0];
 
   return (
-    <div className="flex min-h-full flex-col bg-fond p-6">
-      <header className="mb-6 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={rentrer}
-          title="Retour"
-          className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-surface-douce text-doux transition hover:bg-marque-tint hover:text-marque-fonce"
-        >
-          <IconArrowLeft size={20} />
-        </button>
-        <h1 className="text-2xl font-bold text-marque-fonce">Réglages</h1>
+    <div className="flex h-screen flex-col">
+      {/* ---------- Barre ardoise, comme l'écran de commande (§ 6.4) ---------- */}
+      <header className="flex h-[62px] flex-none items-center justify-between border-b border-ard-700 bg-ard-900 px-3.5 text-ard-txt">
+        <div className="flex min-w-0 items-center gap-3">
+          <button
+            type="button"
+            onClick={rentrer}
+            title="Retour à l’accueil"
+            className="flex flex-none items-center gap-2 rounded-btn px-3 py-2 font-semibold text-ard-txt-doux transition hover:bg-ard-750 hover:text-ard-txt"
+          >
+            <IconArrowLeft size={19} />
+            Accueil
+          </button>
+          <span className="h-6 w-px flex-none bg-ard-600" />
+          <div className="min-w-0">
+            <div className="truncate text-[17px] font-semibold tracking-tight">Administration</div>
+            <div className="truncate text-[12.5px] font-medium text-ard-txt-doux">
+              {session?.restaurant.nom} · {session?.utilisateur.nom_complet}
+            </div>
+          </div>
+        </div>
+        <PiluleSync />
       </header>
 
-      <div className="flex flex-1 gap-6">
-        <nav className="flex w-56 shrink-0 flex-col gap-1">
-          {sections.map((s) => (
-            <button
-              key={s.cle}
-              type="button"
-              className={`rounded-[13px] px-4 py-3 text-left text-lg font-semibold transition ${
-                s.cle === sectionActive?.cle ? 'bg-marque text-sur-marque shadow-e1' : 'text-doux hover:bg-marque-tint hover:text-marque-fonce'
-              }`}
-              onClick={() => setActive(s.cle)}
-            >
-              {s.libelle}
-            </button>
+      <div className="grid min-h-0 flex-1 grid-cols-[214px_1fr]">
+        {/* Colonne des sections, en ardoise : des libellés, pas un rail d'icônes.
+            L'aplat seul (ard-700 sur ard-800) se distingue mal de loin — le
+            liseré de marque dit où l'on est, sans ajouter de couleur décorative. */}
+        <nav className="flex flex-col overflow-y-auto border-r border-ard-700 bg-ard-800 p-2.5">
+          {groupes.map((g) => (
+            <div key={g.nom} className="mb-1.5">
+              <p className="px-3 pb-1.5 pt-2 text-[10.5px] font-bold uppercase leading-tight tracking-[0.09em] text-ard-txt-faible">
+                {g.nom}
+              </p>
+              {g.items.map((s) => {
+                const actif = s.cle === sectionActive?.cle;
+                return (
+                  <button
+                    key={s.cle}
+                    type="button"
+                    onClick={() => setActive(s.cle)}
+                    className={`relative flex w-full items-center rounded-btn py-3 pl-3.5 pr-3 text-left text-[14.5px] font-semibold leading-tight transition ${
+                      actif ? 'bg-ard-700 text-ard-txt' : 'text-ard-txt-doux hover:bg-ard-750 hover:text-ard-txt'
+                    }`}
+                  >
+                    {actif && <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-marque" />}
+                    <span className="truncate">{s.libelle}</span>
+                  </button>
+                );
+              })}
+            </div>
           ))}
         </nav>
-        <main className="flex-1 overflow-auto">{sectionActive?.rendu()}</main>
+
+        {/* Zone de travail — plan de travail CLAIR */}
+        <main className="min-w-0 overflow-y-auto bg-plan p-5">{sectionActive?.rendu()}</main>
       </div>
     </div>
   );
@@ -75,7 +124,7 @@ export function Reglages() {
 function Message({ texte, ok }: { texte: string | null; ok?: boolean }) {
   if (!texte) return null;
   return (
-    <div className={`mb-4 rounded-xl px-4 py-3 ${ok ? 'bg-emerald-100 text-emerald-900' : 'bg-red-100 text-red-900'}`}>
+    <div className={`mb-4 rounded-jeton px-4 py-3 ${ok ? 'bg-ok-tint text-ok-txt' : 'bg-alerte-tint text-alerte-txt'}`}>
       {texte}
     </div>
   );
@@ -228,12 +277,12 @@ function AvatarEmploye({ nom, photo }: { nom: string; photo: string | null }) {
         alt=""
         loading="lazy"
         onError={() => setCasse(true)}
-        className="h-12 w-12 flex-none rounded-xl border border-bordure object-cover"
+        className="h-12 w-12 flex-none rounded-jeton border border-bordure object-cover"
       />
     );
   }
   return (
-    <div className="flex h-12 w-12 flex-none items-center justify-center rounded-xl bg-marque-tint text-sm font-bold text-marque-fonce">
+    <div className="flex h-12 w-12 flex-none items-center justify-center rounded-jeton bg-marque-tint text-sm font-bold text-marque-fonce">
       {initiales}
     </div>
   );
@@ -321,7 +370,7 @@ function Equipe() {
       </div>
       <Message texte={msg?.texte ?? null} ok={msg?.ok} />
       {code && (
-        <div className="mb-4 rounded-xl bg-amber-100 px-4 py-3 text-amber-900">
+        <div className="mb-4 rounded-jeton bg-attente-tint px-4 py-3 text-attente-txt">
           Code temporaire à communiquer à l’employé (une seule fois) : <b className="text-2xl tracking-widest">{code}</b>
           <button type="button" className="btn-blanc ml-3" onClick={() => setCode(null)}>OK</button>
         </div>
@@ -351,7 +400,7 @@ function Equipe() {
       </div>
 
       {nouveau && (
-        <div className="mt-4 rounded-xl border border-bordure p-4">
+        <div className="mt-4 rounded-jeton border border-bordure p-4">
           <h3 className="mb-3 font-bold">Nouvel employé</h3>
           <div className="grid gap-3 sm:grid-cols-3">
             <input className="champ" placeholder="Nom complet" value={nouveau.nom_complet} onChange={(ev) => setNouveau({ ...nouveau, nom_complet: ev.target.value })} />
@@ -505,7 +554,7 @@ function Salle() {
         </div>
       </div>
       {confirmTout && (
-        <p className="mb-3 text-sm text-amber-600">
+        <p className="mb-3 text-sm text-attente-txt">
           Tous les QR de toutes les tables vont changer. Les QR déjà imprimés et collés ne fonctionneront plus : il faudra les réimprimer.
         </p>
       )}
@@ -517,16 +566,16 @@ function Salle() {
       </div>
       <div className="grid gap-4">
         {(zones ?? []).map((z) => (
-          <div key={z.id} className="rounded-xl border border-bordure p-4">
+          <div key={z.id} className="rounded-jeton border border-bordure p-4">
             <div className="mb-2 font-bold">{z.nom}</div>
             <div className="flex flex-wrap gap-2">
               {z.tables.map((t) => (
                 <div key={t.id} className={`rounded-lg border border-bordure px-3 py-2 ${t.actif ? '' : 'opacity-50'}`}>
-                  <div className="font-semibold">{t.numero}{!t.actif && <span className="ml-1 text-xs font-normal text-red-700">· désactivée</span>}</div>
+                  <div className="font-semibold">{t.numero}{!t.actif && <span className="ml-1 text-xs font-normal text-alerte-txt">· désactivée</span>}</div>
                   <div className="flex gap-2">
                     <button type="button" className="text-xs underline" onClick={() => setQrTable(t)}>QR</button>
                     {t.actif ? (
-                      <button type="button" className="text-xs text-red-700 underline" onClick={() => desactiver.mutate(t.id)}>Désactiver</button>
+                      <button type="button" className="text-xs text-alerte-txt underline" onClick={() => desactiver.mutate(t.id)}>Désactiver</button>
                     ) : (
                       <button type="button" className="text-xs text-marque-fonce underline" onClick={() => reactiver.mutate(t.id)}>Réactiver</button>
                     )}
@@ -556,8 +605,8 @@ function AdresseReseau() {
 
   if (local || !data.ip_detectee) {
     return (
-      <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-        <div className="font-semibold text-amber-500">Les QR ne sont pas encore joignables depuis un téléphone</div>
+      <div className="mb-4 rounded-jeton border border-attente bg-attente-tint px-4 py-3 text-sm">
+        <div className="font-semibold text-attente-txt">Les QR ne sont pas encore joignables depuis un téléphone</div>
         <p className="mt-1 text-doux">
           {data.ip_detectee
             ? <>Ce poste est sur le réseau <b>{data.ip_detectee}</b>, mais l’adresse configurée reste locale. Renseignez « Adresse web des QR clients » dans <b>Paramètres</b> avec <b>{data.adresse_detectee}</b>.</>
@@ -567,7 +616,7 @@ function AdresseReseau() {
     );
   }
   return (
-    <div className="mb-4 rounded-xl border border-marque-fonce/40 bg-marque-fonce/10 px-4 py-3 text-sm">
+    <div className="mb-4 rounded-jeton border border-marque-fonce/40 bg-marque-fonce/10 px-4 py-3 text-sm">
       <div className="font-semibold text-marque-fonce">QR joignables sur le réseau local</div>
       <p className="mt-1 text-doux">
         Adresse encodée : <b className="break-all">{data.base_effective}</b>. Un téléphone connecté au même WiFi que le restaurant l’ouvrira en scannant le QR.
@@ -678,7 +727,7 @@ function Disponibilite() {
                   </div>
                   <div className="flex flex-1 flex-col gap-0.5 p-2">
                     <div className="line-clamp-2 text-sm font-semibold leading-tight">{a.nom}</div>
-                    <div className={`text-xs font-bold ${a.disponible ? 'text-emerald-700' : 'text-red-700'}`}>
+                    <div className={`text-xs font-bold ${a.disponible ? 'text-ok-txt' : 'text-alerte-txt'}`}>
                       {a.disponible ? 'Disponible' : 'Épuisé'}
                     </div>
                   </div>
@@ -709,9 +758,9 @@ function Catalogue() {
   return (
     <section>
       <h2 className="mb-2 text-xl font-bold">Catalogue</h2>
-      <div className="mb-4 rounded-xl bg-blue-50 px-4 py-3 text-blue-900">
+      <div className="mb-4 rounded-jeton bg-info-tint px-4 py-3 text-info-txt">
         {data?.delai_message ?? 'Les modifications du catalogue s’appliquent dans les 5 minutes.'}
-        {data && !data.en_ligne && <div className="mt-1 text-red-700">Hors ligne : modification du menu impossible. La vente continue normalement.</div>}
+        {data && !data.en_ligne && <div className="mt-1 text-alerte-txt">Hors ligne : modification du menu impossible. La vente continue normalement.</div>}
       </div>
       <Message texte={msg?.texte ?? null} ok={msg?.ok} />
       <div className="overflow-x-auto">
@@ -891,7 +940,7 @@ function Promotions() {
   return (
     <section>
       <h2 className="mb-2 text-xl font-bold">Promotions</h2>
-      <div className="mb-4 rounded-xl bg-blue-50 px-4 py-3 text-blue-900">
+      <div className="mb-4 rounded-jeton bg-info-tint px-4 py-3 text-info-txt">
         Une promotion active s’applique <strong>toute seule</strong> aux nouvelles commandes dès que le jour et
         l’heure correspondent — personne n’a besoin de la déclencher. Les commandes déjà encaissées gardent la
         remise qu’elles ont reçue : désactiver n’agit que sur la suite.
@@ -913,7 +962,7 @@ function Promotions() {
         {promos.map((p) => (
           <div
             key={p.id}
-            className={`rounded-xl border p-4 ${p.actif ? 'border-bordure-forte bg-surface' : 'border-bordure bg-surface-douce'}`}
+            className={`rounded-jeton border p-4 ${p.actif ? 'border-bordure-forte bg-surface' : 'border-bordure bg-surface-douce'}`}
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
@@ -921,7 +970,7 @@ function Promotions() {
                   <span className="text-lg font-bold">{p.nom}</span>
                   <span
                     className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
-                      p.actif ? 'bg-emerald-100 text-emerald-900' : 'bg-surface-haute text-doux'
+                      p.actif ? 'bg-ok-tint text-ok-txt' : 'bg-surface-haute text-doux'
                     }`}
                   >
                     {p.actif ? 'ACTIVE' : 'désactivée'}
@@ -1186,14 +1235,14 @@ function Options() {
   return (
     <section>
       <h2 className="mb-2 text-xl font-bold">Options</h2>
-      <div className="mb-4 rounded-xl bg-blue-50 px-4 py-3 text-blue-900">
+      <div className="mb-4 rounded-jeton bg-info-tint px-4 py-3 text-info-txt">
         Créez une option (pâte à l’ail, fromage…), puis liez-la à une catégorie entière ou à un produit
         précis. Un prix de <strong>0</strong> = option offerte. Les commandes déjà passées ne changent jamais.
       </div>
       <Message texte={msg?.texte ?? null} ok={msg?.ok} />
 
       {/* Création */}
-      <div className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-bordure p-4">
+      <div className="mb-6 flex flex-wrap items-end gap-3 rounded-jeton border border-bordure p-4">
         <div>
           <label htmlFor="opt-nom" className="mb-1 block text-sm font-semibold text-doux">Nom de l’option</label>
           <input id="opt-nom" className="champ w-64" value={nom} onChange={(e) => setNom(e.target.value)} placeholder="ex : Pâte à l’ail" />
@@ -1215,7 +1264,7 @@ function Options() {
       {/* Liste */}
       <div className="space-y-3">
         {(data?.options ?? []).map((o) => (
-          <div key={o.id} className={`rounded-xl border border-bordure p-4 ${o.actif ? '' : 'opacity-60'}`}>
+          <div key={o.id} className={`rounded-jeton border border-bordure p-4 ${o.actif ? '' : 'opacity-60'}`}>
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-lg font-bold">{o.nom}</span>
               <span className="rounded-full bg-marque-tint px-3 py-1 text-sm font-semibold text-marque-fonce">
@@ -1368,7 +1417,7 @@ function Imprimante() {
       ) : (
         <div className="grid gap-3">
           {(data?.disponibles.length ?? 0) === 0 && (
-            <div className="rounded-xl bg-amber-100 px-4 py-3 text-amber-900">
+            <div className="rounded-jeton bg-attente-tint px-4 py-3 text-attente-txt">
               Aucune imprimante détectée. Installez le pilote, ou saisissez le nom manuellement dans chaque poste.
             </div>
           )}
@@ -1427,7 +1476,7 @@ function LargeurPapier({
   });
 
   return (
-    <div className="rounded-xl border border-bordure p-4">
+    <div className="rounded-jeton border border-bordure p-4">
       <div className="mb-2 font-bold">Largeur du papier</div>
       <p className="mb-3 text-sm text-doux">
         Si les montants se coupent en deux (le <b>5</b> en haut, <b>000 F</b> en dessous), c’est que la
@@ -1486,7 +1535,7 @@ function LogoTicket({
   });
 
   return (
-    <div className="rounded-xl border border-bordure p-4">
+    <div className="rounded-jeton border border-bordure p-4">
       <div className="mb-2 font-bold">Logo sur le ticket</div>
       <p className="mb-3 text-sm text-doux">
         Lancez « Tester » sur la <b>Caisse</b> ci-dessus : le ticket imprime le logo en <b>mode A</b> et en
@@ -1545,7 +1594,7 @@ function LignePosteImprimante({
   });
 
   return (
-    <div className="rounded-xl border border-bordure p-4">
+    <div className="rounded-jeton border border-bordure p-4">
       <div className="mb-2 flex items-center gap-2">
         <span className="font-bold">{LIBELLES_POSTE_IMPRESSION[poste]}</span>
         {valeur ? <span className="text-xs text-ok">· {valeur}</span> : <span className="text-xs text-doux">· non configurée</span>}
@@ -1627,7 +1676,7 @@ function RoutageImpression() {
           const arts = (data?.articles ?? []).filter((a) => a.categorie_id === c.id);
           const nbExceptions = arts.filter((a) => a.poste !== null).length;
           return (
-            <div key={c.id} className="rounded-xl border border-bordure p-3">
+            <div key={c.id} className="rounded-jeton border border-bordure p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <button type="button" className="text-left font-semibold" onClick={() => basculer(c.id)}>
                   {ouvertes.has(c.id) ? '▾' : '▸'} {c.nom}
@@ -1845,7 +1894,7 @@ function LigneRecette({
     : articles.filter((a) => !dejaPris.has(a.id) && a.nom.toLowerCase().includes(rech)).slice(0, 8);
 
   return (
-    <div className="rounded-xl border border-bordure p-3">
+    <div className="rounded-jeton border border-bordure p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <button type="button" className="text-left font-semibold" onClick={onBasculer} disabled={derive}>
           {!derive && (ouvert ? '▾ ' : '▸ ')}{produit.nom}
@@ -1969,7 +2018,7 @@ function LigneParam({ p, onEnregistrer }: { p: ParametreVue; onEnregistrer: (v: 
     else onEnregistrer(v);
   };
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-bordure px-4 py-2">
+    <div className="flex items-center gap-3 rounded-jeton border border-bordure px-4 py-2">
       <div className="flex-1"><div className="font-semibold">{p.libelle}</div><div className="text-xs text-doux">{p.cle}{p.unite ? ` (${p.unite})` : ''}</div></div>
       <input className="champ w-40" value={v} onChange={(e) => setV(e.target.value)} />
       <button type="button" className="btn-blanc" onClick={soumettre}>OK</button>
@@ -2063,7 +2112,7 @@ function Roles() {
           </div>
           <div className="grid gap-2">
             {(roles ?? []).map((r) => (
-              <div key={r.id} className="flex items-center justify-between rounded-xl border border-bordure px-4 py-3">
+              <div key={r.id} className="flex items-center justify-between rounded-jeton border border-bordure px-4 py-3">
                 <div className="flex items-center gap-2">
                   {r.verrouille && <IconLock size={18} className="text-doux" />}
                   <span className="font-bold">{r.nom}</span>
@@ -2091,7 +2140,7 @@ function Roles() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {SECTIONS_PERMISSIONS.map((sec) => (
-              <div key={sec.cle} className="rounded-xl border border-bordure p-3">
+              <div key={sec.cle} className="rounded-jeton border border-bordure p-3">
                 <div className="mb-2 font-bold">{sec.libelle}</div>
                 {sec.permissions.map((p) => {
                   const protege = p.cle === PERMISSION_PROTEGEE;
@@ -2177,7 +2226,7 @@ function ConfigRestaurant() {
       </p>
 
       {(data?.restaurants.length ?? 0) === 0 ? (
-        <div className="rounded-xl bg-alerte-tint p-4 text-sm text-alerte">
+        <div className="rounded-jeton bg-alerte-tint p-4 text-sm text-alerte">
           Liste indisponible — vérifiez la clé SamerTrackly (apps/server/.env) et la connexion internet.
         </div>
       ) : (
