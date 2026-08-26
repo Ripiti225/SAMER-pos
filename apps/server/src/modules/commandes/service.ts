@@ -17,6 +17,7 @@ import {
   combos,
   commandeItems,
   commandes,
+  noteSplitItems,
   notesSplit,
   paiements,
   prixCanaux,
@@ -234,7 +235,31 @@ export async function recalculerTotaux(tx: DbOuTx, commandeId: string, quand = n
   const promoMontant = meilleure ? Math.min(meilleure.montant, sousTotal - remise) : 0;
   // Sprint 4 B : la remise fidélité (points) réduit aussi le total.
   const fidelite = Math.min(avant.fidelite_montant, Math.max(0, sousTotal - remise - promoMontant));
-  const total = Math.max(0, sousTotal - remise - promoMontant - fidelite);
+  let total = Math.max(0, sousTotal - remise - promoMontant - fidelite);
+
+  // Une sous-note ARTICLES est un mini-reçu figé. Les ajouts ou augmentations
+  // ultérieurs ne doivent jamais modifier ce qu'un convive a déjà accepté.
+  const notesArticles = await tx
+    .select()
+    .from(notesSplit)
+    .where(and(eq(notesSplit.commande_id, commandeId), eq(notesSplit.type, 'ARTICLES'), sql`${notesSplit.statut} <> 'ANNULEE'`));
+  if (notesArticles.length > 0) {
+    const allocations = await tx
+      .select({ montant_brut: noteSplitItems.montant_brut })
+      .from(noteSplitItems)
+      .innerJoin(notesSplit, eq(notesSplit.id, noteSplitItems.note_id))
+      .where(and(eq(notesSplit.commande_id, commandeId), eq(notesSplit.type, 'ARTICLES'), sql`${notesSplit.statut} <> 'ANNULEE'`));
+    const brutFige = allocations.reduce((s, allocation) => s + allocation.montant_brut, 0);
+    const notesFigees = notesArticles.reduce((s, note) => s + note.montant, 0);
+    const remiseFigee = notesArticles.reduce((s, note) => s + note.remise_montant, 0);
+    const promoFigee = notesArticles.reduce((s, note) => s + note.promo_montant, 0);
+    const fideliteFigee = notesArticles.reduce((s, note) => s + note.fidelite_montant, 0);
+    const libreBrut = Math.max(0, sousTotal - brutFige);
+    const libreRemise = Math.max(0, remise - remiseFigee);
+    const librePromo = Math.max(0, promoMontant - promoFigee);
+    const libreFidelite = Math.max(0, fidelite - fideliteFigee);
+    total = notesFigees + Math.max(0, libreBrut - libreRemise - librePromo - libreFidelite);
+  }
 
   const [maj] = await tx
     .update(commandes)
@@ -258,10 +283,22 @@ export async function chargerCommandeVue(dbx: DbOuTx, commandeId: string): Promi
   const [c] = await dbx.select().from(commandes).where(eq(commandes.id, commandeId));
   if (!c) throw introuvable('Commande');
 
-  const [items, lignesPaiements, notes, promoLigne, tableLigne] = await Promise.all([
+  const [items, lignesPaiements, notes, allocations, promoLigne, tableLigne] = await Promise.all([
     dbx.select().from(commandeItems).where(eq(commandeItems.commande_id, commandeId)),
     dbx.select().from(paiements).where(eq(paiements.commande_id, commandeId)),
     dbx.select().from(notesSplit).where(eq(notesSplit.commande_id, commandeId)),
+    dbx
+      .select({
+        id: noteSplitItems.id,
+        note_id: noteSplitItems.note_id,
+        commande_item_id: noteSplitItems.commande_item_id,
+        quantite: noteSplitItems.quantite,
+        montant_brut: noteSplitItems.montant_brut,
+        statut_note: notesSplit.statut,
+      })
+      .from(noteSplitItems)
+      .innerJoin(notesSplit, eq(notesSplit.id, noteSplitItems.note_id))
+      .where(eq(notesSplit.commande_id, commandeId)),
     c.promo_id
       ? dbx.select().from(promotions).where(eq(promotions.id, c.promo_id))
       : Promise.resolve([]),
@@ -271,19 +308,31 @@ export async function chargerCommandeVue(dbx: DbOuTx, commandeId: string): Promi
   ]);
 
   const paye = lignesPaiements.reduce((s, p) => s + p.montant, 0);
-  const vueItems: CommandeItemVue[] = items.map((i) => ({
+  const vueItems: CommandeItemVue[] = items.map((i) => {
+    const allocationsItem = allocations.filter((a) => a.commande_item_id === i.id && a.statut_note !== 'ANNULEE');
+    const quantitePayee = allocationsItem
+      .filter((a) => a.statut_note === 'PAYEE')
+      .reduce((s, a) => s + a.quantite, 0);
+    const quantiteReservee = allocationsItem
+      .filter((a) => a.statut_note !== 'PAYEE')
+      .reduce((s, a) => s + a.quantite, 0);
+    return {
     id: i.id,
     article_id: i.article_id,
     combo_id: i.combo_id,
     nom_snapshot: i.nom_snapshot,
     prix_unitaire: i.prix_unitaire,
     quantite: i.quantite,
+    quantite_reservee: quantiteReservee,
+    quantite_payee: quantitePayee,
+    quantite_disponible: Math.max(0, i.quantite - quantiteReservee - quantitePayee),
     options: (i.options as { groupe: string; choix: string[] }[]) ?? [],
     supplements: (i.supplements as { nom: string; prix: number }[]) ?? [],
     statut_cuisine: i.statut_cuisine as CommandeItemVue['statut_cuisine'],
     envoye: i.envoye_le !== null,
     total_ligne: i.statut_cuisine === 'ANNULE' ? 0 : totalLigne(i),
-  }));
+    };
+  });
 
   return {
     id: c.id,
@@ -317,10 +366,83 @@ export async function chargerCommandeVue(dbx: DbOuTx, commandeId: string): Promi
       created_at: p.created_at.toISOString(),
     })),
     notes: notes.map((n) => {
-      const payeNote = lignesPaiements.filter((p) => p.note_id === n.id).reduce((s, p) => s + p.montant, 0);
-      return { id: n.id, libelle: n.libelle, montant: n.montant, paye: payeNote, reste: Math.max(0, n.montant - payeNote) };
+      const paiementsNote = lignesPaiements.filter((p) => p.note_id === n.id);
+      const payeNote = paiementsNote.reduce((s, p) => s + p.montant, 0);
+      const allocationsNote = allocations.filter((a) => a.note_id === n.id);
+      return {
+        id: n.id,
+        numero: n.numero,
+        libelle: n.libelle,
+        type: n.type as 'ARTICLES' | 'MONTANT_HISTORIQUE',
+        statut: n.statut as 'A_PAYER' | 'PARTIELLEMENT_PAYEE' | 'PAYEE' | 'ANNULEE',
+        sous_total: n.sous_total,
+        promo_montant: n.promo_montant,
+        remise_montant: n.remise_montant,
+        fidelite_montant: n.fidelite_montant,
+        client_fidelite_id: n.client_fidelite_id,
+        fidelite_points: n.fidelite_points,
+        montant: n.montant,
+        paye: payeNote,
+        reste: Math.max(0, n.montant - payeNote),
+        payee_le: n.payee_le?.toISOString() ?? null,
+        items: allocationsNote.map((a) => {
+          const item = items.find((i) => i.id === a.commande_item_id)!;
+          return {
+            id: a.id,
+            commande_item_id: a.commande_item_id,
+            nom_snapshot: item.nom_snapshot,
+            prix_unitaire: item.prix_unitaire,
+            quantite: a.quantite,
+            montant_brut: a.montant_brut,
+            options: (item.options as { groupe: string; choix: string[] }[]) ?? [],
+            supplements: (item.supplements as { nom: string; prix: number }[]) ?? [],
+          };
+        }),
+        paiements: paiementsNote.map((p) => ({
+          id: p.id,
+          mode: p.mode,
+          montant: p.montant,
+          note_id: p.note_id,
+          created_at: p.created_at.toISOString(),
+        })),
+      };
     }),
     created_at: c.created_at.toISOString(),
+  };
+}
+
+/**
+ * Addition suivante d'une table partiellement encaissée : uniquement les
+ * quantités encore libres. Les sous-notes restent dans `notes` pour l'audit,
+ * mais leurs articles et réductions figées sont retirés du document imprimé.
+ */
+export function construireFactureDisponible(c: CommandeVue): CommandeVue {
+  const notesActives = c.notes.filter((note) => note.type === 'ARTICLES' && note.statut !== 'ANNULEE');
+  if (notesActives.length === 0) return c;
+  const sousTotalFige = notesActives.reduce((s, note) => s + note.sous_total, 0);
+  const promoFigee = notesActives.reduce((s, note) => s + note.promo_montant, 0);
+  const remiseFigee = notesActives.reduce((s, note) => s + note.remise_montant, 0);
+  const fideliteFigee = notesActives.reduce((s, note) => s + note.fidelite_montant, 0);
+  const montantFige = notesActives.reduce((s, note) => s + note.montant, 0);
+  return {
+    ...c,
+    sous_total: Math.max(0, c.sous_total - sousTotalFige),
+    promo_montant: Math.max(0, c.promo_montant - promoFigee),
+    remise_montant: Math.max(0, c.remise_montant - remiseFigee),
+    fidelite_montant: Math.max(0, c.fidelite_montant - fideliteFigee),
+    total: Math.max(0, c.total - montantFige),
+    paye: 0,
+    reste: Math.max(0, c.total - montantFige),
+    paiements: [],
+    items: c.items
+      .filter((item) => item.statut_cuisine !== 'ANNULE' && item.quantite_disponible > 0)
+      .map((item) => ({
+        ...item,
+        quantite: item.quantite_disponible,
+        quantite_reservee: 0,
+        quantite_payee: 0,
+        total_ligne: Math.round((item.total_ligne / item.quantite) * item.quantite_disponible),
+      })),
   };
 }
 

@@ -1,4 +1,4 @@
-import type { CommandeItemVue, CommandeVue, EtatStockInstant, PosteImpression, RapportSequence, RapportZ } from '@pos/shared';
+import type { CommandeItemVue, CommandeVue, EtatStockInstant, NoteSplitVue, PosteImpression, RapportSequence, RapportZ } from '@pos/shared';
 
 /**
  * Interface d'impression. Implémentations : ConsolePrinter (repli/dev) et
@@ -8,6 +8,8 @@ export interface PrinterService {
   /** Facture / addition AVANT paiement (pas de lignes de règlement). */
   imprimerFacture(commande: CommandeVue): Promise<void>;
   imprimerTicket(commande: CommandeVue): Promise<void>;
+  /** Reçu acquitté d'un seul convive, limité aux articles de sa sous-note. */
+  imprimerSousNote(commande: CommandeVue, note: NoteSplitVue): Promise<void>;
   imprimerRapportZ(rapport: RapportZ): Promise<void>;
   /**
    * Récapitulatif de fin de journée remis au gérant quand il rase la séquence :

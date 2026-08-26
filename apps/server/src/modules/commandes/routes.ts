@@ -22,7 +22,13 @@ import { verifierPinManager } from '../auth/pin.js';
 import { exigerAccesTable } from '../tables/propriete.js';
 import { imprimerBonsEnvoi } from '../../printer/bons.js';
 import {
+  paiementExistePourCommande,
+  quantiteAlloueePourItem,
+  sousNoteArticlesActiveExiste,
+} from '../paiements/sous-notes.js';
+import {
   chargerCommandeVue,
+  construireFactureDisponible,
   exigerModifiable,
   figerNouvelItem,
   genererCodeCommande,
@@ -175,17 +181,18 @@ export function routesCommandes(app: FastifyInstance): void {
     const { id } = req.params as { id: string };
     const vue = await chargerCommandeVue(db, id);
     await exigerAccesTable(db, req.session!, vue.table_id);
-    if (vue.items.filter((i) => i.statut_cuisine !== 'ANNULE').length === 0) {
+    const facture = construireFactureDisponible(vue);
+    if (facture.items.length === 0) {
       throw new ErreurMetier('Aucun article à facturer', 400);
     }
-    await app.imprimante.imprimerFacture(vue);
+    await app.imprimante.imprimerFacture(facture);
     await db.transaction(async (tx) => {
       await journaliser(tx, {
         user_id: req.session!.utilisateur_id,
         action: 'FACTURE_IMPRIMEE',
         entite: 'commandes',
         entite_id: id,
-        montant: vue.total,
+        montant: facture.total,
       });
     });
     return vue;
@@ -223,6 +230,10 @@ export function routesCommandes(app: FastifyInstance): void {
       if (!item) throw introuvable('Article de la commande');
       if (item.envoye_le !== null || item.statut_cuisine !== 'A_PREPARER') {
         throw new ErreurMetier('Cet article est déjà en cuisine — passez par une annulation manager', 409);
+      }
+      const quantiteAllouee = await quantiteAlloueePourItem(tx, id, itemId);
+      if (corps.quantite < quantiteAllouee) {
+        throw new ErreurMetier('La quantité déjà réservée ou payée ne peut pas être diminuée', 409);
       }
       const [maj] = await tx
         .update(commandeItems)
@@ -268,6 +279,9 @@ export function routesCommandes(app: FastifyInstance): void {
     const vue = await db.transaction(async (tx) => {
       const c = await verrouillerCommande(tx, id);
       exigerModifiable(c);
+      if ((await quantiteAlloueePourItem(tx, id, itemId)) > 0) {
+        throw new ErreurMetier('Cet article est déjà réservé ou payé et ne peut plus être annulé', 409);
+      }
       const [maj] = await tx
         .update(commandeItems)
         .set({ statut_cuisine: 'ANNULE', annule_par: annulePar, annule_motif: corps.motif })
@@ -304,6 +318,9 @@ export function routesCommandes(app: FastifyInstance): void {
     const { vue, envoyes } = await db.transaction(async (tx) => {
       const c = await verrouillerCommande(tx, id);
       exigerModifiable(c);
+      if (await sousNoteArticlesActiveExiste(tx, id)) {
+        throw new ErreurMetier('La remise ne peut plus changer après la création d’un paiement par articles', 409);
+      }
       const ids = await marquerEnvoiCuisine(tx, id);
       return { vue: await chargerCommandeVue(tx, id), envoyes: ids };
     });
@@ -391,6 +408,12 @@ export function routesCommandes(app: FastifyInstance): void {
     const vue = await db.transaction(async (tx) => {
       const c = await verrouillerCommande(tx, id);
       exigerModifiable(c);
+      if (await paiementExistePourCommande(tx, id)) {
+        throw new ErreurMetier('La remise ne peut plus changer après un paiement', 409);
+      }
+      if (await sousNoteArticlesActiveExiste(tx, id)) {
+        throw new ErreurMetier('Annulez d’abord les paiements par articles en attente', 409);
+      }
       if (corps.montant > c.sous_total) {
         throw new ErreurMetier('La remise ne peut pas dépasser le montant de la commande', 400);
       }
@@ -431,6 +454,12 @@ export function routesCommandes(app: FastifyInstance): void {
     const vue = await db.transaction(async (tx) => {
       const c = await verrouillerCommande(tx, id);
       exigerModifiable(c);
+      if (await paiementExistePourCommande(tx, id)) {
+        throw new ErreurMetier('Une commande ayant reçu un paiement ne peut plus être annulée', 409);
+      }
+      if (await sousNoteArticlesActiveExiste(tx, id)) {
+        throw new ErreurMetier('Annulez d’abord les paiements par articles en attente', 409);
+      }
       const [maj] = await tx
         .update(commandes)
         .set({ statut: 'ANNULEE', updated_at: new Date() })

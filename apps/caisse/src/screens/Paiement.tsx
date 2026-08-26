@@ -14,8 +14,7 @@ import {
 import type { CommandeVue, ModePaiement } from '@pos/shared';
 import { estLivraisonSansEncaissement, formatFCFA, LIBELLES_MODES, MODES_PAIEMENT } from '@pos/shared';
 import { api } from '../api';
-import { Modale } from '../components/Modale';
-import { Fidelite } from '../components/Fidelite';
+import { SelectionArticlesPaiement, type NouvelleSousNotePaiement } from '../components/SelectionArticlesPaiement';
 import { useCaisse } from '../stores/session';
 
 const RACCOURCIS = [1000, 2000, 5000, 10000];
@@ -48,7 +47,7 @@ export function Paiement() {
   const [mode, setMode] = useState<ModePaiement>('ESPECES');
   const [montant, setMontant] = useState('');
   const [noteId, setNoteId] = useState<string | null>(null);
-  const [splitOuvert, setSplitOuvert] = useState(false);
+  const [selectionOuverte, setSelectionOuverte] = useState(false);
   const [especesDonnees, setEspecesDonnees] = useState('');
 
   const { data: commande } = useQuery({
@@ -66,15 +65,26 @@ export function Paiement() {
       rafraichir(vue);
       setMontant('');
       setEspecesDonnees('');
-      if (vue.statut === 'PAYEE') afficherToast(`Ticket n° ${vue.numero_ticket} encaissé ✔ — reçu imprimé`);
+      const noteSoldee = noteId ? vue.notes.find((note) => note.id === noteId)?.statut === 'PAYEE' : false;
+      if (vue.statut === 'PAYEE') {
+        afficherToast(`Ticket n° ${vue.numero_ticket} encaissé ✔ — reçu imprimé`);
+      } else if (noteSoldee) {
+        afficherToast('Paiement individuel encaissé ✔ — les autres articles restent en attente');
+        aller(vue.table_id ? 'tables' : 'accueil');
+      }
     },
     onError: (e: Error) => afficherToast(e.message),
   });
 
-  const creerSplit = useMutation({
-    mutationFn: (notes: { libelle: string; montant: number }[]) =>
-      api<CommandeVue>(`/api/commandes/${commandeId}/split`, { method: 'POST', corps: { notes } }),
-    onSuccess: (vue) => { rafraichir(vue); setSplitOuvert(false); },
+  const creerSousNote = useMutation({
+    mutationFn: (selection: NouvelleSousNotePaiement) =>
+      api<CommandeVue>(`/api/commandes/${commandeId}/sous-notes`, { method: 'POST', corps: selection }),
+    onSuccess: (vue) => {
+      rafraichir(vue);
+      setSelectionOuverte(false);
+      const prochaine = [...vue.notes].reverse().find((note) => note.statut === 'A_PAYER');
+      setNoteId(prochaine?.id ?? null);
+    },
     onError: (e: Error) => afficherToast(e.message),
   });
 
@@ -91,6 +101,13 @@ export function Paiement() {
 
   const commandePrete = !!commande;
   const estPayee = commande?.statut === 'PAYEE';
+
+  useEffect(() => {
+    if (!commande || noteId) return;
+    const reprise = commande.notes.find((note) => note.statut === 'PARTIELLEMENT_PAYEE')
+      ?? commande.notes.find((note) => note.statut === 'A_PAYER');
+    if (reprise) setNoteId(reprise.id);
+  }, [commande, noteId]);
 
   // Clavier physique (dev) : chiffres → montant, Backspace, Échap (efface).
   useEffect(() => {
@@ -112,25 +129,17 @@ export function Paiement() {
 
   const sansEncaissement = estLivraisonSansEncaissement(commande.partenaire);
   const noteActive = commande.notes.find((n) => n.id === noteId) ?? null;
-  const resteCible = noteActive ? noteActive.reste : commande.reste;
+  const resteCible = noteActive ? noteActive.reste : 0;
   const montantSaisi = montant === '' ? resteCible : Number(montant);
   const donnees = Number(especesDonnees || '0');
   const monnaie = mode === 'ESPECES' && donnees > montantSaisi ? donnees - montantSaisi : 0;
-  const peutAjouter = montantSaisi > 0 && montantSaisi <= resteCible && !encaisser.isPending;
+  const peutAjouter = !!noteActive && montantSaisi > 0 && montantSaisi <= resteCible && !encaisser.isPending;
 
   const ajouter = () => { if (peutAjouter) encaisser.mutate({ mode, montant: montantSaisi, note_id: noteId }); };
   const taper = (c: string) => setMontant((v) => (v.length < 9 ? v + c : v));
   const ajouterRaccourci = (n: number) => setMontant((v) => String(Number(v || '0') + n));
 
-  const splitEgal = (nb: number) => {
-    const base = Math.floor(commande.total / nb);
-    const notes = Array.from({ length: nb }, (_, i) => ({
-      libelle: `Client ${String.fromCharCode(65 + i)}`,
-      montant: i === 0 ? commande.total - base * (nb - 1) : base,
-    }));
-    creerSplit.mutate(notes);
-  };
-  const splitPossible = commande.notes.length === 0 && !estPayee && commande.paye === 0;
+  const articlesDisponibles = commande.items.some((item) => item.quantite_disponible > 0 && item.statut_cuisine !== 'ANNULE');
 
   return (
     <div className="flex h-screen flex-col bg-fond">
@@ -166,7 +175,11 @@ export function Paiement() {
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
               {commande.items.filter((i) => i.statut_cuisine !== 'ANNULE').map((i) => (
                 <div key={i.id} className="flex items-start justify-between gap-2">
-                  <span className="text-fort">{i.quantite}× {i.nom_snapshot}</span>
+                  <span className="text-fort">
+                    {i.quantite}× {i.nom_snapshot}
+                    {i.quantite_payee > 0 && <small className="ml-2 rounded-full bg-ok-tint px-2 py-1 font-bold text-ok">{i.quantite_payee} payé{i.quantite_payee > 1 ? 's' : ''}</small>}
+                    {i.quantite_reservee > 0 && <small className="ml-2 rounded-full bg-marque-tint px-2 py-1 font-bold text-marque-fonce">{i.quantite_reservee} en cours</small>}
+                  </span>
                   <span className="font-semibold tabular-nums">{formatFCFA(i.total_ligne)}</span>
                 </div>
               ))}
@@ -188,35 +201,18 @@ export function Paiement() {
             </div>
           </div>
 
-          {!estPayee && !sansEncaissement && (
-            <Fidelite commande={commande} onMaj={rafraichir} />
-          )}
-
-          {splitPossible && !sansEncaissement && (
+          {!estPayee && !sansEncaissement && articlesDisponibles && (
             <div className="rounded-2xl bg-surface-moyenne p-5 shadow-e1">
               <div className="mb-3 flex items-center gap-2">
                 <IconArrowsSplit2 size={22} className="text-marque-fonce" />
-                <h4 className="text-lg font-bold">Partager l’addition</h4>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {[2, 3, 4].map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => splitEgal(n)}
-                    disabled={creerSplit.isPending}
-                    className="rounded-xl bg-surface py-3 font-semibold shadow-e1 transition hover:bg-surface-haute disabled:opacity-40"
-                  >
-                    Par {n}
-                  </button>
-                ))}
+                <h4 className="text-lg font-bold">Paiement individuel</h4>
               </div>
               <button
                 type="button"
-                onClick={() => setSplitOuvert(true)}
-                className="mt-2 w-full rounded-xl border-2 border-bordure-forte py-3 font-semibold text-marque-fonce transition hover:bg-marque/5"
+                onClick={() => setSelectionOuverte(true)}
+                className="min-h-12 w-full rounded-xl bg-marque px-4 py-3 font-bold text-sur-marque shadow-e1 transition hover:brightness-105"
               >
-                Saisie libre par personne
+                Payer par articles
               </button>
             </div>
           )}
@@ -226,13 +222,21 @@ export function Paiement() {
         <div className="col-span-12 flex min-h-0 flex-col gap-4 lg:col-span-5">
           {commande.notes.length > 0 && !estPayee && (
             <div className="flex flex-wrap gap-2">
-              <BoutonNote actif={noteId === null} onClick={() => setNoteId(null)}>Toute la commande</BoutonNote>
               {commande.notes.map((n) => (
-                <BoutonNote key={n.id} actif={noteId === n.id} paye={n.reste === 0} onClick={() => setNoteId(n.id)}>
-                  {n.libelle} — {n.reste === 0 ? 'payée ✔' : formatFCFA(n.reste)}
+                <BoutonNote
+                  key={n.id}
+                  actif={noteId === n.id}
+                  paye={n.statut === 'PAYEE'}
+                  onClick={() => n.statut !== 'ANNULEE' && setNoteId(n.id)}
+                >
+                  {n.statut === 'PAYEE' ? `Payé — Paiement ${n.numero} ✔` : n.statut === 'PARTIELLEMENT_PAYEE' ? `Reprendre le paiement ${n.numero} — ${formatFCFA(n.reste)}` : `Paiement ${n.numero} — ${formatFCFA(n.reste)}`}
                 </BoutonNote>
               ))}
             </div>
+          )}
+
+          {!estPayee && !sansEncaissement && !noteActive && (
+            <div className="carte p-5 text-center text-doux">Sélectionnez les articles de la personne à encaisser.</div>
           )}
 
           {!estPayee && sansEncaissement && (
@@ -359,7 +363,7 @@ export function Paiement() {
             style={{ borderColor: estPayee ? 'var(--ok)' : 'var(--marque)' }}
           >
             <span className="text-xs font-bold uppercase tracking-widest text-ard-txt-faible">
-              {estPayee ? 'Encaissé' : sansEncaissement ? `À régler chez ${commande.partenaire}` : noteActive ? `Reste — ${noteActive.libelle}` : 'Reste à payer'}
+              {estPayee ? 'Encaissé' : sansEncaissement ? `À régler chez ${commande.partenaire}` : noteActive ? `Reste — Paiement ${noteActive.numero}` : 'Sélection requise'}
             </span>
             <div className={`mt-1 text-5xl font-extrabold tabular-nums ${estPayee ? 'text-ok' : 'text-ard-txt'}`}>
               {formatFCFA(resteCible)}
@@ -426,12 +430,12 @@ export function Paiement() {
         </div>
       </div>
 
-      {splitOuvert && (
-        <ModaleSplit
-          total={commande.total}
-          onConfirmer={(notes) => creerSplit.mutate(notes)}
-          onFermer={() => setSplitOuvert(false)}
-          enCours={creerSplit.isPending}
+      {selectionOuverte && (
+        <SelectionArticlesPaiement
+          commande={commande}
+          onConfirmer={(items) => creerSousNote.mutate(items)}
+          onFermer={() => setSelectionOuverte(false)}
+          enCours={creerSousNote.isPending}
         />
       )}
     </div>
@@ -458,55 +462,5 @@ function BoutonNote({ actif, paye, onClick, children }: { actif: boolean; paye?:
     >
       {children}
     </button>
-  );
-}
-
-function ModaleSplit({
-  total,
-  onConfirmer,
-  onFermer,
-  enCours,
-}: {
-  total: number;
-  onConfirmer: (notes: { libelle: string; montant: number }[]) => void;
-  onFermer: () => void;
-  enCours: boolean;
-}) {
-  const [nb, setNb] = useState(2);
-  const base = Math.floor(total / nb);
-  const notes = Array.from({ length: nb }, (_, i) => ({
-    libelle: `Client ${String.fromCharCode(65 + i)}`,
-    montant: i === 0 ? total - base * (nb - 1) : base,
-  }));
-
-  return (
-    <Modale titre="Diviser la note" onFermer={onFermer} enfants={
-      <div className="space-y-4">
-        <div className="flex items-center justify-center gap-4">
-          <button type="button" className="touche h-14 w-14" onClick={() => setNb(Math.max(2, nb - 1))}>−</button>
-          <div className="text-center">
-            <div className="text-4xl font-black">{nb}</div>
-            <div className="text-sm text-doux">personnes</div>
-          </div>
-          <button type="button" className="touche h-14 w-14" onClick={() => setNb(Math.min(10, nb + 1))}>+</button>
-        </div>
-        <div className="space-y-1 text-sm">
-          {notes.map((n) => (
-            <div key={n.libelle} className="flex justify-between">
-              <span>{n.libelle}</span>
-              <span className="font-semibold tabular-nums">{formatFCFA(n.montant)}</span>
-            </div>
-          ))}
-        </div>
-        <button
-          type="button"
-          className="h-14 w-full rounded-[13px] bg-marque text-lg font-bold text-sur-marque shadow-e2 transition hover:brightness-105 disabled:opacity-40"
-          disabled={enCours}
-          onClick={() => onConfirmer(notes)}
-        >
-          {enCours ? 'Création…' : 'Créer les notes'}
-        </button>
-      </div>
-    } />
   );
 }

@@ -441,6 +441,16 @@ export function Commande() {
                       <div className="min-w-0">
                         <p className="font-semibold leading-tight">{item.nom_snapshot}</p>
                         <p className="text-sm text-marque-clair">{formatFCFA(item.prix_unitaire)}</p>
+                        {item.quantite_payee > 0 && (
+                          <span className="mt-1 inline-block rounded-full bg-ok/20 px-2 py-0.5 text-xs font-bold text-ok">
+                            Payé — {item.quantite_payee}
+                          </span>
+                        )}
+                        {item.quantite_reservee > 0 && (
+                          <span className="ml-1 mt-1 inline-block rounded-full bg-marque/20 px-2 py-0.5 text-xs font-bold text-marque-clair">
+                            Paiement en cours — {item.quantite_reservee}
+                          </span>
+                        )}
                       </div>
                     </div>
                     {/* Total de ligne en attente de recalcul serveur : on affiche
@@ -466,7 +476,7 @@ export function Commande() {
                         <button
                           type="button"
                           className="flex h-full w-9 items-center justify-center text-marque-clair transition hover:bg-ard-650 disabled:opacity-40"
-                          disabled={quantite <= 1}
+                          disabled={quantite <= Math.max(1, item.quantite_reservee + item.quantite_payee)}
                           onClick={() => saisie.changerQuantite(item, -1)}
                         >
                           <IconMinus size={16} />
@@ -485,8 +495,9 @@ export function Commande() {
                     <button
                       type="button"
                       onClick={() => setItemAAnnuler(item)}
+                      disabled={item.quantite_reservee + item.quantite_payee > 0}
                       className="flex h-9 w-9 items-center justify-center rounded-full text-ard-txt-faible transition hover:bg-alerte/20 hover:text-alerte"
-                      title="Annuler l’article"
+                      title={item.quantite_reservee + item.quantite_payee > 0 ? 'Article réservé ou payé' : 'Annuler l’article'}
                     >
                       <IconX size={18} />
                     </button>

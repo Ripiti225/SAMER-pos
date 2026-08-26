@@ -10,7 +10,7 @@
  * les accents, et « Frites supplémentaires » doit rester écrit correctement.
  */
 import PDFDocument from 'pdfkit';
-import type { CommandeVue } from '@pos/shared';
+import type { CommandeVue, NoteSplitVue } from '@pos/shared';
 import {
   estLivraisonSansEncaissement,
   formatFCFA,
@@ -55,8 +55,9 @@ export function construireRecuPdf(
   c: CommandeVue,
   resto: EnteteRecu,
   fidelite: FideliteRecu,
+  numeroPaiement?: number,
 ): Promise<Buffer> {
-  const doc = new PDFDocument({ size: [LARGEUR, 800], margin: MARGE, info: { Title: `Recu ${c.numero_ticket}` } });
+  const doc = new PDFDocument({ size: [LARGEUR, 800], margin: MARGE, info: { Title: `Recu ${c.numero_ticket}${numeroPaiement ? ` paiement ${numeroPaiement}` : ''}` } });
   const morceaux: Buffer[] = [];
   doc.on('data', (m: Buffer) => morceaux.push(m));
   const fini = new Promise<Buffer>((resolve) => doc.on('end', () => resolve(Buffer.concat(morceaux))));
@@ -88,7 +89,7 @@ export function construireRecuPdf(
   if (c.code_commande) centre(c.code_commande, 14, true);
   const sous = `${LIBELLES_TYPES_COMMANDE[c.type]}${c.table_numero ? ` – Table ${c.table_numero}` : ''}`;
   centre(sous, 8);
-  centre(`Ticket ${c.numero_ticket} – ${horodatage(c.created_at)}`, 7);
+  centre(`Ticket ${c.numero_ticket}${numeroPaiement ? ` – Paiement ${numeroPaiement}` : ''} – ${horodatage(c.created_at)}`, 7);
   tiret();
 
   // Articles (une ligne annulée n'est pas vendue : elle ne figure pas au reçu).
@@ -141,4 +142,38 @@ export function construireRecuPdf(
 
   doc.end();
   return fini;
+}
+
+/** PDF d'une sous-note : aucune ligne ni aucun règlement d'un autre convive. */
+export function construireRecuSousNotePdf(
+  commande: CommandeVue,
+  note: NoteSplitVue,
+  resto: EnteteRecu,
+  fidelite: FideliteRecu,
+): Promise<Buffer> {
+  const parId = new Map(commande.items.map((item) => [item.id, item]));
+  const vue: CommandeVue = {
+    ...commande,
+    sous_total: note.sous_total,
+    promo_montant: note.promo_montant,
+    remise_montant: note.remise_montant,
+    fidelite_montant: note.fidelite_montant,
+    client_fidelite_id: note.client_fidelite_id,
+    total: note.montant,
+    paye: note.paye,
+    reste: note.reste,
+    paiements: note.paiements,
+    items: note.items.map((allocation) => {
+      const source = parId.get(allocation.commande_item_id)!;
+      return {
+        ...source,
+        quantite: allocation.quantite,
+        quantite_reservee: 0,
+        quantite_payee: allocation.quantite,
+        quantite_disponible: 0,
+        total_ligne: allocation.montant_brut,
+      };
+    }),
+  };
+  return construireRecuPdf(vue, resto, fidelite, note.numero);
 }

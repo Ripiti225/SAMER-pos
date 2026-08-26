@@ -1,4 +1,12 @@
-import type { ModePaiement, Partenaire, Role, StatutCommande, TypeCommande } from './constantes.js';
+import type {
+  ModePaiement,
+  Partenaire,
+  Role,
+  StatutCommande,
+  StatutNoteSplit,
+  TypeCommande,
+  TypeNoteSplit,
+} from './constantes.js';
 
 /** Vues API (réponses JSON) partagées entre le serveur et la PWA caisse. */
 
@@ -248,6 +256,12 @@ export interface CommandeItemVue {
   nom_snapshot: string;
   prix_unitaire: number;
   quantite: number;
+  /** Quantité bloquée dans une sous-note encore à encaisser. */
+  quantite_reservee: number;
+  /** Quantité appartenant à une sous-note entièrement payée. */
+  quantite_payee: number;
+  /** Quantité encore sélectionnable pour un prochain convive. */
+  quantite_disponible: number;
   options: { groupe: string; choix: string[] }[];
   supplements: { nom: string; prix: number }[];
   statut_cuisine: 'A_PREPARER' | 'EN_COURS' | 'PRET' | 'ANNULE';
@@ -266,10 +280,31 @@ export interface PaiementVue {
 
 export interface NoteSplitVue {
   id: string;
+  numero: number;
   libelle: string;
+  type: TypeNoteSplit;
+  statut: StatutNoteSplit;
+  sous_total: number;
+  promo_montant: number;
+  remise_montant: number;
+  fidelite_montant: number;
+  client_fidelite_id: string | null;
+  fidelite_points: number;
   montant: number;
   paye: number;
   reste: number;
+  payee_le: string | null;
+  items: {
+    id: string;
+    commande_item_id: string;
+    nom_snapshot: string;
+    prix_unitaire: number;
+    quantite: number;
+    montant_brut: number;
+    options: { groupe: string; choix: string[] }[];
+    supplements: { nom: string; prix: number }[];
+  }[];
+  paiements: PaiementVue[];
 }
 
 export interface CommandeVue {
@@ -370,6 +405,8 @@ export interface RapportZ {
    */
   partenaires: Record<string, { nb: number; total: number; contacts: number; refs: number }>;
   top_articles: { nom: string; quantite: number; total: number }[];
+  /** Acomptes du shift sur une sous-note pas encore soldée. */
+  sous_notes_incompletes: { numero_ticket: number; numero_paiement: number; montant_recu: number; reste: number }[];
   remises_detail: { numero_ticket: number; montant: number; motif: string | null; par_nom: string | null }[];
   annulations_detail: { numero_ticket: number; total: number }[];
   // Réconciliation de fermeture (déclarés par le caissier + calculés).

@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import { and, desc, eq, gte, lte, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, lte, ne, notInArray, sql } from 'drizzle-orm';
 import { MODES_PAIEMENT, type ModePaiement } from '@pos/shared';
 import { db } from '../../db/client.js';
-import { commandeItems, commandes, notations, paiements, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
+import { commandeItems, commandes, notations, noteSplitItems, notesSplit, paiements, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
 import { aPermission } from '../../plugins/sessions.js';
 import { retoursDepuis, retoursDuService } from '../services/rapport.js';
 
@@ -34,6 +34,73 @@ function debutIlYaJours(jours: number): Date {
   return d;
 }
 
+/** Ventes reconnues une seule fois : commande historique, ou sous-note ARTICLES soldée. */
+async function ventesAnalytiquesDepuis(depuis: Date) {
+  const commandesArticles = await db
+    .select({ commande_id: notesSplit.commande_id })
+    .from(notesSplit)
+    .where(eq(notesSplit.type, 'ARTICLES'));
+  const ids = [...new Set(commandesArticles.map((note) => note.commande_id))];
+  const historiques = await db
+    .select({
+      commande_id: commandes.id,
+      total: commandes.total,
+      remise: commandes.remise_montant,
+      promo: commandes.promo_montant,
+      type: commandes.type,
+      reconnue_le: commandes.created_at,
+    })
+    .from(commandes)
+    .where(and(
+      gte(commandes.created_at, depuis),
+      eq(commandes.statut, 'PAYEE'),
+      ...(ids.length ? [notInArray(commandes.id, ids)] : []),
+    ));
+  const parArticles = await db
+    .select({
+      commande_id: notesSplit.commande_id,
+      total: notesSplit.montant,
+      remise: notesSplit.remise_montant,
+      promo: notesSplit.promo_montant,
+      type: commandes.type,
+      reconnue_le: notesSplit.payee_le,
+    })
+    .from(notesSplit)
+    .innerJoin(commandes, eq(commandes.id, notesSplit.commande_id))
+    .where(and(eq(notesSplit.type, 'ARTICLES'), eq(notesSplit.statut, 'PAYEE'), gte(notesSplit.payee_le, depuis)));
+  return [...historiques, ...parArticles].map((vente) => ({ ...vente, reconnue_le: vente.reconnue_le! }));
+}
+
+function compterTickets(ventes: { commande_id: string }[]): number {
+  return new Set(ventes.map((vente) => vente.commande_id)).size;
+}
+
+async function topAnalytiqueDepuis(depuis: Date) {
+  const commandesArticles = await db.select({ commande_id: notesSplit.commande_id }).from(notesSplit).where(eq(notesSplit.type, 'ARTICLES'));
+  const ids = [...new Set(commandesArticles.map((note) => note.commande_id))];
+  const historiques = await db
+    .select({ nom: commandeItems.nom_snapshot, quantite: sql<string>`SUM(${commandeItems.quantite})`, total: sql<string>`SUM(${commandeItems.prix_unitaire} * ${commandeItems.quantite})` })
+    .from(commandeItems)
+    .innerJoin(commandes, eq(commandes.id, commandeItems.commande_id))
+    .where(and(gte(commandes.created_at, depuis), eq(commandes.statut, 'PAYEE'), ne(commandeItems.statut_cuisine, 'ANNULE'), ...(ids.length ? [notInArray(commandes.id, ids)] : [])))
+    .groupBy(commandeItems.nom_snapshot);
+  const articles = await db
+    .select({ nom: commandeItems.nom_snapshot, quantite: sql<string>`SUM(${noteSplitItems.quantite})`, total: sql<string>`SUM(${noteSplitItems.montant_brut})` })
+    .from(noteSplitItems)
+    .innerJoin(notesSplit, eq(notesSplit.id, noteSplitItems.note_id))
+    .innerJoin(commandeItems, eq(commandeItems.id, noteSplitItems.commande_item_id))
+    .where(and(eq(notesSplit.type, 'ARTICLES'), eq(notesSplit.statut, 'PAYEE'), gte(notesSplit.payee_le, depuis)))
+    .groupBy(commandeItems.nom_snapshot);
+  const parNom = new Map<string, { nom: string; quantite: number; total: number }>();
+  for (const ligne of [...historiques, ...articles]) {
+    const valeur = parNom.get(ligne.nom) ?? { nom: ligne.nom, quantite: 0, total: 0 };
+    valeur.quantite += Number(ligne.quantite);
+    valeur.total += Number(ligne.total);
+    parNom.set(ligne.nom, valeur);
+  }
+  return [...parNom.values()].sort((a, b) => b.quantite - a.quantite).slice(0, 10);
+}
+
 export function routesRapports(app: FastifyInstance): void {
   const gardeManager = app.exigePermission('rapports.z');
   const gardeProprio = app.exigePermission('rapports.tableau_bord');
@@ -41,10 +108,7 @@ export function routesRapports(app: FastifyInstance): void {
   // Ventes du jour (tous services confondus) — manager / propriétaire
   app.get('/api/rapports/jour', { preHandler: gardeManager }, async () => {
     const depuis = debutDuJour();
-    const lignes = await db
-      .select()
-      .from(commandes)
-      .where(and(gte(commandes.created_at, depuis), eq(commandes.statut, 'PAYEE')));
+    const lignes = await ventesAnalytiquesDepuis(depuis);
 
     const parModeLignes = await db
       .select({ mode: paiements.mode, total: sql<string>`SUM(${paiements.montant})` })
@@ -55,18 +119,23 @@ export function routesRapports(app: FastifyInstance): void {
     for (const l of parModeLignes) parMode[l.mode] = Number(l.total);
 
     const parType: Record<string, { nb: number; total: number }> = {};
+    const commandesParType = new Set<string>();
     for (const c of lignes) {
       const entree = (parType[c.type] ??= { nb: 0, total: 0 });
-      entree.nb += 1;
+      const cleCommande = `${c.type}:${c.commande_id}`;
+      if (!commandesParType.has(cleCommande)) {
+        entree.nb += 1;
+        commandesParType.add(cleCommande);
+      }
       entree.total += c.total;
     }
 
     return {
       date: depuis.toISOString().slice(0, 10),
-      nb_commandes: lignes.length,
+      nb_commandes: compterTickets(lignes),
       total_ventes: lignes.reduce((s, c) => s + c.total, 0),
-      total_remises: lignes.reduce((s, c) => s + c.remise_montant, 0),
-      total_promos: lignes.reduce((s, c) => s + c.promo_montant, 0),
+      total_remises: lignes.reduce((s, c) => s + c.remise, 0),
+      total_promos: lignes.reduce((s, c) => s + c.promo, 0),
       par_mode: parMode,
       par_type: parType,
     };
@@ -75,25 +144,7 @@ export function routesRapports(app: FastifyInstance): void {
   // Top plats du jour — manager / propriétaire
   app.get('/api/rapports/top-plats', { preHandler: gardeManager }, async () => {
     const depuis = debutDuJour();
-    const top = await db
-      .select({
-        nom: commandeItems.nom_snapshot,
-        quantite: sql<string>`SUM(${commandeItems.quantite})`,
-        total: sql<string>`SUM(${commandeItems.prix_unitaire} * ${commandeItems.quantite})`,
-      })
-      .from(commandeItems)
-      .innerJoin(commandes, eq(commandes.id, commandeItems.commande_id))
-      .where(
-        and(
-          gte(commandes.created_at, depuis),
-          eq(commandes.statut, 'PAYEE'),
-          ne(commandeItems.statut_cuisine, 'ANNULE'),
-        ),
-      )
-      .groupBy(commandeItems.nom_snapshot)
-      .orderBy(sql`SUM(${commandeItems.quantite}) DESC`)
-      .limit(10);
-    return top.map((t) => ({ nom: t.nom, quantite: Number(t.quantite), total: Number(t.total) }));
+    return topAnalytiqueDepuis(depuis);
   });
 
   /**
@@ -110,17 +161,21 @@ export function routesRapports(app: FastifyInstance): void {
   // Ventes par heure du jour — manager / propriétaire
   app.get('/api/rapports/par-heure', { preHandler: gardeManager }, async () => {
     const depuis = debutDuJour();
-    const lignes = await db
-      .select({
-        heure: sql<string>`EXTRACT(HOUR FROM ${commandes.created_at})`,
-        nb: sql<string>`COUNT(*)`,
-        total: sql<string>`SUM(${commandes.total})`,
-      })
-      .from(commandes)
-      .where(and(gte(commandes.created_at, depuis), eq(commandes.statut, 'PAYEE')))
-      .groupBy(sql`EXTRACT(HOUR FROM ${commandes.created_at})`)
-      .orderBy(sql`EXTRACT(HOUR FROM ${commandes.created_at})`);
-    return lignes.map((l) => ({ heure: Number(l.heure), nb: Number(l.nb), total: Number(l.total) }));
+    const ventes = await ventesAnalytiquesDepuis(depuis);
+    const parHeure = new Map<number, { heure: number; nb: number; total: number; commandes: Set<string> }>();
+    for (const vente of ventes) {
+      const heure = vente.reconnue_le.getHours();
+      const ligne = parHeure.get(heure) ?? { heure, nb: 0, total: 0, commandes: new Set<string>() };
+      if (!ligne.commandes.has(vente.commande_id)) {
+        ligne.nb += 1;
+        ligne.commandes.add(vente.commande_id);
+      }
+      ligne.total += vente.total;
+      parHeure.set(heure, ligne);
+    }
+    return [...parHeure.values()]
+      .sort((a, b) => a.heure - b.heure)
+      .map(({ commandes: _commandes, ...ligne }) => ligne);
   });
 
   /**
@@ -200,18 +255,11 @@ export function routesRapports(app: FastifyInstance): void {
     const q = (req.query as { periode?: string }).periode ?? 'jour';
     const depuis = q === '7' ? debutIlYaJours(7) : q === '30' ? debutIlYaJours(30) : debutDuJour();
 
-    const [payees, parModeLignes, parHeure, top, ecarts] = await Promise.all([
-      db.select({ total: commandes.total, type: commandes.type }).from(commandes)
-        .where(and(gte(commandes.created_at, depuis), eq(commandes.statut, 'PAYEE'))),
+    const [payees, top, parModeLignes, ecarts] = await Promise.all([
+      ventesAnalytiquesDepuis(depuis),
+      topAnalytiqueDepuis(depuis),
       db.select({ mode: paiements.mode, total: sql<string>`SUM(${paiements.montant})` }).from(paiements)
         .where(gte(paiements.created_at, depuis)).groupBy(paiements.mode),
-      db.select({ heure: sql<string>`EXTRACT(HOUR FROM ${commandes.created_at})`, total: sql<string>`SUM(${commandes.total})` }).from(commandes)
-        .where(and(gte(commandes.created_at, depuis), eq(commandes.statut, 'PAYEE')))
-        .groupBy(sql`EXTRACT(HOUR FROM ${commandes.created_at})`).orderBy(sql`EXTRACT(HOUR FROM ${commandes.created_at})`),
-      db.select({ nom: commandeItems.nom_snapshot, quantite: sql<string>`SUM(${commandeItems.quantite})`, total: sql<string>`SUM(${commandeItems.prix_unitaire} * ${commandeItems.quantite})` })
-        .from(commandeItems).innerJoin(commandes, eq(commandes.id, commandeItems.commande_id))
-        .where(and(gte(commandes.created_at, depuis), eq(commandes.statut, 'PAYEE'), ne(commandeItems.statut_cuisine, 'ANNULE')))
-        .groupBy(commandeItems.nom_snapshot).orderBy(sql`SUM(${commandeItems.quantite}) DESC`).limit(10),
       db.select({ nom: utilisateurs.nom_complet, ecart: sql<string>`SUM(${servicesCaisse.ecart})`, nb: sql<string>`COUNT(*)` })
         .from(servicesCaisse).innerJoin(utilisateurs, eq(utilisateurs.id, servicesCaisse.caissier_id))
         .where(and(eq(servicesCaisse.statut, 'CLOTURE'), gte(servicesCaisse.ouvert_le, depuis)))
@@ -221,16 +269,22 @@ export function routesRapports(app: FastifyInstance): void {
     const parMode = Object.fromEntries(MODES_PAIEMENT.map((m) => [m, 0])) as Record<ModePaiement, number>;
     for (const l of parModeLignes) parMode[l.mode] = Number(l.total);
     const ca = payees.reduce((s, c) => s + c.total, 0);
+    const tickets = compterTickets(payees);
+    const heures = new Map<number, number>();
+    for (const vente of payees) {
+      const heure = vente.reconnue_le.getHours();
+      heures.set(heure, (heures.get(heure) ?? 0) + vente.total);
+    }
 
     return {
       periode: q,
       depuis: depuis.toISOString().slice(0, 10),
       ca,
-      tickets: payees.length,
-      panier_moyen: payees.length ? Math.round(ca / payees.length) : 0,
+      tickets,
+      panier_moyen: tickets ? Math.round(ca / tickets) : 0,
       par_mode: parMode,
-      par_heure: parHeure.map((h) => ({ heure: Number(h.heure), total: Number(h.total) })),
-      top_plats: top.map((t) => ({ nom: t.nom, quantite: Number(t.quantite), total: Number(t.total) })),
+      par_heure: [...heures.entries()].sort(([a], [b]) => a - b).map(([heure, total]) => ({ heure, total })),
+      top_plats: top,
       ecarts_par_caissier: ecarts.map((e) => ({ nom: e.nom, ecart: Number(e.ecart), nb_services: Number(e.nb) })),
     };
   });

@@ -12,7 +12,7 @@ import { unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
-import type { CommandeItemVue, CommandeVue, EtatStockInstant, PosteImpression, RapportSequence, RapportZ } from '@pos/shared';
+import type { CommandeItemVue, CommandeVue, EtatStockInstant, NoteSplitVue, PosteImpression, RapportSequence, RapportZ } from '@pos/shared';
 import { clePosteImprimante, estLivraisonSansEncaissement, formatFCFA, libelleCategorieInventaire, libellePartenaire, LIBELLES_MODES, LIBELLES_POSTE_IMPRESSION, LIBELLES_TYPES_COMMANDE } from '@pos/shared';
 import { db } from '../db/client.js';
 import { parametresLocaux, restaurant } from '../db/schema/index.js';
@@ -505,6 +505,33 @@ export class EscposPrinter implements PrinterService {
     );
   }
 
+  async imprimerSousNote(c: CommandeVue, note: NoteSplitVue): Promise<void> {
+    const info = await this.infosResto();
+    await this.envoyer(
+      () => {
+        const r = new Ruban(info.colonnes);
+        r.init().centre();
+        r.gras(true).ligne(info.nom).gras(false);
+        r.ligne(`Ticket ${c.numero_ticket} - Paiement ${note.numero}`);
+        r.gauche().tiret();
+        for (const item of note.items) {
+          r.duo(`${item.quantite} x ${item.nom_snapshot}`, formatFCFA(item.montant_brut));
+          for (const s of item.supplements) r.ligne(`   + ${s.nom} (${formatFCFA(s.prix)})`);
+          for (const o of item.options) if (o.choix.length) r.ligne(`   ${o.groupe}: ${o.choix.join(', ')}`);
+        }
+        r.tiret().duo('Sous-total', formatFCFA(note.sous_total));
+        if (note.promo_montant > 0) r.duo('Promotion', `-${formatFCFA(note.promo_montant)}`);
+        if (note.remise_montant > 0) r.duo('Remise', `-${formatFCFA(note.remise_montant)}`);
+        if (note.fidelite_montant > 0) r.duo('Fidelite', `-${formatFCFA(note.fidelite_montant)}`);
+        r.gras(true).duo('TOTAL', formatFCFA(note.montant)).gras(false).tiret();
+        for (const p of note.paiements) r.duo(LIBELLES_MODES[p.mode], formatFCFA(p.montant));
+        r.centre().ligne('Paye - merci de votre visite !').couper();
+        return r.buffer();
+      },
+      () => this.console.imprimerSousNote(c, note),
+    );
+  }
+
   async imprimerBon(c: CommandeVue, poste: PosteImpression, items: CommandeItemVue[]): Promise<void> {
     const info = await this.infosResto();
     const ident = c.table_numero ? `Table ${c.table_numero}` : c.partenaire ?? '';
@@ -583,6 +610,16 @@ export class EscposPrinter implements PrinterService {
           r.duo(`Kdo offerts (${z.offerts.nb})`, formatFCFA(z.offerts.total));
         }
         if (z.depenses) r.duo('Depenses', formatFCFA(z.depenses));
+
+        if (z.sous_notes_incompletes?.length) {
+          r.tiret();
+          r.gras(true).ligne('PAIEMENTS INCOMPLETS').gras(false);
+          for (const n of z.sous_notes_incompletes) {
+            r.ligne(`Ticket ${n.numero_ticket} - Paiement ${n.numero_paiement}`);
+            r.duo('Recu', formatFCFA(n.montant_recu));
+            r.duo('Reste', formatFCFA(n.reste));
+          }
+        }
 
         // Bloc Inventaire (DESIGN_V2 § 6.10). Placé APRÈS l'écart de caisse et
         // explicitement marqué information : le manquant de stock n'entre ni

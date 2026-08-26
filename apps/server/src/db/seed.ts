@@ -46,7 +46,7 @@ export async function seed(): Promise<void> {
   // qui ne vise que UPDATE/DELETE ligne à ligne — acceptable pour un seed de démo).
   await db.execute(sql`
     TRUNCATE TABLE appels_table, actions_recues, points_fidelite, clients_fidelite,
-      notations, sync_etat, sync_outbox, audit_log, paiements, notes_split, equipe_service,
+      notations, sync_etat, sync_outbox, audit_log, paiements, note_split_items, notes_split, equipe_service,
       commande_items, commandes, services_caisse, tables_salle, zones,
       promotions, mapping_poste_categorie, combo_articles, combos, supplements,
       options, groupes_options, prix_canaux, articles, categories,

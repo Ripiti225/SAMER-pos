@@ -5,7 +5,7 @@
  * Barème descendu du siège (parametres_locaux).
  */
 import { randomUUID } from 'node:crypto';
-import { desc, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
 import type { DbOuTx } from '../../db/client.js';
 import { db } from '../../db/client.js';
 import { clientsFidelite, parametresLocaux, pointsFidelite, syncEtat } from '../../db/schema/index.js';
@@ -78,13 +78,27 @@ export function pointsGagnes(bareme: Bareme, montant: number): number {
 }
 
 /** Crédite les points d'une vente payée (écrit points_fidelite + outbox). */
-export async function crediterVente(tx: DbOuTx, clientId: string, commandeId: string, montant: number): Promise<number> {
+export async function crediterVente(
+  tx: DbOuTx,
+  clientId: string,
+  commandeId: string,
+  montant: number,
+  noteId: string | null = null,
+): Promise<number> {
+  if (noteId) {
+    const [dejaCredite] = await tx
+      .select({ id: pointsFidelite.id })
+      .from(pointsFidelite)
+      .where(and(eq(pointsFidelite.note_id, noteId), sql`${pointsFidelite.points} > 0`))
+      .limit(1);
+    if (dejaCredite) return 0;
+  }
   const bareme = await lireBareme(tx);
   const points = pointsGagnes(bareme, montant);
   if (points <= 0) return 0;
   const [ligne] = await tx
     .insert(pointsFidelite)
-    .values({ client_id: clientId, commande_id: commandeId, points, source: 'POS' })
+    .values({ client_id: clientId, commande_id: commandeId, note_id: noteId, points, source: 'POS' })
     .returning();
   await ecrireOutbox(tx, 'points_fidelite', 'INSERT', ligne!.id, ligne as unknown as Record<string, unknown>);
   return points;
@@ -100,6 +114,7 @@ export async function utiliserPoints(
   clientId: string,
   commandeId: string,
   points: number,
+  noteId: string | null = null,
 ): Promise<{ montant: number; points: number }> {
   const bareme = await lireBareme(tx);
   if (points < bareme.seuil_utilisation) {
@@ -113,7 +128,7 @@ export async function utiliserPoints(
 
   const [ligne] = await tx
     .insert(pointsFidelite)
-    .values({ client_id: clientId, commande_id: commandeId, points: -points, source: 'POS' })
+    .values({ client_id: clientId, commande_id: commandeId, note_id: noteId, points: -points, source: 'POS' })
     .returning();
   await ecrireOutbox(tx, 'points_fidelite', 'INSERT', ligne!.id, ligne as unknown as Record<string, unknown>);
   return { montant: points * bareme.valeur_point_fcfa, points };

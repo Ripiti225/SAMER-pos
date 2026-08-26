@@ -43,7 +43,7 @@ import {
 import { lireBareme, pointsGagnes, soldePoints, trouverOuCreer } from '../fidelite/service.js';
 import { calculerDestinataire } from '../routage/routage.js';
 import { etatDUneTable } from '../tables/etat.js';
-import { construireRecuPdf } from '../../printer/recu-pdf.js';
+import { construireRecuPdf, construireRecuSousNotePdf } from '../../printer/recu-pdf.js';
 
 /**
  * Durée pendant laquelle une commande payée reste accessible au téléphone qui
@@ -229,6 +229,50 @@ export function routesClient(app: FastifyInstance): void {
     return rep
       .type('application/pdf')
       .header('Content-Disposition', `attachment; filename="recu-${c.numero_ticket}.pdf"`)
+      .header('Cache-Control', 'no-store')
+      .send(pdf);
+  });
+
+  app.get('/api/client/:qr_token/recu/:commande_id/:note_id', async (req, rep) => {
+    const { qr_token, commande_id, note_id } = req.params as { qr_token: string; commande_id: string; note_id: string };
+    const table = await tableParJeton(qr_token);
+    const [c] = await db.select().from(commandes).where(eq(commandes.id, commande_id));
+    if (!c || c.table_id !== table.id) throw introuvable('Commande');
+    const vue = await chargerCommandeVue(db, commande_id);
+    const note = vue.notes.find((candidate) => candidate.id === note_id);
+    if (!note || note.statut !== 'PAYEE' || !note.payee_le) throw new ErreurMetier('Ce paiement n’est pas encore soldé', 409);
+    if (Date.now() - new Date(note.payee_le).getTime() > FENETRE_RECU_MS) {
+      throw new ErreurMetier('Ce reçu n’est plus disponible, demandez-le à votre serveur', 410);
+    }
+    const params = await db.select().from(parametresLocaux);
+    const texte = (cle: string): string => {
+      const p = params.find((x) => x.cle === cle);
+      return typeof p?.valeur === 'string' ? p.valeur : '';
+    };
+    const [resto] = await db.select().from(restaurant).limit(1);
+    const [credit] = await db
+      .select({ points: pointsFidelite.points })
+      .from(pointsFidelite)
+      .where(and(eq(pointsFidelite.note_id, note_id), gt(pointsFidelite.points, 0)));
+    const bareme = await lireBareme(db);
+    const pdf = await construireRecuSousNotePdf(
+      vue,
+      note,
+      {
+        nom: resto?.nom ?? '',
+        entete: texte('ticket_entete'),
+        pied: texte('ticket_pied'),
+        couleur_hex: resto?.couleur_hex ?? '#EF9F27',
+      },
+      {
+        points: credit?.points ?? pointsGagnes(bareme, note.montant),
+        rattache: note.client_fidelite_id !== null,
+        solde: note.client_fidelite_id ? await soldePoints(db, note.client_fidelite_id) : null,
+      },
+    );
+    return rep
+      .type('application/pdf')
+      .header('Content-Disposition', `attachment; filename="recu-${c.numero_ticket}-paiement-${note.numero}.pdf"`)
       .header('Cache-Control', 'no-store')
       .send(pdf);
   });

@@ -1,4 +1,4 @@
-import type { CommandeItemVue, CommandeVue, EtatStockInstant, PosteImpression, RapportSequence, RapportZ } from '@pos/shared';
+import type { CommandeItemVue, CommandeVue, EtatStockInstant, NoteSplitVue, PosteImpression, RapportSequence, RapportZ } from '@pos/shared';
 import { estLivraisonSansEncaissement, formatFCFA, libelleCategorieInventaire, libellePartenaire, LIBELLES_MODES, LIBELLES_POSTE_IMPRESSION, LIBELLES_TYPES_COMMANDE } from '@pos/shared';
 import type { PrinterService } from './PrinterService.js';
 
@@ -83,6 +83,28 @@ export class ConsolePrinter implements PrinterService {
     console.log('\n[IMPRESSION TICKET]\n' + lignes.join('\n') + '\n');
   }
 
+  async imprimerSousNote(c: CommandeVue, note: NoteSplitVue): Promise<void> {
+    const lignes = [
+      '='.repeat(LARGEUR),
+      `Ticket ${c.numero_ticket} — Paiement ${note.numero}`,
+      '-'.repeat(LARGEUR),
+    ];
+    for (const item of note.items) {
+      lignes.push(ligne(`${item.quantite} x ${item.nom_snapshot}`, formatFCFA(item.montant_brut)));
+      for (const s of item.supplements) lignes.push(`   + ${s.nom} (${formatFCFA(s.prix)})`);
+      for (const o of item.options) if (o.choix.length) lignes.push(`   ${o.groupe}: ${o.choix.join(', ')}`);
+    }
+    lignes.push('-'.repeat(LARGEUR));
+    lignes.push(ligne('Sous-total', formatFCFA(note.sous_total)));
+    if (note.promo_montant > 0) lignes.push(ligne('Promotion', `-${formatFCFA(note.promo_montant)}`));
+    if (note.remise_montant > 0) lignes.push(ligne('Remise', `-${formatFCFA(note.remise_montant)}`));
+    if (note.fidelite_montant > 0) lignes.push(ligne('Fidélité', `-${formatFCFA(note.fidelite_montant)}`));
+    lignes.push(ligne('TOTAL', formatFCFA(note.montant)), '-'.repeat(LARGEUR));
+    for (const p of note.paiements) lignes.push(ligne(LIBELLES_MODES[p.mode], formatFCFA(p.montant)));
+    lignes.push('='.repeat(LARGEUR), 'Payé — merci de votre visite !');
+    console.log('\n[IMPRESSION SOUS-NOTE]\n' + lignes.join('\n') + '\n');
+  }
+
   async imprimerBon(c: CommandeVue, poste: PosteImpression, items: CommandeItemVue[]): Promise<void> {
     const ident = c.table_numero ? `Table ${c.table_numero}` : c.partenaire ?? '';
     const lignes: string[] = [
@@ -124,6 +146,15 @@ export class ConsolePrinter implements PrinterService {
         .map(([t, s]) => ligne(`  ${t} (${s.nb})`, formatFCFA(s.total))),
       ...(z.remises_detail.length ? ['-'.repeat(LARGEUR), 'Remises :'] : []),
       ...z.remises_detail.map((r) => ligne(`  N°${r.numero_ticket} ${r.par_nom ?? ''} (${r.motif ?? ''})`, `-${formatFCFA(r.montant)}`)),
+      ...(z.sous_notes_incompletes?.length
+        ? [
+            '-'.repeat(LARGEUR),
+            'Paiements individuels incomplets :',
+            ...z.sous_notes_incompletes.map((n) =>
+              ligne(`  Ticket ${n.numero_ticket} — Paiement ${n.numero_paiement}`, `${formatFCFA(n.montant_recu)} reçus`),
+            ),
+          ]
+        : []),
       '-'.repeat(LARGEUR),
       ligne('Fond de caisse', formatFCFA(z.fond_de_caisse)),
       ligne('Espèces comptées', formatFCFA(z.especes_comptees)),

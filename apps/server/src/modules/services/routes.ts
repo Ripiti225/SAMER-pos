@@ -454,7 +454,11 @@ export function routesServices(app: FastifyInstance): void {
         offerts.total +
         corps.especes_comptees -
         service.fond_de_caisse;
-      const totalSysteme = stats.total_ventes;
+      // Un acompte est bien dans le tiroir / l'opérateur du shift, même si la
+      // vente analytique de sa sous-note ne sera reconnue qu'au solde. Il doit
+      // donc entrer dans la réconciliation sans gonfler `total_ventes`.
+      const acomptesRecus = stats.sous_notes_incompletes.reduce((s, note) => s + note.montant_recu, 0);
+      const totalSysteme = stats.total_ventes + acomptesRecus;
       const diff = venteTotale - totalSysteme;
       const sequenceId = service.sequence_id ?? (await sequenceOuverte(tx));
 

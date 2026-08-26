@@ -80,7 +80,7 @@ describe('paiement mixte : PAYEE uniquement si SUM(paiements) == total', () => {
     expect(rep.json().erreur).toBe('Cette commande est déjà encaissée');
   });
 
-  it('split : la somme des notes doit être égale au total', async () => {
+  it('refuse la création d’un ancien split monétaire', async () => {
     const c2 = await app.inject({ method: 'POST', url: '/api/commandes', cookies, payload: { type: 'EMPORTER' } });
     const id2 = c2.json().id as string;
     await app.inject({
@@ -90,43 +90,13 @@ describe('paiement mixte : PAYEE uniquement si SUM(paiements) == total', () => {
       payload: { article_id: donnees.article_id, quantite: 2, options: [], supplements: [] },
     });
 
-    const mauvais = await app.inject({
-      method: 'POST',
-      url: `/api/commandes/${id2}/split`,
-      cookies,
-      payload: { notes: [{ libelle: 'Client A', montant: 3000 }, { libelle: 'Client B', montant: 2000 }] },
-    });
-    expect(mauvais.statusCode).toBe(400);
-    expect(mauvais.json().erreur).toContain('égale au total');
-
-    const bon = await app.inject({
+    const ancienSplit = await app.inject({
       method: 'POST',
       url: `/api/commandes/${id2}/split`,
       cookies,
       payload: { notes: [{ libelle: 'Client A', montant: 3000 }, { libelle: 'Client B', montant: 3000 }] },
     });
-    expect(bon.statusCode).toBe(200);
-    expect(bon.json().notes).toHaveLength(2);
-
-    // Chaque note se paie séparément ; la commande passe à PAYEE à la fin
-    const noteA = bon.json().notes[0];
-    const p1 = await app.inject({
-      method: 'POST',
-      url: `/api/commandes/${id2}/paiements`,
-      cookies,
-      payload: { mode: 'ESPECES', montant: 3000, note_id: noteA.id },
-    });
-    expect(p1.statusCode).toBe(200);
-    expect(p1.json().statut).not.toBe('PAYEE');
-
-    const noteB = bon.json().notes[1];
-    const p2 = await app.inject({
-      method: 'POST',
-      url: `/api/commandes/${id2}/paiements`,
-      cookies,
-      payload: { mode: 'ORANGE_MONEY', montant: 3000, note_id: noteB.id },
-    });
-    expect(p2.statusCode).toBe(200);
-    expect(p2.json().statut).toBe('PAYEE');
+    expect(ancienSplit.statusCode).toBe(410);
+    expect(ancienSplit.json().erreur).toContain('Payer par articles');
   });
 });

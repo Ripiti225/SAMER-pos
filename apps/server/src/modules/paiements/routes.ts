@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { and, eq } from 'drizzle-orm';
-import { estLivraisonSansEncaissement, OffrirSchema, PaiementSchema, SplitSchema } from '@pos/shared';
+import { CreerSousNoteSchema, estLivraisonSansEncaissement, OffrirSchema, PaiementSchema } from '@pos/shared';
 import { db } from '../../db/client.js';
 import { appelsTable, commandes, notesSplit, paiements } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
@@ -14,56 +14,50 @@ import {
   serviceOuvertDe,
   verrouillerCommande,
 } from '../commandes/service.js';
+import {
+  annulerSousNoteArticles,
+  commandeEntierementAlloueeEtPayee,
+  creerSousNoteArticles,
+} from './sous-notes.js';
 
 export function routesPaiements(app: FastifyInstance): void {
   const gardeCaisse = app.exigePermission('caisse.encaisser');
 
-  /**
-   * Split de note : somme des notes == total de la commande, avant tout paiement.
-   * Chaque note est ensuite payée séparément (paiement mixte autorisé par note).
-   */
-  app.post('/api/commandes/:id/split', { preHandler: gardeCaisse }, async (req) => {
+  app.post('/api/commandes/:id/sous-notes', { preHandler: gardeCaisse }, async (req) => {
     const { id } = req.params as { id: string };
-    const corps = valider(SplitSchema, req.body);
-
+    const corps = valider(CreerSousNoteSchema, req.body);
     const vue = await db.transaction(async (tx) => {
-      const c = await verrouillerCommande(tx, id);
-      if (c.statut === 'PAYEE' || c.statut === 'ANNULEE') {
-        throw new ErreurMetier('Cette commande ne peut plus être divisée', 409);
-      }
-      if (c.total <= 0) throw new ErreurMetier('Ajoutez des articles avant de diviser la note', 400);
-
-      const dejaPaye = await tx.select().from(paiements).where(eq(paiements.commande_id, id));
-      if (dejaPaye.length > 0) {
-        throw new ErreurMetier('Impossible de diviser une note déjà partiellement encaissée', 409);
-      }
-
-      const somme = corps.notes.reduce((s, n) => s + n.montant, 0);
-      if (somme !== c.total) {
-        throw new ErreurMetier('La somme des notes doit être égale au total de la commande', 400);
-      }
-
-      await tx.delete(notesSplit).where(eq(notesSplit.commande_id, id));
-      const inserees = await tx
-        .insert(notesSplit)
-        .values(corps.notes.map((n) => ({ commande_id: id, libelle: n.libelle, montant: n.montant })))
-        .returning();
-      for (const note of inserees) {
-        await ecrireOutbox(tx, 'notes_split', 'INSERT', note.id, note as unknown as Record<string, unknown>);
-      }
-      await journaliser(tx, {
-        user_id: req.session!.utilisateur_id,
-        action: 'SPLIT_NOTE',
-        entite: 'commandes',
-        entite_id: id,
-        montant: c.total,
-        meta: { notes: corps.notes },
-      });
+      await creerSousNoteArticles(tx, id, corps, req.session!.utilisateur_id);
       return chargerCommandeVue(tx, id);
     });
-
     app.diffuser('commande', id);
     return vue;
+  });
+
+  app.post('/api/commandes/:id/sous-notes/:noteId/annuler', { preHandler: gardeCaisse }, async (req) => {
+    const { id, noteId } = req.params as { id: string; noteId: string };
+    const vue = await db.transaction(async (tx) => {
+      await annulerSousNoteArticles(tx, id, noteId, req.session!.utilisateur_id);
+      return chargerCommandeVue(tx, id);
+    });
+    app.diffuser('commande', id);
+    return vue;
+  });
+
+  app.post('/api/commandes/:id/sous-notes/:noteId/imprimer', { preHandler: gardeCaisse }, async (req) => {
+    const { id, noteId } = req.params as { id: string; noteId: string };
+    const vue = await chargerCommandeVue(db, id);
+    const note = vue.notes.find((candidate) => candidate.id === noteId);
+    if (!note || note.statut !== 'PAYEE') throw new ErreurMetier('Seul un paiement soldé peut être réimprimé', 409);
+    await app.imprimante.imprimerSousNote(vue, note);
+    return { ok: true };
+  });
+
+  // Conservée pour qu'une ancienne PWA affiche un message clair après le
+  // déploiement. Les notes MONTANT_HISTORIQUE déjà en base restent encaissables
+  // via /paiements, mais aucune nouvelle division monétaire n'est créée.
+  app.post('/api/commandes/:id/split', { preHandler: gardeCaisse }, async () => {
+    throw new ErreurMetier('Le partage par montant a été remplacé par « Payer par articles »', 410);
   });
 
   /**
@@ -77,23 +71,58 @@ export function routesPaiements(app: FastifyInstance): void {
     const corps = valider(PaiementSchema, req.body);
     const service = await serviceOuvertDe(db, req.session!.utilisateur_id);
 
-    const { vue, payee } = await db.transaction(async (tx) => {
+    const { vue, payee, notePayeeId } = await db.transaction(async (tx) => {
       const c = await verrouillerCommande(tx, id);
       if (c.statut === 'ANNULEE') throw new ErreurMetier('Cette commande est annulée', 409);
       if (c.statut === 'PAYEE') throw new ErreurMetier('Cette commande est déjà encaissée', 409);
       if (c.total <= 0) throw new ErreurMetier('Ajoutez des articles avant d’encaisser', 400);
 
       const existants = await tx.select().from(paiements).where(eq(paiements.commande_id, id));
+      let noteId = corps.note_id ?? null;
+      let notesCommande = await tx.select().from(notesSplit).where(eq(notesSplit.commande_id, id));
+      // Paiement simple : l'API crée elle-même une sous-note ARTICLES couvrant
+      // tout le disponible. On conserve ainsi le parcours en un geste et les
+      // anciens clients API, sans ouvrir une nouvelle voie hors allocations.
+      if (!noteId && notesCommande.length === 0 && existants.length === 0) {
+        const vueCourante = await chargerCommandeVue(tx, id);
+        const selection = vueCourante.items
+          .filter((item) => item.statut_cuisine !== 'ANNULE' && item.quantite_disponible > 0)
+          .map((item) => ({ commande_item_id: item.id, quantite: item.quantite_disponible }));
+        noteId = await creerSousNoteArticles(tx, id, {
+          items: selection,
+          client_fidelite_id: c.client_fidelite_id,
+          fidelite_points: 0,
+        }, req.session!.utilisateur_id);
+        notesCommande = await tx.select().from(notesSplit).where(eq(notesSplit.commande_id, id));
+      }
+      // Compatibilité des clients qui encaissent encore sans `note_id` : une
+      // fois le premier versement enregistré, reprendre l'unique sous-note en
+      // cours. Une sélection explicite encore vierge reste, elle, obligatoire
+      // afin de ne jamais choisir silencieusement le convive à encaisser.
+      if (!noteId && existants.length > 0) {
+        const actives = notesCommande.filter((note) => note.type === 'ARTICLES' && note.statut !== 'ANNULEE');
+        if (actives.length === 1 && existants.every((paiement) => paiement.note_id === actives[0]!.id)) {
+          noteId = actives[0]!.id;
+        }
+      }
+      const fluxArticles = notesCommande.some((note) => note.type === 'ARTICLES' && note.statut !== 'ANNULEE');
+      if (fluxArticles && !noteId) {
+        throw new ErreurMetier('Choisissez le paiement par articles à encaisser', 400);
+      }
       const dejaPaye = existants.reduce((s, p) => s + p.montant, 0);
       if (dejaPaye + corps.montant > c.total) {
         throw new ErreurMetier('Le montant dépasse le reste à payer', 400);
       }
 
-      if (corps.note_id) {
-        const [note] = await tx.select().from(notesSplit).where(eq(notesSplit.id, corps.note_id));
+      let noteCible: typeof notesSplit.$inferSelect | null = null;
+      if (noteId) {
+        const [note] = await tx.select().from(notesSplit).where(eq(notesSplit.id, noteId));
         if (!note || note.commande_id !== id) throw new ErreurMetier('Note de split inconnue', 404);
+        if (note.statut === 'ANNULEE') throw new ErreurMetier('Ce paiement par articles est annulé', 409);
+        if (note.statut === 'PAYEE') throw new ErreurMetier('Ce paiement par articles est déjà soldé', 409);
+        noteCible = note;
         const payeNote = existants
-          .filter((p) => p.note_id === corps.note_id)
+          .filter((p) => p.note_id === noteId)
           .reduce((s, p) => s + p.montant, 0);
         if (payeNote + corps.montant > note.montant) {
           throw new ErreurMetier('Le montant dépasse le reste à payer de cette note', 400);
@@ -104,7 +133,7 @@ export function routesPaiements(app: FastifyInstance): void {
         .insert(paiements)
         .values({
           commande_id: id,
-          note_id: corps.note_id ?? null,
+          note_id: noteId,
           mode: corps.mode,
           montant: corps.montant,
           encaisse_par: req.session!.utilisateur_id,
@@ -112,6 +141,46 @@ export function routesPaiements(app: FastifyInstance): void {
         })
         .returning();
       await ecrireOutbox(tx, 'paiements', 'INSERT', paiement!.id, paiement as unknown as Record<string, unknown>);
+      if (noteCible) {
+        await journaliser(tx, {
+          user_id: req.session!.utilisateur_id,
+          action: 'PAIEMENT_SOUS_NOTE',
+          entite: 'notes_split',
+          entite_id: noteCible.id,
+          montant: corps.montant,
+          meta: {
+            commande_id: id,
+            numero: noteCible.numero,
+            paiement_id: paiement!.id,
+            mode: corps.mode,
+          },
+        });
+      }
+
+      let notePayeeId: string | null = null;
+      if (noteCible) {
+        const payeAvant = existants.filter((p) => p.note_id === noteCible!.id).reduce((s, p) => s + p.montant, 0);
+        const noteSoldee = payeAvant + corps.montant === noteCible.montant;
+        const [noteMaj] = await tx
+          .update(notesSplit)
+          .set(noteSoldee
+            ? {
+                statut: 'PAYEE',
+                service_id: service.id,
+                payee_par: req.session!.utilisateur_id,
+                payee_le: new Date(),
+              }
+            : { statut: 'PARTIELLEMENT_PAYEE' })
+          .where(eq(notesSplit.id, noteCible.id))
+          .returning();
+        await ecrireOutbox(tx, 'notes_split', 'UPDATE', noteCible.id, noteMaj as unknown as Record<string, unknown>);
+        if (noteSoldee) {
+          if (noteCible.type === 'ARTICLES') notePayeeId = noteCible.id;
+          if (noteCible.type === 'ARTICLES' && noteCible.client_fidelite_id) {
+            await crediterVente(tx, noteCible.client_fidelite_id, id, noteCible.montant, noteCible.id);
+          }
+        }
+      }
 
       // Une commande prise sur tablette (sans service) est rattachée au
       // service du caissier qui l'encaisse : elle comptera dans SON rapport Z.
@@ -127,7 +196,8 @@ export function routesPaiements(app: FastifyInstance): void {
 
       const totalPaye = dejaPaye + corps.montant;
       let estPayee = false;
-      if (totalPaye === c.total) {
+      const toutesQuantitesPayees = fluxArticles ? await commandeEntierementAlloueeEtPayee(tx, id) : true;
+      if (totalPaye === c.total && toutesQuantitesPayees) {
         estPayee = true;
         const [maj] = await tx
           .update(commandes)
@@ -145,7 +215,7 @@ export function routesPaiements(app: FastifyInstance): void {
             .where(and(eq(appelsTable.table_id, c.table_id), eq(appelsTable.statut, 'EN_ATTENTE')));
         }
         // Sprint 4 B : crédit des points fidélité, dans la transaction du paiement.
-        if (c.client_fidelite_id) {
+        if (!fluxArticles && c.client_fidelite_id) {
           await crediterVente(tx, c.client_fidelite_id, id, c.total);
         }
         await journaliser(tx, {
@@ -157,10 +227,19 @@ export function routesPaiements(app: FastifyInstance): void {
           meta: { numero_ticket: Number(c.numero_ticket), modes: [...existants.map((p) => p.mode), corps.mode] },
         });
       }
-      return { vue: await chargerCommandeVue(tx, id), payee: estPayee };
+      return { vue: await chargerCommandeVue(tx, id), payee: estPayee, notePayeeId };
     });
 
-    if (payee) {
+    if (notePayeeId) {
+      const note = vue.notes.find((n) => n.id === notePayeeId);
+      if (note) {
+        try {
+          await app.imprimante.imprimerSousNote(vue, note);
+        } catch (erreur) {
+          app.log.error({ erreur, commande_id: id, note_id: note.id }, 'Échec impression sous-note après encaissement');
+        }
+      }
+    } else if (payee) {
       await app.imprimante.imprimerTicket(vue);
     }
     app.diffuser('commande', id);

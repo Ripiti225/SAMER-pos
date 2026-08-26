@@ -20,7 +20,12 @@ export const COLONNES_VENTES: Record<string, string[]> = {
     'quantite', 'options', 'supplements', 'statut_cuisine', 'envoye_le', 'attribue_a',
     'annule_par', 'annule_motif',
   ],
-  notes_split: ['id', 'commande_id', 'libelle', 'montant'],
+  notes_split: [
+    'id', 'commande_id', 'numero', 'libelle', 'type', 'statut', 'sous_total',
+    'promo_montant', 'remise_montant', 'fidelite_montant', 'client_fidelite_id',
+    'fidelite_points', 'montant', 'service_id', 'payee_par', 'created_at', 'payee_le',
+  ],
+  note_split_items: ['id', 'note_id', 'commande_item_id', 'quantite', 'montant_brut'],
   paiements: ['id', 'commande_id', 'note_id', 'mode', 'montant', 'encaisse_par', 'service_id', 'created_at'],
   services_caisse: [
     'id', 'caissier_id', 'fond_de_caisse', 'ouvert_le', 'cloture_le', 'statut',
@@ -33,7 +38,7 @@ export const COLONNES_VENTES: Record<string, string[]> = {
   // Sprint 4 : présences + fidélité remontent aussi (SamerTrackly).
   pointages: ['id', 'user_id', 'methode', 'arrivee', 'depart', 'depart_oublie'],
   clients_fidelite: ['id', 'telephone', 'nom', 'created_at'],
-  points_fidelite: ['id', 'client_id', 'commande_id', 'points', 'source', 'created_at'],
+  points_fidelite: ['id', 'client_id', 'commande_id', 'note_id', 'points', 'source', 'created_at'],
 
   // ---------------------------------------------------------------------------
   // 2026-08-16 — tables que le POS publiait DÉJÀ sans qu'elles soient ici.

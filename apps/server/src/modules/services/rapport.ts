@@ -3,7 +3,7 @@ import { and, eq, gte, inArray, isNotNull, isNull, ne, notInArray, or, sql, type
 import type { ModePaiement, RetoursVue, TypeCommande } from '@pos/shared';
 import { MODES_PAIEMENT, PARTENAIRES_EXTERNES, TYPES_COMMANDE } from '@pos/shared';
 import type { DbOuTx } from '../../db/client.js';
-import { auditLog, commandeItems, commandes, utilisateurs } from '../../db/schema/index.js';
+import { auditLog, commandeItems, commandes, noteSplitItems, notesSplit, utilisateurs } from '../../db/schema/index.js';
 import { paiements } from '../../db/schema/index.js';
 
 export interface RemiseDetail {
@@ -43,6 +43,7 @@ export interface StatsService {
   par_type: Record<TypeCommande, { nb: number; total: number }>;
   partenaires: Record<string, StatPartenaire>;
   top_articles: { nom: string; quantite: number; total: number }[];
+  sous_notes_incompletes: { numero_ticket: number; numero_paiement: number; montant_recu: number; reste: number }[];
   remises_detail: RemiseDetail[];
   annulations_detail: AnnulationDetail[];
   retours: RetoursVue;
@@ -233,11 +234,42 @@ export async function calculerStatsService(dbx: DbOuTx, serviceId: string): Prom
     .from(commandes)
     .where(eq(commandes.service_id, serviceId));
 
-  const payees = lignesCommandes.filter((c) => c.statut === 'PAYEE');
+  const notesArticles = await dbx
+    .select({
+      id: notesSplit.id,
+      commande_id: notesSplit.commande_id,
+      numero: notesSplit.numero,
+      statut: notesSplit.statut,
+      montant: notesSplit.montant,
+      remise_montant: notesSplit.remise_montant,
+      promo_montant: notesSplit.promo_montant,
+      fidelite_montant: notesSplit.fidelite_montant,
+      type_commande: commandes.type,
+      numero_ticket: commandes.numero_ticket,
+      remise_motif: commandes.remise_motif,
+      remise_par: commandes.remise_par,
+      partenaire: commandes.partenaire,
+      contact_client: commandes.contact_client,
+      ref_partenaire: commandes.ref_partenaire,
+    })
+    .from(notesSplit)
+    .innerJoin(commandes, eq(commandes.id, notesSplit.commande_id))
+    .where(and(eq(notesSplit.type, 'ARTICLES'), eq(notesSplit.service_id, serviceId), eq(notesSplit.statut, 'PAYEE')));
+  const commandesAvecArticles = await dbx
+    .select({ commande_id: notesSplit.commande_id })
+    .from(notesSplit)
+    .where(eq(notesSplit.type, 'ARTICLES'));
+  const idsCommandesArticles = new Set(commandesAvecArticles.map((note) => note.commande_id));
+  const payees = lignesCommandes.filter((c) => c.statut === 'PAYEE' && !idsCommandesArticles.has(c.id));
   const annulees = lignesCommandes.filter((c) => c.statut === 'ANNULEE');
 
   // Noms des managers ayant accordé une remise (pour le détail Z/X)
-  const idsRemiseurs = [...new Set(payees.map((c) => c.remise_par).filter((x): x is string => !!x))];
+  const idsRemiseurs = [
+    ...new Set(
+      [...payees.map((c) => c.remise_par), ...notesArticles.map((note) => note.remise_par)]
+        .filter((x): x is string => !!x),
+    ),
+  ];
   const nomsRemiseurs = idsRemiseurs.length
     ? await dbx.select({ id: utilisateurs.id, nom: utilisateurs.nom_complet }).from(utilisateurs).where(inArray(utilisateurs.id, idsRemiseurs))
     : [];
@@ -263,12 +295,44 @@ export async function calculerStatsService(dbx: DbOuTx, serviceId: string): Prom
     if (c.contact_client?.trim()) entree.contacts += 1;
     if (c.ref_partenaire?.trim()) entree.refs += 1;
   }
-
+  const livraisonsArticles = new Map<string, {
+    partenaire: string;
+    total: number;
+    contact: boolean;
+    ref: boolean;
+  }>();
+  for (const note of notesArticles) {
+    if (note.type_commande !== 'LIVRAISON' || !note.partenaire) continue;
+    const livraison = livraisonsArticles.get(note.commande_id) ?? {
+      partenaire: note.partenaire,
+      total: 0,
+      contact: !!note.contact_client?.trim(),
+      ref: !!note.ref_partenaire?.trim(),
+    };
+    livraison.total += note.montant;
+    livraisonsArticles.set(note.commande_id, livraison);
+  }
+  for (const livraison of livraisonsArticles.values()) {
+    const entree = (partenaires[livraison.partenaire] ??= { nb: 0, total: 0, contacts: 0, refs: 0 });
+    entree.nb += 1;
+    entree.total += livraison.total;
+    if (livraison.contact) entree.contacts += 1;
+    if (livraison.ref) entree.refs += 1;
+  }
   // Ventes par type (sur place / à emporter / livraison)
   const parType = Object.fromEntries(TYPES_COMMANDE.map((t) => [t, { nb: 0, total: 0 }])) as Record<TypeCommande, { nb: number; total: number }>;
   for (const c of payees) {
     parType[c.type].nb += 1;
     parType[c.type].total += c.total;
+  }
+  const commandesArticlesParType = new Set<string>();
+  for (const note of notesArticles) {
+    const cleCommande = `${note.type_commande}:${note.commande_id}`;
+    if (!commandesArticlesParType.has(cleCommande)) {
+      parType[note.type_commande].nb += 1;
+      commandesArticlesParType.add(cleCommande);
+    }
+    parType[note.type_commande].total += note.montant;
   }
 
   // Détails remises (qui / motif) et annulations
@@ -280,9 +344,22 @@ export async function calculerStatsService(dbx: DbOuTx, serviceId: string): Prom
       motif: c.remise_motif,
       par_nom: c.remise_par ? (nomParId.get(c.remise_par) ?? null) : null,
     }));
+  const remisesArticlesParCommande = new Map<string, RemiseDetail>();
+  for (const note of notesArticles) {
+    if (note.remise_montant <= 0) continue;
+    const detail = remisesArticlesParCommande.get(note.commande_id) ?? {
+      numero_ticket: Number(note.numero_ticket),
+      montant: 0,
+      motif: note.remise_motif,
+      par_nom: note.remise_par ? (nomParId.get(note.remise_par) ?? null) : null,
+    };
+    detail.montant += note.remise_montant;
+    remisesArticlesParCommande.set(note.commande_id, detail);
+  }
+  remisesDetail.push(...remisesArticlesParCommande.values());
   const annulationsDetail: AnnulationDetail[] = annulees.map((c) => ({ numero_ticket: Number(c.numero_ticket), total: c.total }));
 
-  const top = await dbx
+  const topHistorique = await dbx
     .select({
       nom: commandeItems.nom_snapshot,
       quantite: sql<string>`SUM(${commandeItems.quantite})`,
@@ -290,29 +367,72 @@ export async function calculerStatsService(dbx: DbOuTx, serviceId: string): Prom
     })
     .from(commandeItems)
     .innerJoin(commandes, eq(commandes.id, commandeItems.commande_id))
-    .where(
-      and(
-        eq(commandes.service_id, serviceId),
-        eq(commandes.statut, 'PAYEE'),
-        ne(commandeItems.statut_cuisine, 'ANNULE'),
-      ),
-    )
+    .where(and(
+      eq(commandes.service_id, serviceId),
+      eq(commandes.statut, 'PAYEE'),
+      ne(commandeItems.statut_cuisine, 'ANNULE'),
+      ...(idsCommandesArticles.size ? [notInArray(commandes.id, [...idsCommandesArticles])] : []),
+    ))
     .groupBy(commandeItems.nom_snapshot)
     .orderBy(sql`SUM(${commandeItems.quantite}) DESC`)
     .limit(10);
 
-  const totalVentes = payees.reduce((s, c) => s + c.total, 0);
+  const topArticles = await dbx
+    .select({
+      nom: commandeItems.nom_snapshot,
+      quantite: sql<string>`SUM(${noteSplitItems.quantite})`,
+      total: sql<string>`SUM(${noteSplitItems.montant_brut})`,
+    })
+    .from(noteSplitItems)
+    .innerJoin(notesSplit, eq(notesSplit.id, noteSplitItems.note_id))
+    .innerJoin(commandeItems, eq(commandeItems.id, noteSplitItems.commande_item_id))
+    .where(and(eq(notesSplit.type, 'ARTICLES'), eq(notesSplit.statut, 'PAYEE'), eq(notesSplit.service_id, serviceId)))
+    .groupBy(commandeItems.nom_snapshot);
+
+  const topParNom = new Map<string, { nom: string; quantite: number; total: number }>();
+  for (const ligne of [...topHistorique, ...topArticles]) {
+    const courant = topParNom.get(ligne.nom) ?? { nom: ligne.nom, quantite: 0, total: 0 };
+    courant.quantite += Number(ligne.quantite);
+    courant.total += Number(ligne.total);
+    topParNom.set(ligne.nom, courant);
+  }
+
+  const incompletes = await dbx
+    .select({
+      numero_ticket: commandes.numero_ticket,
+      numero_paiement: notesSplit.numero,
+      montant: notesSplit.montant,
+      montant_recu: sql<string>`SUM(${paiements.montant})`,
+    })
+    .from(paiements)
+    .innerJoin(notesSplit, eq(notesSplit.id, paiements.note_id))
+    .innerJoin(commandes, eq(commandes.id, notesSplit.commande_id))
+    .where(and(
+      eq(paiements.service_id, serviceId),
+      eq(notesSplit.type, 'ARTICLES'),
+      eq(notesSplit.statut, 'PARTIELLEMENT_PAYEE'),
+    ))
+    .groupBy(commandes.numero_ticket, notesSplit.numero, notesSplit.montant);
+
+  const totalVentes = payees.reduce((s, c) => s + c.total, 0) + notesArticles.reduce((s, note) => s + note.montant, 0);
+  const nbVentes = payees.length + new Set(notesArticles.map((note) => note.commande_id)).size;
   return {
-    nb_commandes_payees: payees.length,
+    nb_commandes_payees: nbVentes,
     nb_commandes_annulees: annulees.length,
     total_ventes: totalVentes,
-    total_remises: payees.reduce((s, c) => s + c.remise_montant, 0),
-    total_promos: payees.reduce((s, c) => s + c.promo_montant, 0),
-    total_fidelite: payees.reduce((s, c) => s + c.fidelite_montant, 0),
-    panier_moyen: payees.length ? Math.round(totalVentes / payees.length) : 0,
+    total_remises: payees.reduce((s, c) => s + c.remise_montant, 0) + notesArticles.reduce((s, n) => s + n.remise_montant, 0),
+    total_promos: payees.reduce((s, c) => s + c.promo_montant, 0) + notesArticles.reduce((s, n) => s + n.promo_montant, 0),
+    total_fidelite: payees.reduce((s, c) => s + c.fidelite_montant, 0) + notesArticles.reduce((s, n) => s + n.fidelite_montant, 0),
+    panier_moyen: nbVentes ? Math.round(totalVentes / nbVentes) : 0,
     par_mode: parMode,
     par_type: parType,
-    top_articles: top.map((t) => ({ nom: t.nom, quantite: Number(t.quantite), total: Number(t.total) })),
+    top_articles: [...topParNom.values()].sort((a, b) => b.quantite - a.quantite).slice(0, 10),
+    sous_notes_incompletes: incompletes.map((note) => ({
+      numero_ticket: Number(note.numero_ticket),
+      numero_paiement: note.numero_paiement,
+      montant_recu: Number(note.montant_recu),
+      reste: note.montant - Number(note.montant_recu),
+    })),
     partenaires,
     remises_detail: remisesDetail,
     annulations_detail: annulationsDetail,

@@ -27,6 +27,9 @@ export type ActionAudit =
   // toujours l'entrée — sans lui, un cadeau est indiscernable d'un vol.
   | 'COMMANDE_OFFERTE'
   | 'SPLIT_NOTE'
+  | 'CREATION_SOUS_NOTE_ARTICLES'
+  | 'ANNULATION_SOUS_NOTE_ARTICLES'
+  | 'PAIEMENT_SOUS_NOTE'
   | 'TRANSFERT_TABLE'
   | 'ECART_RECONCILIATION'
   | 'CORRECTION_POINTAGE'

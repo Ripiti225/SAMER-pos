@@ -229,3 +229,15 @@ Parcours manuel d'acceptation :
 8. vérifier la libération de la table, les rapports, le ticket Z et l'absence de double comptage.
 
 La livraison partenaire sans encaissement, les Kdo et les remboursements restent hors de ce nouveau flux.
+
+## 13. Ordre de déploiement
+
+Déployer les éléments dans cet ordre afin qu'aucun client ni moteur de synchronisation n'envoie une structure inconnue :
+
+1. appliquer la migration locale `0028_paiement_par_articles.sql` sur chaque serveur de restaurant ;
+2. déployer le serveur local compatible avec les anciennes notes monétaires et les nouvelles sous-notes par articles ;
+3. déployer la PWA caisse, qui envoie désormais les sélections et le `note_id` ;
+4. appliquer la migration cloud `20260826000000_paiement_par_articles.sql` ;
+5. redéployer les fonctions Supabase de synchronisation avec leurs nouvelles listes blanches.
+
+En cas de retour arrière de la PWA, le serveur continue d'accepter un paiement intégral simple en créant automatiquement une sous-note couvrant tous les articles disponibles. Les sous-notes par articles déjà créées ne doivent jamais être supprimées ni reconverties en partage monétaire.

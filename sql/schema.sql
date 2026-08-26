@@ -447,8 +447,31 @@ CREATE TYPE mode_paiement AS ENUM
 CREATE TABLE notes_split (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   commande_id  UUID NOT NULL REFERENCES commandes(id) ON DELETE CASCADE,
+  numero       SMALLINT NOT NULL CHECK (numero > 0),
   libelle      TEXT NOT NULL DEFAULT 'Note 1',   -- 'Client A', 'Client B'...
-  montant      INTEGER NOT NULL CHECK (montant > 0)
+  type         TEXT NOT NULL DEFAULT 'ARTICLES' CHECK (type IN ('ARTICLES','MONTANT_HISTORIQUE')),
+  statut       TEXT NOT NULL DEFAULT 'A_PAYER' CHECK (statut IN ('A_PAYER','PARTIELLEMENT_PAYEE','PAYEE','ANNULEE')),
+  sous_total   INTEGER NOT NULL CHECK (sous_total > 0),
+  promo_montant INTEGER NOT NULL DEFAULT 0 CHECK (promo_montant >= 0),
+  remise_montant INTEGER NOT NULL DEFAULT 0 CHECK (remise_montant >= 0),
+  fidelite_montant INTEGER NOT NULL DEFAULT 0 CHECK (fidelite_montant >= 0),
+  client_fidelite_id UUID,
+  fidelite_points INTEGER NOT NULL DEFAULT 0,
+  montant      INTEGER NOT NULL CHECK (montant > 0),
+  service_id   UUID REFERENCES services_caisse(id),
+  payee_par    UUID REFERENCES utilisateurs(id),
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  payee_le     TIMESTAMPTZ,
+  UNIQUE (commande_id, numero)
+);
+
+CREATE TABLE note_split_items (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  note_id           UUID NOT NULL REFERENCES notes_split(id) ON DELETE CASCADE,
+  commande_item_id  UUID NOT NULL REFERENCES commande_items(id),
+  quantite          SMALLINT NOT NULL CHECK (quantite > 0),
+  montant_brut      INTEGER NOT NULL CHECK (montant_brut > 0),
+  UNIQUE (note_id, commande_item_id)
 );
 
 CREATE TABLE paiements (
@@ -562,10 +585,15 @@ CREATE TABLE points_fidelite (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   client_id   UUID NOT NULL REFERENCES clients_fidelite(id),
   commande_id UUID REFERENCES commandes(id),
+  note_id     UUID REFERENCES notes_split(id),
   points      INTEGER NOT NULL,          -- positif = gain, négatif = utilisation
   source      TEXT NOT NULL DEFAULT 'POS',   -- 'POS' | 'SAMER_DELLY'
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE notes_split
+  ADD CONSTRAINT notes_split_client_fidelite_fk
+  FOREIGN KEY (client_fidelite_id) REFERENCES clients_fidelite(id);
 
 -- ============================================================================
 -- 12. INVENTAIRE DE SERVICE (DESIGN_V2 §6.9) — LOCAL UNIQUEMENT

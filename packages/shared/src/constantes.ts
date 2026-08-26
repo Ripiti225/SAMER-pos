@@ -25,6 +25,12 @@ export const MODES_PAIEMENT = [
 ] as const;
 export type ModePaiement = (typeof MODES_PAIEMENT)[number];
 
+export const TYPES_NOTE_SPLIT = ['ARTICLES', 'MONTANT_HISTORIQUE'] as const;
+export type TypeNoteSplit = (typeof TYPES_NOTE_SPLIT)[number];
+
+export const STATUTS_NOTE_SPLIT = ['A_PAYER', 'PARTIELLEMENT_PAYEE', 'PAYEE', 'ANNULEE'] as const;
+export type StatutNoteSplit = (typeof STATUTS_NOTE_SPLIT)[number];
+
 export const LIBELLES_MODES: Record<ModePaiement, string> = {
   ESPECES: 'Espèces',
   WAVE: 'Wave',

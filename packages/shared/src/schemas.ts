@@ -280,6 +280,21 @@ export const PaiementSchema = z.object({
   note_id: z.string().uuid().nullish(),
 });
 
+/** Sélection tactile des quantités qu'un convive souhaite régler. */
+export const CreerSousNoteSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        commande_item_id: z.string().uuid('Article invalide'),
+        quantite: z.number().int().min(1, 'La quantité doit être au moins 1').max(99),
+      }),
+    )
+    .min(1, 'Sélectionnez au moins un article'),
+  client_fidelite_id: z.string().uuid('Client fidélité invalide').nullish(),
+  telephone_fidelite: z.string().trim().min(6, 'Téléphone invalide').max(20, 'Téléphone invalide').optional(),
+  fidelite_points: z.number().int().min(0).default(0),
+});
+
 export const SplitSchema = z.object({
   notes: z
     .array(
@@ -463,6 +478,7 @@ export type LoginInput = z.infer<typeof LoginSchema>;
 export type CreerCommandeInput = z.infer<typeof CreerCommandeSchema>;
 export type AjouterItemInput = z.infer<typeof AjouterItemSchema>;
 export type PaiementInput = z.infer<typeof PaiementSchema>;
+export type CreerSousNoteInput = z.infer<typeof CreerSousNoteSchema>;
 export type CreerRoleInput = z.infer<typeof CreerRoleSchema>;
 export type ModifierRoleInput = z.infer<typeof ModifierRoleSchema>;
 export type CreerEmployeInput = z.infer<typeof CreerEmployeSchema>;

@@ -62,7 +62,7 @@ export interface Donnees {
 export async function resetDonnees(): Promise<Donnees> {
   await db.execute(sql`
     TRUNCATE TABLE appels_table, actions_recues, points_fidelite, clients_fidelite,
-      notations, sync_etat, sync_outbox, audit_log, paiements, notes_split, equipe_service,
+      notations, sync_etat, sync_outbox, audit_log, paiements, note_split_items, notes_split, equipe_service,
       depenses, entrees_stock, inventaire_lignes, inventaires_service, produits_inventaire,
       commande_items, commandes, services_caisse, tables_salle, zones,
       promotions, mapping_poste_categorie, combo_articles, combos, supplements,

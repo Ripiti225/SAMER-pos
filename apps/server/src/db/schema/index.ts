@@ -459,9 +459,42 @@ export const commandeItems = pgTable('commande_items', {
 export const notesSplit = pgTable('notes_split', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   commande_id: uuid('commande_id').notNull().references(() => commandes.id, { onDelete: 'cascade' }),
+  numero: smallint('numero').notNull(),
   libelle: text('libelle').notNull().default('Note 1'),
+  type: text('type').notNull().default('ARTICLES'),
+  statut: text('statut').notNull().default('A_PAYER'),
+  sous_total: integer('sous_total').notNull(),
+  promo_montant: integer('promo_montant').notNull().default(0),
+  remise_montant: integer('remise_montant').notNull().default(0),
+  fidelite_montant: integer('fidelite_montant').notNull().default(0),
+  client_fidelite_id: uuid('client_fidelite_id').references(() => clientsFidelite.id),
+  fidelite_points: integer('fidelite_points').notNull().default(0),
   montant: integer('montant').notNull(),
-}, (t) => [check('notes_split_montant_check', sql`${t.montant} > 0`)]);
+  service_id: uuid('service_id').references(() => servicesCaisse.id),
+  payee_par: uuid('payee_par').references(() => utilisateurs.id),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  payee_le: timestamp('payee_le', { withTimezone: true }),
+}, (t) => [
+  uniqueIndex('notes_split_commande_numero_unique').on(t.commande_id, t.numero),
+  check('notes_split_numero_check', sql`${t.numero} > 0`),
+  check('notes_split_type_check', sql`${t.type} IN ('ARTICLES','MONTANT_HISTORIQUE')`),
+  check('notes_split_statut_check', sql`${t.statut} IN ('A_PAYER','PARTIELLEMENT_PAYEE','PAYEE','ANNULEE')`),
+  check('notes_split_sous_total_check', sql`${t.sous_total} > 0`),
+  check('notes_split_montant_check', sql`${t.montant} > 0`),
+  check('notes_split_reductions_check', sql`${t.promo_montant} >= 0 AND ${t.remise_montant} >= 0 AND ${t.fidelite_montant} >= 0`),
+]);
+
+export const noteSplitItems = pgTable('note_split_items', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  note_id: uuid('note_id').notNull().references(() => notesSplit.id, { onDelete: 'cascade' }),
+  commande_item_id: uuid('commande_item_id').notNull().references(() => commandeItems.id),
+  quantite: smallint('quantite').notNull(),
+  montant_brut: integer('montant_brut').notNull(),
+}, (t) => [
+  uniqueIndex('note_split_items_note_item_unique').on(t.note_id, t.commande_item_id),
+  check('note_split_items_quantite_check', sql`${t.quantite} > 0`),
+  check('note_split_items_montant_check', sql`${t.montant_brut} > 0`),
+]);
 
 export const paiements = pgTable('paiements', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
@@ -729,6 +762,7 @@ export const pointsFidelite = pgTable('points_fidelite', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   client_id: uuid('client_id').notNull().references(() => clientsFidelite.id),
   commande_id: uuid('commande_id').references(() => commandes.id),
+  note_id: uuid('note_id').references(() => notesSplit.id),
   points: integer('points').notNull(),
   source: text('source').notNull().default('POS'),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
