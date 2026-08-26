@@ -1,112 +1,162 @@
-import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { IconSearch } from '@tabler/icons-react';
-import { appelSiege, ErreurSiege, type Employe } from '../api';
-import { Erreur, Info, Squelette } from '../components/Etat';
-import { FiltreRestaurant } from '../components/FiltreRestaurant';
-import { restoChoisi, useRestaurants, type FiltreResto } from '../restaurants';
+import { useMemo, useState } from 'react';
+import { IconAlertTriangle, IconSearch, IconUsers } from '@tabler/icons-react';
+import { appeler } from '../api';
 
-/** Initiales pour l'emplacement de la photo, quand `photo_url` est vide. */
+interface Employe {
+  id: string;
+  nom: string | null;
+  poste: string | null;
+  contact: string | null;
+  photo_url: string | null;
+  actif: boolean | null;
+  restaurant_id: string | null;
+  restaurant_nom: string | null;
+}
+
+/**
+ * Couleurs d'avatar, tirées du NOM et non du rang dans la liste : une embauche
+ * ne doit pas repeindre les avatars de toute l'équipe. Même règle que la caisse.
+ * Hors famille orange, réservée à la marque.
+ */
+const COULEURS = ['#e2445c', '#8b5cf6', '#3b82f6', '#14b8a6', '#0ea5e9', '#d946ef'];
+
+function couleur(nom: string): string {
+  let somme = 0;
+  for (let i = 0; i < nom.length; i += 1) somme = (somme * 31 + nom.charCodeAt(i)) % 100_000;
+  return COULEURS[somme % COULEURS.length]!;
+}
+
 function initiales(nom: string): string {
   return nom
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
-    .map((m) => m[0]?.toUpperCase() ?? '')
+    .map((m) => m[0]!.toUpperCase())
     .join('');
 }
 
-export function Equipe({ filtre, onFiltre }: { filtre: FiltreResto; onFiltre: (v: FiltreResto) => void }) {
+export function Equipe(): JSX.Element {
   const [recherche, setRecherche] = useState('');
+  const [restaurant, setRestaurant] = useState<string>('tous');
 
-  const { data: restos } = useRestaurants();
-  const choisi = restoChoisi(restos?.restaurants, filtre);
-
-  const { data, error, isPending } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['equipe'],
-    queryFn: () => appelSiege<{ employes: Employe[] }>('equipe'),
+    queryFn: () => appeler<{ employes: Employe[] }>('equipe'),
+    // L'équipe bouge à l'échelle de la semaine, pas de la minute.
+    refetchInterval: false,
     staleTime: 5 * 60_000,
   });
 
   const employes = data?.employes ?? [];
 
-  /**
-   * Le rattachement se compare sur le `samtrackly_id` et non sur le nom :
-   * `employes[].restaurant_id` EST l'identifiant SamerTrackly du restaurant
-   * (la fonction n'y ajoute que le nom, pour l'affichage). Comparer des noms
-   * casserait au premier restaurant renommé ou mal accentué.
-   */
-  const visibles = useMemo(() => {
+  const restaurants = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const e of employes) {
+      if (e.restaurant_id && e.restaurant_nom) m.set(e.restaurant_id, e.restaurant_nom);
+    }
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1], 'fr'));
+  }, [employes]);
+
+  const filtres = useMemo(() => {
     const q = recherche.trim().toLowerCase();
-    return employes.filter(
-      (e) =>
-        (!choisi || e.restaurant_id === choisi.samtrackly_id) &&
-        (!q || (e.nom ?? '').toLowerCase().includes(q) || (e.poste ?? '').toLowerCase().includes(q)),
-    );
-  }, [employes, recherche, choisi]);
+    return employes.filter((e) => {
+      if (restaurant !== 'tous' && e.restaurant_id !== restaurant) return false;
+      if (!q) return true;
+      return `${e.nom ?? ''} ${e.poste ?? ''}`.toLowerCase().includes(q);
+    });
+  }, [employes, recherche, restaurant]);
 
   return (
-    <section>
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Équipe</h1>
-          <p className="text-doux">
-            {choisi ? `${visibles.length} personne(s) — ${choisi.nom}` : `${employes.length} personne(s) dans le groupe`}
-          </p>
-        </div>
-        <FiltreRestaurant restaurants={restos?.restaurants ?? []} valeur={filtre} onChoisir={onFiltre} />
-      </div>
+    <div className="mx-auto max-w-[1180px] p-8">
+      <header className="mb-6">
+        <h1 className="text-[26px] font-bold tracking-tight text-fort">Équipe</h1>
+        <p className="mt-1 text-doux">
+          {employes.length} employés actifs dans le groupe. Les fiches viennent de SamerTrackly, qui en est la
+          source ; chaque caisse les récupère automatiquement.
+        </p>
+      </header>
 
-      {/* Le point à ne pas rouvrir : SamerTrackly est MAÎTRE de l'employé. La
-          descente `sync-samtrackly.ts` désactive dans chaque POS tout compte lié
-          disparu de sa liste — une seconde source d'employés provoquerait des
-          désactivations et des doublons silencieux. D'où la lecture seule ici,
-          et la phrase à l'écran plutôt qu'un bouton « Ajouter » qui manquerait. */}
-      <Info>
-        Cet écran est en <b>lecture seule</b>. L’employé se crée et se modifie dans <b>SamerTrackly</b>, qui en est
-        la source unique : chaque POS reçoit sa liste par la synchro, et désactive les comptes qui en disparaissent.
-      </Info>
-
-      {error && <Erreur texte={error instanceof ErreurSiege ? error.message : 'Lecture impossible'} />}
-
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative max-w-xs flex-1">
-          <IconSearch size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-doux" />
-          <input
-            type="search"
-            className="champ pl-10"
-            placeholder="Rechercher un nom, un poste…"
-            value={recherche}
-            onChange={(e) => setRecherche(e.target.value)}
-          />
-        </div>
-      </div>
-
-      {isPending ? (
-        <Squelette lignes={4} />
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {visibles.map((e) => (
-            <article key={e.id} className="flex items-center gap-3 rounded-jeton border border-filet bg-carte p-4 shadow-e1">
-              {e.photo_url ? (
-                <img src={e.photo_url} alt="" className="h-12 w-12 flex-none rounded-full object-cover" />
-              ) : (
-                <span className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-marque-tint text-sm font-bold text-marque-sur-plan">
-                  {initiales(e.nom ?? '?')}
-                </span>
-              )}
-              <div className="min-w-0">
-                <p className="truncate font-semibold">{e.nom ?? 'Sans nom'}</p>
-                <p className="truncate text-sm text-doux">{e.poste ?? 'Poste non renseigné'}</p>
-                <p className="truncate text-xs text-faible">{e.restaurant_nom ?? 'Non rattaché à un restaurant'}</p>
-              </div>
-            </article>
-          ))}
-          {visibles.length === 0 && !error && (
-            <p className="text-doux">Aucune personne ne correspond à cette recherche.</p>
-          )}
+      {isError && (
+        <div
+          className="mb-6 flex items-start gap-3 rounded-jeton p-4"
+          style={{ background: 'var(--alerte-tint)', color: 'var(--alerte-txt)' }}
+        >
+          <IconAlertTriangle size={22} style={{ flex: 'none', marginTop: 1 }} />
+          <div className="text-sm">{(error as Error).message}</div>
         </div>
       )}
-    </section>
+
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <div className="champ flex max-w-[320px] flex-1 items-center gap-2.5">
+          <IconSearch size={19} className="flex-none text-faible" />
+          <input
+            value={recherche}
+            onChange={(e) => setRecherche(e.target.value)}
+            placeholder="Chercher un nom, un poste…"
+            className="w-full bg-transparent outline-none"
+          />
+        </div>
+        <select
+          value={restaurant}
+          onChange={(e) => setRestaurant(e.target.value)}
+          className="champ max-w-[260px] cursor-pointer"
+        >
+          <option value="tous">Tous les restaurants</option>
+          {restaurants.map(([id, nom]) => (
+            <option key={id} value={id}>
+              {nom}
+            </option>
+          ))}
+        </select>
+        <div className="ml-auto flex items-center gap-2 text-sm text-doux">
+          <IconUsers size={18} />
+          {filtres.length} affichés
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 9 }, (_, i) => (
+            <div key={i} className="squelette h-[76px] w-full" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {filtres.map((e) => {
+            const nom = (e.nom ?? '').trim() || 'Sans nom';
+            const c = couleur(nom);
+            return (
+              <div key={e.id} className="carte flex items-center gap-3.5 p-4">
+                {e.photo_url ? (
+                  <img
+                    src={e.photo_url}
+                    alt=""
+                    className="h-11 w-11 flex-none rounded-full object-cover"
+                    style={{ border: '1px solid var(--filet)' }}
+                  />
+                ) : (
+                  <div
+                    className="flex h-11 w-11 flex-none items-center justify-center rounded-full text-sm font-bold"
+                    style={{ background: `color-mix(in srgb, ${c} 18%, var(--carte))`, color: c }}
+                  >
+                    {initiales(nom)}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-semibold text-fort">{nom}</div>
+                  <div className="truncate text-sm text-doux">{e.poste?.trim() || 'Poste non renseigné'}</div>
+                  <div className="truncate text-xs text-faible">{e.restaurant_nom ?? 'Restaurant non affecté'}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {!isLoading && filtres.length === 0 && !isError && (
+        <div className="carte p-8 text-center text-doux">Aucun employé ne correspond à cette recherche.</div>
+      )}
+    </div>
   );
 }

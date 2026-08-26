@@ -7,13 +7,6 @@ export const COLONNES_VENTES: Record<string, string[]> = {
     'service_id', 'caissier_id', 'serveur_id', 'statut', 'origine', 'refus_motif',
     'sous_total', 'remise_montant', 'remise_par', 'remise_motif', 'promo_id',
     'promo_montant', 'total', 'created_at', 'updated_at',
-    // 2026-08-25 — les Kdo étaient comptés dans `total` sans être
-    // identifiables : ils gonflaient le CA du siège en silence.
-    'offert', 'motif_offert',
-    // 2026-08-25 — contact du client livré, saisi au lancement en cuisine.
-    // Sans lui, le siège ne peut pas voir quel caissier laisse partir des
-    // courses partenaires sans aucun moyen de rappeler le client.
-    'contact_client',
   ],
   commande_items: [
     'id', 'commande_id', 'article_id', 'combo_id', 'nom_snapshot', 'prix_unitaire',
@@ -25,9 +18,6 @@ export const COLONNES_VENTES: Record<string, string[]> = {
   services_caisse: [
     'id', 'caissier_id', 'fond_de_caisse', 'ouvert_le', 'cloture_le', 'statut',
     'especes_comptees', 'especes_theorique', 'ecart', 'rapport_z',
-    // 2026-08-25 — sans lui, rien ne relie un shift à sa séquence côté cloud :
-    // la console du siège ne pourrait pas montrer ce qu'elle s'apprête à raser.
-    'sequence_id',
   ],
   audit_log: ['id', 'seq', 'user_id', 'action', 'entite', 'entite_id', 'montant', 'motif', 'meta', 'created_at'],
   // Sprint 4 : présences + fidélité remontent aussi (SamerTrackly).
@@ -48,11 +38,6 @@ export const COLONNES_VENTES: Record<string, string[]> = {
   // Le POS envoie la LISTE ENTIÈRE des permissions du rôle, `record_id` = role_id.
   role_permissions: ['id', 'role_id', 'permissions'],
   disponibilite_locale: ['id', 'article_id', 'disponible'],
-  // 2026-08-25 — référentiel de salle, pour traduire `commandes.table_id`.
-  // `statut`, `qr_token` et `ouverte_par` sont volontairement absents : le
-  // statut change toutes les minutes, et le jeton QR est un secret du site.
-  zones: ['id', 'nom', 'couleur', 'ordre'],
-  tables_salle: ['id', 'zone_id', 'numero', 'partenaire', 'actif'],
   options_catalogue: ['id', 'nom', 'prix', 'actif', 'ordre', 'updated_at'],
   options_liaisons: ['id', 'option_id', 'categorie_id', 'article_id'],
   // `utilisateurs` : le POS publie la fiche employé quand elle change sur site.
@@ -132,11 +117,6 @@ export const FLUX_DESCENTE: Record<string, string[]> = {
     'produits_inventaire', 'inventaire_consommations',
   ],
   PROMOTIONS: ['promotions'],
-  // 2026-08-25 — le siège change les accès d'un rôle sur plusieurs restaurants
-  // d'un coup. SEULE `role_permissions` descend : la table `roles` porte un
-  // `nom` UNIQUE côté site, et y pousser une ligne d'un autre uuid ferait
-  // échouer toute la descente, catalogue compris.
-  ROLES: ['role_permissions'],
   UTILISATEURS: ['utilisateurs'],
   // Sprint 4C : barème fidélité (2.5) — édité au siège, redescend comme le catalogue.
   PARAMETRES: ['parametres_locaux'],

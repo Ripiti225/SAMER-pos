@@ -26,7 +26,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CommandeItemVue, CommandeVue } from '@pos/shared';
-import { uuidLocal } from '@pos/shared';
 import { api, ErreurApi } from './api';
 import { attendreEcho } from './echo-mutations';
 
@@ -43,6 +42,14 @@ export interface LigneEnAttente {
 type Operation =
   | { genre: 'ajout'; cle: string; corps: unknown }
   | { genre: 'quantite'; itemId: string };
+
+// Compteur local : `crypto.randomUUID()` n'existe QU'EN contexte sécurisé, et
+// la caisse tourne en http://IP-LAN (même piège que apps/client/PageTable.tsx).
+let compteur = 0;
+function nouvelleCle(): string {
+  compteur += 1;
+  return `attente-${compteur}`;
+}
 
 export function useSaisieOptimiste(commandeId: string | null, surErreur: (e: Error) => void) {
   const queryClient = useQueryClient();
@@ -150,7 +157,7 @@ export function useSaisieOptimiste(commandeId: string | null, surErreur: (e: Err
   /** Tap sur un article ou un combo : la ligne apparaît tout de suite. */
   const ajouter = useCallback(
     (nom: string, quantite: number, corps: unknown) => {
-      const cle = uuidLocal();
+      const cle = nouvelleCle();
       setLignesEnAttente((prev) => [...prev, { cle, nom, quantite }]);
       file.current.push({ genre: 'ajout', cle, corps });
       lancer();

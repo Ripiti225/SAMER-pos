@@ -2,8 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Le thème « Duo contrasté » (@pos/theme/theme.css) est importé dans main.tsx.
-   Ici : seulement ce qui est propre à la console. */
+/* Le thème partagé « Duo contrasté » (@pos/theme/theme.css) est importé dans
+   main.tsx. Ici : seulement ce qui est propre à la console du siège.
+
+   Différence assumée avec la caisse : celle-ci est tactile et interdit la
+   sélection de texte. Une console d'administration, elle, sert à lire des
+   chiffres, les copier, les coller dans un message — on ne bloque rien. */
 
 html,
 body,
@@ -15,8 +19,93 @@ body {
   @apply antialiased;
 }
 
-/* Chiffres alignés partout où l'on compare des montants d'un restaurant à
-   l'autre : sans cela les colonnes de FCFA ne s'alignent pas verticalement. */
-.chiffres {
+/* Colonne de navigation — ossature, sombre dans les deux modes (§ 3 du thème). */
+.nav-siege {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border-radius: var(--r-btn);
+  color: var(--ard-txt-doux);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.nav-siege:hover:not(:disabled) {
+  background: var(--ard-700);
+  color: var(--ard-txt);
+}
+.nav-siege[aria-current='page'] {
+  background: var(--marque);
+  color: var(--sur-marque);
+}
+.nav-siege:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+/* Tableau de chiffres : colonnes de montants alignées au chiffre près. */
+.tbl-siege {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.tbl-siege th {
+  padding: 10px 12px;
+  color: var(--txt-doux);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+  border-bottom: 1px solid var(--filet);
+  white-space: nowrap;
+}
+.tbl-siege td {
+  padding: 12px;
+  border-bottom: 1px solid var(--filet);
+  vertical-align: middle;
+}
+.tbl-siege tbody tr:last-child td {
+  border-bottom: none;
+}
+.tbl-siege .num {
+  text-align: right;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Refus de connexion : le bloc tremble (même retour que la caisse). */
+@keyframes secousse {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-9px);
+  }
+  40% {
+    transform: translateX(8px);
+  }
+  60% {
+    transform: translateX(-5px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
+.secousse {
+  animation: secousse 420ms var(--ease);
+}
+
+/* Pastille de marque devant le nom d'un restaurant. */
+.pastille {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  flex: none;
 }

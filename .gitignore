@@ -1,14 +1,23 @@
 node_modules/
 dist/
+dist.avant-optimisation/
 dev-dist/
+
+# Exécutables Electron empaquetés : PosSamer.exe fait 70 Mo et win-unpacked/
+# 180 Mo, au-dessus de la limite GitHub de 100 Mo par fichier. L'exe se
+# reconstruit avec `pnpm --filter @pos/desktop build`.
+apps/desktop/release/
+
+# Secrets : aucun fichier d'environnement ne part sur GitHub. Le motif `.env`
+# seul ne couvrait PAS `.env.avant-sync`, qui contient la clé service_role
+# SamerTrackly en clair. Seuls les gabarits restent versionnés.
 .env
+.env.*
+!.env.example
+!.env.exemple
+
 *.log
 .DS_Store
 
 # SQL cloud du catalogue : régénéré (porte le restaurant_id du seed)
 sql/cloud/catalogue_import.sql
-
-# Résidus d'outils, pas du code du projet.
-# `supabase/.temp/linked-project.json` reste suivi : il désigne le projet cloud.
-deno.lock
-supabase/.temp/cli-latest

@@ -10,9 +10,7 @@
     "test": "exit 0"
   },
   "dependencies": {
-    "@pos/shared": "workspace:*",
     "@pos/theme": "workspace:*",
-    "@supabase/supabase-js": "^2.58.0",
     "@tabler/icons-react": "^3.44.0",
     "@tanstack/react-query": "^5.80.7",
     "react": "^18.3.1",

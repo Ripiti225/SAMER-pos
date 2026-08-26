@@ -1,9 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { CatalogueVue, TableClientVue } from '@pos/shared';
-import { formatFCFA, LIBELLES_ETAT_TABLE, uuidLocal } from '@pos/shared';
+import { formatFCFA, LIBELLES_ETAT_TABLE } from '@pos/shared';
 import { api } from '../api';
-import { ConfirmationPaiement } from './ConfirmationPaiement';
 import { SuiviCommandes } from './SuiviCommandes';
 
 interface LignePanier {
@@ -14,11 +13,21 @@ interface LignePanier {
   quantite: number;
 }
 
+/**
+ * Identifiant de ligne (clé React). `crypto.randomUUID()` n'existe QUE en
+ * contexte sécurisé : sur un téléphone qui ouvre l'app en http://IP-LAN (QR de
+ * table), il est absent → repli sans plantage.
+ */
+function nouvelleCle(): string {
+  const c = globalThis.crypto;
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID();
+  return `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function PageTable({ jeton, table }: { jeton: string; table: TableClientVue }) {
   const queryClient = useQueryClient();
   const [categorieId, setCategorieId] = useState<string | null>(null);
   const [panier, setPanier] = useState<LignePanier[]>([]);
-  const [telephone, setTelephone] = useState('');
   const [message, setMessage] = useState<string | null>(null);
 
   const { data: catalogue } = useQuery({
@@ -43,11 +52,7 @@ export function PageTable({ jeton, table }: { jeton: string; table: TableClientV
     mutationFn: () =>
       api<{ confirmation: string }>(`/api/client/${jeton}/commande`, {
         method: 'POST',
-        corps: {
-          items: panier.map((l) => ({ article_id: l.article_id, quantite: l.quantite, options: [], supplements: [] })),
-          // Champ vide = pas de numéro : le serveur l'accepte, sans fidélité.
-          telephone: telephone.trim(),
-        },
+        corps: { items: panier.map((l) => ({ article_id: l.article_id, quantite: l.quantite, options: [], supplements: [] })) },
       }),
     onSuccess: (r) => {
       setPanier([]);
@@ -66,7 +71,7 @@ export function PageTable({ jeton, table }: { jeton: string; table: TableClientV
     setPanier((p) => {
       const existe = p.find((l) => l.article_id === id);
       if (existe) return p.map((l) => (l.article_id === id ? { ...l, quantite: l.quantite + 1 } : l));
-      return [...p, { cle: uuidLocal(), article_id: id, nom, prix, quantite: 1 }];
+      return [...p, { cle: nouvelleCle(), article_id: id, nom, prix, quantite: 1 }];
     });
   };
 
@@ -178,34 +183,13 @@ export function PageTable({ jeton, table }: { jeton: string; table: TableClientV
               </div>
             ))}
           </div>
-          {/* Numéro TOUJOURS demandé, JAMAIS obligatoire : sans lui la commande
-              part quand même, et le libellé du bouton dit ce qui est perdu. */}
-          <label className="mb-3 block">
-            <span className="mb-1 block text-sm font-semibold">
-              Votre numéro pour cumuler vos points de fidélité
-            </span>
-            <input
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel"
-              placeholder="07 00 00 00 00"
-              value={telephone}
-              onChange={(e) => setTelephone(e.target.value)}
-              className="min-h-[52px] w-full rounded-[13px] border-2 border-bordure bg-fond px-4 text-lg tabular-nums outline-none focus:border-marque"
-            />
-            <span className="mt-1 block text-xs text-doux">
-              Facultatif — sans numéro, pas de points sur cette commande.
-            </span>
-          </label>
           <button
             type="button"
             className="flex min-h-[56px] w-full items-center justify-center rounded-[13px] bg-marque text-lg font-bold text-sur-marque shadow-e2 transition active:translate-y-px disabled:opacity-40"
             disabled={envoyer.isPending}
             onClick={() => envoyer.mutate()}
           >
-            {telephone.trim()
-              ? `Envoyer à mon serveur · ${formatFCFA(totalPanier)}`
-              : `Commander sans points · ${formatFCFA(totalPanier)}`}
+            Envoyer à mon serveur · {formatFCFA(totalPanier)}
           </button>
           <p className="mt-2 text-center text-xs text-doux">Votre serveur validera la commande avant la cuisine.</p>
         </div>
@@ -216,8 +200,6 @@ export function PageTable({ jeton, table }: { jeton: string; table: TableClientV
           {message}
         </div>
       )}
-
-      <ConfirmationPaiement jeton={jeton} />
     </div>
   );
 }

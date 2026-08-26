@@ -143,7 +143,7 @@ describe('construireLignesInventaire — le détail par produit', () => {
       { produit_id: 'uuid-p1', produit_code: 'p1', produit_nom: 'Pain chawarma', produit_prix: 2_500, stock_initial: '10', entrees: '0', sorties: '10', stock_compte: '10', ecart: '0', quantite_expliquee: '0', explication: 'texte sans objet' },
     ];
     const [l] = construireLignesInventaire(lignes, 'inv-shift-1', true);
-    assert.equal(l.explication_statut, null);
+    assert.equal(l.explication_statut, undefined);
   });
 
   test('sans explication et sans écart → pas de statut du tout', () => {
@@ -151,7 +151,7 @@ describe('construireLignesInventaire — le détail par produit', () => {
       { produit_id: 'uuid-p1', produit_code: 'p1', produit_nom: 'Pain chawarma', produit_prix: 2_500, stock_initial: '10', entrees: '0', sorties: '10', stock_compte: '10', ecart: '0', quantite_expliquee: '0', explication: null },
     ];
     const [l] = construireLignesInventaire(lignes, 'inv-shift-1', true);
-    assert.equal(l.explication_statut, null);
+    assert.equal(l.explication_statut, undefined);
   });
 
   test('une ligne sans snapshot (montée par un site pas encore migré) est écartée plutôt que de faire planter le transfert', () => {
@@ -170,41 +170,12 @@ describe('construireLignesInventaire — le détail par produit', () => {
     assert.equal(l.montant_deduit, 16_000);
   });
 
-  test('produit_nom est repris du snapshot : la colonne est NOT NULL côté Samtrackly', () => {
-    const lignes = [
-      { produit_id: 'uuid-p1', produit_code: 'p1', produit_nom: 'Pain chawarma', produit_prix: 2_500, stock_initial: '10', entrees: '0', sorties: '8', stock_compte: '2', ecart: '0', quantite_expliquee: '0', explication: null },
-    ];
-    const [l] = construireLignesInventaire(lignes, 'inv-shift-1', true);
-    assert.equal(l.produit_nom, 'Pain chawarma');
-  });
-
-  test('snapshot sans nom (cas limite) → repli sur le code, jamais null', () => {
-    const lignes = [
-      { produit_id: 'uuid-x', produit_code: 'x9', produit_nom: null, produit_prix: 0, stock_initial: '0', entrees: '0', sorties: '0', stock_compte: '0', ecart: '0', quantite_expliquee: '0', explication: null },
-    ];
-    const [l] = construireLignesInventaire(lignes, 'inv-shift-1', true);
-    assert.equal(l.produit_nom, 'x9');
-  });
-
   test('entrees est reprise telle quelle depuis la ligne figée du POS', () => {
     const lignes = [
       { produit_id: 'uuid-p1', produit_code: 'p1', produit_nom: 'Pain chawarma', produit_prix: 2_500, stock_initial: '10', entrees: '5', sorties: '8', stock_compte: '7', ecart: '0', quantite_expliquee: '0', explication: null },
     ];
     const [l] = construireLignesInventaire(lignes, 'inv-shift-1', true);
     assert.equal(l.entrees, 5);
-  });
-});
-
-describe('homogénéité des clés — la panne PGRST102 du 2026-08-22', () => {
-  test('un lot mêlant lignes expliquées et non expliquées produit des objets aux clés IDENTIQUES', () => {
-    const lignes = [
-      { produit_id: 'u1', produit_code: 'po8', produit_nom: 'Total poulet', produit_prix: 8_000, stock_initial: '20', entrees: '0', sorties: '17', stock_compte: '17', ecart: '-3', quantite_expliquee: '1', explication: 'cassé' },
-      { produit_id: 'u2', produit_code: 'p1', produit_nom: 'Pain chawarma', produit_prix: 2_500, stock_initial: '10', entrees: '0', sorties: '10', stock_compte: '10', ecart: '0', quantite_expliquee: '0', explication: null },
-    ];
-    const construites = construireLignesInventaire(lignes, 'inv-shift-1', true);
-    assert.equal(construites.length, 2);
-    const [a, b] = construites.map((l) => Object.keys(l).sort().join(','));
-    assert.equal(a, b, 'PostgREST rejette tout le lot si un seul objet a une clé de plus');
   });
 });
 

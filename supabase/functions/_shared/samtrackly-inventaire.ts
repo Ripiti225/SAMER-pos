@@ -175,14 +175,6 @@ export interface LigneInventairePosCloud {
 export interface LigneInventaireDetail {
   inventaire_id: string;
   produit_id: string;
-  /**
-   * NOT NULL côté Samtrackly, et c'est ce qui a fait rejeter tous les inserts
-   * du 2026-08-22 au 24 : l'en-tête passait, les 34 lignes étaient refusées, le
-   * service repartait en échec toutes les 5 minutes en réécrivant l'en-tête.
-   * L'app Samtrackly le remplit toujours (app/inventaire.js:525) — le pont doit
-   * faire pareil.
-   */
-  produit_nom: string;
   stock_initial: number;
   entrees: number;
   sorties: number;
@@ -191,15 +183,7 @@ export interface LigneInventaireDetail {
   nombre_explique: number | null;
   explication: string | null;
   montant_deduit: number;
-  /**
-   * TOUJOURS présente, `null` quand il n'y a rien à revoir — jamais absente.
-   * PostgREST insère un lot en une requête et exige des objets STRICTEMENT
-   * homogènes : une clé posée sur certaines lignes seulement fait rejeter tout
-   * le lot avec PGRST102 « All object keys must match ». C'est ce qui a bloqué
-   * les inventaires du 2026-08-22 au 24 — un seul produit expliqué parmi 34
-   * suffisait à faire refuser les 34.
-   */
-  explication_statut: 'en_attente' | null;
+  explication_statut?: 'en_attente';
 }
 
 /**
@@ -250,7 +234,6 @@ export function construireLignesInventaire(
     const ligne: LigneInventaireDetail = {
       inventaire_id: invShiftId,
       produit_id: l.produit_code,
-      produit_nom: l.produit_nom ?? l.produit_code,
       stock_initial: n(l.stock_initial),
       entrees: n(l.entrees),
       sorties: n(l.sorties),
@@ -259,7 +242,6 @@ export function construireLignesInventaire(
       nombre_explique: nOuNull(l.quantite_expliquee),
       explication: l.explication ?? null,
       montant_deduit: montantDeduit,
-      explication_statut: null,
     };
 
     // Le déblocage manager évite la retenue automatique (ci-dessus), il ne

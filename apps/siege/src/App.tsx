@@ -1,171 +1,156 @@
-import { useEffect, useState } from 'react';
-import type { Session } from '@supabase/supabase-js';
-import { IconLogout, IconMoon, IconSun } from '@tabler/icons-react';
-import { appelSiege, ErreurSiege, type Siege } from './api';
-import { modeInitial, poserMode, type Mode } from './affichage';
-import type { FiltreResto } from './restaurants';
-import { supabase } from './supabase';
-import { Clotures } from './screens/Clotures';
-import { Connexion } from './screens/Connexion';
-import { Equipe } from './screens/Equipe';
-import { Categories } from './screens/Categories';
-import { Menu } from './screens/Menu';
-import { Parametres } from './screens/Parametres';
-import { Sequences } from './screens/Sequences';
+import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import {
+  IconBuildingStore,
+  IconCash,
+  IconChartBar,
+  IconLogout,
+  IconMoon,
+  IconReceipt,
+  IconSun,
+  IconToolsKitchen2,
+  IconUsers,
+} from '@tabler/icons-react';
+import { appeler, configureeCorrectement, seDeconnecter, sessionOuverte, type Moi } from './api';
+import { Login } from './screens/Login';
 import { TableauBord } from './screens/TableauBord';
+import { Clotures } from './screens/Clotures';
+import { Equipe } from './screens/Equipe';
 
-type Ecran = 'tableau-bord' | 'clotures' | 'sequences' | 'menu' | 'categories' | 'equipe' | 'parametres';
+type Section = 'tableau' | 'clotures' | 'equipe' | 'depenses' | 'catalogue';
 
-const SECTIONS: { cle: Ecran; libelle: string }[] = [
-  { cle: 'tableau-bord', libelle: 'Tableau de bord' },
-  { cle: 'clotures', libelle: 'Clôtures' },
-  { cle: 'sequences', libelle: 'Séquences' },
-  { cle: 'menu', libelle: 'Menu' },
-  { cle: 'categories', libelle: 'Catégories' },
-  { cle: 'equipe', libelle: 'Équipe' },
-  { cle: 'parametres', libelle: 'Paramètres' },
+const SECTIONS: { cle: Section; libelle: string; icone: typeof IconChartBar; pret: boolean }[] = [
+  { cle: 'tableau', libelle: 'Tableau de bord', icone: IconChartBar, pret: true },
+  { cle: 'clotures', libelle: 'Clôtures & écarts', icone: IconCash, pret: true },
+  { cle: 'equipe', libelle: 'Équipe', icone: IconUsers, pret: true },
+  { cle: 'depenses', libelle: 'Dépenses & inventaire', icone: IconReceipt, pret: false },
+  { cle: 'catalogue', libelle: 'Catalogue', icone: IconToolsKitchen2, pret: false },
 ];
 
-export function App() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [siege, setSiege] = useState<Siege | null>(null);
-  const [chargement, setChargement] = useState(true);
-  const [refus, setRefus] = useState<string | null>(null);
-  const [ecran, setEcran] = useState<Ecran>('tableau-bord');
-  const [mode, setMode] = useState<Mode>(modeInitial);
-  /**
-   * Filtre restaurant, tenu ICI et non dans chaque écran : il est commun à tous
-   * les onglets et doit SURVIVRE au changement d'onglet — on suit un restaurant
-   * du tableau de bord à ses clôtures sans le resélectionner à chaque fois.
-   */
-  const [filtreResto, setFiltreResto] = useState<FiltreResto>('');
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setChargement(false);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    return () => sub.subscription.unsubscribe();
-  }, []);
-
-  /**
-   * Un compte Supabase valide ne suffit pas : il faut être inscrit dans
-   * `siege_utilisateurs`. On le demande à la fonction dès la session ouverte,
-   * pour afficher le refus tout de suite plutôt qu'à chaque écran.
-   */
-  useEffect(() => {
-    if (!session) {
-      setSiege(null);
-      setRefus(null);
-      return;
-    }
-    appelSiege<Siege>('moi', { connexion: true })
-      .then((s) => {
-        setSiege(s);
-        setRefus(null);
-      })
-      .catch((e: unknown) => {
-        setSiege(null);
-        setRefus(e instanceof ErreurSiege ? e.message : 'Vérification impossible');
-      });
-  }, [session]);
-
-  const basculerMode = () => {
-    const suivant: Mode = mode === 'sombre' ? 'clair' : 'sombre';
-    setMode(suivant);
-    poserMode(suivant);
+function BasculeMode(): JSX.Element {
+  const [sombre, setSombre] = useState(document.documentElement.dataset.mode === 'sombre');
+  const basculer = (): void => {
+    const neuf = !sombre;
+    setSombre(neuf);
+    if (neuf) document.documentElement.dataset.mode = 'sombre';
+    else delete document.documentElement.dataset.mode;
+    localStorage.setItem('siege.mode', neuf ? 'sombre' : 'clair');
   };
+  return (
+    <button className="nav-siege" onClick={basculer} title="Changer le mode d'affichage">
+      {sombre ? <IconSun size={20} /> : <IconMoon size={20} />}
+      <span>{sombre ? 'Mode clair' : 'Mode sombre'}</span>
+    </button>
+  );
+}
 
-  if (chargement) {
-    return <div className="flex h-full items-center justify-center bg-vitrine-fond text-vitrine-txt-doux">Ouverture de la console…</div>;
-  }
-
-  if (!session) return <Connexion mode={mode} onBasculerMode={basculerMode} />;
-
-  // Connecté chez Supabase, mais pas autorisé au siège : on le dit en clair, et
-  // on ne laisse que la sortie — les écrans répondraient 403 de toute façon.
-  if (refus) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 bg-vitrine-fond px-6 text-center">
-        <p className="max-w-md text-lg font-semibold text-vitrine-txt">{refus}</p>
-        <p className="max-w-md text-vitrine-txt-doux">
-          Un compte de connexion ne suffit pas : il doit être inscrit dans <code>siege_utilisateurs</code>,
-          avec le niveau ADMIN ou LECTURE.
+/** Écran affiché quand le fichier `.env` n'a pas été rempli — cas du premier lancement. */
+function ConfigManquante(): JSX.Element {
+  return (
+    <div className="flex h-full items-center justify-center bg-vitrine-fond p-8">
+      <div className="carte max-w-lg space-y-3 p-8">
+        <h1 className="text-xl font-bold text-fort">Console non configurée</h1>
+        <p className="text-doux">
+          L'adresse du cloud et la clé publique manquent. Copiez le fichier{' '}
+          <code className="rounded bg-surface-douce px-1.5 py-0.5 text-sm">.env.exemple</code> en{' '}
+          <code className="rounded bg-surface-douce px-1.5 py-0.5 text-sm">.env</code> dans{' '}
+          <code className="rounded bg-surface-douce px-1.5 py-0.5 text-sm">apps/siege</code>, complétez la clé,
+          puis relancez.
         </p>
-        <button type="button" className="btn-blanc" onClick={() => void supabase.auth.signOut()}>
-          Se déconnecter
-        </button>
       </div>
+    </div>
+  );
+}
+
+export function App(): JSX.Element {
+  const [connecte, setConnecte] = useState(sessionOuverte());
+  const [section, setSection] = useState<Section>('tableau');
+
+  const moi = useQuery({
+    queryKey: ['moi'],
+    queryFn: () => appeler<Moi>('moi', { connexion: true }),
+    enabled: connecte,
+    retry: false,
+    refetchInterval: false,
+  });
+
+  if (!configureeCorrectement) return <ConfigManquante />;
+  if (!connecte) return <Login surConnexion={() => setConnecte(true)} />;
+
+  // Le compte existe côté Supabase Auth mais n'est pas autorisé dans
+  // `siege_utilisateurs` (ou la session est morte) : on renvoie à la connexion
+  // avec le motif, plutôt que de laisser une console vide et muette.
+  if (moi.isError) {
+    return (
+      <Login
+        surConnexion={() => {
+          setConnecte(true);
+          void moi.refetch();
+        }}
+        motif={(moi.error as Error).message}
+      />
     );
   }
 
-  if (!siege) {
-    return <div className="flex h-full items-center justify-center bg-vitrine-fond text-vitrine-txt-doux">Vérification du compte…</div>;
-  }
+  const deconnecter = (): void => {
+    seDeconnecter();
+    setConnecte(false);
+  };
 
   return (
-    <div className="flex h-full flex-col">
-      {/* ---------- Barre ardoise (DESIGN_V2 § 6.12) ---------- */}
-      <header className="flex h-[62px] flex-none items-center justify-between border-b border-ard-700 bg-ard-900 px-4 text-ard-txt">
-        <div className="min-w-0">
-          <div className="truncate text-[17px] font-semibold tracking-tight">Console du siège</div>
-          <div className="truncate text-[12.5px] font-medium text-ard-txt-doux">
-            {siege.nomComplet} · {siege.niveau === 'ADMIN' ? 'Administrateur' : 'Lecture seule'}
+    <div className="flex h-full">
+      {/* Colonne d'ossature — identique en clair et en sombre, c'est l'identité
+          du design v2. */}
+      <aside className="ossature flex w-[248px] flex-none flex-col gap-1 p-4">
+        <div className="mb-5 flex items-center gap-3 px-2 pt-1">
+          <div
+            className="flex h-10 w-10 items-center justify-center rounded-jeton"
+            style={{ background: 'var(--marque)', color: 'var(--sur-marque)' }}
+          >
+            <IconBuildingStore size={22} />
+          </div>
+          <div className="min-w-0">
+            <div className="truncate text-[15px] font-bold text-ard-txt">Siège</div>
+            <div className="truncate text-xs text-ard-txt-faible">Chez Samer / Al Kayan</div>
           </div>
         </div>
-        <div className="flex flex-none items-center gap-2">
+
+        {SECTIONS.map((s) => (
           <button
-            type="button"
-            onClick={basculerMode}
-            title={mode === 'sombre' ? 'Passer en clair' : 'Passer en sombre'}
-            className="flex h-10 w-10 items-center justify-center rounded-btn text-ard-txt-doux transition hover:bg-ard-750 hover:text-ard-txt"
+            key={s.cle}
+            className="nav-siege"
+            aria-current={section === s.cle ? 'page' : undefined}
+            disabled={!s.pret}
+            onClick={() => setSection(s.cle)}
+            title={s.pret ? undefined : 'Bientôt disponible'}
           >
-            {mode === 'sombre' ? <IconSun size={19} /> : <IconMoon size={19} />}
+            <s.icone size={20} />
+            <span className="flex-1">{s.libelle}</span>
+            {!s.pret && <span className="text-[11px] font-medium uppercase">à venir</span>}
           </button>
-          <button
-            type="button"
-            onClick={() => void supabase.auth.signOut()}
-            className="flex items-center gap-2 rounded-btn px-3 py-2 font-semibold text-ard-txt-doux transition hover:bg-ard-750 hover:text-ard-txt"
-          >
-            <IconLogout size={19} />
-            Se déconnecter
-          </button>
+        ))}
+
+        <div className="flex-1" />
+
+        <div className="mb-1 px-3 py-2">
+          <div className="truncate text-sm font-semibold text-ard-txt">{moi.data?.nomComplet ?? '…'}</div>
+          <div className="text-xs text-ard-txt-faible">
+            {moi.data?.niveau === 'ADMIN' ? 'Administrateur' : 'Lecture seule'}
+          </div>
         </div>
-      </header>
+        <BasculeMode />
+        <button className="nav-siege" onClick={deconnecter}>
+          <IconLogout size={20} />
+          <span>Se déconnecter</span>
+        </button>
+      </aside>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[214px_1fr]">
-        {/* Colonne des écrans, en ardoise — même ossature que la caisse. */}
-        <nav className="flex flex-col overflow-y-auto border-r border-ard-700 bg-ard-800 p-2.5">
-          {SECTIONS.map((s) => {
-            const actif = s.cle === ecran;
-            return (
-              <button
-                key={s.cle}
-                type="button"
-                onClick={() => setEcran(s.cle)}
-                className={`relative flex w-full items-center rounded-btn py-3 pl-3.5 pr-3 text-left text-[14.5px] font-semibold leading-tight transition ${
-                  actif ? 'bg-ard-700 text-ard-txt' : 'text-ard-txt-doux hover:bg-ard-750 hover:text-ard-txt'
-                }`}
-              >
-                {actif && <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-marque" />}
-                <span className="truncate">{s.libelle}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Zone de travail — plan CLAIR */}
-        <main className="min-w-0 overflow-y-auto bg-plan p-6">
-          {ecran === 'tableau-bord' && <TableauBord filtre={filtreResto} onFiltre={setFiltreResto} />}
-          {ecran === 'clotures' && <Clotures filtre={filtreResto} onFiltre={setFiltreResto} />}
-          {ecran === 'sequences' && <Sequences filtre={filtreResto} onFiltre={setFiltreResto} />}
-          {ecran === 'menu' && <Menu filtre={filtreResto} onFiltre={setFiltreResto} />}
-          {ecran === 'categories' && <Categories filtre={filtreResto} onFiltre={setFiltreResto} />}
-          {ecran === 'equipe' && <Equipe filtre={filtreResto} onFiltre={setFiltreResto} />}
-          {ecran === 'parametres' && <Parametres filtre={filtreResto} onFiltre={setFiltreResto} />}
-        </main>
-      </div>
+      {/* Plan de travail */}
+      <main className="min-w-0 flex-1 overflow-y-auto bg-plan">
+        {section === 'tableau' && <TableauBord />}
+        {section === 'clotures' && <Clotures />}
+        {section === 'equipe' && <Equipe />}
+      </main>
     </div>
   );
 }

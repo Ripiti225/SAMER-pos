@@ -1,80 +1,168 @@
-import { supabase } from './supabase';
+﻿/**
+ * Accès au cloud depuis la console siège.
+ *
+ * Deux interlocuteurs seulement :
+ *   * Supabase Auth (`/auth/v1`) pour la connexion et le renouvellement du
+ *     jeton — on parle à l'API REST en `fetch`, comme le serveur POS le fait
+ *     déjà pour SamerTrackly. Pas de SDK à installer.
+ *   * la fonction `siege` pour TOUTES les données. La console ne touche jamais
+ *     une table directement : elle n'en aurait pas le droit (RLS forcée) et il
+ *     faudrait pour cela lui confier une clé qui ouvre les ventes du groupe.
+ */
 
-/** Erreur portant le message FRANÇAIS renvoyé par la fonction, pas un code. */
-export class ErreurSiege extends Error {
-  constructor(
-    message: string,
-    readonly statut: number,
-  ) {
-    super(message);
+const URL_BASE = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const CLE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+
+export const configureeCorrectement = !!URL_BASE && !!CLE_ANON;
+
+/** Message d'erreur en français courant — jamais de code technique à l'écran. */
+export class ErreurApi extends Error {}
+
+// ---------------------------------------------------------------------------
+// Session
+// ---------------------------------------------------------------------------
+// Le jeton d'accès expire vite (1 h) ; c'est le jeton de renouvellement qui
+// tient la session. Il est conservé dans le navigateur, ce qui est le
+// fonctionnement normal d'une console d'administration ouverte sur un poste
+// personnel — contrairement à la caisse, qui tourne sur un kiosque partagé et
+// où l'on refuse d'écrire quoi que ce soit de sensible.
+
+const CLE_STOCKAGE = 'siege.session';
+
+interface Session {
+  access_token: string;
+  refresh_token: string;
+  /** Instant d'expiration, en millisecondes. */
+  expire_le: number;
+}
+
+function lireSession(): Session | null {
+  try {
+    const brut = localStorage.getItem(CLE_STOCKAGE);
+    if (!brut) return null;
+    const s = JSON.parse(brut) as Session;
+    return s.refresh_token ? s : null;
+  } catch {
+    return null;
   }
 }
 
-/**
- * Appelle l'Edge Function `siege` — point d'entrée UNIQUE de la console.
- *
- * Une action = une entrée du `switch` côté fonction. On n'interroge jamais la
- * base directement : la RLS y est forcée sans politique, une lecture directe
- * exigerait la clé `service_role` dans le navigateur.
- */
-export async function appelSiege<T>(action: string, corps: Record<string, unknown> = {}): Promise<T> {
-  const { data: sess } = await supabase.auth.getSession();
-  const jeton = sess.session?.access_token;
-  if (!jeton) throw new ErreurSiege('Connexion requise', 401);
+function ecrireSession(s: Session | null): void {
+  if (s) localStorage.setItem(CLE_STOCKAGE, JSON.stringify(s));
+  else localStorage.removeItem(CLE_STOCKAGE);
+}
 
-  const rep = await supabase.functions.invoke(`siege`, {
-    body: { action, ...corps },
-    headers: { Authorization: `Bearer ${jeton}` },
-  });
+interface ReponseJeton {
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+  error_description?: string;
+  msg?: string;
+}
 
-  // `functions.invoke` range le corps de réponse des statuts d'erreur dans
-  // l'erreur ; on va le rechercher pour afficher le message français plutôt
-  // qu'un « Edge Function returned a non-2xx status code ».
-  if (rep.error) {
-    let message = 'La console n’a pas pu joindre le siège';
-    let statut = 500;
-    const ctx = (rep.error as { context?: Response }).context;
-    if (ctx && typeof ctx.json === 'function') {
-      statut = ctx.status;
-      try {
-        const corpsErreur = (await ctx.json()) as { erreur?: string };
-        if (corpsErreur?.erreur) message = corpsErreur.erreur;
-      } catch {
-        // Réponse non JSON : on garde le message générique.
-      }
+async function demanderJeton(corps: Record<string, string>, typeOctroi: string): Promise<Session> {
+  const rep = await fetch(`${URL_BASE}/auth/v1/token?grant_type=${typeOctroi}`, {
+    method: 'POST',
+    headers: { apikey: CLE_ANON!, 'content-type': 'application/json' },
+    body: JSON.stringify(corps),
+  }).catch(() => null);
+
+  if (!rep) throw new ErreurApi('Le cloud est injoignable. Vérifiez votre connexion internet.');
+
+  const data = (await rep.json().catch(() => ({}))) as ReponseJeton;
+  if (!rep.ok || !data.access_token || !data.refresh_token) {
+    // Supabase renvoie un libellé anglais ; on ne le montre pas tel quel.
+    if (rep.status === 400 || rep.status === 401) {
+      throw new ErreurApi(
+        typeOctroi === 'password' ? 'Adresse e-mail ou mot de passe incorrect.' : 'Session expirée.',
+      );
     }
-    throw new ErreurSiege(message, statut);
+    throw new ErreurApi('Connexion impossible pour le moment.');
   }
 
-  const data = rep.data as T & { erreur?: string };
-  if (data && typeof data === 'object' && 'erreur' in data && data.erreur) {
-    throw new ErreurSiege(data.erreur, 400);
+  return {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    expire_le: Date.now() + (data.expires_in ?? 3600) * 1000,
+  };
+}
+
+export async function seConnecter(email: string, motDePasse: string): Promise<void> {
+  const s = await demanderJeton({ email: email.trim(), password: motDePasse }, 'password');
+  ecrireSession(s);
+}
+
+export function seDeconnecter(): void {
+  ecrireSession(null);
+}
+
+export function sessionOuverte(): boolean {
+  return lireSession() !== null;
+}
+
+/**
+ * Renvoie un jeton valide, en le renouvelant si besoin.
+ * La marge de 60 s évite de partir avec un jeton qui expire pendant l'appel.
+ */
+async function jetonValide(): Promise<string> {
+  const s = lireSession();
+  if (!s) throw new ErreurApi('Session expirée.');
+  if (Date.now() < s.expire_le - 60_000) return s.access_token;
+
+  try {
+    const neuf = await demanderJeton({ refresh_token: s.refresh_token }, 'refresh_token');
+    ecrireSession(neuf);
+    return neuf.access_token;
+  } catch (e) {
+    ecrireSession(null);
+    throw e;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Appels à la fonction `siege`
+// ---------------------------------------------------------------------------
+
+export async function appeler<T>(action: string, corps: Record<string, unknown> = {}): Promise<T> {
+  const jeton = await jetonValide();
+  const rep = await fetch(`${URL_BASE}/functions/v1/siege`, {
+    method: 'POST',
+    headers: {
+      apikey: CLE_ANON!,
+      Authorization: `Bearer ${jeton}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ action, ...corps }),
+  }).catch(() => null);
+
+  if (!rep) throw new ErreurApi('Le cloud est injoignable. Vérifiez votre connexion internet.');
+
+  const data = (await rep.json().catch(() => ({}))) as { erreur?: string };
+  if (!rep.ok) {
+    // 401 = la session ne vaut plus rien : on la jette pour que l'app renvoie
+    // proprement à l'écran de connexion au lieu de boucler sur des erreurs.
+    if (rep.status === 401) ecrireSession(null);
+    throw new ErreurApi(data.erreur ?? 'Le cloud a refusé la demande.');
   }
   return data as T;
 }
 
 // ---------------------------------------------------------------------------
-// Formes renvoyées par la fonction (supabase/functions/siege/index.ts).
+// Formes de données
 // ---------------------------------------------------------------------------
 
-export interface Siege {
+export interface Moi {
   userId: string;
   nomComplet: string;
-  /** LECTURE voit tout et n'écrit rien — pour un comptable ou un associé. */
   niveau: 'ADMIN' | 'LECTURE';
 }
 
-export interface RestoGroupe {
-  /** UUID POS, présent SEULEMENT si le site est enrôlé : c'est la clé des ventes. */
+export interface RestoTableau {
   restaurant_id: string | null;
   samtrackly_id: string;
   nom: string;
   marque: 'SAMER' | 'AL_KAYAN';
-  /** false = ce POS ne synchronise pas encore, donc aucune vente ici. */
   enrole: boolean;
-}
-
-export interface LigneTableauBord extends RestoGroupe {
   nb_commandes: number;
   ca: number;
   nb_annulees: number;
@@ -82,112 +170,38 @@ export interface LigneTableauBord extends RestoGroupe {
   panier_moyen: number;
 }
 
-/**
- * Réponse de l'action `tableau_bord`. Chaque tableau vient d'une fonction SQL
- * `siege_*` : l'agrégation se fait dans PostgreSQL, jamais dans la fonction
- * Deno ni ici. Un bloc dont la fonction manque (migration pas encore passée)
- * arrive VIDE plutôt que de faire échouer tout l'écran.
- */
-export interface Bord {
-  periode: { debut: string; fin: string; debut_precedent: string };
-  total: number;
-  total_precedent: number;
-  restaurants: (RestoGroupe & {
-    nb_commandes: number;
-    ca: number;
-    nb_annulees: number;
-    remises: number;
-    panier_moyen: number;
-    ca_precedent: number;
-    nb_commandes_precedent: number;
-  })[];
-  tendance: { restaurant_id: string; jour: string; ca: number; nb_commandes: number }[];
-  heures: { restaurant_id: string; heure: number; nb: number; ca: number }[];
-  plats: { restaurant_id: string; nom: string; quantite: number; total: number }[];
-  modes: { restaurant_id: string; mode: string; montant: number; nb: number }[];
-  types: { restaurant_id: string; type: string; partenaire: string | null; nb: number; total: number }[];
-  /** `numero` est NULL tant que `pnpm salle:republier` n'a pas tourné sur le site. */
-  tables: { restaurant_id: string; table_id: string; numero: string | null; zone: string | null; nb: number; total: number }[];
-  retours: { restaurant_id: string; nom: string; quantite: number; montant: number }[];
-  depenses: { restaurant_id: string; categorie: string; montant: number; nb: number }[];
-  ecarts: { restaurant_id: string; caissier: string; ecart: number; nb_services: number }[];
-  equipe: {
-    restaurant_id: string;
-    utilisateur_id: string;
-    nom: string;
-    poste: string | null;
-    nb_services: number;
-    minutes: number;
-    salaire: number;
-  }[];
-  remises: { restaurant_id: string; numero_ticket: number; montant: number; motif: string | null; created_at: string }[];
-  annulations: { restaurant_id: string; numero_ticket: number; total: number; created_at: string }[];
-  inventaire: { restaurant_id: string; nb_inventaires: number; montant_manquant: number; nb_debloques: number }[];
-  /**
-   * Livraisons partenaires, par caissier. `nb` = courses payées, `contacts` =
-   * celles qui portent le téléphone du client, `refs` = celles qui portent le
-   * n° de commande du partenaire. L'écart entre `nb` et `contacts` est le
-   * nombre de courses qu'on ne saura rattacher à personne en cas de litige.
-   */
-  livraisons: {
-    restaurant_id: string;
-    caissier: string;
-    partenaire: string;
-    nb: number;
-    contacts: number;
-    refs: number;
-    ca: number;
-  }[];
-  /** État COURANT de la fiche employé, jamais un historique. */
-  absents: { id: string; restaurant_id: string; nom_complet: string; poste: string | null; disponibilite: string }[];
-  aucun_site_enrole: boolean;
-  /** Les tables remontent sans nom : le référentiel de salle n'a pas été republié. */
-  salle_non_publiee: boolean;
-}
-
 export interface TableauBord {
   periode: { debut: string; fin: string };
   total: number;
-  restaurants: LigneTableauBord[];
+  restaurants: RestoTableau[];
   tendance: { restaurant_id: string; jour: string; ca: number; nb_commandes: number }[];
-  /** Aucun site ne remonte encore : à écrire à l'écran, sinon on croit à une journée blanche. */
   aucun_site_enrole: boolean;
 }
 
-export interface Cloture {
-  restaurant_id: string;
-  service_id: string;
-  caissier_id: string | null;
-  ouvert_le: string;
-  cloture_le: string | null;
-  statut: string;
-  fond_de_caisse: number;
-  especes_comptees: number | null;
-  especes_theorique: number | null;
-  ecart: number | null;
+// ---------------------------------------------------------------------------
+// Formatage
+// ---------------------------------------------------------------------------
+
+/** FCFA : entiers, jamais de décimale. Même écriture que la caisse. */
+export function fcfa(montant: number): string {
+  return `${Math.round(montant).toLocaleString('fr-FR')} F`;
 }
 
-export interface Employe {
-  id: string;
-  nom: string | null;
-  poste: string | null;
-  contact: string | null;
-  photo_url: string | null;
-  actif: boolean | null;
-  restaurant_id: string | null;
-  restaurant_nom: string | null;
-}
-
-/** Un membre de l'équipe d'un service, tel que l'action `equipe_service` le rend. */
-export interface MembreService {
-  utilisateur_id: string;
-  nom_complet: string | null;
-  poste: string | null;
-  taux_journalier: number | null;
-  /** Heure d'arrivée = heure du clic sur « Pointer » sur le site. */
-  arrive_le: string | null;
-  /** NULL = pas tranché ; à la clôture, tout ce qui n'est pas `true` est PARTI. */
-  reste: boolean | null;
-  /** Payé à la journée : montant et HEURE DE PAIE, qui vaut heure de départ. */
-  salaire: { montant: number; paye_le: string } | null;
+/**
+ * Bornes d'une période, en ISO.
+ * Abidjan vit à UTC+0 toute l'année : la journée comptable va donc bien de
+ * minuit à minuit UTC, sans décalage à corriger.
+ */
+export function bornes(periode: 'jour' | 'semaine' | 'mois'): { debut: string; fin: string } {
+  const maintenant = new Date();
+  const debut = new Date(Date.UTC(maintenant.getUTCFullYear(), maintenant.getUTCMonth(), maintenant.getUTCDate()));
+  if (periode === 'semaine') {
+    // Semaine commençant le lundi.
+    const jour = (debut.getUTCDay() + 6) % 7;
+    debut.setUTCDate(debut.getUTCDate() - jour);
+  } else if (periode === 'mois') {
+    debut.setUTCDate(1);
+  }
+  const fin = new Date(Date.UTC(maintenant.getUTCFullYear(), maintenant.getUTCMonth(), maintenant.getUTCDate() + 1));
+  return { debut: debut.toISOString(), fin: fin.toISOString() };
 }

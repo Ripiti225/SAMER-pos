@@ -11,9 +11,7 @@
     "site:enroler": "tsx src/scripts/enroler-site.ts",
     "sync:reconcile": "tsx src/scripts/reconcilier.ts",
     "catalogue:importer": "tsx src/scripts/importer-catalogue.ts",
-    "test": "vitest run",
-    "roles:republier": "tsx src/scripts/republier-roles.ts",
-    "salle:republier": "tsx src/scripts/republier-salle.ts"
+    "test": "vitest run"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

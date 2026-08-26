@@ -1,196 +1,215 @@
-import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { formatFCFA } from '@pos/shared';
-import { appelSiege, ErreurSiege, type Cloture, type RestoGroupe } from '../api';
-import { Erreur, Info, PastilleMarque, Squelette } from '../components/Etat';
-import { FiltreRestaurant } from '../components/FiltreRestaurant';
-import { SelecteurPeriode } from '../components/SelecteurPeriode';
-import { dateHeure, periodes, type Periode } from '../periode';
-import { TicketZ, type RapportZLu } from '../components/TicketZ';
-import { restoChoisi, useRestaurants, type FiltreResto } from '../restaurants';
+import { useState } from 'react';
+import { IconAlertTriangle, IconPlugConnectedX } from '@tabler/icons-react';
+import { appeler, bornes, fcfa, type TableauBord as Donnees } from '../api';
 
-/** Seuil d'alerte par défaut du POS (`parametres_locaux.seuil_alerte_ecart_caisse`). */
+interface Cloture {
+  restaurant_id: string;
+  service_id: string;
+  caissier_id: string | null;
+  ouvert_le: string;
+  cloture_le: string | null;
+  statut: string | null;
+  fond_de_caisse: number | null;
+  especes_comptees: number | null;
+  especes_theorique: number | null;
+  ecart: number | null;
+}
+
+type Periode = 'jour' | 'semaine' | 'mois';
+
+const LIBELLES: Record<Periode, string> = {
+  jour: "Aujourd'hui",
+  semaine: 'Cette semaine',
+  mois: 'Ce mois',
+};
+
+/**
+ * Seuil d'alerte par défaut du POS (`parametres_locaux.seuil_alerte_ecart_caisse`).
+ * Il est réglable par restaurant ; la console ne descend pas encore ces réglages,
+ * on prend donc la valeur par défaut du cahier des charges.
+ */
 const SEUIL_ECART = 2000;
 
-export function Clotures({ filtre, onFiltre }: { filtre: FiltreResto; onFiltre: (v: FiltreResto) => void }) {
-  const [periode, setPeriode] = useState<Periode>(() => periodes()['7j']);
-  const [ouverte, setOuverte] = useState<Cloture | null>(null);
-
-  const { data: restos } = useRestaurants();
-  const choisi = restoChoisi(restos?.restaurants, filtre);
-  const { data, error, isPending } = useQuery({
-    queryKey: ['clotures', periode.debut, periode.fin],
-    queryFn: () => appelSiege<{ clotures: Cloture[] }>('clotures', { debut: periode.debut, fin: periode.fin }),
+function dateCourte(iso: string | null): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
   });
-
-  const nomResto = useMemo(() => {
-    const m = new Map<string, RestoGroupe>();
-    for (const r of restos?.restaurants ?? []) if (r.restaurant_id) m.set(r.restaurant_id, r);
-    return m;
-  }, [restos]);
-
-  /**
-   * Une clôture est identifiée par l'UUID POS du site. Un restaurant non enrôlé
-   * n'en a pas : il n'a donc aucune clôture ici, et ce n'est pas une liste vide
-   * à expliquer par un « aucune clôture » qui laisserait croire à un oubli.
-   */
-  const lignes = useMemo(
-    () => (data?.clotures ?? []).filter((c) => !choisi || c.restaurant_id === choisi.restaurant_id),
-    [data?.clotures, choisi],
-  );
-
-  return (
-    <section>
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">Clôtures</h1>
-        <div className="flex flex-wrap items-center gap-3">
-          <FiltreRestaurant restaurants={restos?.restaurants ?? []} valeur={filtre} onChoisir={onFiltre} />
-          <SelecteurPeriode valeur={periode} onChoisir={setPeriode} />
-        </div>
-      </div>
-
-      {error && <Erreur texte={error instanceof ErreurSiege ? error.message : 'Lecture impossible'} />}
-
-      {choisi && !choisi.enrole && (
-        <Info>
-          <b>{choisi.nom} ne synchronise pas encore.</b> Aucune de ses clôtures n’est remontée au cloud — ce
-          n’est pas qu’il n’en fait pas.
-        </Info>
-      )}
-
-      {isPending ? (
-        <Squelette lignes={5} />
-      ) : (
-        <div className="overflow-x-auto rounded-jeton border border-filet bg-carte shadow-e1">
-          <table className="w-full min-w-[820px] border-collapse text-left">
-            <thead>
-              <tr className="border-b border-filet text-[12px] uppercase tracking-wide text-faible">
-                <th className="px-4 py-3 font-semibold">Restaurant</th>
-                <th className="px-4 py-3 font-semibold">Ouvert</th>
-                <th className="px-4 py-3 font-semibold">Clôturé</th>
-                <th className="px-4 py-3 text-right font-semibold">Fond</th>
-                <th className="px-4 py-3 text-right font-semibold">Compté</th>
-                <th className="px-4 py-3 text-right font-semibold">Théorique</th>
-                <th className="px-4 py-3 text-right font-semibold">Écart</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {lignes.map((c) => {
-                const r = nomResto.get(c.restaurant_id);
-                const ecart = c.ecart;
-                // Au-delà du seuil, le POS écrit déjà une entrée d'audit
-                // ECART_CAISSE : la console montre le même seuil, pas un autre.
-                const grave = ecart !== null && Math.abs(ecart) > SEUIL_ECART;
-                return (
-                  <tr key={c.service_id} className="border-b border-filet last:border-0">
-                    <td className="px-4 py-3">
-                      <span className="flex items-center gap-2 font-semibold">
-                        {r && <PastilleMarque marque={r.marque} />}
-                        {r?.nom ?? 'Site inconnu'}
-                      </span>
-                    </td>
-                    <td className="chiffres px-4 py-3 text-doux">{dateHeure(c.ouvert_le)}</td>
-                    <td className="chiffres px-4 py-3 text-doux">
-                      {c.cloture_le ? (
-                        dateHeure(c.cloture_le)
-                      ) : (
-                        <span className="rounded-sm bg-attente-tint px-2 py-1 text-xs font-semibold text-attente-txt">
-                          Service en cours
-                        </span>
-                      )}
-                    </td>
-                    <td className="chiffres px-4 py-3 text-right text-doux">{formatFCFA(c.fond_de_caisse)}</td>
-                    <td className="chiffres px-4 py-3 text-right text-doux">
-                      {c.especes_comptees === null ? '—' : formatFCFA(c.especes_comptees)}
-                    </td>
-                    <td className="chiffres px-4 py-3 text-right text-doux">
-                      {c.especes_theorique === null ? '—' : formatFCFA(c.especes_theorique)}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {ecart === null ? (
-                        <span className="text-doux">—</span>
-                      ) : (
-                        <span
-                          className={`chiffres rounded-sm px-2 py-1 font-bold ${
-                            grave ? 'bg-alerte-tint text-alerte-txt' : 'bg-ok-tint text-ok-txt'
-                          }`}
-                        >
-                          {ecart > 0 ? '+' : ''}
-                          {formatFCFA(ecart)}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {c.cloture_le && (
-                        <button type="button" className="btn-blanc !min-h-[38px] !px-3 !text-sm" onClick={() => setOuverte(c)}>
-                          Ticket Z
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {lignes.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-4 py-6 text-center text-doux">
-                    {choisi ? `Aucune clôture pour ${choisi.nom} sur cette période.` : 'Aucune clôture sur cette période.'}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {ouverte && <ModaleTicketZ cloture={ouverte} nom={nomResto.get(ouverte.restaurant_id)?.nom ?? 'Site'} onFermer={() => setOuverte(null)} />}
-    </section>
-  );
 }
 
 /**
- * Le rapport Z complet, chargé À LA DEMANDE : il pèse lourd (tout le point de
- * caisse en JSONB) et la liste n'en a pas besoin — c'est pourquoi la RPC
- * `siege_clotures` l'exclut volontairement.
+ * Un écart n'est pas qu'un chiffre : son SIGNE change la lecture.
+ * Un manque (négatif) est le cas qui doit sauter aux yeux ; un excédent
+ * signale plutôt une erreur de saisie ou de rendu de monnaie.
  */
-function ModaleTicketZ({ cloture, nom, onFermer }: { cloture: Cloture; nom: string; onFermer: () => void }) {
-  const { data, error, isPending } = useQuery({
-    queryKey: ['rapport_z', cloture.service_id],
-    queryFn: () =>
-      appelSiege<{ cloture: Record<string, unknown> }>('rapport_z', {
-        service_id: cloture.service_id,
-        restaurant_id: cloture.restaurant_id,
-      }),
-  });
+function Ecart({ valeur }: { valeur: number | null }): JSX.Element {
+  if (valeur === null) return <span className="text-faible">—</span>;
+  if (valeur === 0) return <span style={{ color: 'var(--ok-txt)' }}>juste</span>;
 
-  const rapport = (data?.cloture?.rapport_z ?? null) as RapportZLu | null;
+  const grave = Math.abs(valeur) >= SEUIL_ECART;
+  const couleur = valeur < 0 ? 'var(--alerte-txt)' : 'var(--attente-txt)';
+  const fond = valeur < 0 ? 'var(--alerte-tint)' : 'var(--attente-tint)';
 
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onClick={onFermer}>
-      <div
-        className="my-auto w-full max-w-4xl rounded-jeton border border-filet bg-plan p-5 shadow-e2"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-end">
-          <button type="button" className="btn-blanc !min-h-[38px] !px-3 !text-sm" onClick={onFermer}>
-            Fermer
-          </button>
+    <span
+      className="inline-block rounded-full px-2.5 py-1 font-semibold"
+      style={grave ? { background: fond, color: couleur } : { color: couleur }}
+      title={grave ? `Au-delà du seuil d'alerte de ${fcfa(SEUIL_ECART)}` : undefined}
+    >
+      {valeur > 0 ? '+' : ''}
+      {fcfa(valeur)}
+    </span>
+  );
+}
+
+export function Clotures(): JSX.Element {
+  const [periode, setPeriode] = useState<Periode>('semaine');
+
+  const restos = useQuery({
+    queryKey: ['tableau_bord', 'jour'],
+    queryFn: () => appeler<Donnees>('tableau_bord', bornes('jour')),
+  });
+
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ['clotures', periode],
+    queryFn: () => appeler<{ clotures: Cloture[] }>('clotures', bornes(periode)),
+  });
+
+  // Le cloud ne connaît les restaurants que par leur UUID : on rapatrie les
+  // noms depuis la même source que le tableau de bord.
+  const nomParId = new Map(
+    (restos.data?.restaurants ?? []).filter((r) => r.restaurant_id).map((r) => [r.restaurant_id!, r.nom]),
+  );
+
+  const lignes = data?.clotures ?? [];
+  const horsSeuil = lignes.filter((c) => c.ecart !== null && Math.abs(c.ecart) >= SEUIL_ECART);
+  const manquant = lignes.reduce((s, c) => s + (c.ecart && c.ecart < 0 ? c.ecart : 0), 0);
+
+  return (
+    <div className="mx-auto max-w-[1180px] p-8">
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-[26px] font-bold tracking-tight text-fort">Clôtures & écarts</h1>
+          <p className="mt-1 text-doux">
+            Chaque service fermé par un caissier, avec son comptage à l'aveugle et son écart.
+          </p>
         </div>
+        <div className="flex gap-2">
+          {(Object.keys(LIBELLES) as Periode[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriode(p)}
+              className={periode === p ? 'btn-accent' : 'btn-blanc'}
+              style={{ minHeight: 42, fontSize: 14 }}
+            >
+              {LIBELLES[p]}
+            </button>
+          ))}
+        </div>
+      </header>
 
-        {error && <Erreur texte={error instanceof ErreurSiege ? error.message : 'Rapport illisible'} />}
-        {isPending && <Squelette lignes={3} />}
+      {isError && (
+        <div
+          className="mb-6 flex items-start gap-3 rounded-jeton p-4"
+          style={{ background: 'var(--alerte-tint)', color: 'var(--alerte-txt)' }}
+        >
+          <IconAlertTriangle size={22} style={{ flex: 'none', marginTop: 1 }} />
+          <div className="text-sm">{(error as Error).message}</div>
+        </div>
+      )}
 
-        {rapport ? (
-          <TicketZ
-            rapport={rapport}
-            restaurant={nom}
-            serviceId={cloture.service_id}
-            restaurantId={cloture.restaurant_id}
-          />
-        ) : (
-          !isPending && !error && <p className="text-doux">Ce service n’a pas de rapport Z figé.</p>
-        )}
-      </div>
+      {!isLoading && lignes.length === 0 && !isError && (
+        <div
+          className="flex items-start gap-3 rounded-jeton p-4"
+          style={{ background: 'var(--info-tint)', color: 'var(--info-txt)' }}
+        >
+          <IconPlugConnectedX size={22} style={{ flex: 'none', marginTop: 1 }} />
+          <div className="text-sm leading-relaxed">
+            Aucune clôture sur cette période. Tant qu'aucun restaurant n'est enrôlé, les services fermés restent
+            dans la base locale de chaque caisse et ne remontent pas ici.
+          </div>
+        </div>
+      )}
+
+      {lignes.length > 0 && (
+        <>
+          <div className="mb-6 flex flex-wrap gap-4">
+            <div className="carte flex-1 p-5">
+              <div className="text-xs font-semibold uppercase tracking-wide text-doux">Services clôturés</div>
+              <div className="mt-1.5 text-[30px] font-bold leading-none text-fort tabular-nums">{lignes.length}</div>
+            </div>
+            <div className="carte flex-1 p-5">
+              <div className="text-xs font-semibold uppercase tracking-wide text-doux">Au-delà du seuil</div>
+              <div
+                className="mt-1.5 text-[30px] font-bold leading-none tabular-nums"
+                style={{ color: horsSeuil.length > 0 ? 'var(--alerte-txt)' : 'var(--txt)' }}
+              >
+                {horsSeuil.length}
+              </div>
+              <div className="mt-1.5 text-sm text-doux">Écart supérieur à {fcfa(SEUIL_ECART)}</div>
+            </div>
+            <div className="carte flex-1 p-5">
+              <div className="text-xs font-semibold uppercase tracking-wide text-doux">Total manquant</div>
+              <div
+                className="mt-1.5 text-[30px] font-bold leading-none tabular-nums"
+                style={{ color: manquant < 0 ? 'var(--alerte-txt)' : 'var(--txt)' }}
+              >
+                {fcfa(manquant)}
+              </div>
+              <div className="mt-1.5 text-sm text-doux">Excédents non déduits</div>
+            </div>
+          </div>
+
+          <div className="carte overflow-hidden">
+            <div className="overflow-x-auto p-2">
+              <table className="tbl-siege">
+                <thead>
+                  <tr>
+                    <th>Restaurant</th>
+                    <th>Ouvert</th>
+                    <th>Clôturé</th>
+                    <th className="num">Fond</th>
+                    <th className="num">Théorique</th>
+                    <th className="num">Compté</th>
+                    <th className="num">Écart</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lignes.map((c) => (
+                    <tr key={`${c.restaurant_id}-${c.service_id}`}>
+                      <td className="font-semibold text-fort">
+                        {nomParId.get(c.restaurant_id) ?? 'Restaurant inconnu'}
+                      </td>
+                      <td className="text-doux">{dateCourte(c.ouvert_le)}</td>
+                      <td className="text-doux">
+                        {c.statut === 'OUVERT' ? (
+                          <span style={{ color: 'var(--ok-txt)' }}>en cours</span>
+                        ) : (
+                          dateCourte(c.cloture_le)
+                        )}
+                      </td>
+                      <td className="num text-doux">{c.fond_de_caisse !== null ? fcfa(c.fond_de_caisse) : '—'}</td>
+                      <td className="num text-doux">
+                        {c.especes_theorique !== null ? fcfa(c.especes_theorique) : '—'}
+                      </td>
+                      <td className="num text-fort">
+                        {c.especes_comptees !== null ? fcfa(c.especes_comptees) : '—'}
+                      </td>
+                      <td className="num">
+                        <Ecart valeur={c.ecart} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
