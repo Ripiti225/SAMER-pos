@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS commandes (
   table_id       UUID,
   partenaire     TEXT,
   ref_partenaire TEXT,
+  contact_client TEXT,
   service_id     UUID,
   caissier_id    UUID,
   serveur_id     UUID,

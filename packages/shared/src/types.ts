@@ -281,7 +281,10 @@ export interface CommandeVue {
   table_id: string | null;
   table_numero: string | null;
   partenaire: Partenaire | string | null;
+  /** N° de commande chez le partenaire, saisi au lancement en cuisine. */
   ref_partenaire: string | null;
+  /** Téléphone du client livré, saisi au lancement en cuisine. Facultatif. */
+  contact_client: string | null;
   statut: StatutCommande;
   /** Kdo : repas offert, clôturé sans encaissement. Motif obligatoire. */
   offert: boolean;
@@ -358,7 +361,14 @@ export interface RapportZ {
   panier_moyen: number;
   par_mode: Record<ModePaiement, number>;
   par_type: Record<TypeCommande, { nb: number; total: number }>;
-  partenaires: Record<string, { nb: number; total: number }>;
+  /**
+   * Livraisons partenaires du shift. `contacts` et `refs` disent combien de ces
+   * commandes portent le téléphone du client et le n° de commande du
+   * partenaire — « Yango 5 cmd · 4 contacts » : l'écart entre les deux est le
+   * nombre de courses qu'on ne saura rattacher à personne en cas de litige.
+   * Absents des rapports Z figés avant le 2026-08-25 : lire avec `?? 0`.
+   */
+  partenaires: Record<string, { nb: number; total: number; contacts: number; refs: number }>;
   top_articles: { nom: string; quantite: number; total: number }[];
   remises_detail: { numero_ticket: number; montant: number; motif: string | null; par_nom: string | null }[];
   annulations_detail: { numero_ticket: number; total: number }[];
@@ -515,4 +525,45 @@ export interface RapportSequence extends RecapSequence {
    */
   shifts_reportes: number;
   shifts: ShiftSequence[];
+}
+
+/**
+ * Une ligne du tirage de stock à l'instant T. Un seul chiffre compte pour le
+ * lecteur — `stock`, celui qui est en face du nom sur le papier ; les trois
+ * autres sont le détail qui explique d'où il sort.
+ */
+export interface EtatStockLigne {
+  produit_id: string;
+  code: string;
+  categorie: string;
+  nom: string;
+  unite: string;
+  stock_initial: number;
+  entrees: number;
+  sorties: number;
+  /**
+   * Le stock à l'instant T : le COMPTÉ dès qu'il est saisi, sinon le théorique
+   * (initial + entrées − sorties). Un comptage physique prime toujours sur un
+   * calcul — c'est le sens même du comptage.
+   */
+  stock: number;
+  /** true = ce chiffre vient d'un comptage physique, pas du calcul. */
+  compte: boolean;
+}
+
+/**
+ * Photo du stock à un instant précis (DESIGN_V2 § 6.9), tirée pendant le
+ * service sans rien valider ni figer : elle ne touche NI l'inventaire, NI la
+ * clôture. Deux usages : le gérant qui veut savoir ce qu'il reste avant de
+ * commander, et le contrôle inopiné en cours de service.
+ */
+export interface EtatStockInstant {
+  genere_le: string;
+  genere_par: string;
+  service_ouvert_le: string;
+  /** Après validation, les chiffres ne bougent plus : le tirage le dit. */
+  inventaire_valide: boolean;
+  /** Combien de lignes reposent encore sur le théorique, faute de comptage. */
+  nb_theoriques: number;
+  lignes: EtatStockLigne[];
 }

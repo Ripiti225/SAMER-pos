@@ -6,13 +6,14 @@ import {
   AnnulerCommandeSchema,
   AnnulerItemSchema,
   CreerCommandeSchema,
+  InfosLivraisonSchema,
   ModifierItemSchema,
   RemiseSchema,
   ReouvrirSchema,
   estTableKdo,
 } from '@pos/shared';
 import { db } from '../../db/client.js';
-import { commandeItems, commandes, tablesSalle } from '../../db/schema/index.js';
+import { commandeItems, commandes, servicesCaisse, tablesSalle } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
@@ -308,6 +309,75 @@ export function routesCommandes(app: FastifyInstance): void {
     });
     await imprimerBonsEnvoi(app, id, envoyes);
     app.diffuser('commande:envoyee', id);
+    app.diffuser('commande', id);
+    return vue;
+  });
+
+  /**
+   * Infos d'une commande partenaire : n° de commande chez Yango/Glovo et
+   * téléphone du client. Saisies dans la modale qui s'ouvre APRÈS le lancement
+   * en cuisine — la cuisine ne doit jamais attendre après un formulaire.
+   *
+   * Facultatives : le caissier peut fermer sans rien mettre, et le ticket Z
+   * compte alors une commande sans contact (« Yango 5 cmd · 4 contacts »). Le
+   * trou est visible, il n'est pas caché.
+   *
+   * Modifiables tant que le shift est ouvert — un caissier qui a fermé la
+   * modale doit pouvoir revenir la remplir, sinon l'information est perdue pour
+   * de bon. Chaque saisie passe au journal d'audit avec son auteur : c'est la
+   * pièce qu'on ressort quand un partenaire conteste une course.
+   */
+  app.post('/api/commandes/:id/infos-livraison', { preHandler: app.exigePermission('salle.envoyer_cuisine') }, async (req) => {
+    const { id } = req.params as { id: string };
+    const corps = valider(InfosLivraisonSchema, req.body);
+
+    const vue = await db.transaction(async (tx) => {
+      const c = await verrouillerCommande(tx, id);
+      if (c.type !== 'LIVRAISON' || !c.partenaire) {
+        throw new ErreurMetier('Ces informations ne concernent que les commandes en livraison', 400);
+      }
+      if (c.statut === 'ANNULEE') {
+        throw new ErreurMetier('Cette commande est annulée : elle n’est plus modifiable', 409);
+      }
+      // Le shift clôturé a déjà figé son ticket Z : y ajouter un contact ferait
+      // diverger le papier du gérant de ce que lit le siège.
+      if (c.service_id) {
+        const [service] = await tx
+          .select({ statut: servicesCaisse.statut })
+          .from(servicesCaisse)
+          .where(eq(servicesCaisse.id, c.service_id));
+        if (service && service.statut !== 'OUVERT') {
+          throw new ErreurMetier('Ce service est clôturé : ses commandes ne se modifient plus', 409);
+        }
+      }
+
+      // `undefined` = champ absent du formulaire, on garde l'existant. Une
+      // chaîne vide = le caissier a effacé volontairement.
+      const ref = corps.ref_partenaire === undefined ? c.ref_partenaire : (corps.ref_partenaire || null);
+      const contact = corps.contact_client === undefined ? c.contact_client : (corps.contact_client || null);
+
+      const [maj] = await tx
+        .update(commandes)
+        .set({ ref_partenaire: ref, contact_client: contact, updated_at: new Date() })
+        .where(eq(commandes.id, id))
+        .returning();
+      await ecrireOutbox(tx, 'commandes', 'UPDATE', id, maj as unknown as Record<string, unknown>);
+
+      await journaliser(tx, {
+        user_id: req.session!.utilisateur_id,
+        action: 'INFOS_LIVRAISON',
+        entite: 'commandes',
+        entite_id: id,
+        meta: {
+          partenaire: c.partenaire,
+          numero_ticket: Number(c.numero_ticket),
+          ref_partenaire: ref,
+          contact_client: contact,
+        },
+      });
+      return chargerCommandeVue(tx, id);
+    });
+
     app.diffuser('commande', id);
     return vue;
   });

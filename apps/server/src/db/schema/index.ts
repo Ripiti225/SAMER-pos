@@ -382,7 +382,11 @@ export const commandes = pgTable('commandes', {
   type: typeCommande('type').notNull(),
   table_id: uuid('table_id').references(() => tablesSalle.id),
   partenaire: text('partenaire'),
+  // Saisis dans la modale qui s'ouvre au lancement en cuisine d'une commande
+  // partenaire. Facultatifs (le caissier peut fermer) : le ticket Z compte les
+  // commandes ET les contacts recueillis, pour que le trou se voie.
   ref_partenaire: text('ref_partenaire'),
+  contact_client: text('contact_client'),
   service_id: uuid('service_id').references(() => servicesCaisse.id),
   caissier_id: uuid('caissier_id').references(() => utilisateurs.id),
   serveur_id: uuid('serveur_id').references(() => utilisateurs.id),

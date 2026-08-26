@@ -368,6 +368,7 @@ CREATE TABLE commandes (
   table_id       UUID REFERENCES tables_salle(id),
   partenaire     TEXT,                              -- YANGO/GLOVO/SAMER_DELLY si livraison
   ref_partenaire TEXT,                              -- n° de commande côté partenaire
+  contact_client TEXT,                              -- téléphone du client livré (saisi à l'envoi en cuisine)
   service_id     UUID REFERENCES services_caisse(id),
   caissier_id    UUID REFERENCES utilisateurs(id),
   serveur_id     UUID REFERENCES utilisateurs(id),  -- si prise en salle

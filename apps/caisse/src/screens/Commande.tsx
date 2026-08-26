@@ -4,6 +4,7 @@ import {
   IconArrowLeft,
   IconMinus,
   IconPlus,
+  IconPhone,
   IconPrinter,
   IconSearch,
   IconSend,
@@ -17,6 +18,7 @@ import {
   couleurCategorie,
   estLivraisonSansEncaissement,
   formatFCFA,
+  libellePartenaire,
   LIBELLES_TYPES_COMMANDE,
 } from '@pos/shared';
 import { api } from '../api';
@@ -36,6 +38,7 @@ export function Commande() {
   const [remiseOuverte, setRemiseOuverte] = useState(false);
   const [offrirOuvert, setOffrirOuvert] = useState(false);
   const [annulationOuverte, setAnnulationOuverte] = useState(false);
+  const [infosLivraisonOuverte, setInfosLivraisonOuverte] = useState(false);
 
   const { data: catalogue } = useQuery({
     queryKey: ['catalogue'],
@@ -67,7 +70,27 @@ export function Commande() {
   });
   const envoyerCuisine = useMutation({
     mutationFn: () => api<CommandeVue>(`/api/commandes/${commandeId}/envoyer`, { method: 'POST', corps: {} }),
-    onSuccess: (vue) => { rafraichir(vue); afficherToast('Commande envoyée en cuisine'); },
+    onSuccess: (vue) => {
+      rafraichir(vue);
+      afficherToast('Commande envoyée en cuisine');
+      // Commande partenaire : on réclame le n° de commande et le contact du
+      // client. APRÈS l'envoi, jamais avant — la cuisine ne doit pas attendre
+      // après un formulaire. Et une seule fois : rien à redemander quand la
+      // commande repart avec des articles ajoutés.
+      if (vue.type === 'LIVRAISON' && vue.partenaire && !vue.ref_partenaire && !vue.contact_client) {
+        setInfosLivraisonOuverte(true);
+      }
+    },
+    onError: surErreur,
+  });
+  const enregistrerInfosLivraison = useMutation({
+    mutationFn: (corps: { ref_partenaire: string | null; contact_client: string | null }) =>
+      api<CommandeVue>(`/api/commandes/${commandeId}/infos-livraison`, { method: 'POST', corps }),
+    onSuccess: (vue) => {
+      rafraichir(vue);
+      setInfosLivraisonOuverte(false);
+      afficherToast('Informations de livraison enregistrées');
+    },
     onError: surErreur,
   });
   const imprimerFacture = useMutation({
@@ -522,6 +545,27 @@ export function Commande() {
               </div>
             </div>
 
+            {/* Commande partenaire : le rappel reste visible tant que rien n'est
+                saisi. Un caissier qui a fermé la modale doit pouvoir revenir la
+                remplir — sinon l'information est perdue pour de bon, et c'est
+                exactement celle qu'on cherche quand un client se plaint. */}
+            {commande.type === 'LIVRAISON' && commande.partenaire && (
+              <button
+                type="button"
+                onClick={() => setInfosLivraisonOuverte(true)}
+                className={`mb-2 flex h-12 w-full items-center justify-center gap-2 rounded-[13px] text-[13.5px] font-semibold transition ${
+                  commande.contact_client || commande.ref_partenaire
+                    ? 'bg-ard-750 text-ard-txt hover:bg-ard-700'
+                    : 'bg-attente/20 text-[#ffd08a] hover:bg-attente/30'
+                }`}
+              >
+                <IconPhone size={18} />
+                {commande.contact_client || commande.ref_partenaire
+                  ? `Livraison · ${commande.contact_client ?? commande.ref_partenaire}`
+                  : 'Contact client manquant'}
+              </button>
+            )}
+
             {/* Trois actions secondaires, LOIN du bouton Encaisser : « Vider »
                 est destructif, il ne doit jamais se toucher par erreur en
                 visant l'encaissement. Il ouvre de toute façon une confirmation
@@ -596,6 +640,15 @@ export function Commande() {
           </div>
         </aside>
       </div>
+
+      {infosLivraisonOuverte && (
+        <ModaleInfosLivraison
+          commande={commande}
+          enCours={enregistrerInfosLivraison.isPending}
+          onFermer={() => setInfosLivraisonOuverte(false)}
+          onEnregistrer={(corps) => enregistrerInfosLivraison.mutate(corps)}
+        />
+      )}
 
       {articleOuvert && (
         <ModaleArticle
@@ -710,6 +763,102 @@ function ModaleMotifKdo({
         </button>
       </div>
     } />
+  );
+}
+
+/**
+ * Infos d'une commande partenaire, demandées au lancement en cuisine.
+ *
+ * Elle s'ouvre APRÈS l'envoi : la commande est déjà partie, la cuisine
+ * travaille, le caissier remplit pendant ce temps. **« Fermer » est un choix
+ * légitime** — le coursier est déjà reparti, le client n'a pas laissé son
+ * numéro — et c'est pour ça que le ticket Z compte les commandes ET les
+ * contacts : ce qui n'a pas été saisi se voit, au lieu de se perdre.
+ */
+function ModaleInfosLivraison({
+  commande,
+  enCours,
+  onEnregistrer,
+  onFermer,
+}: {
+  commande: CommandeVue;
+  enCours: boolean;
+  onEnregistrer: (corps: { ref_partenaire: string | null; contact_client: string | null }) => void;
+  onFermer: () => void;
+}) {
+  const [ref, setRef] = useState(commande.ref_partenaire ?? '');
+  const [contact, setContact] = useState(commande.contact_client ?? '');
+  // Le serveur refuse un enregistrement entièrement vide : il n'ajouterait rien
+  // et effacerait une saisie précédente. Le bouton dit la même chose.
+  const valide = ref.trim() !== '' || contact.trim() !== '';
+
+  const enregistrer = () => {
+    if (!valide) return;
+    onEnregistrer({ ref_partenaire: ref.trim() || null, contact_client: contact.trim() || null });
+  };
+
+  return (
+    <Modale
+      titre={`Livraison ${libellePartenaire(commande.partenaire ?? '')}`}
+      onFermer={onFermer}
+      enfants={
+        <div className="space-y-4">
+          <p className="text-doux">
+            Commande <span className="font-bold text-texte">{commande.code_commande ?? `n° ${commande.numero_ticket}`}</span>{' '}
+            partie en cuisine. Ces informations servent à retrouver la course en cas de litige.
+          </p>
+          <div>
+            <label htmlFor="ref-partenaire" className="mb-1 block text-sm font-semibold text-doux">
+              N° de commande {libellePartenaire(commande.partenaire ?? '')}
+            </label>
+            <input
+              id="ref-partenaire"
+              autoFocus
+              value={ref}
+              onChange={(e) => setRef(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && enregistrer()}
+              placeholder="Tel qu'il apparaît sur l'écran du coursier"
+              className="w-full rounded-[13px] border border-bordure bg-surface p-4 text-lg"
+            />
+          </div>
+          <div>
+            <label htmlFor="contact-client" className="mb-1 block text-sm font-semibold text-doux">
+              Contact du client
+            </label>
+            <input
+              id="contact-client"
+              type="tel"
+              inputMode="tel"
+              value={contact}
+              onChange={(e) => setContact(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && enregistrer()}
+              placeholder="Numéro de téléphone"
+              className="w-full rounded-[13px] border border-bordure bg-surface p-4 text-lg"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={onFermer}
+              className="flex h-14 items-center justify-center rounded-[13px] bg-surface-douce text-lg font-semibold text-doux"
+            >
+              Fermer
+            </button>
+            <button
+              type="button"
+              disabled={!valide || enCours}
+              onClick={enregistrer}
+              className="flex h-14 items-center justify-center rounded-[13px] bg-marque text-lg font-bold text-sur-marque disabled:opacity-40"
+            >
+              {enCours ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
+          </div>
+          <p className="text-center text-xs text-doux">
+            Fermer sans rien saisir est possible : le ticket Z comptera cette commande sans contact.
+          </p>
+        </div>
+      }
+    />
   );
 }
 

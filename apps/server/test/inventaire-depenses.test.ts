@@ -167,6 +167,52 @@ describe('§ 6.9 — inventaire : sorties automatiques et formules dérivées', 
     expect(ligne(explique, 'f10').manque_chiffre).toBe(150); // reste 30 g × 5 F
   });
 
+  /**
+   * Tirage du stock à l'instant T (§ 6.9). Une PHOTO : elle ne valide rien, ne
+   * fige rien, et ne montre que de la marchandise — une consommation calculée
+   * (le fromage des Manaïches) n'est pas du stock en réserve.
+   */
+  it('tire le stock à l’instant T : le compté prime, le théorique est signalé', async () => {
+    const r = await app.inject({ method: 'GET', url: '/api/inventaire/etat-stock', cookies });
+    expect(r.statusCode).toBe(200);
+    const tirage = r.json() as {
+      genere_par: string;
+      nb_theoriques: number;
+      inventaire_valide: boolean;
+      lignes: { code: string; nom: string; stock: number; compte: boolean }[];
+    };
+
+    // Les lignes de consommation n'y figurent pas : sinon on compterait deux
+    // fois le même fromage (la conso ET son total).
+    expect(tirage.lignes.map((l) => l.code).sort()).toEqual(['f10', 'p1']);
+
+    // Pain non compté : le théorique (0 + 100 − 2), signalé comme tel.
+    const pain1 = tirage.lignes.find((l) => l.code === 'p1')!;
+    expect(pain1.stock).toBe(98);
+    expect(pain1.compte).toBe(false);
+
+    // Fromage compté 650 : le comptage physique prime sur le théorique (700).
+    const fromage = tirage.lignes.find((l) => l.code === 'f10')!;
+    expect(fromage.stock).toBe(650);
+    expect(fromage.compte).toBe(true);
+
+    expect(tirage.nb_theoriques).toBe(1);
+    expect(tirage.inventaire_valide).toBe(false);
+    expect(tirage.genere_par).toBeTruthy();
+
+    // Lecture pure : le tirage ne fait avancer ni le comptage ni la clôture.
+    const etat = await inventaire();
+    expect(etat.bilan.a_compter).toBe(1);
+    expect(etat.valide).toBe(false);
+  });
+
+  it('imprime le tirage sans rien valider', async () => {
+    const r = await app.inject({ method: 'POST', url: '/api/inventaire/etat-stock/imprimer', cookies });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().lignes).toHaveLength(2);
+    expect((await inventaire()).valide).toBe(false);
+  });
+
   it('refuse la validation tant qu’un produit n’est pas compté', async () => {
     const r = await app.inject({ method: 'POST', url: '/api/inventaire/valider', cookies });
     expect(r.statusCode).toBe(409);

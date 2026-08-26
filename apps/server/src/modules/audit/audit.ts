@@ -52,6 +52,10 @@ export type ActionAudit =
   | 'PROMO_DESACTIVEE'
   | 'MODIF_FIDELITE'
   | 'FACTURE_IMPRIMEE'
+  // Contact client et n° de commande d'une livraison partenaire. Tracé parce
+  // que c'est la pièce qu'on ressort quand Yango conteste une course : qui a
+  // saisi quoi, et à quelle heure.
+  | 'INFOS_LIVRAISON'
   | 'ACCES_PROTEGE_REFUSE'
   // DESIGN_V2 — dépenses, pointage, inventaire (§ 6.7 à § 6.10).
   // Les paiements réels (salaire, encouragement) et le déblocage d'inventaire

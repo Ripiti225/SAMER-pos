@@ -28,6 +28,7 @@ import { journaliser } from '../audit/audit.js';
 import { verifierPinManager } from '../auth/pin.js';
 import { serviceOuvertCourant } from '../depenses/service.js';
 import { etatInventaire } from './service.js';
+import { tirerEtatStock } from './etat-stock.js';
 import { expliqueeInvalide } from './calcul.js';
 
 /** Quantité d'inventaire : jamais un entier — fromage en grammes, glace en pots. */
@@ -52,6 +53,12 @@ const DebloquerSchema = z.object({
   pin_manager: z.string().min(4, 'PIN manager obligatoire'),
   motif: z.string().trim().min(1, 'Le déblocage exige un motif'),
 });
+
+/** Nom affiché en haut d'un tirage : « tiré par » n'est utile qu'avec un nom. */
+async function nomUtilisateur(id: string): Promise<string> {
+  const [u] = await db.select({ nom: utilisateurs.nom_complet }).from(utilisateurs).where(eq(utilisateurs.id, id));
+  return u?.nom ?? 'Inconnu';
+}
 
 export function routesInventaire(app: FastifyInstance): void {
   // Avant le 2026-08-17 : caisse.service.ouvrir pour tout, y compris le
@@ -311,6 +318,29 @@ export function routesInventaire(app: FastifyInstance): void {
       montant_manquant: resultat.bilan.montant,
       bilan: resultat.bilan,
     };
+  });
+
+  /**
+   * Tirage du stock à l'instant T (§ 6.9) — le bouton « Stock à l'instant T ».
+   *
+   * Lecture pure : rien n'est validé, rien n'est figé, la clôture n'avance pas
+   * d'un pas. Les chiffres viennent du même `etatInventaire()` que l'écran de
+   * comptage et que le ticket Z — un tirage qui raconterait autre chose que la
+   * clôture du soir ne servirait qu'à ouvrir des discussions.
+   */
+  app.get('/api/inventaire/etat-stock', { preHandler: garde }, async (req) => {
+    const service = await serviceOuvertCourant(db);
+    return db.transaction(async (tx) => tirerEtatStock(tx, service, await nomUtilisateur(req.session!.utilisateur_id)));
+  });
+
+  /** Le même tirage, sur le papier de la caisse. */
+  app.post('/api/inventaire/etat-stock/imprimer', { preHandler: garde }, async (req) => {
+    const service = await serviceOuvertCourant(db);
+    const etat = await db.transaction(async (tx) =>
+      tirerEtatStock(tx, service, await nomUtilisateur(req.session!.utilisateur_id)),
+    );
+    await app.imprimante.imprimerEtatStock(etat);
+    return etat;
   });
 
   /**

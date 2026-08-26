@@ -32,14 +32,20 @@ avant que les 6 autres restaurants ne reçoivent quoi que ce soit.
 
 | | |
 |---|---|
-| Dernière migration | **0026** (`0026_inventaire_snapshot_produit.sql`) — **pas sur la clé** |
-| Migrations ajoutées depuis la clé | **1 — la 0026** (`pnpm db:migrate` obligatoire) |
-| Rebuild caisse | **fait** — `dist` du 18/08 23h30, postérieur à la dernière source |
-| Report du code sur la clé master | **fait le 21/08 15h48** (43 fichiers, 0 échec) |
+| Dernière migration | **0027** (`0027_contact_livraison.sql`) — **pas sur la clé** |
+| Migrations ajoutées depuis la clé | **2 — la 0026 et la 0027** (`pnpm db:migrate` obligatoire) |
+| Rebuild caisse | **À REFAIRE** — `dist` du 18/08 23h30, antérieur aux sources d'`apps/caisse` |
+| Report du code sur la clé master | **à refaire** — dernier report le 21/08 15h48 ; la clé s'arrête à la migration 0025 |
 | Repackaging `PosSamer.exe` nécessaire | non |
-| Redéploiement Edge Function | **OUI — `sync-push`** (fait le 17/08) et **`samtrackly-points`** (nouvelle, à confirmer déployée) |
-| Migrations CLOUD à appliquer | **2** — `20260817140000_pont_samtrackly`, `20260821150000_inventaire_snapshot_produit` |
-| Tests | **38 fichiers, 235 tests verts** (POS) + **103 tests** du pont (`pnpm test:functions`) |
+| Redéploiement Edge Function | **OUI — `siege`** (nouvelle action `siege_livraisons_caissier`), plus `sync-push` (fait le 17/08) et `samtrackly-points` (à confirmer déployée) |
+| Migrations CLOUD à appliquer | **3** — `20260817140000_pont_samtrackly`, `20260821150000_inventaire_snapshot_produit`, `20260825030000_livraisons_partenaires` |
+| Tests | **42 fichiers, 263 tests verts** (POS) + **103 tests** du pont (`pnpm test:functions`) |
+
+> **Trou de journal à combler.** Ce fichier s'arrête au 21/08 ; les commits du
+> 22 au 25/08 (séquences, ordres du siège, console du siège, republication des
+> rôles et de la salle, reçu PDF, correctif UUID en contexte non sécurisé) n'y
+> ont pas d'entrée. Ils sont dans le dépôt, pas ici : relire `git log` avant un
+> déploiement plutôt que de se fier à ce seul journal.
 
 ---
 
@@ -534,3 +540,78 @@ la paie. C'est une erreur d'argent, silencieuse.
 - `pnpm-lock.yaml` : le lock du 7E référençait un workspace `apps/siege` qui n'existe
   dans aucun arbre. Le lock retenu est celui du Mac, sans ce bloc. Si un
   `pnpm install --frozen-lockfile` ronchonne sur un poste, c'est de là que ça vient.
+
+---
+
+## 2026-08-25 — Stock à l'instant T : tirer le stock sans rien clôturer
+
+**Fichiers** : `apps/server/src/modules/inventaire/etat-stock.ts` (nouveau),
+`modules/inventaire/routes.ts`, `printer/PrinterService.ts`, `printer/ConsolePrinter.ts`,
+`printer/escpos.ts`, `apps/caisse/src/screens/Inventaire.tsx`,
+`packages/shared/src/{types,constantes}.ts`.
+
+**Le problème** : « combien il me reste de pain, là, maintenant ? » — la question du
+gérant qui passe commande à 16 h. L'écran d'inventaire n'y répondait pas : il est fait
+pour le comptage de fin de service, pas pour la lecture.
+
+Un bouton **« Stock à l'instant T »** dans l'en-tête de l'écran Inventaire tire une
+photo, présentée comme une facture — nom à gauche, stock à droite, points de conduite
+entre les deux, détail (initial / entrées / sorties) en petit dessous. Le même papier
+sort sur l'imprimante de la caisse.
+
+- **Lecture pure** : ne valide rien, ne fige rien, la clôture n'avance pas d'un pas.
+  Reste accessible même après validation de l'inventaire.
+- Le chiffre de droite est le **compté** dès qu'il est saisi, sinon le théorique. Les
+  lignes théoriques sont annoncées en tête et marquées d'une `*` sur le papier.
+- Les lignes de consommation sont exclues : ce sont des sorties calculées, pas de la
+  marchandise en réserve — les imprimer compterait deux fois le même stock.
+
+**Pour déployer** : rien de particulier. **Rebuild caisse obligatoire** (`apps/caisse`
+a changé), puis relancer l'exe.
+
+---
+
+## 2026-08-25 — Contact client des livraisons partenaires
+
+**Fichiers** : migration **0027**, `apps/server/src/modules/commandes/routes.ts`,
+`modules/services/rapport.ts`, `modules/audit/audit.ts`, `printer/{ConsolePrinter,escpos}.ts`,
+`apps/caisse/src/screens/Commande.tsx`, `packages/shared/src/{types,schemas}.ts`,
+côté cloud `supabase/migrations/20260825030000_livraisons_partenaires.sql`,
+`supabase/functions/_shared/tables.ts`, `supabase/functions/siege/index.ts`,
+`apps/siege/src/{api.ts,components/TicketZ.tsx,screens/TableauBord.tsx}`.
+
+**Le problème** : une course Yango, Glovo ou Samer Delly partait en cuisine sans rien
+qui permette de la rattacher à un client. `ref_partenaire` existait depuis le début
+mais **aucun écran ne le demandait**, et le numéro du client n'était nulle part : un
+litige (« cette commande n'est jamais arrivée ») se réglait de mémoire.
+
+Au clic sur « Envoyer en cuisine » d'une commande partenaire, une modale demande le
+**n° de commande partenaire** et le **contact du client**. Elle s'ouvre **APRÈS
+l'envoi** — la cuisine ne doit jamais attendre après un formulaire — et une seule
+fois, si rien n'est déjà saisi. Le caissier peut **Fermer** : c'est un choix légitime,
+et c'est pourquoi le ticket Z compte les commandes **et** les contacts.
+
+```
+Yango (5)                                 25 000 F
+   contacts 4/5  no partenaire 5/5
+```
+
+Tant que rien n'est saisi, le panneau d'addition porte un bouton ambre « Contact client
+manquant » : on peut y revenir tant que le shift est ouvert. Après clôture, le serveur
+refuse — le Z est figé. Chaque saisie passe au journal d'audit (`INFOS_LIVRAISON`).
+
+La console du siège montre le décompte **par caissier** (bloc « Livraisons partenaires
+par caissier », trié par courses non rattachées).
+
+**Pour déployer, dans cet ordre** :
+
+1. `pnpm db:migrate` sur le poste — **la 0027 est obligatoire**, sans elle le serveur
+   plante à la première commande partenaire (`contact_client` inconnue).
+2. **Rebuild caisse** (`pnpm --filter caisse build`), puis relancer l'exe.
+3. **Cloud** : passer `20260825030000_livraisons_partenaires.sql` dans l'éditeur SQL de
+   pos-samer-cloud, **puis redéployer la fonction `siege`** (elle appelle la nouvelle
+   `siege_livraisons_caissier`). Sans la migration, le bloc du siège arrive vide — pas
+   en erreur.
+
+**À savoir** : `contact_client` ne vaudra que pour les commandes **à venir**. Les lignes
+déjà montées au cloud ne sont pas republiées, elles resteront à NULL.

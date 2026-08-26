@@ -354,6 +354,46 @@ Ossature ardoise (barre, colonne catégories, panneau addition) + grille d'artic
 claire. Chaque article porte son **visuel** (voir § 7). Les articles à options
 ouvrent une fiche : bandeau visuel, options et suppléments en chips, quantité.
 
+#### 6.4 bis Livraison partenaire — contact client au lancement en cuisine
+
+Une commande Yango, Glovo ou Samer Delly partait en cuisine sans que rien ne
+permette de la rattacher à un client. `ref_partenaire` existait depuis le début
+mais **aucun écran ne le demandait**, et le numéro du client n'était nulle part :
+un litige (« cette commande n'est jamais arrivée ») se réglait de mémoire.
+
+Au clic sur **Envoyer en cuisine**, une modale demande deux choses :
+
+| Champ | À quoi il sert |
+|---|---|
+| N° de commande *(Yango / Glovo…)* | contester une course auprès du partenaire |
+| Contact du client | rappeler le client, retrouver la commande |
+
+**Elle s'ouvre APRÈS l'envoi, jamais avant.** La commande est déjà partie, la
+cuisine travaille pendant que le caissier remplit — un formulaire ne doit jamais
+retarder une préparation. Elle ne s'ouvre qu'une fois, à condition que rien ne
+soit déjà saisi : une commande qui repart avec des articles ajoutés ne redemande
+rien.
+
+**« Fermer » est un choix légitime** : le coursier est déjà reparti, le client
+n'a pas laissé son numéro. C'est exactement pourquoi le ticket Z compte les
+commandes **et** les contacts —
+
+```
+Yango (5)                                 25 000 F
+   contacts 4/5  no partenaire 5/5
+```
+
+— l'écart entre les deux est le nombre de courses qu'on ne saura rattacher à
+personne. Il se voit au lieu de se perdre. Tant que rien n'est saisi, le panneau
+d'addition porte un bouton ambre **« Contact client manquant »** : le caissier
+qui a fermé la modale peut y revenir tant que son shift est ouvert. Une fois le
+shift clôturé, le serveur refuse la saisie — le ticket Z est figé, et le siège
+doit lire exactement ce que le gérant a sur son papier.
+
+Chaque saisie passe au **journal d'audit** (`INFOS_LIVRAISON`) avec son auteur et
+son heure : c'est la pièce qu'on ressort quand un partenaire conteste. Et la
+console du siège montre le décompte **par caissier** (§ 6.12).
+
 ### 6.5 Paiement
 
 Plan clair à gauche (modes colorés, montant, raccourcis, pavé, bouton d'ajout
@@ -493,6 +533,36 @@ sont comptés. Après validation, tout passe en lecture seule.
 **Le montant est une information, pas une retenue.** Contrairement à
 SamerTrackly qui déduit, le POS présente le chiffre au manager, qui tranche.
 
+#### Stock à l'instant T (bouton d'en-tête)
+
+« Combien il me reste de pain, là, maintenant ? » — la question du gérant qui
+passe commande à 16 h, à laquelle l'écran de comptage ne répond pas : il est
+fait pour la fin de service, pas pour la lecture.
+
+Le bouton **« Stock à l'instant T »** tire une **photo** : nom du produit à
+gauche, stock à droite, reliés par des points de conduite, le détail qui
+l'explique en petit dessous — la forme d'une facture, parce qu'on la lit debout
+dans une réserve.
+
+```
+PAINS
+Pain rond (u) ............................... 28
+   Initial 30  Entrees +20  Sorties -22
+```
+
+- **Lecture pure** : rien n'est validé, rien n'est figé, la clôture n'avance pas
+  d'un pas. Reste donc accessible même après validation de l'inventaire.
+- Le chiffre de droite est le **compté** dès qu'il est saisi, sinon le
+  théorique ; les lignes théoriques sont comptées en tête (« n produits non
+  comptés ») et le papier marque d'une `*` celles qui sont comptées.
+- Seules les lignes **comptées** y figurent : une consommation (le fromage des
+  Manaïches) est une sortie calculée, pas de la marchandise en réserve — la
+  faire apparaître compterait deux fois le même stock.
+- Le papier sort sur l'imprimante de la caisse (`POST
+  /api/inventaire/etat-stock/imprimer`) et dit qu'il **ne vaut pas inventaire
+  validé** : sans ça, un tirage ramassé sur le comptoir passerait pour la
+  clôture du soir.
+
 ### 6.10 Clôture — ce qui change
 
 1. **Étape 1 bloquée** si l'inventaire n'est pas validé : encart rouge, bouton de
@@ -596,6 +666,14 @@ chiffre d'affaires quotidien sont **empilées** et non groupées : trente jours 
 sept restaurants font 210 barres larges de deux pixels, illisibles. Empilé, on
 lit le total du groupe ET sa composition d'un coup, ce qui est la question posée.
 Le détail vient au survol, jamais en écrivant un nombre sur chaque pile.
+
+**Les livraisons partenaires se lisent par caissier** — un tableau, pas des
+barres : trois nombres par ligne (commandes, contacts, n° partenaire) et une
+barre n'en montre qu'un. La colonne à regarder est **Contacts**, en ambre dès
+qu'elle est inférieure aux commandes, avec le manque entre parenthèses. Le
+tableau est trié par courses non rattachées : le caissier à reprendre est en
+haut, sans qu'on ait à faire la soustraction de tête. Voir § 6.4 bis pour la
+saisie côté caisse.
 
 Les **heures de pic** gardent une série unique — superposer sept restaurants sur
 vingt-quatre heures donnerait une bouillie. L'heure de pointe est en aplat plein
@@ -768,3 +846,5 @@ Une ligne par modification de la maquette. **À tenir à jour à chaque changeme
 | 2026-08-24 | Console du siège : **ticket Z rendu lisible** — blocs nommés reprenant l'ordre du ticket imprimé, tous les champs affichés zéros compris, bloc « Autres valeurs » pour les champs inconnus et JSON brut dépliable. Il s'affichait en JSON nu. |
 | 2026-08-25 | Ticket Z du siège : **montant d'annulation toujours affiché** (0 F compris, rouge au-dessus de 0, avec un total annulé), et bloc **Équipe nominatif** — nom, poste, arrivée, départ, salaire, Reste/Parti. Départ = heure de paie pour qui est payé à la journée, heure de clôture sinon, dite comme telle. |
 | 2026-08-25 | **Tableau de bord du siège refondu** : six chiffres d'appel avec variation contre la période précédente, CA quotidien empilé par restaurant, heures de pic, comparaisons entre restaurants, puis ce que seul le POS voit — top des plats, modes de paiement, tables, canaux, retours, écarts par caissier, remises, annulations, inventaire, équipe et heures travaillées. Palette catégorielle définie et validée (§ 4.4) : la règle « une seule série » du § 6.12 est levée. |
+| 2026-08-25 | **Stock à l'instant T** (§ 6.9) : bouton d'en-tête de l'écran Inventaire qui tire une photo du stock, présentée comme une facture (nom, points de conduite, stock en face, détail dessous) à l'écran et sur le papier de la caisse. Lecture pure — ne valide rien, ne fige rien. Le compté prime sur le théorique, et les lignes théoriques sont annoncées. |
+| 2026-08-25 | **Contact client des livraisons partenaires** (§ 6.4 bis) : modale ouverte APRÈS le lancement en cuisine, n° de commande partenaire + téléphone du client, fermable. Le ticket Z compte les commandes ET les contacts par partenaire (« Yango 5 · contacts 4/5 ») ; la console du siège les montre **par caissier**, trié par courses non rattachées. Tracé au journal (`INFOS_LIVRAISON`). |

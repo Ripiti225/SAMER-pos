@@ -10,6 +10,10 @@ export const COLONNES_VENTES: Record<string, string[]> = {
     // 2026-08-25 — les Kdo étaient comptés dans `total` sans être
     // identifiables : ils gonflaient le CA du siège en silence.
     'offert', 'motif_offert',
+    // 2026-08-25 — contact du client livré, saisi au lancement en cuisine.
+    // Sans lui, le siège ne peut pas voir quel caissier laisse partir des
+    // courses partenaires sans aucun moyen de rappeler le client.
+    'contact_client',
   ],
   commande_items: [
     'id', 'commande_id', 'article_id', 'combo_id', 'nom_snapshot', 'prix_unitaire',

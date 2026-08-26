@@ -82,6 +82,15 @@ export function TableauBord({ filtre, onFiltre }: { filtre: FiltreResto; onFiltr
   const retoursMontant = retours.reduce((s, r) => s + nb(r.montant), 0);
   const retoursNb = retours.reduce((s, r) => s + nb(r.quantite), 0);
   const ecartCumule = mien(data?.ecarts).reduce((s, e) => s + nb(e.ecart), 0);
+  // Trié par courses non rattachées d'abord : le caissier à reprendre est en
+  // haut de la liste, sans qu'on ait à faire la soustraction de tête.
+  const livraisons = [...mien(data?.livraisons)].sort(
+    (a, b) => (nb(b.nb) - nb(b.contacts)) - (nb(a.nb) - nb(a.contacts)) || nb(b.nb) - nb(a.nb),
+  );
+  const totalLivraisons = livraisons.reduce(
+    (t, l) => ({ nb: t.nb + nb(l.nb), contacts: t.contacts + nb(l.contacts) }),
+    { nb: 0, contacts: 0 },
+  );
 
   // --- Couche 2 : les deux graphes ----------------------------------------
   const pointsJour = useMemo(() => {
@@ -361,6 +370,62 @@ export function TableauBord({ filtre, onFiltre }: { filtre: FiltreResto; onFiltr
                   </div>
                 </div>
               </div>
+            </Bloc>
+
+            {/* Livraisons partenaires par caissier. Le chiffre qui compte n'est
+                pas le CA — il est déjà dans « Canaux de vente » — mais l'écart
+                entre les courses et les contacts recueillis : chaque unité
+                manquante est une livraison qu'on ne saura rattacher à personne
+                si le client se plaint ou si le partenaire conteste. */}
+            <Bloc
+              titre="Livraisons partenaires par caissier"
+              note="Contact = téléphone du client, demandé au lancement en cuisine. Ce qui manque ici ne se rattrape plus."
+              large
+            >
+              {livraisons.length === 0 ? (
+                <p className="py-4 text-center text-faible">Aucune livraison partenaire sur cette période.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[560px] border-collapse text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-filet text-[11px] uppercase tracking-wide text-faible">
+                        <th className="py-1.5 pr-3 font-semibold">Caissier</th>
+                        {!choisi && <th className="py-1.5 pr-3 font-semibold">Restaurant</th>}
+                        <th className="py-1.5 pr-3 font-semibold">Partenaire</th>
+                        <th className="py-1.5 pr-3 text-right font-semibold">Commandes</th>
+                        <th className="py-1.5 pr-3 text-right font-semibold">Contacts</th>
+                        <th className="py-1.5 pr-3 text-right font-semibold">N° partenaire</th>
+                        <th className="py-1.5 text-right font-semibold">CA</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {livraisons.map((l) => {
+                        const manquants = nb(l.nb) - nb(l.contacts);
+                        return (
+                          <tr key={`${l.restaurant_id}:${l.caissier}:${l.partenaire}`} className="border-b border-filet last:border-0">
+                            <td className="py-1.5 pr-3 font-semibold">{l.caissier}</td>
+                            {!choisi && <td className="py-1.5 pr-3 text-doux">{nomResto.get(l.restaurant_id) ?? ''}</td>}
+                            <td className="py-1.5 pr-3">{libellePartenaire(l.partenaire)}</td>
+                            <td className="chiffres py-1.5 pr-3 text-right">{nb(l.nb)}</td>
+                            <td className={`chiffres py-1.5 pr-3 text-right font-semibold ${manquants > 0 ? 'text-attente-txt' : 'text-ok-txt'}`}>
+                              {nb(l.contacts)}
+                              {manquants > 0 && <span className="ml-1 text-[11px] font-normal">(−{manquants})</span>}
+                            </td>
+                            <td className="chiffres py-1.5 pr-3 text-right text-doux">{nb(l.refs)}</td>
+                            <td className="chiffres py-1.5 text-right">{formatFCFA(nb(l.ca))}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <p className="mt-2 text-xs text-doux">
+                    <b className="chiffres">{totalLivraisons.contacts}</b> contact(s) recueilli(s) sur{' '}
+                    <b className="chiffres">{totalLivraisons.nb}</b> course(s) —{' '}
+                    <b className="chiffres text-attente-txt">{totalLivraisons.nb - totalLivraisons.contacts}</b> sans
+                    moyen de rappeler le client.
+                  </p>
+                </div>
+              )}
             </Bloc>
 
             <Bloc titre="Inventaire" note="Information manager — sans effet sur la vente ni sur l’écart de caisse.">

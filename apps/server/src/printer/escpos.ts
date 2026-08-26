@@ -12,8 +12,8 @@ import { unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
-import type { CommandeItemVue, CommandeVue, PosteImpression, RapportSequence, RapportZ } from '@pos/shared';
-import { clePosteImprimante, estLivraisonSansEncaissement, formatFCFA, libellePartenaire, LIBELLES_MODES, LIBELLES_POSTE_IMPRESSION, LIBELLES_TYPES_COMMANDE } from '@pos/shared';
+import type { CommandeItemVue, CommandeVue, EtatStockInstant, PosteImpression, RapportSequence, RapportZ } from '@pos/shared';
+import { clePosteImprimante, estLivraisonSansEncaissement, formatFCFA, libelleCategorieInventaire, libellePartenaire, LIBELLES_MODES, LIBELLES_POSTE_IMPRESSION, LIBELLES_TYPES_COMMANDE } from '@pos/shared';
 import { db } from '../db/client.js';
 import { parametresLocaux, restaurant } from '../db/schema/index.js';
 import type { PrinterService } from './PrinterService.js';
@@ -73,6 +73,16 @@ function ascii(s: string): string {
     .replace(/[^\x20-\x7E]/g, ' ');
 }
 
+/** Heure seule (17:46) : suffit quand la date est déjà imprimée au-dessus. */
+function heure(d: Date): string {
+  return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
+
+/** Quantités d'inventaire : jamais des entiers (grammes, pots, sachets). */
+function quantite(n: number): string {
+  return n.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+}
+
 /** Constructeur de flux ESC/POS, pour un papier de `papier` colonnes. */
 class Ruban {
   private o: number[] = [];
@@ -116,11 +126,19 @@ class Ruban {
    * replié par mots, et le montant reste seul aligné à droite sur la dernière
    * ligne — quitte à s'y trouver seul.
    */
-  duo(g: string, d: string): this {
+  duo(g: string, d: string, remplissage = ' '): this {
     const gauche = ascii(g), droite = ascii(d);
     const max = this.colonnes;
-    const aDroite = (texte: string, avant = ''): string =>
-      avant + ' '.repeat(Math.max(1, max - avant.length - texte.length)) + texte;
+    const aDroite = (texte: string, avant = ''): string => {
+      const vide = Math.max(1, max - avant.length - texte.length);
+      // Points de conduite : un espace de part et d'autre, sinon le nom et le
+      // chiffre se collent aux points et la ligne devient illisible. Sous 3
+      // caractères de vide il n'y a plus la place : on retombe sur des espaces.
+      if (remplissage !== ' ' && avant !== '' && vide >= 3) {
+        return `${avant} ${remplissage.repeat(vide - 2)} ${texte}`;
+      }
+      return avant + ' '.repeat(vide) + texte;
+    };
 
     if (gauche.length + droite.length + 1 <= max) return this.ligne(aDroite(droite, gauche));
 
@@ -534,6 +552,25 @@ export class EscposPrinter implements PrinterService {
         r.duo('Total promotions', formatFCFA(z.total_promos));
         r.tiret();
         for (const [mode, montant] of Object.entries(z.par_mode)) if (montant > 0) r.duo(mode, formatFCFA(montant));
+
+        // Livraisons partenaires : le montant, puis le décompte
+        // commandes/contacts. C'est cette seconde ligne que le gérant regarde —
+        // 5 courses Yango dont 4 seulement portent un téléphone, c'est une
+        // course qu'on ne saura rattacher à personne en cas de litige.
+        if (Object.keys(z.partenaires ?? {}).length > 0) {
+          r.tiret();
+          r.gras(true).ligne('LIVRAISONS PARTENAIRES').gras(false);
+          for (const [p, s] of Object.entries(z.partenaires)) {
+            r.duo(`${libellePartenaire(p)} (${s.nb})`, formatFCFA(s.total));
+            // Mots entiers si le papier les porte, forme courte sinon : sur une
+            // 58 mm la ligne longue repartirait à la ligne et le second ratio
+            // atterrirait sous le premier, illisible.
+            const detail = `   contacts ${s.contacts ?? 0}/${s.nb}  no partenaire ${s.refs ?? 0}/${s.nb}`;
+            const court = `   contacts ${s.contacts ?? 0}/${s.nb}  no ${s.refs ?? 0}/${s.nb}`;
+            r.ligne(detail.length <= info.colonnes ? detail : court);
+          }
+        }
+
         r.tiret();
         r.duo('Fond de caisse', formatFCFA(z.fond_de_caisse));
         r.duo('Especes comptees', formatFCFA(z.especes_comptees));
@@ -594,6 +631,64 @@ export class EscposPrinter implements PrinterService {
         return r.buffer();
       },
       () => this.console.imprimerRapportZ(z),
+    );
+  }
+
+  /**
+   * Tirage du stock à l'instant T (§ 6.9). Le stock est le SEUL chiffre en
+   * gros, relié au nom par des points de conduite ; le détail qui l'explique
+   * (initial, entrées, sorties) tient sur la ligne du dessous. Un gérant lit ce
+   * papier debout dans une réserve : la colonne de droite doit s'attraper d'un
+   * coup d'œil, sans suivre la ligne au doigt.
+   */
+  async imprimerEtatStock(etat: EtatStockInstant): Promise<void> {
+    const info = await this.infosResto();
+    await this.envoyer(
+      () => {
+        const r = new Ruban(info.colonnes);
+        r.init().centre().gras(true).ligne(info.nom).gras(false);
+        r.taille(1, 2).gras(true).ligne('ETAT DU STOCK').gras(false).taille();
+        r.ligne(horodatage(new Date(etat.genere_le)));
+        r.ligne(`${etat.genere_par} - service de ${heure(new Date(etat.service_ouvert_le))}`);
+        r.gauche();
+
+        let categorie: string | null = null;
+        for (const l of etat.lignes) {
+          if (l.categorie !== categorie) {
+            categorie = l.categorie;
+            r.tiret().gras(true).ligne(libelleCategorieInventaire(categorie).toUpperCase()).gras(false);
+          }
+          r.gras(true).duo(`${l.nom} (${l.unite})`, quantite(l.stock), '.').gras(false);
+          // Le détail sous le chiffre, jamais à côté : sur 32 colonnes il
+          // repousserait le stock hors de la ligne. Les mots entiers d'abord ;
+          // s'ils ne tiennent pas sur ce papier, la forme courte — mieux vaut
+          // abréger que laisser l'imprimante renvoyer la moitié à la ligne.
+          const detail =
+            `   Initial ${quantite(l.stock_initial)}  Entrees +${quantite(l.entrees)}`
+            + `  Sorties -${quantite(l.sorties)}`;
+          const court =
+            `   Init ${quantite(l.stock_initial)}  +${quantite(l.entrees)}  -${quantite(l.sorties)}`;
+          r.ligne((detail.length <= info.colonnes ? detail : court) + (l.compte ? ' *' : ''));
+        }
+
+        r.tiret();
+        // L'étoile n'a de sens qu'expliquée, et seulement s'il y en a une.
+        if (etat.lignes.some((l) => l.compte)) r.ligne('* stock compte physiquement');
+        r.centre();
+        // Un tirage n'est pas un inventaire validé : sans cette phrase, un
+        // papier ramassé sur le comptoir passerait pour la clôture du soir.
+        if (etat.inventaire_valide) r.ligne('Inventaire du service deja valide.');
+        else if (etat.nb_theoriques > 0) {
+          r.ligne(`${etat.nb_theoriques} ligne(s) non comptee(s) :`);
+          r.ligne('stock theorique.');
+        }
+        r.ligne('Photo du stock - ne vaut pas');
+        r.ligne('inventaire valide.');
+        if (info.pied) r.ligne(info.pied);
+        r.couper();
+        return r.buffer();
+      },
+      () => this.console.imprimerEtatStock(etat),
     );
   }
 

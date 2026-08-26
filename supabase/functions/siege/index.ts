@@ -199,6 +199,7 @@ Deno.serve(async (req) => {
         const [
           ventes, parJour, ventesPrec, heures, plats, modes, types,
           tables, retours, depenses, ecarts, equipe, remises, annulations, inventaire,
+          livraisons,
         ] = await Promise.all([
           admin.rpc('siege_ventes', bornes),
           admin.rpc('siege_ventes_jour', bornes),
@@ -215,6 +216,7 @@ Deno.serve(async (req) => {
           admin.rpc('siege_remises', bornes),
           admin.rpc('siege_annulations', bornes),
           admin.rpc('siege_inventaire', bornes),
+          admin.rpc('siege_livraisons_caissier', bornes),
         ]);
 
         // Absents : état COURANT de la fiche employé, pas un historique — le
@@ -284,6 +286,10 @@ Deno.serve(async (req) => {
           remises: lignesDe(remises),
           annulations: lignesDe(annulations),
           inventaire: lignesDe(inventaire),
+          // Livraisons partenaires par caissier : commandes, contacts recueillis
+          // et n° de commande partenaire. L'écart entre `nb` et `contacts` est
+          // le nombre de courses qu'on ne saura rattacher à personne.
+          livraisons: lignesDe(livraisons),
           absents: absents.error ? [] : (absents.data ?? []),
           // Ce que la console doit dire à l'écran plutôt que d'afficher 0 F sans
           // explication : personne ne synchronise encore.

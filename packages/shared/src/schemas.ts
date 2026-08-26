@@ -89,6 +89,24 @@ export const CreerCommandeSchema = z
     message: 'Choisissez une table pour une commande sur place',
   });
 
+/**
+ * Infos d'une commande partenaire, saisies dans la modale qui s'ouvre au
+ * lancement en cuisine (n° de commande chez Yango/Glovo, téléphone du client).
+ *
+ * Les deux champs sont facultatifs — le caissier peut fermer sans rien mettre,
+ * et le ticket Z compte alors une commande sans contact. Mais un enregistrement
+ * entièrement vide est refusé : il n'ajouterait rien et EFFACERAIT une saisie
+ * précédente, sur une donnée qu'on veut justement ne pas perdre.
+ */
+export const InfosLivraisonSchema = z
+  .object({
+    ref_partenaire: z.string().trim().max(60, 'Numéro de commande trop long').nullish(),
+    contact_client: z.string().trim().max(40, 'Contact trop long').nullish(),
+  })
+  .refine((i) => !!i.ref_partenaire || !!i.contact_client, {
+    message: 'Renseignez au moins le numéro de commande ou le contact du client',
+  });
+
 export const OptionChoisieSchema = z.object({
   groupe: z.string().min(1),
   choix: z.array(z.string().min(1)),

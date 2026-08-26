@@ -294,6 +294,7 @@ export async function chargerCommandeVue(dbx: DbOuTx, commandeId: string): Promi
     table_numero: tableLigne[0]?.numero ?? null,
     partenaire: c.partenaire,
     ref_partenaire: c.ref_partenaire,
+    contact_client: c.contact_client,
     statut: c.statut,
     offert: c.offert,
     motif_offert: c.motif_offert,

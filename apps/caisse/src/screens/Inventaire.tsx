@@ -11,7 +11,9 @@
  */
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { IconAlertTriangle, IconLock, IconLockOpen, IconPlus, IconTrash } from '@tabler/icons-react';
+import { IconAlertTriangle, IconClipboardList, IconLock, IconLockOpen, IconPlus, IconPrinter, IconTrash } from '@tabler/icons-react';
+import type { EtatStockInstant, EtatStockLigne } from '@pos/shared';
+import { libelleCategorieInventaire } from '@pos/shared';
 import { api } from '../api';
 import { EnteteEcran } from '../components/EnteteEcran';
 import { Modale } from '../components/Modale';
@@ -62,16 +64,6 @@ interface VueInventaire {
   entrees: EntreeRecue[];
 }
 
-const LIBELLES: Record<string, string> = {
-  PAIN: 'Pains',
-  POUL: 'Poulet',
-  APER: 'Apéritifs',
-  PLAT: 'Plats',
-  FROM: 'Fromage',
-  BOIS: 'Boissons',
-  GLAC: 'Glaces',
-  FRIT: 'Frites',
-};
 
 /** Quantités : jamais des entiers (grammes, pots de 4,5, sachets). */
 const qte = (n: number): string => n.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
@@ -81,6 +73,7 @@ export function Inventaire() {
   const [onglet, setOnglet] = useState<'comptage' | 'entrees'>('comptage');
   const [categorie, setCategorie] = useState<string | null>(null);
   const [debloquer, setDebloquer] = useState(false);
+  const [tirage, setTirage] = useState(false);
   const queryClient = useQueryClient();
 
   const { data } = useQuery({ queryKey: ['inventaire'], queryFn: () => api<VueInventaire>('/api/inventaire') });
@@ -111,19 +104,31 @@ export function Inventaire() {
         titre="Inventaire"
         onRetour={rentrer}
         actions={
-          <div className="flex rounded-btn border border-bordure bg-surface p-1">
-            {(['comptage', 'entrees'] as const).map((o) => (
-              <button
-                key={o}
-                type="button"
-                onClick={() => setOnglet(o)}
-                className={`rounded-[9px] px-4 py-2 text-sm font-semibold transition ${
-                  onglet === o ? 'bg-marque text-sur-marque' : 'text-doux hover:bg-surface-douce'
-                }`}
-              >
-                {o === 'comptage' ? 'Comptage' : `Entrées reçues (${data.entrees.length})`}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Le tirage se lit à tout moment, y compris après validation :
+                c'est une photo, pas une étape du comptage. */}
+            <button
+              type="button"
+              className="btn-blanc flex items-center gap-2"
+              onClick={() => setTirage(true)}
+            >
+              <IconClipboardList size={18} />
+              Stock à l’instant T
+            </button>
+            <div className="flex rounded-btn border border-bordure bg-surface p-1">
+              {(['comptage', 'entrees'] as const).map((o) => (
+                <button
+                  key={o}
+                  type="button"
+                  onClick={() => setOnglet(o)}
+                  className={`rounded-[9px] px-4 py-2 text-sm font-semibold transition ${
+                    onglet === o ? 'bg-marque text-sur-marque' : 'text-doux hover:bg-surface-douce'
+                  }`}
+                >
+                  {o === 'comptage' ? 'Comptage' : `Entrées reçues (${data.entrees.length})`}
+                </button>
+              ))}
+            </div>
           </div>
         }
       />
@@ -159,7 +164,7 @@ export function Inventaire() {
                   categorieActive === c.categorie ? 'bg-marque text-sur-marque' : 'text-fort hover:bg-surface-douce'
                 }`}
               >
-                <span>{LIBELLES[c.categorie] ?? c.categorie}</span>
+                <span>{libelleCategorieInventaire(c.categorie)}</span>
                 {c.restants > 0 && (
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs font-bold ${
@@ -227,6 +232,8 @@ export function Inventaire() {
       ) : (
         <OngletEntrees vue={data} verrouille={verrouille} onChange={rafraichir} onErreur={afficherToast} />
       )}
+
+      {tirage && <ModaleEtatStock onFermer={() => setTirage(false)} onMessage={afficherToast} />}
 
       {debloquer && (
         <ModaleDeblocage
@@ -527,7 +534,7 @@ function ModaleEntree({
                 .filter((l) => !l.role.startsWith('CONSO'))
                 .map((l) => (
                   <option key={l.produit_id} value={l.produit_id}>
-                    {LIBELLES[l.categorie] ?? l.categorie} — {l.nom} ({l.unite})
+                    {libelleCategorieInventaire(l.categorie)} — {l.nom} ({l.unite})
                   </option>
                 ))}
             </select>
@@ -565,6 +572,125 @@ function ModaleEntree({
         </div>
       }
     />
+  );
+}
+
+/**
+ * Tirage du stock à l'instant T (§ 6.9) — « combien il me reste de pain, là,
+ * maintenant ? ». Présenté comme une facture : le nom à gauche, le stock à
+ * droite, reliés par des points de conduite, et le détail qui l'explique en
+ * petit dessous. Le même papier sort de l'imprimante de la caisse.
+ *
+ * Lecture pure : ouvrir ce tirage ne valide rien et ne fige rien. Il reste donc
+ * accessible même après validation de l'inventaire.
+ */
+function ModaleEtatStock({ onFermer, onMessage }: { onFermer: () => void; onMessage: (m: string) => void }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['inventaire-etat-stock'],
+    // Une photo ne se rafraîchit pas toute seule : l'heure affichée en haut
+    // doit rester celle des chiffres du dessous. Mais le cache meurt avec la
+    // modale, sinon la rouvrir dix minutes plus tard ressortirait la photo de
+    // tout à l'heure — le contraire de « à l'instant T ».
+    staleTime: Infinity,
+    gcTime: 0,
+    queryFn: () => api<EtatStockInstant>('/api/inventaire/etat-stock'),
+  });
+
+  const imprimer = useMutation({
+    mutationFn: () => api('/api/inventaire/etat-stock/imprimer', { method: 'POST' }),
+    onSuccess: () => onMessage('Tirage envoyé à l’imprimante'),
+    onError: (e: unknown) => onMessage((e as Error).message),
+  });
+
+  return (
+    <Modale
+      titre="Stock à l’instant T"
+      large
+      onFermer={onFermer}
+      enfants={
+        isLoading || !data ? (
+          <p className="py-10 text-center text-doux">Tirage du stock…</p>
+        ) : (
+          <div className="space-y-4">
+            <div className="rounded-jeton bg-surface-douce px-4 py-3 text-sm text-doux">
+              Tiré le{' '}
+              <b className="text-fort">
+                {new Date(data.genere_le).toLocaleString('fr-FR', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </b>{' '}
+              par <b className="text-fort">{data.genere_par}</b>.
+            </div>
+
+            {/* Un tirage n'est pas un inventaire : sans cette phrase, le chiffre
+                théorique passerait pour un stock compté. */}
+            {data.nb_theoriques > 0 && (
+              <div className="flex items-start gap-3 rounded-jeton bg-attente-tint px-4 py-3 text-attente-txt">
+                <IconAlertTriangle size={20} className="mt-0.5 flex-none" />
+                <p className="text-sm">
+                  <b>{data.nb_theoriques}</b> produit{data.nb_theoriques > 1 ? 's' : ''} non compté
+                  {data.nb_theoriques > 1 ? 's' : ''} : leur stock est <b>théorique</b> (initial + entrées − ventes).
+                  Les autres portent le chiffre réellement compté.
+                </p>
+              </div>
+            )}
+
+            {data.lignes.length === 0 ? (
+              <p className="py-10 text-center text-doux">Aucun produit à suivre en stock.</p>
+            ) : (
+              <div className="space-y-4">
+                {[...new Set(data.lignes.map((l) => l.categorie))].map((cat) => (
+                  <section key={cat}>
+                    <h3 className="mb-1 text-xs font-bold uppercase tracking-wider text-doux">
+                      {libelleCategorieInventaire(cat)}
+                    </h3>
+                    <ul className="divide-y divide-bordure">
+                      {data.lignes
+                        .filter((l) => l.categorie === cat)
+                        .map((l) => (
+                          <LigneTirage key={l.produit_id} ligne={l} />
+                        ))}
+                    </ul>
+                  </section>
+                ))}
+              </div>
+            )}
+
+            <button
+              type="button"
+              disabled={imprimer.isPending || data.lignes.length === 0}
+              className="btn-accent flex w-full items-center justify-center gap-2 py-4 text-lg disabled:opacity-50"
+              onClick={() => imprimer.mutate()}
+            >
+              <IconPrinter size={20} />
+              {imprimer.isPending ? 'Envoi…' : 'Imprimer le tirage'}
+            </button>
+          </div>
+        )
+      }
+    />
+  );
+}
+
+/** Une ligne du tirage : nom à gauche, stock à droite, points entre les deux. */
+function LigneTirage({ ligne }: { ligne: EtatStockLigne }) {
+  return (
+    <li className="py-2">
+      <div className="flex items-baseline gap-2">
+        <span className="flex-none font-semibold text-fort">
+          {ligne.nom} <span className="text-xs font-normal text-doux">({ligne.unite})</span>
+        </span>
+        <span className="min-w-[1.5rem] flex-1 self-center border-b border-dotted border-bordure" />
+        <span className="flex-none text-xl font-bold tabular-nums text-fort">{qte(ligne.stock)}</span>
+      </div>
+      <div className="text-[11px] text-doux">
+        Initial {qte(ligne.stock_initial)} · Entrées +{qte(ligne.entrees)} · Sorties −{qte(ligne.sorties)}
+        {ligne.compte && <span className="ml-1 font-semibold text-ok">· compté</span>}
+      </div>
+    </li>
   );
 }
 

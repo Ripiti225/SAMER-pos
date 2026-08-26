@@ -83,7 +83,10 @@ export function TicketZ({
   const declares = (rapport.modes_declares ?? {}) as Record<string, number>;
   const parMode = (rapport.par_mode ?? {}) as Record<string, number>;
   const parType = (rapport.par_type ?? {}) as Record<string, { nb: number; total: number }>;
-  const partenaires = (rapport.partenaires ?? {}) as Record<string, { nb: number; total: number }>;
+  const partenaires = (rapport.partenaires ?? {}) as Record<
+    string,
+    { nb: number; total: number; contacts?: number; refs?: number }
+  >;
   const top = (rapport.top_articles ?? []) as { nom: string; quantite: number; total: number }[];
   const remises = (rapport.remises_detail ?? []) as
     { numero_ticket: number; montant: number; motif: string | null; par_nom: string | null }[];
@@ -188,7 +191,26 @@ export function TicketZ({
             <>
               <div className="my-1 border-t border-filet" />
               {Object.entries(partenaires).map(([p, v]) => (
-                <LigneF key={p} libelle={`${libellePartenaire(p)} (${nb(v?.nb)})`} montant={nb(v?.total)} />
+                <div key={p}>
+                  <LigneF libelle={`${libellePartenaire(p)} (${nb(v?.nb)})`} montant={nb(v?.total)} />
+                  {/* Contacts recueillis : l'écart avec le nombre de courses est
+                      le nombre de livraisons qu'on ne saura rattacher à personne.
+                      Absent des rapports Z figés avant le 2026-08-25 — d'où le
+                      libellé « non suivi » plutôt qu'un 0 trompeur. */}
+                  <div className="-mt-0.5 pl-3 text-[12px] text-faible">
+                    {v?.contacts === undefined ? (
+                      'contacts non suivis à cette date'
+                    ) : (
+                      <>
+                        <span className={nb(v.contacts) < nb(v?.nb) ? 'text-attente-txt' : 'text-ok-txt'}>
+                          {nb(v.contacts)}/{nb(v?.nb)} contact(s)
+                        </span>
+                        {' · '}
+                        {nb(v?.refs)}/{nb(v?.nb)} n° partenaire
+                      </>
+                    )}
+                  </div>
+                </div>
               ))}
             </>
           )}

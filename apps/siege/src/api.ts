@@ -123,6 +123,21 @@ export interface Bord {
   remises: { restaurant_id: string; numero_ticket: number; montant: number; motif: string | null; created_at: string }[];
   annulations: { restaurant_id: string; numero_ticket: number; total: number; created_at: string }[];
   inventaire: { restaurant_id: string; nb_inventaires: number; montant_manquant: number; nb_debloques: number }[];
+  /**
+   * Livraisons partenaires, par caissier. `nb` = courses payées, `contacts` =
+   * celles qui portent le téléphone du client, `refs` = celles qui portent le
+   * n° de commande du partenaire. L'écart entre `nb` et `contacts` est le
+   * nombre de courses qu'on ne saura rattacher à personne en cas de litige.
+   */
+  livraisons: {
+    restaurant_id: string;
+    caissier: string;
+    partenaire: string;
+    nb: number;
+    contacts: number;
+    refs: number;
+    ca: number;
+  }[];
   /** État COURANT de la fiche employé, jamais un historique. */
   absents: { id: string; restaurant_id: string; nom_complet: string; poste: string | null; disponibilite: string }[];
   aucun_site_enrole: boolean;

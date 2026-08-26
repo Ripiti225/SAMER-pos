@@ -17,6 +17,20 @@ export interface AnnulationDetail {
   total: number;
 }
 
+/**
+ * Une ligne « partenaire » du ticket Z. `nb` et `contacts` se lisent ensemble —
+ * « Yango 5 commandes, 4 contacts » — et c'est tout l'intérêt : le trou entre
+ * les deux est le nombre de livraisons qu'on ne saura rattacher à personne si
+ * le client se plaint. `refs` fait la même chose pour le n° de commande côté
+ * partenaire, celui qui sert à contester une course.
+ */
+export interface StatPartenaire {
+  nb: number;
+  total: number;
+  contacts: number;
+  refs: number;
+}
+
 export interface StatsService {
   nb_commandes_payees: number;
   nb_commandes_annulees: number;
@@ -27,7 +41,7 @@ export interface StatsService {
   panier_moyen: number;
   par_mode: Record<ModePaiement, number>;
   par_type: Record<TypeCommande, { nb: number; total: number }>;
-  partenaires: Record<string, { nb: number; total: number }>;
+  partenaires: Record<string, StatPartenaire>;
   top_articles: { nom: string; quantite: number; total: number }[];
   remises_detail: RemiseDetail[];
   annulations_detail: AnnulationDetail[];
@@ -238,12 +252,16 @@ export async function calculerStatsService(dbx: DbOuTx, serviceId: string): Prom
   const parMode = Object.fromEntries(MODES_PAIEMENT.map((m) => [m, 0])) as Record<ModePaiement, number>;
   for (const l of lignesPaiements) parMode[l.mode] = Number(l.total);
 
-  const partenaires: Record<string, { nb: number; total: number }> = {};
+  // Même base que le montant de la ligne (les commandes PAYÉES) : le « 4/5 »
+  // doit se lire en face des 25 000 F, pas contre un autre décompte.
+  const partenaires: Record<string, StatPartenaire> = {};
   for (const c of payees) {
     if (c.type !== 'LIVRAISON' || !c.partenaire) continue;
-    const entree = (partenaires[c.partenaire] ??= { nb: 0, total: 0 });
+    const entree = (partenaires[c.partenaire] ??= { nb: 0, total: 0, contacts: 0, refs: 0 });
     entree.nb += 1;
     entree.total += c.total;
+    if (c.contact_client?.trim()) entree.contacts += 1;
+    if (c.ref_partenaire?.trim()) entree.refs += 1;
   }
 
   // Ventes par type (sur place / à emporter / livraison)

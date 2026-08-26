@@ -403,3 +403,25 @@ export function uuidLocal(): string {
   const h = [...o].map((b) => b.toString(16).padStart(2, '0')).join('');
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
+
+/**
+ * Catégories de l'inventaire : les codes vivent en base (`produits_inventaire`),
+ * les libellés ici. Partagés parce que le même mot doit apparaître à l'écran et
+ * sur le papier — un « POUL » imprimé au lieu de « Poulet » se paie en appels
+ * du gérant.
+ */
+export const LIBELLES_CATEGORIES_INVENTAIRE: Record<string, string> = {
+  PAIN: 'Pains',
+  POUL: 'Poulet',
+  APER: 'Apéritifs',
+  PLAT: 'Plats',
+  FROM: 'Fromage',
+  BOIS: 'Boissons',
+  GLAC: 'Glaces',
+  FRIT: 'Frites',
+};
+
+/** Libellé d'une catégorie d'inventaire ; le code brut si elle est inconnue. */
+export function libelleCategorieInventaire(code: string): string {
+  return LIBELLES_CATEGORIES_INVENTAIRE[code] ?? code;
+}

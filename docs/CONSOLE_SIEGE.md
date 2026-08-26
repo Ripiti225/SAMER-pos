@@ -74,6 +74,13 @@ d'un nom de restaurant.
    ```
    `niveau` : `ADMIN` voit et écrit, `LECTURE` voit seulement (comptable, associé).
 5. **`.env`** — `apps/siege/.env`, adresse du projet + clé `anon`.
+6. **Migration livraisons partenaires** —
+   `supabase/migrations/20260825030000_livraisons_partenaires.sql` dans
+   l'éditeur SQL, **puis redéployer la fonction `siege`** (elle appelle la
+   nouvelle `siege_livraisons_caissier`). Sans la migration, le bloc
+   « Livraisons partenaires par caissier » arrive vide — le siège voit un trou,
+   pas une erreur. `contact_client` ne vaudra que pour les commandes **à
+   venir** : les lignes déjà montées ne sont pas republiées.
 
 ## Le front
 
@@ -85,7 +92,7 @@ maintenant, au design « Duo contrasté » (DESIGN_V2 § 6.12).
 | Écran | Ce qu'il montre | Action appelée |
 |---|---|---|
 | Connexion | e-mail + mot de passe Supabase | — |
-| Tableau de bord | **Refondu le 2026-08-25** — six chiffres d'appel avec variation, CA quotidien empilé par restaurant, heures de pic, comparaisons, top des plats, modes de paiement, tables, canaux, retours, écarts par caissier, dépenses, remises, annulations, inventaire, équipe et heures travaillées | `moi`, `tableau_bord` |
+| Tableau de bord | **Refondu le 2026-08-25** — six chiffres d'appel avec variation, CA quotidien empilé par restaurant, heures de pic, comparaisons, top des plats, modes de paiement, tables, canaux, retours, écarts par caissier, **livraisons partenaires par caissier**, dépenses, remises, annulations, inventaire, équipe et heures travaillées | `moi`, `tableau_bord` |
 | Clôtures | fond, compté, théorique, **écart** coloré au-delà de 2 000 F, ticket Z complet à la demande (blocs nommés, tous les champs, JSON brut dépliable) | `restaurants`, `clotures`, `rapport_z` |
 | Équipe | les travailleurs du groupe, filtrables par restaurant, **en lecture seule** | `equipe` |
 
@@ -99,6 +106,20 @@ PostgREST. Une action, une réponse, quinze agrégats.
 
 Un bloc dont la fonction SQL manque encore arrive **vide** au lieu de faire
 échouer l'écran : le siège voit un trou, pas une page d'erreur.
+
+#### Livraisons partenaires par caissier
+
+Une ligne par caissier × partenaire : **commandes**, **contacts** (téléphone du
+client) et **n° partenaire**. Le chiffre à regarder n'est pas le CA — il est
+déjà dans « Canaux de vente » — mais l'écart entre les commandes et les
+contacts : chaque unité manquante est une course qu'on ne saura rattacher à
+personne si le client se plaint ou si Yango conteste. Le tableau est trié par
+courses non rattachées, le caissier à reprendre est donc en haut.
+
+Ces deux informations sont demandées sur la caisse dans une modale qui s'ouvre
+au lancement en cuisine (DESIGN_V2 § 6.6 bis). Le caissier peut fermer sans rien
+saisir : c'est un choix légitime, et c'est pourquoi on compte le trou plutôt que
+de l'ignorer. La même paire de décomptes figure sur le ticket Z du site.
 
 Deux limites à connaître, toutes deux écrites à l'écran :
 

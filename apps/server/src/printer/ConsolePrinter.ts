@@ -1,5 +1,5 @@
-import type { CommandeItemVue, CommandeVue, PosteImpression, RapportSequence, RapportZ } from '@pos/shared';
-import { estLivraisonSansEncaissement, formatFCFA, libellePartenaire, LIBELLES_MODES, LIBELLES_POSTE_IMPRESSION, LIBELLES_TYPES_COMMANDE } from '@pos/shared';
+import type { CommandeItemVue, CommandeVue, EtatStockInstant, PosteImpression, RapportSequence, RapportZ } from '@pos/shared';
+import { estLivraisonSansEncaissement, formatFCFA, libelleCategorieInventaire, libellePartenaire, LIBELLES_MODES, LIBELLES_POSTE_IMPRESSION, LIBELLES_TYPES_COMMANDE } from '@pos/shared';
 import type { PrinterService } from './PrinterService.js';
 
 const LARGEUR = 42;
@@ -7,6 +7,21 @@ const LARGEUR = 42;
 function ligne(gauche: string, droite: string): string {
   const espace = Math.max(1, LARGEUR - gauche.length - droite.length);
   return gauche + ' '.repeat(espace) + droite;
+}
+
+/**
+ * Ligne à points de conduite : « Pain rond ......... 28 ». Les points guident
+ * l'œil du nom jusqu'au chiffre — sur une liste de trente produits, deux
+ * colonnes séparées par du vide se lisent de travers.
+ */
+function ligneAPoints(gauche: string, droite: string): string {
+  const points = LARGEUR - gauche.length - droite.length - 2;
+  return points >= 1 ? `${gauche} ${'.'.repeat(points)} ${droite}` : ligne(gauche, droite);
+}
+
+/** Quantités d'inventaire : jamais des entiers (grammes, pots, sachets). */
+function qte(n: number): string {
+  return n.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
 }
 
 /** Implémentation sprint 1 : « imprime » dans la console du serveur. */
@@ -116,7 +131,10 @@ export class ConsolePrinter implements PrinterService {
       ligne('ÉCART', formatFCFA(z.ecart)),
       '-'.repeat(LARGEUR),
       'Récap partenaires :',
-      ...Object.entries(z.partenaires).map(([p, s]) => ligne(`  ${libellePartenaire(p)} (${s.nb})`, formatFCFA(s.total))),
+      ...Object.entries(z.partenaires).flatMap(([p, s]) => [
+        ligne(`  ${libellePartenaire(p)} (${s.nb})`, formatFCFA(s.total)),
+        `      commandes/contacts ${s.nb}/${s.contacts ?? 0} · n° partenaire ${s.refs ?? 0}/${s.nb}`,
+      ]),
       ...(z.offerts?.total ? [ligne(`  Kdo offerts (${z.offerts.nb})`, formatFCFA(z.offerts.total))] : []),
       ...(z.depenses ? [ligne('Dépenses (registre)', formatFCFA(z.depenses))] : []),
       // Inventaire (§ 6.10) : information manager, hors vente et hors écart.
@@ -149,6 +167,33 @@ export class ConsolePrinter implements PrinterService {
       '='.repeat(LARGEUR),
     ];
     console.log('\n[IMPRESSION RAPPORT Z]\n' + lignes.join('\n') + '\n');
+  }
+
+  async imprimerEtatStock(etat: EtatStockInstant): Promise<void> {
+    const lignes: string[] = [
+      '='.repeat(LARGEUR),
+      'ETAT DU STOCK',
+      `Tire le ${new Date(etat.genere_le).toLocaleString('fr-FR')}`,
+      `Par ${etat.genere_par} — service ouvert à ${new Date(etat.service_ouvert_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`,
+    ];
+    let categorie: string | null = null;
+    for (const l of etat.lignes) {
+      if (l.categorie !== categorie) {
+        categorie = l.categorie;
+        lignes.push('-'.repeat(LARGEUR), libelleCategorieInventaire(categorie).toUpperCase());
+      }
+      lignes.push(ligneAPoints(`${l.nom} (${l.unite})`, qte(l.stock)));
+      lignes.push(
+        `    Initial ${qte(l.stock_initial)}  Entrées +${qte(l.entrees)}  Sorties -${qte(l.sorties)}`
+          + (l.compte ? '  [compté]' : ''),
+      );
+    }
+    lignes.push('='.repeat(LARGEUR));
+    if (etat.nb_theoriques > 0) {
+      lignes.push(`${etat.nb_theoriques} ligne(s) non comptée(s) : stock théorique.`);
+    }
+    lignes.push('Photo du stock — ne vaut pas inventaire validé.');
+    console.log('\n[IMPRESSION ETAT DU STOCK]\n' + lignes.join('\n') + '\n');
   }
 
   async imprimerRapportSequence(s: RapportSequence): Promise<void> {
