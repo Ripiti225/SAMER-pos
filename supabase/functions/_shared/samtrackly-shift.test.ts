@@ -48,6 +48,7 @@ const SERVICE = {
   especes_comptees: 193_500,
   especes_theorique: 191_000,
   ecart: 2_500,
+  explication_ecart: 'Deux encaissements espèces ont été inversés.',
   rapport_z: RAPPORT_Z,
 };
 
@@ -149,6 +150,13 @@ describe('construireShift — les montants', () => {
 
   test('l’écart mesuré part aussi dans ecart_pos, pour l’imputation', () => {
     assert.equal(construireShift(SERVICE, DEPENSES, CTX).ecart_pos, 2_500);
+  });
+
+  test('l’explication du caissier accompagne l’écart dans SamerTrackly', () => {
+    assert.equal(
+      construireShift(SERVICE, DEPENSES, CTX).explication_ecart,
+      'Deux encaissements espèces ont été inversés.',
+    );
   });
 });
 

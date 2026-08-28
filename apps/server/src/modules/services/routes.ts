@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { and, eq, isNull, notInArray, sql } from 'drizzle-orm';
-import { CloturerServiceSchema, OuvrirServiceSchema, TransfererServiceSchema } from '@pos/shared';
+import { CloturerServiceSchema, OuvrirServiceSchema, RemettreClotureSchema, TransfererServiceSchema } from '@pos/shared';
 import type { RapportZ } from '@pos/shared';
 import { db } from '../../db/client.js';
 import { commandes, depenses, equipeService, parametresLocaux, roles, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
@@ -217,16 +217,43 @@ export function routesServices(app: FastifyInstance): void {
   // Accusé de fin : le caissier valide son ticket (bouton « Terminer »). Le shift
   // clôturé n'est plus un « point à valider » et ne le renvoie plus au ticket.
   app.post('/api/services/remettre-cloture', { preHandler: app.exigerAuth }, async (req) => {
-    await db
-      .update(servicesCaisse)
-      .set({ remis_le: new Date() })
-      .where(
-        and(
-          eq(servicesCaisse.caissier_id, req.session!.utilisateur_id),
-          eq(servicesCaisse.statut, 'CLOTURE'),
-          isNull(servicesCaisse.remis_le),
-        ),
-      );
+    const corps = valider(RemettreClotureSchema, req.body ?? {});
+    await db.transaction(async (tx) => {
+      const [service] = await tx
+        .select()
+        .from(servicesCaisse)
+        .where(
+          and(
+            eq(servicesCaisse.caissier_id, req.session!.utilisateur_id),
+            eq(servicesCaisse.statut, 'CLOTURE'),
+            isNull(servicesCaisse.remis_le),
+          ),
+        )
+        .for('update');
+      if (!service) return;
+
+      const explication = corps.explication_ecart?.trim() || null;
+      if (service.ecart !== null && service.ecart !== 0 && !explication) {
+        throw new ErreurMetier('Expliquez l’écart de caisse avant de terminer', 400);
+      }
+
+      const [maj] = await tx
+        .update(servicesCaisse)
+        .set({ remis_le: new Date(), explication_ecart: service.ecart === 0 ? null : explication })
+        .where(eq(servicesCaisse.id, service.id))
+        .returning();
+      await ecrireOutbox(tx, 'services_caisse', 'UPDATE', service.id, maj as unknown as Record<string, unknown>);
+      if (explication) {
+        await journaliser(tx, {
+          user_id: req.session!.utilisateur_id,
+          action: 'EXPLICATION_ECART_CAISSE',
+          entite: 'services_caisse',
+          entite_id: service.id,
+          montant: service.ecart,
+          motif: explication,
+        });
+      }
+    });
     return { ok: true };
   });
 

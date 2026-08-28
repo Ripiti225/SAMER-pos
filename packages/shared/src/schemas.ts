@@ -66,6 +66,11 @@ export const CloturerServiceSchema = z.object({
   modes: z.record(z.string(), MontantPositif).default({}),
 });
 
+/** Accusé final du ticket. Un écart non nul rend l'explication obligatoire côté serveur. */
+export const RemettreClotureSchema = z.object({
+  explication_ecart: z.string().trim().min(3, 'Expliquez l’écart de caisse avant de terminer').max(500).optional(),
+});
+
 /**
  * Rasage de séquence (journée). Le gérant choisit LES SHIFTS qui composent la
  * journée : une séquence contient parfois le début de la journée suivante (le

@@ -40,6 +40,7 @@ export interface ServiceCloud {
   especes_comptees?: number | null;
   especes_theorique?: number | null;
   ecart?: number | null;
+  explication_ecart?: string | null;
   rapport_z?: Record<string, unknown> | null;
   /** Journée choisie à la clôture, si le POS la demande un jour. Sinon dérivée. */
   journee_exploitation?: string | null;
@@ -208,6 +209,8 @@ export interface LigneShift {
   espece: number;
   vente_shift: number;
   ecart_pos: number;
+  /** Motif saisi par le caissier, affiché sous son écart. */
+  explication_ecart: string | null;
   /** Vente système du POS pour ce shift — alimente `points.vente_machine`. */
   vente_systeme_pos: number;
   pos_service_id: string;
@@ -281,6 +284,7 @@ export function construireShift(
     // AUSSI dans l'écart théorique/machine, puisque `espece` vient du comptage.
     // Les deux vues montrent le même fait : ne pas déduire deux fois.
     ecart_pos: n(service.ecart),
+    explication_ecart: service.explication_ecart?.trim() || null,
     // La vente réelle du système, que le gérant tapait à la main jusqu'ici.
     vente_systeme_pos: n(z.total_ventes),
     pos_service_id: service.id,

@@ -204,6 +204,13 @@
       "when": 1787060000000,
       "tag": "0028_paiement_par_articles",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1787875200000,
+      "tag": "0029_explication_ecart",
+      "breakpoints": true
     }
   ]
 }

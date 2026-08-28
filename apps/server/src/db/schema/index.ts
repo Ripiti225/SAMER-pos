@@ -320,6 +320,8 @@ export const servicesCaisse = pgTable('services_caisse', {
   especes_comptees: integer('especes_comptees'),
   especes_theorique: integer('especes_theorique'),
   ecart: integer('ecart'),
+  // Saisie après révélation du comptage, au moment où le caissier valide son point.
+  explication_ecart: text('explication_ecart'),
   // Réconciliation de fermeture (§ brief) : dépenses + détail des sources.
   depenses: integer('depenses').notNull().default(0),
   reconciliation: jsonb('reconciliation'),

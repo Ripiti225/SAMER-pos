@@ -44,6 +44,7 @@ export function Cloture() {
   const [enCours, setEnCours] = useState(false);
   const [transfertOuvert, setTransfertOuvert] = useState(false);
   const [deblocageOuvert, setDeblocageOuvert] = useState(false);
+  const [explicationEcart, setExplicationEcart] = useState('');
 
   // Saisies de réconciliation. Les DÉPENSES n'en font plus partie (§ 6.8) :
   // elles sont la somme du registre, calculée par le serveur et affichée ici en
@@ -132,8 +133,14 @@ export function Cloture() {
   const terminer = async () => {
     // Accuse la fin du shift (le « point à valider » disparaît) puis déconnecte.
     try {
-      await api('/api/services/remettre-cloture', { method: 'POST' });
-    } catch { /* ignore */ }
+      await api('/api/services/remettre-cloture', {
+        method: 'POST',
+        corps: { explication_ecart: explicationEcart.trim() || undefined },
+      });
+    } catch (e) {
+      afficherToast((e as Error).message);
+      return;
+    }
     try {
       await api('/api/auth/logout', { method: 'POST' });
     } catch { /* ignore */ }
@@ -347,6 +354,22 @@ export function Cloture() {
               <div className="mt-1 text-xs text-doux">Comptées {formatFCFA(rapport.especes_comptees)} / Théoriques {formatFCFA(rapport.especes_theorique)}</div>
             </div>
 
+            {rapport.ecart !== 0 && (
+              <label className="block space-y-2">
+                <span className="text-sm font-bold text-alerte-txt">Expliquez cet écart *</span>
+                <textarea
+                  className="champ min-h-24 w-full resize-y"
+                  value={explicationEcart}
+                  maxLength={500}
+                  onChange={(e) => setExplicationEcart(e.target.value)}
+                  placeholder="Ex. : un billet de 1 000 F manque dans le tiroir…"
+                />
+                <span className="block text-xs text-doux">
+                  Cette explication sera affichée dans SamerTrackly sous l’écart de ce point.
+                </span>
+              </label>
+            )}
+
             <div className="space-y-1 text-sm">
               <Ligne libelle="Fond de caisse" valeur={formatFCFA(rapport.fond_de_caisse)} />
               <Ligne libelle="Dépenses" valeur={formatFCFA(rapport.depenses)} />
@@ -429,7 +452,14 @@ export function Cloture() {
             )}
 
             <p className="text-center text-xs text-doux">Vente validée — vous devez terminer pour clôturer le point.</p>
-            <button type="button" className="btn-accent w-full py-4 text-lg" onClick={terminer}>Valider & terminer — se déconnecter</button>
+            <button
+              type="button"
+              className="btn-accent w-full py-4 text-lg"
+              disabled={rapport.ecart !== 0 && explicationEcart.trim().length < 3}
+              onClick={terminer}
+            >
+              Valider & terminer — se déconnecter
+            </button>
           </div>
         )}
       </div>

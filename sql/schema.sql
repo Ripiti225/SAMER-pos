@@ -291,6 +291,7 @@ CREATE TABLE services_caisse (
   especes_comptees   INTEGER,
   especes_theorique  INTEGER,
   ecart              INTEGER,          -- comptees - theorique, calculé à la clôture
+  explication_ecart  TEXT,             -- obligatoire à la remise si ecart <> 0
   -- Verrou de clôture (§6.10) : sans inventaire validé, pas de clôture.
   -- Appliqué CÔTÉ SERVEUR — l'UI ne fait que le refléter.
   inventaire_valide  BOOLEAN NOT NULL DEFAULT FALSE,

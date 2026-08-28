@@ -495,8 +495,9 @@ Deno.serve(async (req) => {
 
   const { data: services, error } = await admin
     .from('services_caisse')
-    .select('id, restaurant_id, caissier_id, ouvert_le, cloture_le, fond_de_caisse, especes_comptees, especes_theorique, ecart, rapport_z')
+    .select('id, restaurant_id, caissier_id, ouvert_le, cloture_le, fond_de_caisse, especes_comptees, especes_theorique, ecart, explication_ecart, remis_le, rapport_z')
     .eq('statut', 'CLOTURE')
+    .not('remis_le', 'is', null)
     .order('cloture_le', { ascending: true })
     .limit(LOT_MAX * 4);
 

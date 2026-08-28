@@ -164,6 +164,8 @@ CREATE TABLE IF NOT EXISTS services_caisse (
   especes_comptees  INTEGER,
   especes_theorique INTEGER,
   ecart             INTEGER,
+  explication_ecart TEXT,
+  remis_le          TIMESTAMPTZ,
   rapport_z         JSONB
 );
 CREATE INDEX IF NOT EXISTS idx_cloud_services ON services_caisse (restaurant_id, ouvert_le);
