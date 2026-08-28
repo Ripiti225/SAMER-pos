@@ -615,3 +615,180 @@ par caissier », trié par courses non rattachées).
 
 **À savoir** : `contact_client` ne vaudra que pour les commandes **à venir**. Les lignes
 déjà montées au cloud ne sont pas republiées, elles resteront à NULL.
+
+## 2026-08-28 — Le billet reçu, la monnaie rendue, et le fond de monnaie
+
+Trois choses tenaient en une seule plainte : « le champ nombre, on ne voit que les
+premiers chiffres », « on ne peut pas taper la somme reçue directement sur l'écran
+sans clavier », et « le reçu ne garde aucune trace de ce que le client a donné ni de
+ce qu'on lui a rendu ».
+
+**Le champ était condamné par sa mise en page.** « Reçu du client » était un `<input>`
+posé en `flex-1` sur une ligne partagée avec son étiquette et la monnaie calculée : dès
+que la monnaie s'affichait, la case rétrécissait et coupait le nombre au troisième
+chiffre. Surtout, c'était un champ texte sur un **kiosque sans clavier** — le pavé
+numérique de l'écran n'alimentait que « Montant ». Le champ était donc, en pratique,
+impossible à remplir.
+
+Il est remplacé par **deux cases que le pavé peut viser**. On appuie sur « À encaisser »
+ou sur « Reçu du client » pour choisir où tapent les chiffres ; la case active porte la
+bordure de marque. Les cases prennent toute la largeur et **la police rétrécit au lieu
+de tronquer** : un chiffre saisi est toujours un chiffre lu. `C` et la touche d'effacement
+suivent la case active, comme les chiffres.
+
+Sur « Reçu du client », les raccourcis deviennent les **coupures qui circulent
+réellement** — +500, +1 000, +2 000, +5 000, +10 000 — plus un bouton **Compte juste**
+qui recopie le montant. On appuie sur ce que le client a posé au lieu de composer
+1-0-0-0-0. La monnaie à rendre s'affiche en grand, en vert ; si le billet ne couvre pas
+la note, elle passe au rouge (« Il manque … ») et l'encaissement est bloqué : on
+n'enregistre pas un rendu négatif.
+
+**La trace, ensuite.** `paiements` porte deux colonnes (migration **0030**) :
+`montant_recu` et `monnaie_rendue`. La caisse ne transmet **que le billet** — le rendu
+est calculé par le serveur, comme tout montant, et un `CHECK` en base interdit qu'il
+mente (`monnaie_rendue = montant_recu − montant`, et `montant_recu >= montant`). Les
+deux colonnes restent NULL hors espèces, et NULL sur tout l'historique : la monnaie
+rendue avant aujourd'hui n'a jamais été saisie, on ne l'invente pas.
+
+Les deux lignes s'impriment sous le mode de paiement, sur le **ticket**, sur le **reçu
+individuel** d'un paiement par articles et sur le **reçu PDF** du QR — la même pièce
+partout. Sans elles, un « je vous ai donné 10 000 » n'avait rien à lui opposer.
+
+**Le fond de monnaie, enfin.** Rendre la monnaie ne crée **ni vente ni écart de
+caisse** : le billet entre dans le tiroir à l'instant où la monnaie en sort. Le chiffre
+ne sert qu'à une chose — savoir de combien de petites coupures un restaurant a besoin
+pour travailler. Il apparaît :
+
+- sur le **ticket Z**, sous les dépenses, marqué « hors vente et hors écart » ;
+- sur le **récap de séquence**, par caissier puis en total de la journée, avec
+  « à prévoir en coupures demain » ;
+- sur l'écran **Fermeture de séquence**, à côté des Kdo et des dépenses ;
+- sur **Supervision**, en bande « Monnaie à prévoir » : moyenne, pire journée, et le
+  montant recommandé.
+
+`GET /api/rapports/besoin-monnaie?jours=14` (permission `rapports.z`) rend le détail
+journée par journée. Le regroupement se fait sur la **journée d'exploitation** du shift
+(sa date d'ouverture), pas sur l'horloge : un service 16h→01h reste une seule journée.
+La recommandation cale sur la **pire journée observée**, arrondie au multiple de 5 000 F
+supérieur — tenir la moyenne laisserait la caisse à sec un jour sur deux. Elle ne se
+calcule que sur les journées qui portent la trace : `jours_traces` compte celles-là, et
+une journée à 0 F d'avant aujourd'hui veut dire « non renseigné », pas « aucune monnaie
+rendue ».
+
+**Pour déployer, dans cet ordre** :
+
+1. `pnpm db:migrate` sur le poste — la **0030** ajoute les deux colonnes et le `CHECK`.
+2. **Rebuild caisse** (`pnpm --filter caisse build`), puis relancer l'exe.
+3. **Cloud** : passer `supabase/migrations/20260828000000_monnaie_rendue.sql` dans
+   l'éditeur SQL de pos-samer-cloud, **puis redéployer `sync-push`** (les deux colonnes
+   sont ajoutées à `_shared/tables.ts`). Sans la migration, les paiements du poste mis à
+   jour sont refusés et l'outbox s'accumule.
+
+**À savoir** : la trace ne vaut que pour les encaissements **à venir**, et seulement si
+le caissier saisit le billet. Rien n'est obligatoire — un caissier qui ne tape pas le
+billet enregistre un paiement sans trace, exactement comme avant. C'est voulu : mieux
+vaut pas de trace qu'une trace inventée.
+
+## 2026-08-28 — Deux correctifs sur le paiement par articles
+
+**Le partage était devenu obligatoire.** Depuis la 0028, l'écran de paiement exigeait
+une sous-note avant de laisser encaisser : `resteCible` valait 0 tant qu'aucune note
+n'était sélectionnée, et le bouton « Ajouter » restait éteint. Le caissier ne pouvait
+donc plus régler une addition d'un bloc — il devait passer par « Payer par articles »
+même pour un client seul. C'était un défaut de l'ÉCRAN seul : le serveur, lui, a
+toujours accepté un encaissement sans `note_id` (il crée alors tout seul une sous-note
+couvrant le ticket entier, pour que les quantités payées soient tracées comme dans un
+partage).
+
+L'écran distingue désormais les deux situations. Une sous-note unique qui couvre le
+ticket entier est de la **comptabilité interne** : ni pastilles de convives, ni
+sélection réclamée, l'ardoise dit simplement « Reste à payer ». Un partage RÉEL —
+plusieurs notes, ou une note qui ne couvre pas tout — affiche les pastilles et exige
+qu'on choisisse qui on encaisse. « Payer par articles » redevient ce qu'il devait être :
+un bouton sur lequel on appuie **quand on en a besoin**.
+
+L'invariant dont dépend cette distinction (`note.montant === commande.total` pour la
+note implicite) est désormais tenu par deux tests dans
+`apps/server/test/paiement-par-articles.test.ts` — s'il se rompait, le caissier
+retomberait à devoir sélectionner un convive pour un ticket qui n'en a qu'un.
+
+**Le reçu individuel sortait minuscule.** `imprimerSousNote` avait sa propre mise en
+page, écrite à la main : pas de logo, pas d'entête, pas de code commande en gros, et
+surtout les articles et le TOTAL en caractères NORMAUX là où un ticket les imprime en
+double hauteur. À côté d'un vrai reçu, il avait l'air d'un brouillon.
+
+Il emprunte maintenant **exactement** le chemin du ticket : `entete` puis
+`corpsArticles`, sur une vue restreinte à la sous-note. Cette vue est une fonction pure
+partagée, `vueSousNote` dans `packages/shared/src/recu.ts` — le PDF du QR l'utilisait
+déjà sous une forme recopiée, il utilise maintenant la même. Le repli console suit
+(`lignesRecu`, partagée ticket / sous-note). Conséquence voulue : **toute évolution du
+reçu profite aux deux sans qu'on y pense**, et aucune ne pourra plus oublier le reçu
+individuel.
+
+Rien à migrer, rien à passer au cloud : `pnpm --filter caisse build` puis relancer l'exe.
+
+## 2026-08-28 — Le pavé de paiement tenait mal, et deux opérateurs portaient la mauvaise couleur
+
+**La dernière rangée du pavé n'était pas affichée.** Le poste de caisse est en
+**1024 × 768**, ce qui laisse 672 px à la grille de paiement une fois l'entête et les
+marges retirés. La colonne du milieu en réclamait bien davantage : sept tuiles de mode
+sur trois colonnes (3 × 84 px = 252 px) et quatre rangées de touches à
+`min-height: 64px` — 280 px **incompressibles**, imposés par la classe `.touche` du
+thème. Le parent étant en `overflow-hidden`, le surplus n'était pas repoussé, il était
+**découpé** : d'où une rangée absente plutôt qu'écrasée.
+
+Les modes passent sur **quatre colonnes** (deux rangées de 68 px) et les rangées du pavé
+**se partagent** désormais la place restante, avec un plancher de 44 px posé en style en
+ligne — qui bat la classe à coup sûr, sans parier sur l'ordre des feuilles de style.
+
+**Un second piège, plus sournois** : les trois colonnes ne s'affichaient côte à côte
+qu'à partir de `lg`, soit **1024 px** — exactement la largeur du poste. À un pixel près,
+tout s'empile sur une colonne et déborde massivement ; une barre de défilement (1024 − 15
+= 1009) suffisait à basculer dedans, et le piège se referme seul : ça déborde, donc une
+barre apparaît, donc ça déborde plus. Le seuil passe à `md` (768 px) : le kiosque est
+maintenant largement au-dessus au lieu d'être en équilibre dessus. Un `overflow-y-auto`
+sur la colonne sert de filet — pas de fonctionnalité : l'assurance que plus rien ne
+pourra jamais être invisible sans qu'une barre le dise.
+
+**Moov et Djamo portaient la mauvaise couleur.** La règle du § 4.2 est la couleur de la
+MARQUE — Wave au bleu, Orange Money à l'orange, MTN au jaune, Moov au vert, Djamo au
+noir. Deux jetons ne la respectaient pas : `--pay-moov` était **bleu** (`#0057b8`) et
+`--pay-djamo`, ajouté après la rédaction du tableau, **violet** (`#6d28d9`). Corrigés en
+`#00a94f` et `#101828`. Le commentaire de `Paiement.tsx` annonçait « le caissier
+reconnaît Wave au violet » — faux depuis toujours, et probablement ce qui a laissé
+passer les deux.
+
+Djamo est le seul aplat qui ne traverse pas les deux modes : un noir disparaît sur fond
+sombre. Il s'y inverse en blanc cassé (`#e6eaf2`), et le vert de Moov y remonte d'un cran
+(`#2fbf6a`) sans quoi il vire au sapin boueux. Le tableau du § 4.2 de `DESIGN_V2.md` porte
+désormais la colonne « aplat en sombre » et la ligne Djamo qui manquait.
+
+Les jetons vivent dans `packages/theme/theme.css` et n'ont que deux consommateurs, tous
+deux par variable CSS : la caisse et la console du siège. Une seule correction suffit
+donc pour les deux — et **jamais de couleur en dur dans un écran**.
+
+**Et la couleur ne s'affichait qu'APRÈS le clic.** Elle ne servait donc qu'à marquer la
+sélection, alors que le § 4.2 demande l'inverse : « le caissier reconnaît le bouton à la
+couleur **avant** de lire le mot ». Une couleur qui n'apparaît qu'une fois le choix fait
+n'aide plus à choisir.
+
+Les sept tuiles portent désormais leur couleur **en permanence** — aplat très dilué (8 %)
+et filet teinté, pour que la marque se reconnaisse sans que sept tuiles crient ensemble.
+La sélection se lit maintenant à l'**aplat plein** avec halo, et non plus à l'apparition
+de la couleur.
+
+Cet aplat plein a réveillé la colonne « texte sur aplat » du § 4.2, écrite dès l'origine
+mais jamais utilisée faute d'aplat : elle devient un jeu de jetons `--pay-*-sur`. Ce
+n'est pas toujours du blanc — sur le cyan de Wave et le jaune de MTN, seule une encre
+sombre se lit. Le LIBELLÉ, lui, garde l'encre normale quand la tuile n'est pas
+sélectionnée : « MTN MoMo » écrit en jaune sur blanc serait illisible. C'est l'icône et
+le filet qui portent la reconnaissance, pas le texte.
+
+**Point ouvert** : Espèces (`#16a34a`) et Moov (`#00a94f`) sont deux verts, et la grille
+à quatre colonnes les place l'un SOUS l'autre (positions 1 et 5). Tant que la couleur
+n'apparaissait qu'à la sélection, les deux n'étaient jamais visibles ensemble ; ce n'est
+plus le cas. Espèces est la seule tuile dont la couleur n'est pas imposée par un
+partenaire — c'est donc elle qui peut bouger, si le gérant juge la confusion réelle.
+
+Rien à migrer, rien à passer au cloud : `pnpm --filter caisse build` puis relancer l'exe.
+Attention, `packages/theme` a changé : sur la clé, relancer `propager-paquets.ps1`.

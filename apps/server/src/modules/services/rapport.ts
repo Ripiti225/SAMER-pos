@@ -42,6 +42,10 @@ export interface StatsService {
   par_mode: Record<ModePaiement, number>;
   par_type: Record<TypeCommande, { nb: number; total: number }>;
   partenaires: Record<string, StatPartenaire>;
+  /** Espèces rendues au client sur le shift — le besoin réel en monnaie. */
+  monnaie_rendue: number;
+  /** Nombre d'encaissements espèces qui ont demandé de rendre la monnaie. */
+  nb_rendus: number;
   top_articles: { nom: string; quantite: number; total: number }[];
   sous_notes_incompletes: { numero_ticket: number; numero_paiement: number; montant_recu: number; reste: number }[];
   remises_detail: RemiseDetail[];
@@ -284,6 +288,18 @@ export async function calculerStatsService(dbx: DbOuTx, serviceId: string): Prom
   const parMode = Object.fromEntries(MODES_PAIEMENT.map((m) => [m, 0])) as Record<ModePaiement, number>;
   for (const l of lignesPaiements) parMode[l.mode] = Number(l.total);
 
+  // Monnaie rendue du shift. Volontairement HORS de `par_mode` : ce n'est pas
+  // un encaissement. Le billet entre dans le tiroir à l'instant où la monnaie
+  // en sort, donc ni la vente ni l'écart de caisse ne bougent. Le chiffre ne
+  // sert qu'à savoir combien de petites coupures il faut pour tenir un service.
+  const [ligneMonnaie] = await dbx
+    .select({
+      total: sql<string>`COALESCE(SUM(${paiements.monnaie_rendue}), 0)`,
+      nb: sql<string>`COUNT(*) FILTER (WHERE ${paiements.monnaie_rendue} > 0)`,
+    })
+    .from(paiements)
+    .where(eq(paiements.service_id, serviceId));
+
   // Même base que le montant de la ligne (les commandes PAYÉES) : le « 4/5 »
   // doit se lire en face des 25 000 F, pas contre un autre décompte.
   const partenaires: Record<string, StatPartenaire> = {};
@@ -426,6 +442,8 @@ export async function calculerStatsService(dbx: DbOuTx, serviceId: string): Prom
     panier_moyen: nbVentes ? Math.round(totalVentes / nbVentes) : 0,
     par_mode: parMode,
     par_type: parType,
+    monnaie_rendue: Number(ligneMonnaie?.total ?? 0),
+    nb_rendus: Number(ligneMonnaie?.nb ?? 0),
     top_articles: [...topParNom.values()].sort((a, b) => b.quantite - a.quantite).slice(0, 10),
     sous_notes_incompletes: incompletes.map((note) => ({
       numero_ticket: Number(note.numero_ticket),

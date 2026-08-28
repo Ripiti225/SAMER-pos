@@ -504,10 +504,28 @@ export const paiements = pgTable('paiements', {
   note_id: uuid('note_id').references(() => notesSplit.id),
   mode: modePaiement('mode').notNull(),
   montant: integer('montant').notNull(),
+  /**
+   * Espèces posées par le client, et monnaie rendue. NULL partout ailleurs
+   * qu'en ESPECES, et NULL sur tout l'historique d'avant le 2026-08-28 : la
+   * trace n'existait pas, on ne l'invente pas rétroactivement.
+   *
+   * `monnaie_rendue` est stockée alors qu'elle se déduit : elle est figée avec
+   * le paiement, comme les snapshots de prix, et le CHECK interdit qu'elle
+   * mente.
+   */
+  montant_recu: integer('montant_recu'),
+  monnaie_rendue: integer('monnaie_rendue'),
   encaisse_par: uuid('encaisse_par').notNull().references(() => utilisateurs.id),
   service_id: uuid('service_id').notNull().references(() => servicesCaisse.id),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [check('paiements_montant_check', sql`${t.montant} > 0`)]);
+}, (t) => [
+  check('paiements_montant_check', sql`${t.montant} > 0`),
+  check(
+    'paiements_monnaie_check',
+    sql`(${t.montant_recu} IS NULL AND ${t.monnaie_rendue} IS NULL)
+        OR (${t.montant_recu} >= ${t.montant} AND ${t.monnaie_rendue} = ${t.montant_recu} - ${t.montant})`,
+  ),
+]);
 
 // ---------------------------------------------------------------------------
 // 6 bis. Dépenses du service (DESIGN_V2 § 6.8)

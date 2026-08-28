@@ -12,8 +12,8 @@ import { unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
-import type { CommandeItemVue, CommandeVue, EtatStockInstant, NoteSplitVue, PosteImpression, RapportSequence, RapportZ } from '@pos/shared';
-import { clePosteImprimante, estLivraisonSansEncaissement, formatFCFA, libelleCategorieInventaire, libellePartenaire, LIBELLES_MODES, LIBELLES_POSTE_IMPRESSION, LIBELLES_TYPES_COMMANDE } from '@pos/shared';
+import type { CommandeItemVue, CommandeVue, EtatStockInstant, NoteSplitVue, PaiementVue, PosteImpression, RapportSequence, RapportZ } from '@pos/shared';
+import { clePosteImprimante, estLivraisonSansEncaissement, formatFCFA, libelleCategorieInventaire, libellePartenaire, LIBELLES_MODES, LIBELLES_POSTE_IMPRESSION, LIBELLES_TYPES_COMMANDE, titreRecuSousNote, vueSousNote } from '@pos/shared';
 import { db } from '../db/client.js';
 import { parametresLocaux, restaurant } from '../db/schema/index.js';
 import type { PrinterService } from './PrinterService.js';
@@ -377,6 +377,20 @@ function entete(r: Ruban, resto: { nom: string; entete: string; marque: Marque; 
   r.gauche().tiret();
 }
 
+/**
+ * Sous les espèces : le billet posé par le client, puis la monnaie rendue.
+ *
+ * C'est la seule pièce que le client emporte — sans elle, une contestation
+ * (« je vous ai donné 10 000 ») n'a rien à opposer. Les deux lignes ne
+ * s'impriment que si la caisse a saisi le billet : un ancien paiement, ou un
+ * règlement Wave, n'a rien à dire ici.
+ */
+function ligneMonnaie(r: Ruban, p: PaiementVue): void {
+  if (p.montant_recu === null || p.montant_recu === undefined) return;
+  r.duo('   Recu du client', formatFCFA(p.montant_recu));
+  r.duo('   Monnaie rendue', formatFCFA(p.monnaie_rendue ?? 0));
+}
+
 function corpsArticles(r: Ruban, c: CommandeVue): void {
   for (const item of c.items) {
     if (item.statut_cuisine === 'ANNULE') continue;
@@ -486,7 +500,10 @@ export class EscposPrinter implements PrinterService {
         entete(r, info, c, 'RECU');
         corpsArticles(r, c);
         r.tiret();
-        for (const p of c.paiements) r.duo(LIBELLES_MODES[p.mode], formatFCFA(p.montant));
+        for (const p of c.paiements) {
+          r.duo(LIBELLES_MODES[p.mode], formatFCFA(p.montant));
+          ligneMonnaie(r, p);
+        }
         if (c.paiements.length === 0 && estLivraisonSansEncaissement(c.partenaire)) {
           r.ligne(`Regle par ${libellePartenaire(c.partenaire!)}`);
         }
@@ -505,27 +522,29 @@ export class EscposPrinter implements PrinterService {
     );
   }
 
+  /**
+   * Reçu d'un paiement individuel. Il sortait en caractères normaux, sans logo
+   * ni entête : à côté d'un ticket complet il avait l'air d'un brouillon. Il
+   * emprunte désormais EXACTEMENT le chemin du ticket — `entete` puis
+   * `corpsArticles` sur une vue restreinte à la sous-note — de sorte qu'aucune
+   * évolution du reçu ne puisse à nouveau l'oublier.
+   */
   async imprimerSousNote(c: CommandeVue, note: NoteSplitVue): Promise<void> {
     const info = await this.infosResto();
+    const vue = vueSousNote(c, note);
     await this.envoyer(
       () => {
         const r = new Ruban(info.colonnes);
-        r.init().centre();
-        r.gras(true).ligne(info.nom).gras(false);
-        r.ligne(`Ticket ${c.numero_ticket} - Paiement ${note.numero}`);
-        r.gauche().tiret();
-        for (const item of note.items) {
-          r.duo(`${item.quantite} x ${item.nom_snapshot}`, formatFCFA(item.montant_brut));
-          for (const s of item.supplements) r.ligne(`   + ${s.nom} (${formatFCFA(s.prix)})`);
-          for (const o of item.options) if (o.choix.length) r.ligne(`   ${o.groupe}: ${o.choix.join(', ')}`);
+        entete(r, info, vue, titreRecuSousNote(note));
+        corpsArticles(r, vue);
+        r.tiret();
+        for (const p of vue.paiements) {
+          r.duo(LIBELLES_MODES[p.mode], formatFCFA(p.montant));
+          ligneMonnaie(r, p);
         }
-        r.tiret().duo('Sous-total', formatFCFA(note.sous_total));
-        if (note.promo_montant > 0) r.duo('Promotion', `-${formatFCFA(note.promo_montant)}`);
-        if (note.remise_montant > 0) r.duo('Remise', `-${formatFCFA(note.remise_montant)}`);
-        if (note.fidelite_montant > 0) r.duo('Fidelite', `-${formatFCFA(note.fidelite_montant)}`);
-        r.gras(true).duo('TOTAL', formatFCFA(note.montant)).gras(false).tiret();
-        for (const p of note.paiements) r.duo(LIBELLES_MODES[p.mode], formatFCFA(p.montant));
-        r.centre().ligne('Paye - merci de votre visite !').couper();
+        r.tiret().centre().ligne('Paye - merci de votre visite !');
+        if (info.pied) r.ligne(info.pied);
+        r.couper();
         return r.buffer();
       },
       () => this.console.imprimerSousNote(c, note),
@@ -610,6 +629,15 @@ export class EscposPrinter implements PrinterService {
           r.duo(`Kdo offerts (${z.offerts.nb})`, formatFCFA(z.offerts.total));
         }
         if (z.depenses) r.duo('Depenses', formatFCFA(z.depenses));
+        // La monnaie rendue ne pèse NI sur la vente NI sur l'écart : le billet
+        // entre dans le tiroir quand la monnaie en sort. Elle est imprimée
+        // pour une seule raison — dimensionner le fond de monnaie du site.
+        if (z.monnaie_rendue) {
+          r.tiret();
+          r.duo(`Monnaie rendue (${z.nb_rendus ?? 0})`, formatFCFA(z.monnaie_rendue));
+          r.ligne('Besoin en petites coupures -');
+          r.ligne('hors vente et hors ecart.');
+        }
 
         if (z.sous_notes_incompletes?.length) {
           r.tiret();
@@ -773,6 +801,7 @@ export class EscposPrinter implements PrinterService {
           // Les Kdo comptent dans les ventes du shift mais pas dans le tiroir :
           // sans cette ligne, le gérant verrait un manquant inexpliqué.
           if (sh.offerts?.total) r.duo(` Kdo offerts (${sh.offerts.nb})`, formatFCFA(sh.offerts.total));
+          if (sh.monnaie_rendue) r.duo(' Monnaie rendue', formatFCFA(sh.monnaie_rendue));
           r.gras(true).duo(' Ecart', formatFCFA(sh.ecart ?? 0)).gras(false);
         }
 
@@ -787,6 +816,11 @@ export class EscposPrinter implements PrinterService {
         }
         if (s.offerts?.total) r.duo(`Kdo offerts (${s.offerts.nb})`, formatFCFA(s.offerts.total));
         if (s.depenses) r.duo('Depenses', formatFCFA(s.depenses));
+        r.tiret();
+        // Ce que la journée a coûté en petite monnaie : le gérant prépare le
+        // fond du lendemain avec ce chiffre, pas avec une estimation.
+        r.duo(`Monnaie rendue (${s.nb_rendus ?? 0})`, formatFCFA(s.monnaie_rendue ?? 0));
+        r.ligne('A prevoir en coupures demain.');
         r.tiret();
         r.gras(true).taille(1, 2).duo('VENTE TOTALE', formatFCFA(s.vente_totale)).taille().gras(false);
         if (s.offerts?.total) r.duo(`dont Kdo offerts (${s.offerts.nb})`, formatFCFA(s.offerts.total));

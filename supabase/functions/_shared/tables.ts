@@ -26,7 +26,13 @@ export const COLONNES_VENTES: Record<string, string[]> = {
     'fidelite_points', 'montant', 'service_id', 'payee_par', 'created_at', 'payee_le',
   ],
   note_split_items: ['id', 'note_id', 'commande_item_id', 'quantite', 'montant_brut'],
-  paiements: ['id', 'commande_id', 'note_id', 'mode', 'montant', 'encaisse_par', 'service_id', 'created_at'],
+  paiements: [
+    'id', 'commande_id', 'note_id', 'mode', 'montant',
+    // 2026-08-28 — billet reçu et monnaie rendue : le siège dimensionne le
+    // fond de monnaie de chaque site avec ces deux colonnes.
+    'montant_recu', 'monnaie_rendue',
+    'encaisse_par', 'service_id', 'created_at',
+  ],
   services_caisse: [
     'id', 'caissier_id', 'fond_de_caisse', 'ouvert_le', 'cloture_le', 'statut',
     'especes_comptees', 'especes_theorique', 'ecart', 'explication_ecart', 'remis_le', 'rapport_z',

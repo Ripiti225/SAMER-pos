@@ -211,6 +211,13 @@
       "when": 1787875200000,
       "tag": "0029_explication_ecart",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1787961600000,
+      "tag": "0030_monnaie_rendue",
+      "breakpoints": true
     }
   ]
 }

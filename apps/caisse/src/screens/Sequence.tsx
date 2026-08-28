@@ -37,6 +37,8 @@ const RECAP_VIDE: RecapSequence = {
   ecart_especes: 0,
   livraisons: {},
   offerts: { nb: 0, total: 0 },
+  monnaie_rendue: 0,
+  nb_rendus: 0,
   modes: {},
 };
 
@@ -236,6 +238,12 @@ export function Sequence() {
                 ? [[`Kdo offerts (${totauxRetenus.offerts.nb})`, totauxRetenus.offerts.total] as [string, number]]
                 : []),
               ['Dépenses', totauxRetenus.depenses] as [string, number],
+              ...(totauxRetenus.monnaie_rendue > 0
+                ? [[
+                    `Monnaie rendue (${totauxRetenus.nb_rendus})`,
+                    totauxRetenus.monnaie_rendue,
+                  ] as [string, number]]
+                : []),
             ]} />
           </div>
 
@@ -326,6 +334,9 @@ function RapportSequenceVue({ rapport, onQuitter }: { rapport: RapportSequence; 
           <L libelle="Espèces comptées" valeur={formatFCFA(rapport.especes_comptees)} />
           <L libelle="Écart espèces cumulé" valeur={`${rapport.ecart_especes > 0 ? '+' : ''}${formatFCFA(rapport.ecart_especes)}`} />
           <L libelle="Dépenses" valeur={formatFCFA(rapport.depenses)} />
+          {/* Ni une vente ni une dépense : le billet entre dans le tiroir quand
+              la monnaie en sort. C'est le fond de monnaie à prévoir demain. */}
+          <L libelle="Monnaie rendue" valeur={formatFCFA(rapport.monnaie_rendue ?? 0)} />
         </div>
         <p className="text-center text-sm text-doux">
           Le récap détaillé (chaque shift + totaux du jour) a été envoyé à l’imprimante de la caisse.

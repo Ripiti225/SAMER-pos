@@ -17,7 +17,24 @@ import { api } from '../api';
 import { SelectionArticlesPaiement, type NouvelleSousNotePaiement } from '../components/SelectionArticlesPaiement';
 import { useCaisse } from '../stores/session';
 
+/**
+ * Plancher des touches du pavé. `.touche` monte à 64 px, ce qui empêchait les
+ * quatre rangées de tenir dans la colonne sur un écran de caisse : la dernière
+ * sortait sous la découpe. Ici les rangées se partagent la place disponible et
+ * ne descendent jamais sous une cible tactile correcte.
+ */
+const TOUCHE = { minHeight: 44 } as const;
+
+/** Appoints pour composer le montant à encaisser. */
 const RACCOURCIS = [1000, 2000, 5000, 10000];
+
+/**
+ * Les COUPURES qui circulent réellement à Abidjan. Elles servent à saisir ce
+ * que le client pose sur le comptoir en tapant sur l'écran : sur un kiosque
+ * tactile il n'y a pas de clavier physique, et l'ancien petit champ « Reçu du
+ * client » ne pouvait donc pas être rempli du tout.
+ */
+const COUPURES = [500, 1000, 2000, 5000, 10000];
 
 function iconeMode(mode: ModePaiement) {
   if (mode === 'ESPECES') return IconCash;
@@ -27,9 +44,10 @@ function iconeMode(mode: ModePaiement) {
 
 /**
  * La VRAIE couleur de l'opérateur (DESIGN_V2 § 4.2) : le caissier reconnaît
- * Wave au violet et Orange Money à l'orange avant même de lire le libellé —
- * c'est ce qui évite d'enregistrer un paiement sur le mauvais mode dans un
- * rush. Les jetons sont définis dans packages/theme/theme.css.
+ * Wave au bleu, Orange Money à l'orange, MTN au jaune, Moov au vert et Djamo
+ * au noir avant même de lire le libellé — c'est ce qui évite d'enregistrer un
+ * paiement sur le mauvais mode dans un rush. Les jetons sont définis dans
+ * packages/theme/theme.css, et JAMAIS en dur ici.
  */
 const COULEUR_MODE: Record<ModePaiement, string> = {
   ESPECES: 'var(--pay-especes)',
@@ -41,6 +59,17 @@ const COULEUR_MODE: Record<ModePaiement, string> = {
   DJAMO: 'var(--pay-djamo)',
 };
 
+/** Encre posée SUR l'aplat, quand le mode est sélectionné (§ 4.2). */
+const TEXTE_SUR_MODE: Record<ModePaiement, string> = {
+  ESPECES: 'var(--pay-especes-sur)',
+  WAVE: 'var(--pay-wave-sur)',
+  ORANGE_MONEY: 'var(--pay-orange-sur)',
+  MTN_MOMO: 'var(--pay-mtn-sur)',
+  MOOV_MONEY: 'var(--pay-moov-sur)',
+  CARTE: 'var(--pay-carte-sur)',
+  DJAMO: 'var(--pay-djamo-sur)',
+};
+
 export function Paiement() {
   const { commandeId, aller, afficherToast } = useCaisse();
   const queryClient = useQueryClient();
@@ -49,6 +78,12 @@ export function Paiement() {
   const [noteId, setNoteId] = useState<string | null>(null);
   const [selectionOuverte, setSelectionOuverte] = useState(false);
   const [especesDonnees, setEspecesDonnees] = useState('');
+  /**
+   * Case alimentée par le pavé numérique. Le pavé est le SEUL moyen de saisie
+   * du poste : tout ce qui se tape doit pouvoir viser l'une ou l'autre case,
+   * sans quoi le champ reste inaccessible au doigt.
+   */
+  const [cible, setCible] = useState<'montant' | 'recu'>('montant');
 
   const { data: commande } = useQuery({
     queryKey: ['commande', commandeId],
@@ -59,12 +94,13 @@ export function Paiement() {
   const rafraichir = (vue: CommandeVue) => queryClient.setQueryData(['commande', commandeId], vue);
 
   const encaisser = useMutation({
-    mutationFn: (corps: { mode: ModePaiement; montant: number; note_id?: string | null }) =>
+    mutationFn: (corps: { mode: ModePaiement; montant: number; note_id?: string | null; montant_recu?: number }) =>
       api<CommandeVue>(`/api/commandes/${commandeId}/paiements`, { method: 'POST', corps }),
     onSuccess: (vue) => {
       rafraichir(vue);
       setMontant('');
       setEspecesDonnees('');
+      setCible('montant');
       const noteSoldee = noteId ? vue.notes.find((note) => note.id === noteId)?.statut === 'PAYEE' : false;
       if (vue.statut === 'PAYEE') {
         afficherToast(`Ticket n° ${vue.numero_ticket} encaissé ✔ — reçu imprimé`);
@@ -113,15 +149,17 @@ export function Paiement() {
   useEffect(() => {
     if (!commandePrete || estPayee) return;
     const gerer = (e: KeyboardEvent) => {
-      const cible = e.target as HTMLElement;
-      if (cible?.tagName === 'INPUT') return;
-      if (/^\d$/.test(e.key)) { e.preventDefault(); setMontant((v) => (v.length < 9 ? v + e.key : v)); }
-      else if (e.key === 'Backspace') { e.preventDefault(); setMontant((v) => v.slice(0, -1)); }
-      else if (e.key === 'Escape') { e.preventDefault(); setMontant(''); }
+      const source = e.target as HTMLElement;
+      if (source?.tagName === 'INPUT') return;
+      // Le pavé (et le clavier de dev) écrivent dans la CASE ACTIVE.
+      const ecrireCible = mode === 'ESPECES' && cible === 'recu' ? setEspecesDonnees : setMontant;
+      if (/^\d$/.test(e.key)) { e.preventDefault(); ecrireCible((v) => (v.length < 9 ? v + e.key : v)); }
+      else if (e.key === 'Backspace') { e.preventDefault(); ecrireCible((v) => v.slice(0, -1)); }
+      else if (e.key === 'Escape') { e.preventDefault(); ecrireCible(''); }
     };
     window.addEventListener('keydown', gerer);
     return () => window.removeEventListener('keydown', gerer);
-  }, [commandePrete, estPayee]);
+  }, [commandePrete, estPayee, mode, cible]);
 
   if (!commande) {
     return <div className="flex min-h-full items-center justify-center text-doux">Chargement…</div>;
@@ -129,15 +167,53 @@ export function Paiement() {
 
   const sansEncaissement = estLivraisonSansEncaissement(commande.partenaire);
   const noteActive = commande.notes.find((n) => n.id === noteId) ?? null;
-  const resteCible = noteActive ? noteActive.reste : 0;
+  const notesActives = commande.notes.filter((n) => n.statut !== 'ANNULEE');
+  /**
+   * Le caissier a-t-il VRAIMENT demandé un partage ?
+   *
+   * Le serveur crée tout seul une sous-note couvrant le ticket entier au
+   * premier encaissement, pour que les quantités payées soient tracées comme
+   * partout ailleurs. Cette sous-note-là est de la comptabilité interne : elle
+   * ne doit pas transformer l'écran en parcours de partage. Seul un partage
+   * réel — plusieurs notes, ou une note qui ne couvre pas tout le ticket —
+   * oblige à choisir qui on encaisse.
+   */
+  const partageDemande =
+    notesActives.length > 1
+    || (notesActives.length === 1 && notesActives[0]!.montant !== commande.total);
+  /** Partage en cours, mais aucun convive sélectionné : là seulement, on bloque. */
+  const attenteSelection = partageDemande && !noteActive;
+  // Sans partage, on encaisse la commande entière : c'est le parcours normal,
+  // celui de l'immense majorité des tickets.
+  const resteCible = noteActive ? noteActive.reste : partageDemande ? 0 : commande.reste;
   const montantSaisi = montant === '' ? resteCible : Number(montant);
   const donnees = Number(especesDonnees || '0');
-  const monnaie = mode === 'ESPECES' && donnees > montantSaisi ? donnees - montantSaisi : 0;
-  const peutAjouter = !!noteActive && montantSaisi > 0 && montantSaisi <= resteCible && !encaisser.isPending;
+  const enEspeces = mode === 'ESPECES';
+  // Hors espèces il n'y a ni billet ni monnaie : le pavé retombe sur le montant.
+  const cibleActive: 'montant' | 'recu' = enEspeces ? cible : 'montant';
+  const billetSaisi = enEspeces && especesDonnees !== '' && donnees > 0;
+  // Affichage seulement : le franc qui fait foi est recalculé par le serveur à
+  // partir du billet transmis (aucun calcul monétaire côté caisse).
+  const monnaie = billetSaisi ? Math.max(0, donnees - montantSaisi) : 0;
+  const billetInsuffisant = billetSaisi && donnees < montantSaisi;
+  const peutAjouter =
+    !attenteSelection && montantSaisi > 0 && montantSaisi <= resteCible && !billetInsuffisant && !encaisser.isPending;
 
-  const ajouter = () => { if (peutAjouter) encaisser.mutate({ mode, montant: montantSaisi, note_id: noteId }); };
-  const taper = (c: string) => setMontant((v) => (v.length < 9 ? v + c : v));
-  const ajouterRaccourci = (n: number) => setMontant((v) => String(Number(v || '0') + n));
+  const ajouter = () => {
+    if (!peutAjouter) return;
+    encaisser.mutate({
+      mode,
+      montant: montantSaisi,
+      note_id: noteId,
+      // Rien n'est transmis si le caissier n'a pas saisi le billet : mieux vaut
+      // aucune trace qu'une trace inventée.
+      ...(billetSaisi ? { montant_recu: donnees } : {}),
+    });
+  };
+  const ecrire = (maj: (v: string) => string) =>
+    cibleActive === 'recu' ? setEspecesDonnees(maj) : setMontant(maj);
+  const taper = (c: string) => ecrire((v) => (v.length < 9 ? v + c : v));
+  const ajouterRaccourci = (n: number) => ecrire((v) => String(Number(v || '0') + n));
 
   const articlesDisponibles = commande.items.some((item) => item.quantite_disponible > 0 && item.statut_cuisine !== 'ANNULE');
 
@@ -164,7 +240,7 @@ export function Paiement() {
       {/* ---------- Grille de paiement ---------- */}
       <div className="grid min-h-0 flex-1 grid-cols-12 gap-4 overflow-hidden p-4">
         {/* Colonne gauche : résumé + partage */}
-        <div className="col-span-12 flex min-h-0 flex-col gap-4 lg:col-span-4">
+        <div className="col-span-12 flex min-h-0 flex-col gap-4 md:col-span-4">
           <div className="carte flex min-h-0 flex-1 flex-col p-5">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-bold">Résumé du ticket</h3>
@@ -218,9 +294,14 @@ export function Paiement() {
           )}
         </div>
 
-        {/* Colonne milieu : modes + clavier */}
-        <div className="col-span-12 flex min-h-0 flex-col gap-4 lg:col-span-5">
-          {commande.notes.length > 0 && !estPayee && (
+        {/* Colonne milieu : modes + clavier.
+            `overflow-y-auto` est un filet, pas une fonctionnalité : la colonne
+            est dimensionnée pour tout montrer. Mais le parent est en
+            `overflow-hidden`, donc sans ce filet un écran plus court coupe
+            purement et simplement la dernière rangée du pavé — invisible, et
+            sans le moindre indice que quelque chose manque. */}
+        <div className="col-span-12 flex min-h-0 flex-col gap-4 overflow-y-auto md:col-span-5">
+          {partageDemande && !estPayee && (
             <div className="flex flex-wrap gap-2">
               {commande.notes.map((n) => (
                 <BoutonNote
@@ -235,8 +316,10 @@ export function Paiement() {
             </div>
           )}
 
-          {!estPayee && !sansEncaissement && !noteActive && (
-            <div className="carte p-5 text-center text-doux">Sélectionnez les articles de la personne à encaisser.</div>
+          {!estPayee && !sansEncaissement && attenteSelection && (
+            <div className="carte p-5 text-center text-doux">
+              Ce ticket est partagé — choisissez le paiement à encaisser ci-dessus.
+            </div>
           )}
 
           {!estPayee && sansEncaissement && (
@@ -266,75 +349,137 @@ export function Paiement() {
           {!estPayee && !sansEncaissement && (
             <>
               <div className="carte p-5">
-                <h3 className="mb-4 text-lg font-bold">Mode de paiement</h3>
-                <div className="grid grid-cols-3 gap-3">
+                <h3 className="mb-3 text-base font-bold">Mode de paiement</h3>
+                <div className="grid grid-cols-4 gap-2">
                   {MODES_PAIEMENT.map((m) => {
                     const Icone = iconeMode(m);
                     const actif = mode === m;
                     const couleur = COULEUR_MODE[m];
+                    const surCouleur = TEXTE_SUR_MODE[m];
                     return (
                       <button
                         key={m}
                         type="button"
-                        onClick={() => setMode(m)}
-                        className="flex min-h-[84px] flex-col items-center justify-center gap-2 rounded-xl border-2 p-3 text-center transition"
+                        onClick={() => { setMode(m); setCible('montant'); }}
+                        className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border-2 p-2 text-center transition"
                         style={
                           actif
-                            ? { borderColor: couleur, background: `color-mix(in srgb, ${couleur} 12%, var(--carte))`, color: couleur }
-                            : { borderColor: 'var(--filet)', color: 'var(--texte-doux)' }
+                            ? {
+                                borderColor: couleur,
+                                background: couleur,
+                                color: surCouleur,
+                                boxShadow: `0 0 0 3px color-mix(in srgb, ${couleur} 30%, transparent)`,
+                              }
+                            : {
+                                // Aplat très dilué + filet teinté : la marque se
+                                // reconnaît sans que sept tuiles crient ensemble.
+                                borderColor: `color-mix(in srgb, ${couleur} 42%, var(--filet))`,
+                                background: `color-mix(in srgb, ${couleur} 8%, var(--carte))`,
+                                color: couleur,
+                              }
                         }
                       >
-                        <Icone size={30} />
-                        <span className="text-xs font-semibold leading-tight">{LIBELLES_MODES[m]}</span>
+                        <Icone size={26} />
+                        <span
+                          className="text-[11px] font-semibold leading-tight"
+                          style={{ color: actif ? surCouleur : 'var(--txt)' }}
+                        >
+                          {LIBELLES_MODES[m]}
+                        </span>
                       </button>
                     );
                   })}
                 </div>
-
-                {mode === 'ESPECES' && (
-                  <div className="mt-4 flex items-center gap-3">
-                    <label className="text-sm text-doux">Reçu du client</label>
-                    <input
-                      className="champ h-11 flex-1"
-                      inputMode="numeric"
-                      value={especesDonnees}
-                      onChange={(e) => setEspecesDonnees(e.target.value.replace(/\D/g, ''))}
-                      placeholder="ex : 10000"
-                    />
-                    {monnaie > 0 && (
-                      <span className="whitespace-nowrap text-sm">Monnaie : <b className="text-marque-fonce">{formatFCFA(monnaie)}</b></span>
-                    )}
-                  </div>
-                )}
               </div>
 
-              <div className="carte flex min-h-0 flex-1 flex-col p-5">
-                <div className="mb-3 text-right">
-                  <div className="text-xs font-bold uppercase tracking-widest text-doux">Montant saisi</div>
-                  <div className="mt-1 text-4xl font-bold tabular-nums text-fort">{formatFCFA(montantSaisi)}</div>
+              <div className="carte flex min-h-0 flex-1 flex-col p-4">
+                {/* Les deux cases que le pavé peut remplir. On tape sur l'une
+                    pour la rendre active — c'est ce qui rend « Reçu du client »
+                    saisissable sur un kiosque, qui n'a pas de clavier. En
+                    espèces la case est toujours affichée, même vide : le
+                    caissier doit VOIR qu'il peut y noter le billet. */}
+                <div className={`mb-3 grid gap-2 ${enEspeces ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                  <CaseSaisie
+                    titre="À encaisser"
+                    valeur={formatFCFA(montantSaisi)}
+                    active={cibleActive === 'montant'}
+                    onClick={() => setCible('montant')}
+                  />
+                  {enEspeces && (
+                    <CaseSaisie
+                      titre="Reçu du client"
+                      valeur={billetSaisi ? formatFCFA(donnees) : '—'}
+                      indice={billetSaisi ? undefined : 'Le billet posé'}
+                      active={cibleActive === 'recu'}
+                      onClick={() => setCible('recu')}
+                    />
+                  )}
                 </div>
-                <div className="grid flex-1 grid-cols-3 gap-2">
+
+                {/* Monnaie à rendre : le chiffre que le caissier compte dans sa
+                    main. Rouge tant que le billet ne couvre pas la note — on ne
+                    laisse pas enregistrer un rendu négatif. */}
+                {enEspeces && billetSaisi && (
+                  <div
+                    className={`mb-3 flex items-baseline justify-between rounded-xl px-4 py-2 ${
+                      billetInsuffisant ? 'bg-alerte/10 text-alerte' : 'bg-ok-tint text-ok'
+                    }`}
+                  >
+                    <span className="text-sm font-bold uppercase tracking-wider">
+                      {billetInsuffisant ? 'Il manque' : monnaie === 0 ? 'Compte juste' : 'Monnaie à rendre'}
+                    </span>
+                    <span className="text-2xl font-extrabold tabular-nums">
+                      {formatFCFA(billetInsuffisant ? montantSaisi - donnees : monnaie)}
+                    </span>
+                  </div>
+                )}
+                <div className="grid min-h-0 flex-1 grid-cols-3 grid-rows-4 gap-2">
                   {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((c) => (
-                    <button key={c} type="button" onClick={() => taper(c)} className="touche">{c}</button>
+                    <button key={c} type="button" onClick={() => taper(c)} className="touche" style={TOUCHE}>{c}</button>
                   ))}
-                  <button type="button" onClick={() => setMontant('')} className="touche text-lg font-bold text-alerte">C</button>
-                  <button type="button" onClick={() => taper('0')} className="touche">0</button>
-                  <button type="button" onClick={() => setMontant((v) => v.slice(0, -1))} className="touche" aria-label="Effacer un chiffre">
+                  <button type="button" onClick={() => ecrire(() => '')} className="touche text-lg font-bold text-alerte" style={TOUCHE}>C</button>
+                  <button type="button" onClick={() => taper('0')} className="touche" style={TOUCHE}>0</button>
+                  <button type="button" onClick={() => ecrire((v) => v.slice(0, -1))} className="touche" style={TOUCHE} aria-label="Effacer un chiffre">
                     <IconBackspace size={24} className="text-doux" />
                   </button>
                 </div>
-                <div className="mt-2 grid grid-cols-4 gap-2">
-                  {RACCOURCIS.map((n) => (
+                {/* Sur la case « Reçu », les raccourcis sont les COUPURES qui
+                    circulent : on appuie sur ce que le client a posé, plutôt
+                    que de composer 1-0-0-0-0. */}
+                {cibleActive === 'recu' ? (
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    {COUPURES.map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => ajouterRaccourci(n)}
+                        className="rounded-lg bg-surface-tres-haute py-2 font-bold text-marque-fonce transition hover:brightness-95"
+                      >
+                        +{n.toLocaleString('fr-FR')}
+                      </button>
+                    ))}
                     <button
-                      key={n}
                       type="button"
-                      onClick={() => ajouterRaccourci(n)}
-                      className="rounded-lg bg-surface-tres-haute py-2 font-bold text-marque-fonce transition hover:brightness-95"
+                      onClick={() => setEspecesDonnees(String(montantSaisi))}
+                      className="rounded-lg bg-ok-tint py-2 font-bold text-ok transition hover:brightness-95"
                     >
-                      +{n / 1000}k
+                      Compte juste
                     </button>
-                  ))}
-                </div>
+                  </div>
+                ) : (
+                  <div className="mt-2 grid grid-cols-4 gap-2">
+                    {RACCOURCIS.map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => ajouterRaccourci(n)}
+                        className="rounded-lg bg-surface-tres-haute py-2 font-bold text-marque-fonce transition hover:brightness-95"
+                      >
+                        +{n / 1000}k
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {montantSaisi > resteCible && (
                   <div className="mt-2 text-center text-sm font-medium text-alerte">Le montant dépasse le reste à payer</div>
                 )}
@@ -354,7 +499,7 @@ export function Paiement() {
         </div>
 
         {/* Colonne droite : reste + paiements + validation */}
-        <div className="col-span-12 flex min-h-0 flex-col gap-4 lg:col-span-3">
+        <div className="col-span-12 flex min-h-0 flex-col gap-4 md:col-span-3">
           {/* Récapitulatif ARDOISE (§ 6.5) : le Reste à payer en très grand,
               détaché du plan de travail clair — c'est le seul chiffre que le
               caissier cherche des yeux pendant un paiement mixte. */}
@@ -363,7 +508,15 @@ export function Paiement() {
             style={{ borderColor: estPayee ? 'var(--ok)' : 'var(--marque)' }}
           >
             <span className="text-xs font-bold uppercase tracking-widest text-ard-txt-faible">
-              {estPayee ? 'Encaissé' : sansEncaissement ? `À régler chez ${commande.partenaire}` : noteActive ? `Reste — Paiement ${noteActive.numero}` : 'Sélection requise'}
+              {estPayee
+                ? 'Encaissé'
+                : sansEncaissement
+                  ? `À régler chez ${commande.partenaire}`
+                  : attenteSelection
+                    ? 'Sélection requise'
+                    : partageDemande && noteActive
+                      ? `Reste — Paiement ${noteActive.numero}`
+                      : 'Reste à payer'}
             </span>
             <div className={`mt-1 text-5xl font-extrabold tabular-nums ${estPayee ? 'text-ok' : 'text-ard-txt'}`}>
               {formatFCFA(resteCible)}
@@ -382,11 +535,22 @@ export function Paiement() {
               {commande.paiements.map((p) => {
                 const Icone = iconeMode(p.mode);
                 return (
-                  <div key={p.id} className="flex items-center justify-between rounded-xl bg-ard-800 p-3">
-                    <span className="flex items-center gap-2 font-semibold">
-                      <Icone size={18} style={{ color: COULEUR_MODE[p.mode] }} /> {LIBELLES_MODES[p.mode]}
-                    </span>
-                    <span className="font-bold tabular-nums">{formatFCFA(p.montant)}</span>
+                  <div key={p.id} className="rounded-xl bg-ard-800 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-2 font-semibold">
+                        <Icone size={18} style={{ color: COULEUR_MODE[p.mode] }} /> {LIBELLES_MODES[p.mode]}
+                      </span>
+                      <span className="font-bold tabular-nums">{formatFCFA(p.montant)}</span>
+                    </div>
+                    {/* Le billet et la monnaie rendue, tels qu'ils sont partis
+                        sur le reçu du client. Absents des paiements enregistrés
+                        avant le 2026-08-28. */}
+                    {p.montant_recu !== null && (
+                      <div className="mt-1 flex justify-between text-xs text-ard-txt-faible">
+                        <span>Reçu {formatFCFA(p.montant_recu)}</span>
+                        <span>Rendu {formatFCFA(p.monnaie_rendue ?? 0)}</span>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -439,6 +603,46 @@ export function Paiement() {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Case de saisie du pavé. Ce n'est pas un `<input>` : sur le kiosque il n'y a
+ * pas de clavier, et l'ancien champ texte étroit coupait le nombre dès le
+ * troisième chiffre. Ici le montant a toute la largeur, et la taille de police
+ * baisse au lieu de tronquer — un chiffre saisi est toujours un chiffre lu.
+ */
+function CaseSaisie({
+  titre,
+  valeur,
+  indice,
+  active,
+  onClick,
+}: {
+  titre: string;
+  valeur: string;
+  indice?: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const taille = valeur.length > 13 ? 'text-xl' : valeur.length > 10 ? 'text-2xl' : 'text-3xl';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`flex min-h-[76px] flex-col justify-center rounded-xl border-2 px-3 py-2 text-right transition ${
+        active
+          ? 'border-marque bg-marque-tint'
+          : 'border-bordure bg-surface-douce hover:border-bordure-forte'
+      }`}
+    >
+      <span className={`text-[11px] font-bold uppercase tracking-widest ${active ? 'text-marque-fonce' : 'text-doux'}`}>
+        {titre}
+      </span>
+      <span className={`mt-0.5 break-words font-bold leading-none tabular-nums text-fort ${taille}`}>{valeur}</span>
+      {indice && <span className="mt-1 text-[10px] text-doux">{indice}</span>}
+    </button>
   );
 }
 

@@ -221,14 +221,24 @@ réordonnancement. Un combo n'appartenant à aucune catégorie prend la marque.
 
 Le caissier reconnaît le bouton à la couleur avant de lire le mot.
 
-| Mode | Aplat | Fond tinté (clair) | Texte sur aplat |
-|---|---|---|---|
-| Espèces | `#16a34a` | `#e7f6ec` | `#ffffff` |
-| Wave | `#1dc8ff` | `#e2f8ff` | `#06323f` |
-| Orange Money | `#ff7900` | `#fff0e3` | `#ffffff` |
-| MTN MoMo | `#ffcc00` | `#fff8db` | `#3d3100` |
-| Moov Money | `#0057b8` | `#e3eefa` | `#ffffff` |
-| Carte | `#64748b` | `#eef1f5` | `#ffffff` |
+| Mode | Aplat | Fond tinté (clair) | Texte sur aplat | Aplat en sombre |
+|---|---|---|---|---|
+| Espèces | `#16a34a` | `#e7f6ec` | `#ffffff` | inchangé |
+| Wave | `#1dc8ff` | `#e2f8ff` | `#06323f` | inchangé |
+| Orange Money | `#ff7900` | `#fff0e3` | `#ffffff` | inchangé |
+| MTN MoMo | `#ffcc00` | `#fff8db` | `#3d3100` | inchangé |
+| Moov Money | `#00a94f` | `#e3f6ec` | `#ffffff` | `#2fbf6a` |
+| Carte | `#64748b` | `#eef1f5` | `#ffffff` | inchangé |
+| Djamo | `#101828` | `#e9eaee` | `#ffffff` | `#e6eaf2` |
+
+C'est la couleur de la MARQUE, jamais une teinte décorative choisie pour
+équilibrer une grille. Deux jetons ne la respectaient pas et ont été corrigés le
+2026-08-28 : **Moov** était en bleu (`#0057b8`) et **Djamo**, arrivé après la
+rédaction de ce tableau, en violet (`#6d28d9`).
+
+Djamo est le seul aplat qui ne peut pas traverser les deux modes : un noir
+disparaît sur fond sombre. Il s'y inverse en blanc cassé — l'encre change de
+couleur quand le papier change, la marque reste reconnaissable.
 
 Le bouton « Ajouter ce paiement » prend la couleur du mode sélectionné.
 

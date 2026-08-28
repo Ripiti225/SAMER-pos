@@ -5,6 +5,7 @@ import {
   IconCashRegister,
   IconClipboardList,
   IconLogout,
+  IconCoin,
   IconMoon,
   IconPrinter,
   IconReportMoney,
@@ -13,7 +14,7 @@ import {
   IconToolsKitchen2,
   IconWifi,
 } from '@tabler/icons-react';
-import { formatFCFA, PERMISSIONS_ADMIN, type RetoursVue } from '@pos/shared';
+import { type BesoinMonnaie, formatFCFA, PERMISSIONS_ADMIN, type RetoursVue } from '@pos/shared';
 import { Modale } from '../components/Modale';
 import { PiluleSync } from '../components/SanteSync';
 import { api } from '../api';
@@ -52,6 +53,17 @@ export function Supervision() {
   const { data: retours } = useQuery({
     queryKey: ['retours-jour'],
     queryFn: () => api<RetoursVue & { date: string }>('/api/rapports/retours-jour'),
+    enabled: peutRapports,
+  });
+
+  /**
+   * Besoin en monnaie sur deux semaines. C'est la réponse à « combien de
+   * pièces et de petites coupures faut-il pour ouvrir demain ? » — une
+   * question qui se posait de tête jusqu'ici, faute de trace.
+   */
+  const { data: monnaie } = useQuery({
+    queryKey: ['besoin-monnaie'],
+    queryFn: () => api<BesoinMonnaie>('/api/rapports/besoin-monnaie?jours=14'),
     enabled: peutRapports,
   });
 
@@ -151,6 +163,30 @@ export function Supervision() {
                 <span className="whitespace-nowrap text-lg font-black tabular-nums">{formatFCFA(retours.montant)}</span>
               )}
             </button>
+          )}
+
+          {/* Fond de monnaie à prévoir. Tant qu'aucune journée n'est tracée,
+              la bande dit pourquoi elle est vide plutôt que d'afficher 0 F —
+              un 0 F se lirait « aucune monnaie rendue », ce qui serait faux. */}
+          {peutRapports && monnaie && (
+            <div className="flex w-full items-center justify-between gap-4 rounded-[18px] border border-bordure bg-surface px-5 py-3 text-left">
+              <span className="flex min-w-0 items-center gap-3">
+                <IconCoin size={22} className="flex-none text-marque-fonce" />
+                <span className="min-w-0">
+                  <span className="block font-bold text-fort">Monnaie à prévoir</span>
+                  <span className="block truncate text-xs text-doux">
+                    {monnaie.jours_traces === 0
+                      ? 'Aucune journée tracée — le billet reçu n’est pas encore saisi en caisse.'
+                      : `Moyenne ${formatFCFA(monnaie.moyenne)} · pire journée ${formatFCFA(monnaie.maximum)} · ${monnaie.jours_traces} journée${monnaie.jours_traces > 1 ? 's' : ''} sur ${monnaie.jours}`}
+                  </span>
+                </span>
+              </span>
+              {monnaie.jours_traces > 0 && (
+                <span className="whitespace-nowrap text-lg font-black tabular-nums text-marque-fonce">
+                  {formatFCFA(monnaie.recommande)}
+                </span>
+              )}
+            </div>
           )}
 
           {/* Trois colonnes comme l'accueil caissier : mêmes tuiles, mêmes

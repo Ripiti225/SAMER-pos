@@ -69,6 +69,16 @@ export function routesPaiements(app: FastifyInstance): void {
   app.post('/api/commandes/:id/paiements', { preHandler: gardeCaisse }, async (req) => {
     const { id } = req.params as { id: string };
     const corps = valider(PaiementSchema, req.body);
+
+    // Le billet posé sur le comptoir n'a de sens qu'en espèces : un paiement
+    // Wave ne rend pas de monnaie. On calcule le rendu ICI — la caisse ne
+    // transmet que ce que le caissier a vu, jamais un montant calculé.
+    const montantRecu = corps.mode === 'ESPECES' ? corps.montant_recu ?? null : null;
+    if (montantRecu !== null && montantRecu < corps.montant) {
+      throw new ErreurMetier('Les espèces reçues sont inférieures au montant encaissé', 400);
+    }
+    const monnaieRendue = montantRecu === null ? null : montantRecu - corps.montant;
+
     const service = await serviceOuvertDe(db, req.session!.utilisateur_id);
 
     const { vue, payee, notePayeeId } = await db.transaction(async (tx) => {
@@ -136,6 +146,8 @@ export function routesPaiements(app: FastifyInstance): void {
           note_id: noteId,
           mode: corps.mode,
           montant: corps.montant,
+          montant_recu: montantRecu,
+          monnaie_rendue: monnaieRendue,
           encaisse_par: req.session!.utilisateur_id,
           service_id: service.id,
         })
@@ -153,6 +165,8 @@ export function routesPaiements(app: FastifyInstance): void {
             numero: noteCible.numero,
             paiement_id: paiement!.id,
             mode: corps.mode,
+            montant_recu: montantRecu,
+            monnaie_rendue: monnaieRendue,
           },
         });
       }

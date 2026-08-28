@@ -275,6 +275,13 @@ export interface PaiementVue {
   mode: ModePaiement;
   montant: number;
   note_id: string | null;
+  /**
+   * Espèces posées par le client. `null` hors ESPECES, et sur tous les
+   * paiements enregistrés avant le 2026-08-28 : la trace n'existait pas.
+   */
+  montant_recu: number | null;
+  /** `montant_recu − montant`, calculée et figée par le serveur. */
+  monnaie_rendue: number | null;
   created_at: string;
 }
 
@@ -417,6 +424,15 @@ export interface RapportZ {
    * même titre qu'une livraison Yango, jamais dans les espèces attendues.
    */
   offerts: { nb: number; total: number };
+  /**
+   * Espèces RENDUES au client, et nombre d'encaissements concernés. Ni une
+   * vente ni une dépense : le billet entre dans le tiroir à l'instant où la
+   * monnaie en sort, l'écart n'en dépend donc pas. C'est le seul chiffre qui
+   * dise de combien de petites coupures le restaurant a besoin pour
+   * travailler. Absent de tout rapport figé avant le 2026-08-28 : lire `?? 0`.
+   */
+  monnaie_rendue: number;
+  nb_rendus: number;
   modes_declares: Record<string, number>;
   vente_totale: number;
   total_systeme: number;
@@ -498,6 +514,29 @@ export interface ReconciliationPreview {
   retours: RetoursVue;
 }
 
+/**
+ * Besoin en monnaie d'un site, journée par journée : ce que la caisse a dû
+ * rendre en petites coupures pour travailler. Sert à préparer le fond de
+ * monnaie, jamais à juger une caisse — rendre la monnaie ne crée ni vente ni
+ * écart.
+ */
+export interface BesoinMonnaie {
+  /** Première journée observée (AAAA-MM-JJ). */
+  depuis: string;
+  /** Profondeur demandée, en journées. */
+  jours: number;
+  par_jour: { journee: string; total: number; nb: number; plus_gros: number }[];
+  /**
+   * Journées qui portent vraiment la trace. Avant le 2026-08-28 le billet
+   * n'était pas saisi : une journée à 0 F veut dire « non renseigné ».
+   */
+  jours_traces: number;
+  moyenne: number;
+  maximum: number;
+  /** Pire journée observée, arrondie au multiple de 5 000 F supérieur. */
+  recommande: number;
+}
+
 /** Détail d'un shift dans une séquence (vue gérant). */
 export interface ShiftSequence {
   service_id: string;
@@ -521,6 +560,15 @@ export interface ShiftSequence {
   livraisons: Record<string, number>;
   /** Kdo du shift. Absent des shifts clôturés avant les Kdo → { nb: 0, total: 0 }. */
   offerts: { nb: number; total: number };
+  /**
+   * Espèces RENDUES au client, et nombre d'encaissements concernés. Ni une
+   * vente ni une dépense : le billet entre dans le tiroir à l'instant où la
+   * monnaie en sort, l'écart n'en dépend donc pas. C'est le seul chiffre qui
+   * dise de combien de petites coupures le restaurant a besoin pour
+   * travailler. Absent de tout rapport figé avant le 2026-08-28 : lire `?? 0`.
+   */
+  monnaie_rendue: number;
+  nb_rendus: number;
   modes_declares: Record<string, number>;
 }
 
@@ -544,6 +592,15 @@ export interface RecapSequence {
   livraisons: Record<string, number>;
   /** Total des repas offerts (Kdo) de la séquence : compté en vente, jamais en espèces. */
   offerts: { nb: number; total: number };
+  /**
+   * Espèces RENDUES au client, et nombre d'encaissements concernés. Ni une
+   * vente ni une dépense : le billet entre dans le tiroir à l'instant où la
+   * monnaie en sort, l'écart n'en dépend donc pas. C'est le seul chiffre qui
+   * dise de combien de petites coupures le restaurant a besoin pour
+   * travailler. Absent de tout rapport figé avant le 2026-08-28 : lire `?? 0`.
+   */
+  monnaie_rendue: number;
+  nb_rendus: number;
   modes: Record<string, number>;
 }
 

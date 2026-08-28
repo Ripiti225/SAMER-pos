@@ -283,6 +283,13 @@ export const PaiementSchema = z.object({
   mode: z.enum(MODES_PAIEMENT, { errorMap: () => ({ message: 'Mode de paiement invalide' }) }),
   montant: z.number().int().min(1, 'Le montant doit être positif'),
   note_id: z.string().uuid().nullish(),
+  /**
+   * Espèces réellement posées sur le comptoir par le client — le billet.
+   * Facultatif, et ignoré hors ESPECES : un paiement Wave ne rend pas de
+   * monnaie. La monnaie rendue n'est PAS transmise : le serveur la calcule,
+   * comme tout montant (aucun calcul monétaire côté client).
+   */
+  montant_recu: z.number().int().min(1, 'Le montant reçu doit être positif').nullish(),
 });
 
 /** Sélection tactile des quantités qu'un convive souhaite régler. */

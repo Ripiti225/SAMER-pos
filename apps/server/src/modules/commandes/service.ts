@@ -363,6 +363,8 @@ export async function chargerCommandeVue(dbx: DbOuTx, commandeId: string): Promi
       mode: p.mode,
       montant: p.montant,
       note_id: p.note_id,
+      montant_recu: p.montant_recu,
+      monnaie_rendue: p.monnaie_rendue,
       created_at: p.created_at.toISOString(),
     })),
     notes: notes.map((n) => {
@@ -403,6 +405,8 @@ export async function chargerCommandeVue(dbx: DbOuTx, commandeId: string): Promi
           mode: p.mode,
           montant: p.montant,
           note_id: p.note_id,
+          montant_recu: p.montant_recu,
+          monnaie_rendue: p.monnaie_rendue,
           created_at: p.created_at.toISOString(),
         })),
       };

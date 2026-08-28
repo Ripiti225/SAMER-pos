@@ -13,12 +13,12 @@
  * encore ouvert n'empêche plus de raser — il repart dans la séquence suivante.
  */
 import type { FastifyInstance } from 'fastify';
-import { asc, eq, inArray } from 'drizzle-orm';
+import { asc, eq, inArray, sql } from 'drizzle-orm';
 import { CloturerSequenceSchema } from '@pos/shared';
 import type { RapportSequence, RecapSequence, SequenceCourante, ShiftSequence } from '@pos/shared';
 import type { DbOuTx } from '../../db/client.js';
 import { db } from '../../db/client.js';
-import { sequencesCaisse, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
+import { paiements, sequencesCaisse, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
@@ -75,6 +75,23 @@ async function detailShifts(dbx: DbOuTx, sequenceId: string): Promise<ShiftSeque
     .where(eq(servicesCaisse.sequence_id, sequenceId))
     .orderBy(asc(servicesCaisse.ouvert_le));
 
+  // Monnaie rendue par shift. Lue sur les paiements et NON sur la
+  // réconciliation figée : le caissier ne déclare rien ici, et le chiffre doit
+  // rester juste sur un shift encore ouvert comme sur un shift déjà clôturé.
+  const idsShifts = rows.map((r) => r.id);
+  const rendus = idsShifts.length
+    ? await dbx
+        .select({
+          service_id: paiements.service_id,
+          total: sql<string>`COALESCE(SUM(${paiements.monnaie_rendue}), 0)`,
+          nb: sql<string>`COUNT(*) FILTER (WHERE ${paiements.monnaie_rendue} > 0)`,
+        })
+        .from(paiements)
+        .where(inArray(paiements.service_id, idsShifts))
+        .groupBy(paiements.service_id)
+    : [];
+  const rendusParShift = new Map(rendus.map((l) => [l.service_id, l]));
+
   return rows.map((r) => {
     const rec = (r.reconciliation ?? {}) as {
       livraisons?: Record<string, number>;
@@ -97,6 +114,8 @@ async function detailShifts(dbx: DbOuTx, sequenceId: string): Promise<ShiftSeque
       depenses: r.depenses,
       livraisons: rec.livraisons ?? {},
       offerts: rec.offerts ?? { nb: 0, total: 0 },
+      monnaie_rendue: Number(rendusParShift.get(r.id)?.total ?? 0),
+      nb_rendus: Number(rendusParShift.get(r.id)?.nb ?? 0),
       modes_declares: rec.modes ?? {},
     };
   });
@@ -107,6 +126,8 @@ function agreger(shifts: ShiftSequence[]): RecapSequence {
   const livraisons = recAdditif();
   const modes = recAdditif();
   const offerts = { nb: 0, total: 0 };
+  let monnaie_rendue = 0;
+  let nb_rendus = 0;
   let vente_totale = 0;
   let total_systeme = 0;
   let especes_comptees = 0;
@@ -123,8 +144,10 @@ function agreger(shifts: ShiftSequence[]): RecapSequence {
     ajoute(modes, s.modes_declares);
     offerts.nb += s.offerts?.nb ?? 0;
     offerts.total += s.offerts?.total ?? 0;
+    monnaie_rendue += s.monnaie_rendue ?? 0;
+    nb_rendus += s.nb_rendus ?? 0;
   }
-  return { vente_totale, total_systeme, diff: vente_totale - total_systeme, especes_comptees, depenses, ecart_especes, livraisons, offerts, modes };
+  return { vente_totale, total_systeme, diff: vente_totale - total_systeme, especes_comptees, depenses, ecart_especes, livraisons, offerts, monnaie_rendue, nb_rendus, modes };
 }
 
 /**

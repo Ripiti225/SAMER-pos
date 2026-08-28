@@ -17,6 +17,7 @@ import {
   libellePartenaire,
   LIBELLES_MODES,
   LIBELLES_TYPES_COMMANDE,
+  vueSousNote,
 } from '@pos/shared';
 
 /** Largeur d'un ticket 80 mm en points PDF (72 pt = 1 pouce). */
@@ -112,7 +113,15 @@ export function construireRecuPdf(
   duo('TOTAL', formatFCFA(c.total), true, 12);
   tiret();
 
-  for (const p of c.paiements) duo(LIBELLES_MODES[p.mode], formatFCFA(p.montant));
+  for (const p of c.paiements) {
+    duo(LIBELLES_MODES[p.mode], formatFCFA(p.montant));
+    // Le billet posé et la monnaie rendue : la même trace que sur le papier
+    // thermique, sinon le reçu dématérialisé serait la version amputée.
+    if (p.montant_recu !== null && p.montant_recu !== undefined) {
+      duo('   Reçu du client', formatFCFA(p.montant_recu), false, 7);
+      duo('   Monnaie rendue', formatFCFA(p.monnaie_rendue ?? 0), false, 7);
+    }
+  }
   if (c.paiements.length === 0 && estLivraisonSansEncaissement(c.partenaire)) {
     centre(`Réglé par ${libellePartenaire(c.partenaire!)}`, 8);
   }
@@ -151,29 +160,7 @@ export function construireRecuSousNotePdf(
   resto: EnteteRecu,
   fidelite: FideliteRecu,
 ): Promise<Buffer> {
-  const parId = new Map(commande.items.map((item) => [item.id, item]));
-  const vue: CommandeVue = {
-    ...commande,
-    sous_total: note.sous_total,
-    promo_montant: note.promo_montant,
-    remise_montant: note.remise_montant,
-    fidelite_montant: note.fidelite_montant,
-    client_fidelite_id: note.client_fidelite_id,
-    total: note.montant,
-    paye: note.paye,
-    reste: note.reste,
-    paiements: note.paiements,
-    items: note.items.map((allocation) => {
-      const source = parId.get(allocation.commande_item_id)!;
-      return {
-        ...source,
-        quantite: allocation.quantite,
-        quantite_reservee: 0,
-        quantite_payee: allocation.quantite,
-        quantite_disponible: 0,
-        total_ligne: allocation.montant_brut,
-      };
-    }),
-  };
-  return construireRecuPdf(vue, resto, fidelite, note.numero);
+  // Même vue restreinte que sur le papier thermique : une seule règle de
+  // composition pour les deux supports (voir packages/shared/src/recu.ts).
+  return construireRecuPdf(vueSousNote(commande, note), resto, fidelite, note.numero);
 }

@@ -147,6 +147,8 @@ CREATE TABLE IF NOT EXISTS paiements (
   note_id        UUID,
   mode           TEXT,
   montant        INTEGER,
+  montant_recu   INTEGER,
+  monnaie_rendue INTEGER,
   encaisse_par   UUID,
   service_id     UUID,
   created_at     TIMESTAMPTZ

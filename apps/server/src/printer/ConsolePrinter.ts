@@ -1,5 +1,5 @@
-import type { CommandeItemVue, CommandeVue, EtatStockInstant, NoteSplitVue, PosteImpression, RapportSequence, RapportZ } from '@pos/shared';
-import { estLivraisonSansEncaissement, formatFCFA, libelleCategorieInventaire, libellePartenaire, LIBELLES_MODES, LIBELLES_POSTE_IMPRESSION, LIBELLES_TYPES_COMMANDE } from '@pos/shared';
+import type { CommandeItemVue, CommandeVue, EtatStockInstant, NoteSplitVue, PaiementVue, PosteImpression, RapportSequence, RapportZ } from '@pos/shared';
+import { estLivraisonSansEncaissement, formatFCFA, libelleCategorieInventaire, libellePartenaire, LIBELLES_MODES, LIBELLES_POSTE_IMPRESSION, LIBELLES_TYPES_COMMANDE, vueSousNote } from '@pos/shared';
 import type { PrinterService } from './PrinterService.js';
 
 const LARGEUR = 42;
@@ -17,6 +17,19 @@ function ligne(gauche: string, droite: string): string {
 function ligneAPoints(gauche: string, droite: string): string {
   const points = LARGEUR - gauche.length - droite.length - 2;
   return points >= 1 ? `${gauche} ${'.'.repeat(points)} ${droite}` : ligne(gauche, droite);
+}
+
+/**
+ * Billet posé par le client, puis monnaie rendue — sous la ligne du mode.
+ * Rien à imprimer si la caisse n'a pas saisi le billet (ancien paiement) ou
+ * si le règlement n'est pas en espèces : Wave ne rend pas de monnaie.
+ */
+function lignesMonnaie(p: PaiementVue): string[] {
+  if (p.montant_recu === null || p.montant_recu === undefined) return [];
+  return [
+    ligne('   Reçu du client', formatFCFA(p.montant_recu)),
+    ligne('   Monnaie rendue', formatFCFA(p.monnaie_rendue ?? 0)),
+  ];
 }
 
 /** Quantités d'inventaire : jamais des entiers (grammes, pots, sachets). */
@@ -51,10 +64,11 @@ export class ConsolePrinter implements PrinterService {
     console.log('\n[IMPRESSION FACTURE]\n' + lignes.join('\n') + '\n');
   }
 
-  async imprimerTicket(c: CommandeVue): Promise<void> {
+  /** Lignes d'un reçu, du titre au remerciement. Partagées ticket / sous-note. */
+  private lignesRecu(c: CommandeVue, titre: string): string[] {
     const lignes: string[] = [
       '='.repeat(LARGEUR),
-      `TICKET N° ${c.numero_ticket}`.padStart(Math.floor((LARGEUR + `TICKET N° ${c.numero_ticket}`.length) / 2)),
+      titre.padStart(Math.floor((LARGEUR + titre.length) / 2)),
       `${LIBELLES_TYPES_COMMANDE[c.type]}${c.table_numero ? ` — Table ${c.table_numero}` : ''}${c.partenaire ? ` — ${c.partenaire}` : ''}`,
       '-'.repeat(LARGEUR),
     ];
@@ -70,7 +84,10 @@ export class ConsolePrinter implements PrinterService {
     if (c.remise_montant > 0) lignes.push(ligne('Remise', `-${formatFCFA(c.remise_montant)}`));
     lignes.push(ligne('TOTAL', formatFCFA(c.total)));
     lignes.push('-'.repeat(LARGEUR));
-    for (const p of c.paiements) lignes.push(ligne(LIBELLES_MODES[p.mode], formatFCFA(p.montant)));
+    for (const p of c.paiements) {
+      lignes.push(ligne(LIBELLES_MODES[p.mode], formatFCFA(p.montant)));
+      lignes.push(...lignesMonnaie(p));
+    }
     if (c.paiements.length === 0 && estLivraisonSansEncaissement(c.partenaire)) {
       lignes.push(`Réglé par ${libellePartenaire(c.partenaire!)}`);
     }
@@ -80,28 +97,20 @@ export class ConsolePrinter implements PrinterService {
     }
     lignes.push('='.repeat(LARGEUR));
     lignes.push(c.offert ? 'Offert — bonne dégustation !' : 'Merci de votre visite !');
+    return lignes;
+  }
+
+  async imprimerTicket(c: CommandeVue): Promise<void> {
+    const lignes = this.lignesRecu(c, `TICKET N° ${c.numero_ticket}`);
     console.log('\n[IMPRESSION TICKET]\n' + lignes.join('\n') + '\n');
   }
 
+  /** Même mise en page que le ticket : un paiement individuel est un vrai reçu. */
   async imprimerSousNote(c: CommandeVue, note: NoteSplitVue): Promise<void> {
-    const lignes = [
-      '='.repeat(LARGEUR),
-      `Ticket ${c.numero_ticket} — Paiement ${note.numero}`,
-      '-'.repeat(LARGEUR),
-    ];
-    for (const item of note.items) {
-      lignes.push(ligne(`${item.quantite} x ${item.nom_snapshot}`, formatFCFA(item.montant_brut)));
-      for (const s of item.supplements) lignes.push(`   + ${s.nom} (${formatFCFA(s.prix)})`);
-      for (const o of item.options) if (o.choix.length) lignes.push(`   ${o.groupe}: ${o.choix.join(', ')}`);
-    }
-    lignes.push('-'.repeat(LARGEUR));
-    lignes.push(ligne('Sous-total', formatFCFA(note.sous_total)));
-    if (note.promo_montant > 0) lignes.push(ligne('Promotion', `-${formatFCFA(note.promo_montant)}`));
-    if (note.remise_montant > 0) lignes.push(ligne('Remise', `-${formatFCFA(note.remise_montant)}`));
-    if (note.fidelite_montant > 0) lignes.push(ligne('Fidélité', `-${formatFCFA(note.fidelite_montant)}`));
-    lignes.push(ligne('TOTAL', formatFCFA(note.montant)), '-'.repeat(LARGEUR));
-    for (const p of note.paiements) lignes.push(ligne(LIBELLES_MODES[p.mode], formatFCFA(p.montant)));
-    lignes.push('='.repeat(LARGEUR), 'Payé — merci de votre visite !');
+    const lignes = this.lignesRecu(
+      vueSousNote(c, note),
+      `TICKET N° ${c.numero_ticket} — PAIEMENT ${note.numero}`,
+    );
     console.log('\n[IMPRESSION SOUS-NOTE]\n' + lignes.join('\n') + '\n');
   }
 

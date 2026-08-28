@@ -481,11 +481,23 @@ CREATE TABLE paiements (
   note_id      UUID REFERENCES notes_split(id),
   mode         mode_paiement NOT NULL,
   montant      INTEGER NOT NULL CHECK (montant > 0),
+  -- Billet posé par le client et monnaie rendue (ESPECES uniquement ; NULL
+  -- partout ailleurs, et sur tout l'historique d'avant le 2026-08-28).
+  montant_recu   INTEGER,
+  monnaie_rendue INTEGER,
   encaisse_par UUID NOT NULL REFERENCES utilisateurs(id),
   service_id   UUID NOT NULL REFERENCES services_caisse(id),
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT paiements_monnaie_check CHECK (
+    (montant_recu IS NULL AND monnaie_rendue IS NULL)
+    OR (montant_recu >= montant AND monnaie_rendue = montant_recu - montant)
+  )
 );
+CREATE INDEX idx_paiements_monnaie_jour ON paiements (created_at) WHERE monnaie_rendue > 0;
 -- Règle serveur : SUM(paiements.montant) == commandes.total avant statut PAYEE.
+-- La monnaie rendue n'entre NI dans la vente NI dans l'écart de caisse : le
+-- billet entre dans le tiroir à l'instant où la monnaie en sort. Elle ne sert
+-- qu'à dimensionner le fond de monnaie du restaurant.
 
 -- ============================================================================
 -- 7. JOURNAL D'AUDIT IMMUABLE (§14.2)

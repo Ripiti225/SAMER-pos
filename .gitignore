@@ -12,3 +12,12 @@ sql/cloud/catalogue_import.sql
 # `supabase/.temp/linked-project.json` reste suivi : il désigne le projet cloud.
 deno.lock
 supabase/.temp/cli-latest
+
+# Le depot est PUBLIC et apps/server/.env.avant-sync porte la cle service_role
+# SamerTrackly : le motif exact ".env" ne le couvrait pas.
+.env.*
+!.env.example
+!.env.exemple
+
+# Binaires electron-builder : 340 Mo en local, au-dessus de la limite GitHub.
+apps/desktop/release/

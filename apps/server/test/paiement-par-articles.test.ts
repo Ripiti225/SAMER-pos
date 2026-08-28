@@ -396,3 +396,60 @@ describe('paiement par articles', () => {
     expect(lignes.filter((ligne) => ligne.note_id === note.id).map((ligne) => ligne.points).sort()).toEqual([-50, 50]);
   });
 });
+
+/**
+ * Le cas de loin le plus fréquent : une addition réglée d'un bloc.
+ *
+ * Le serveur crée alors tout seul une sous-note couvrant le ticket entier,
+ * pour que les quantités payées soient tracées comme dans un partage. Cette
+ * note-là est de la comptabilité interne, et l'écran de caisse s'appuie sur
+ * `note.montant === commande.total` pour NE PAS afficher le parcours de
+ * partage. Si cette égalité venait à se rompre, le caissier se retrouverait à
+ * devoir sélectionner un convive pour un ticket qui n'en a qu'un.
+ */
+describe('encaissement normal : aucun partage imposé', () => {
+  it('solde une commande entière sans jamais choisir de sous-note', async () => {
+    const commande = await ouvrirCommandeTable(2);
+    const rep = await app.inject({
+      method: 'POST',
+      url: `/api/commandes/${commande.id}/paiements`,
+      cookies,
+      payload: { mode: 'ESPECES', montant: commande.total, montant_recu: 10_000 },
+    });
+    expect(rep.statusCode).toBe(200);
+    const vue = rep.json();
+    expect(vue.statut).toBe('PAYEE');
+    expect(vue.reste).toBe(0);
+
+    const actives = vue.notes.filter((n: { statut: string }) => n.statut !== 'ANNULEE');
+    expect(actives).toHaveLength(1);
+    // L'invariant dont dépend l'écran de paiement.
+    expect(actives[0].montant).toBe(vue.total);
+  });
+
+  it('accepte un paiement mixte sans note_id, en reprenant la note implicite', async () => {
+    const commande = await ouvrirCommandeTable(2); // 6 000 F
+    const premier = await app.inject({
+      method: 'POST',
+      url: `/api/commandes/${commande.id}/paiements`,
+      cookies,
+      payload: { mode: 'ESPECES', montant: 4000 },
+    });
+    expect(premier.statusCode).toBe(200);
+    expect(premier.json().statut).not.toBe('PAYEE');
+
+    const second = await app.inject({
+      method: 'POST',
+      url: `/api/commandes/${commande.id}/paiements`,
+      cookies,
+      payload: { mode: 'WAVE', montant: 2000 },
+    });
+    expect(second.statusCode).toBe(200);
+    const vue = second.json();
+    expect(vue.statut).toBe('PAYEE');
+    expect(vue.paiements).toHaveLength(2);
+    const actives = vue.notes.filter((n: { statut: string }) => n.statut !== 'ANNULEE');
+    expect(actives).toHaveLength(1);
+    expect(actives[0].montant).toBe(vue.total);
+  });
+});

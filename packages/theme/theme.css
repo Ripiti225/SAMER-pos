@@ -74,14 +74,30 @@
   --cat-grillades: #14b8a6;
   --cat-boissons: #3b82f6;
 
-  /* --- Couleurs d'opérateur de paiement ------------------------------------ */
+  /* --- Couleurs d'opérateur de paiement ------------------------------------
+     La couleur de la MARQUE, pas une teinte décorative : le caissier reconnaît
+     le bouton avant de lire le mot. Wave au bleu, Orange Money à l'orange, MTN
+     au jaune, Moov au vert, Djamo au noir.
+
+     Moov et Djamo étaient faux (bleu et violet) : corrigés le 2026-08-28. */
   --pay-especes: #16a34a;
   --pay-wave: #1dc8ff;
   --pay-orange: #ff7900;
   --pay-mtn: #ffcc00;
-  --pay-moov: #0057b8;
+  --pay-moov: #00a94f;
   --pay-carte: #64748b;
-  --pay-djamo: #6d28d9;
+  --pay-djamo: #101828;
+
+  /* Encre POSÉE SUR l'aplat, quand le mode est sélectionné (§ 4.2, colonne
+     « texte sur aplat »). Ce n'est pas toujours du blanc : sur le cyan de Wave
+     et le jaune de MTN, seule une encre sombre se lit. */
+  --pay-especes-sur: #ffffff;
+  --pay-wave-sur: #06323f;
+  --pay-orange-sur: #ffffff;
+  --pay-mtn-sur: #3d3100;
+  --pay-moov-sur: #ffffff;
+  --pay-carte-sur: #ffffff;
+  --pay-djamo-sur: #ffffff;
 
   /* --- Séries de graphique (console du siège) -------------------------------
      Palette CATÉGORIELLE : une teinte par restaurant sur un même graphe.
@@ -208,6 +224,21 @@
   --vitrine-txt-faible: var(--ard-txt-faible);
   --vitrine-ombre: var(--ombre-ard);
   --halo-opacite: 1;
+
+  /* Opérateurs de paiement : les autres teintes tiennent telles quelles sur le
+     fond sombre, ces deux-là non.
+
+     Le NOIR de Djamo disparaîtrait purement et simplement sur --carte sombre :
+     il s'inverse en blanc cassé, comme une encre noire devient blanche quand on
+     retourne le papier. La marque reste reconnaissable, le bouton reste
+     lisible. Le vert de Moov remonte d'un cran, sans quoi il vire au sapin
+     boueux. Jamais un éclaircissement automatique du jeu clair. */
+  --pay-moov: #2fbf6a;
+  --pay-djamo: #e6eaf2;
+  /* Les deux aplats ayant changé, leur encre change avec eux : le blanc cassé
+     de Djamo réclame une encre sombre, et le vert remonté de Moov aussi. */
+  --pay-moov-sur: #05291a;
+  --pay-djamo-sur: #101828;
 
   /* Les séries redescendent d'un cran pour le fond sombre : mêmes huit teintes,
      autres marches, validées comme un jeu contre --carte sombre. Jamais un

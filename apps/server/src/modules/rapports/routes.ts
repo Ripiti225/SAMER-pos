@@ -141,6 +141,68 @@ export function routesRapports(app: FastifyInstance): void {
     };
   });
 
+  /**
+   * BESOIN EN MONNAIE — combien de petites coupures le restaurant consomme
+   * pour travailler, journée par journée.
+   *
+   * Le chiffre est la somme des monnaies rendues, regroupée sur la JOURNÉE
+   * D'EXPLOITATION du shift (sa date d'ouverture), pas sur l'horloge : un
+   * service 16h→01h reste une seule journée, comme partout ailleurs dans le
+   * POS. Rendre la monnaie ne change ni la vente ni l'écart de caisse — le
+   * billet entre dans le tiroir à l'instant où la monnaie en sort. Ce rapport
+   * ne sert donc qu'à préparer le fond de monnaie du lendemain.
+   *
+   * `jours_traces` compte les journées qui portent vraiment la trace : avant
+   * le 2026-08-28 le billet n'était pas saisi, et une journée à 0 F veut dire
+   * « non renseigné », pas « aucune monnaie rendue ». La recommandation ne se
+   * calcule que sur les journées tracées, sinon l'historique muet la tirerait
+   * vers le bas.
+   */
+  app.get('/api/rapports/besoin-monnaie', { preHandler: gardeManager }, async (req) => {
+    const demande = Number((req.query as { jours?: string }).jours ?? 14);
+    const jours = Number.isFinite(demande) ? Math.min(90, Math.max(1, Math.trunc(demande))) : 14;
+    const depuis = debutDuJour();
+    depuis.setDate(depuis.getDate() - (jours - 1));
+
+    const lignes = await db
+      .select({
+        journee: sql<string>`to_char(${servicesCaisse.ouvert_le}, 'YYYY-MM-DD')`,
+        total: sql<string>`COALESCE(SUM(${paiements.monnaie_rendue}), 0)`,
+        nb: sql<string>`COUNT(*) FILTER (WHERE ${paiements.monnaie_rendue} > 0)`,
+        plus_gros: sql<string>`COALESCE(MAX(${paiements.monnaie_rendue}), 0)`,
+      })
+      .from(paiements)
+      .innerJoin(servicesCaisse, eq(servicesCaisse.id, paiements.service_id))
+      .where(gte(servicesCaisse.ouvert_le, depuis))
+      .groupBy(sql`to_char(${servicesCaisse.ouvert_le}, 'YYYY-MM-DD')`)
+      .orderBy(sql`to_char(${servicesCaisse.ouvert_le}, 'YYYY-MM-DD') DESC`);
+
+    const parJour = lignes.map((l) => ({
+      journee: l.journee,
+      total: Number(l.total),
+      nb: Number(l.nb),
+      plus_gros: Number(l.plus_gros),
+    }));
+    const traces = parJour.filter((j) => j.nb > 0);
+    const maximum = traces.reduce((m, j) => Math.max(m, j.total), 0);
+    const moyenne = traces.length
+      ? Math.round(traces.reduce((s, j) => s + j.total, 0) / traces.length)
+      : 0;
+
+    return {
+      depuis: depuis.toISOString().slice(0, 10),
+      jours,
+      par_jour: parJour,
+      jours_traces: traces.length,
+      moyenne,
+      maximum,
+      // Le fond de monnaie se prépare en coupures, pas au franc près : on cale
+      // sur la pire journée observée, arrondie au multiple de 5 000 F
+      // supérieur. Tenir la moyenne laisserait la caisse à sec un jour sur deux.
+      recommande: maximum > 0 ? Math.ceil(maximum / 5000) * 5000 : 0,
+    };
+  });
+
   // Top plats du jour — manager / propriétaire
   app.get('/api/rapports/top-plats', { preHandler: gardeManager }, async () => {
     const depuis = debutDuJour();
