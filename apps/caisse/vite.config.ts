@@ -23,6 +23,24 @@ export default defineConfig({
       workbox: {
         // Le shell de l'app est mis en cache ; les données passent toujours par l'API locale
         navigateFallbackDenylist: [/^\/api/, /^\/ws/],
+        // Les photos viennent de SamerTrackly/Supabase. Une fois vues sur un
+        // poste, elles doivent rester disponibles immédiatement sur le LAN,
+        // même si internet disparaît ou si un autre caissier se connecte.
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.destination === 'image',
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'pos-photos-v1',
+              cacheableResponse: { statuses: [0, 200] },
+              expiration: {
+                maxEntries: 500,
+                maxAgeSeconds: 60 * 60 * 24 * 90,
+                purgeOnQuotaError: true,
+              },
+            },
+          },
+        ],
       },
     }),
   ],

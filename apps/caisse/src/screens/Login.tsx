@@ -643,7 +643,8 @@ function AvatarProfil({ nom, photo, couleur }: { nom: string; photo: string | nu
       <img
         src={photo}
         alt=""
-        loading="lazy"
+        loading="eager"
+        decoding="async"
         onError={() => setCasse(true)}
         className="h-[46px] w-[46px] rounded-full border border-vitrine-bordure object-cover"
       />

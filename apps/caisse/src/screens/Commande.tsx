@@ -12,7 +12,7 @@ import {
   IconTrash,
   IconX,
 } from '@tabler/icons-react';
-import type { ArticleVue, CatalogueVue, CommandeItemVue, CommandeVue } from '@pos/shared';
+import type { ArticleVue, CommandeItemVue, CommandeVue } from '@pos/shared';
 import {
   categorieVisiblePour,
   couleurCategorie,
@@ -22,6 +22,7 @@ import {
   LIBELLES_TYPES_COMMANDE,
 } from '@pos/shared';
 import { api } from '../api';
+import { optionsCatalogue } from '../catalogue-cache';
 import { Modale } from '../components/Modale';
 import { ModalePinManager } from '../components/ModalePinManager';
 import { PiluleSync } from '../components/SanteSync';
@@ -40,11 +41,7 @@ export function Commande() {
   const [annulationOuverte, setAnnulationOuverte] = useState(false);
   const [infosLivraisonOuverte, setInfosLivraisonOuverte] = useState(false);
 
-  const { data: catalogue } = useQuery({
-    queryKey: ['catalogue'],
-    queryFn: () => api<CatalogueVue>('/api/catalogue'),
-    staleTime: 5 * 60 * 1000,
-  });
+  const { data: catalogue } = useQuery(optionsCatalogue);
   const { data: commande } = useQuery({
     queryKey: ['commande', commandeId],
     queryFn: () => api<CommandeVue>(`/api/commandes/${commandeId}`),

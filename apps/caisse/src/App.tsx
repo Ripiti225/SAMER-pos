@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import type { SessionInfo } from '@pos/shared';
 import { api, ErreurApi, surNonAutorise } from './api';
+import { prechargerCatalogue } from './catalogue-cache';
 import { BandeauAdditions } from './components/BandeauAdditions';
 import { NotificationsCaisse } from './components/NotificationsCaisse';
 import { VerrouInactivite } from './components/VerrouInactivite';
@@ -48,6 +49,18 @@ export function App() {
   }, [poserSession]);
 
   useEffect(() => connecterTempsReel(queryClient), [queryClient]);
+
+  // Dès qu'un compte entre, le catalogue et ses photos commencent à charger
+  // en arrière-plan. L'accueil reste instantané et la première commande trouve
+  // ensuite les données en mémoire (les photos sont aussi conservées par la PWA).
+  useEffect(() => {
+    if (session) {
+      void prechargerCatalogue(queryClient).catch(() => {
+        // Le flux normal de Commande affichera l'erreur réseau si le serveur
+        // local est réellement indisponible ; le préchargement reste discret.
+      });
+    }
+  }, [session, queryClient]);
 
   // Session perdue côté serveur (redémarrage du serveur, expiration) : au lieu
   // de laisser l'écran figé avec des erreurs « Connectez-vous » à répétition,
