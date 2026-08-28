@@ -213,6 +213,10 @@ export interface LigneShift {
   explication_ecart: string | null;
   /** Vente système du POS pour ce shift — alimente `points.vente_machine`. */
   vente_systeme_pos: number;
+  /** Compteurs de traçabilité des livraisons, calculés par le rapport Z du POS. */
+  pos_nb_contacts: number;
+  pos_nb_yango: number;
+  pos_nb_glovo: number;
   pos_service_id: string;
   valide: boolean;
   valide_at: string;
@@ -228,6 +232,11 @@ export function construireShift(
   const modes = (z.modes_declares ?? {}) as Record<string, unknown>;
   const parMode = (z.par_mode ?? {}) as Record<string, unknown>;
   const offerts = (z.offerts ?? {}) as Record<string, unknown>;
+  const partenaires = (z.partenaires ?? {}) as Record<string, unknown>;
+  const statPartenaire = (partenaire: string): Record<string, unknown> => {
+    const valeur = partenaires[partenaire];
+    return valeur && typeof valeur === 'object' ? valeur as Record<string, unknown> : {};
+  };
 
   // Le registre, séparé en deux : les achats vont dans `depenses`, la paie part
   // dans les présences (décision : taux journalier automatique + encouragement).
@@ -287,6 +296,15 @@ export function construireShift(
     explication_ecart: service.explication_ecart?.trim() || null,
     // La vente réelle du système, que le gérant tapait à la main jusqu'ici.
     vente_systeme_pos: n(z.total_ventes),
+    // Le rapport Z porte déjà ces compteurs. Le pont les perdait à cette
+    // frontière, laissant les colonnes SamerTrackly à NULL malgré des données
+    // présentes côté POS. Les contacts couvrent tous les partenaires.
+    pos_nb_contacts: Object.values(partenaires).reduce<number>((total, valeur) => {
+      if (!valeur || typeof valeur !== 'object') return total;
+      return total + n((valeur as Record<string, unknown>).contacts);
+    }, 0),
+    pos_nb_yango: n(statPartenaire('YANGO').nb),
+    pos_nb_glovo: n(statPartenaire('GLOVO').nb),
     pos_service_id: service.id,
     valide: true,
     valide_at: service.cloture_le || new Date().toISOString(),

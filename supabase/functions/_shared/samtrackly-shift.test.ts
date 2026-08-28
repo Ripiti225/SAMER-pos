@@ -26,6 +26,11 @@ const RAPPORT_Z = {
   ecart: 2_500,
   depenses: 16_000, // registre ENTIER : achats + salaires
   livraisons: { YANGO: 40_000, GLOVO: 12_000 },
+  partenaires: {
+    YANGO: { nb: 5, total: 40_000, contacts: 4, refs: 5 },
+    GLOVO: { nb: 2, total: 12_000, contacts: 1, refs: 2 },
+    SAMER_DELLY: { nb: 3, total: 18_000, contacts: 2, refs: 0 },
+  },
   offerts: { nb: 1, total: 5_000 },
   modes_declares: { WAVE: 30_000, ORANGE_MONEY: 18_000 },
   par_mode: { ESPECES: 182_000, WAVE: 30_000, ORANGE_MONEY: 18_000 },
@@ -88,6 +93,13 @@ describe('construireShift — les montants', () => {
     assert.equal(s.wave, 30_000);
     assert.equal(s.om, 18_000);
     assert.equal(s.kdo, 5_000);
+  });
+
+  test('les compteurs partenaires du rapport Z alimentent les colonnes POS du shift', () => {
+    const s = construireShift(SERVICE, DEPENSES, CTX);
+    assert.equal(s.pos_nb_yango, 5);
+    assert.equal(s.pos_nb_glovo, 2);
+    assert.equal(s.pos_nb_contacts, 7, 'les contacts de tous les partenaires sont cumulés');
   });
 
   // ── LE POINT LE PLUS SENSIBLE : d'où vient la part espèces ──
