@@ -524,11 +524,13 @@ Deno.serve(async (req) => {
   try {
     aTraiter = await chargerServicesEnAttente(
       async (debut, fin) => {
+        // La clôture fige déjà le rapport Z et les montants. `remis_le` n'est
+        // qu'un accusé de lecture du caissier : attendre ce clic ferait
+        // disparaître de Samtrackly une vente pourtant visible au siège.
         const { data, error } = await admin
           .from('services_caisse')
           .select('id, restaurant_id, caissier_id, ouvert_le, cloture_le, fond_de_caisse, especes_comptees, especes_theorique, ecart, explication_ecart, remis_le, rapport_z')
           .eq('statut', 'CLOTURE')
-          .not('remis_le', 'is', null)
           .order('cloture_le', { ascending: true })
           .order('id', { ascending: true })
           .range(debut, fin);
