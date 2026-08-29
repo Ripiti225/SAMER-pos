@@ -792,3 +792,38 @@ partenaire — c'est donc elle qui peut bouger, si le gérant juge la confusion 
 
 Rien à migrer, rien à passer au cloud : `pnpm --filter caisse build` puis relancer l'exe.
 Attention, `packages/theme` a changé : sur la clé, relancer `propager-paquets.ps1`.
+
+## 2026-08-29 — Le pavé numérique volait les frappes des champs de saisie
+
+Deux plaintes du terrain, une seule cause.
+
+**« Lors des annulations de tables, espace valide alors qu'on n'a pas mis toute
+l'explication. »** Le gérant tape son motif ; au premier espace entre deux mots,
+l'annulation part — avec une explication tronquée, et sans même que l'espace ait été
+inséré dans le texte.
+
+**« Quand on veut taper le montant d'une remise, c'est le code qui se remplit. »** Chaque
+chiffre frappé dans « Montant (FCFA) » atterrissait dans le PIN. Or un montant est un
+chiffre : il n'y avait aucun moyen d'en saisir un au clavier.
+
+Le `Numpad` écoutait le clavier sur la **fenêtre entière** (`window.addEventListener`)
+sans jamais regarder où se trouvait le curseur. Dans la modale PIN manager — celle des
+annulations et des remises — il y a pourtant deux champs texte au-dessus du pavé. Le pavé
+les vidait de leurs frappes : les chiffres partaient dans le PIN, `preventDefault()`
+empêchait l'espace d'être écrit, et la branche de validation acceptait l'espace au même
+titre qu'Entrée.
+
+Deux corrections dans `apps/caisse/src/components/Numpad.tsx` :
+
+- une garde sur la cible de l'événement — si le curseur est dans un `INPUT`, un
+  `TEXTAREA` ou un bloc éditable, le pavé se tait **complètement** (chiffres, Retour
+  arrière, Échap et Entrée) ;
+- l'espace ne valide plus jamais. Seul Entrée valide, et seulement hors champ de saisie.
+
+L'espace est un caractère de texte avant d'être un raccourci : sur un formulaire où l'on
+demande une explication écrite, en faire une validation garantit qu'on valide à moitié.
+
+Audit des deux autres écouteurs clavier globaux de la caisse : `Paiement.tsx` avait déjà
+la garde, `Login.tsx` n'affiche aucun champ de saisie. Rien d'autre à corriger.
+
+Rien à migrer, rien à passer au cloud : `pnpm --filter caisse build` puis relancer l'exe.

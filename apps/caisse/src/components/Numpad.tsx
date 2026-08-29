@@ -19,6 +19,9 @@ export function Numpad({ valeur, onChange, longueurMax = 9, onValider, libelleVa
   // Support clavier (dev) : 0-9, Backspace, Enter/Return, Escape (clear)
   useEffect(() => {
     const gererClavier = (evt: KeyboardEvent) => {
+      // Ne jamais voler les frappes destinées à un champ de saisie (montant, motif…).
+      const cible = evt.target as HTMLElement | null;
+      if (cible && (cible.tagName === 'INPUT' || cible.tagName === 'TEXTAREA' || cible.isContentEditable)) return;
       if (/^\d$/.test(evt.key)) {
         evt.preventDefault();
         taper(evt.key);
@@ -28,7 +31,7 @@ export function Numpad({ valeur, onChange, longueurMax = 9, onValider, libelleVa
       } else if (evt.key === 'Escape') {
         evt.preventDefault();
         onChange('');
-      } else if ((evt.key === 'Enter' || evt.key === ' ') && onValider && !validerDesactive) {
+      } else if (evt.key === 'Enter' && onValider && !validerDesactive) {
         evt.preventDefault();
         onValider();
       }
