@@ -28,8 +28,10 @@ describe('expliqueeInvalide — on ne justifie pas plus que ce qui manque', () =
     expect(expliqueeInvalide(-0.65, 67)).toBe(true);
   });
 
-  test('un surplus n’est jamais concerné : rien n’y est retenu', () => {
-    expect(expliqueeInvalide(2, 16_000)).toBe(false);
+  test('un surplus est borné comme un manquant : Samtrackly retient sur |écart|', () => {
+    expect(expliqueeInvalide(2, 16_000)).toBe(true);
+    expect(expliqueeInvalide(2, 2)).toBe(false);
+    expect(expliqueeInvalide(3, 1)).toBe(false);
   });
 
   test('un écart nul ou non compté ne bloque rien', () => {

@@ -159,10 +159,10 @@ export function routesInventaire(app: FastifyInstance): void {
       // appel. Le `throw` annule la transaction, donc rien n'est écrit.
       const ligneApres = apres.lignes.find((l) => l.produit_id === produitId);
       if (ligneApres && expliqueeInvalide(ligneApres.ecart, ligneApres.quantite_expliquee)) {
-        const manque = Math.abs(ligneApres.ecart ?? 0);
+        const ecartAbs = Math.abs(ligneApres.ecart ?? 0);
         throw new ErreurMetier(
-          `Vous justifiez ${ligneApres.quantite_expliquee} unités alors qu'il n'en manque que ${manque}. `
-          + `Ce champ attend un NOMBRE D'UNITÉS, pas un montant en francs.`,
+          `Vous justifiez ${ligneApres.quantite_expliquee} unités alors que l'écart n'est que de `
+          + `${ecartAbs}. Ce champ attend un NOMBRE D'UNITÉS, pas un montant en francs.`,
           400,
         );
       }

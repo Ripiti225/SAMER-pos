@@ -307,7 +307,7 @@ function CarteProduit({
   // Même règle que le serveur (`expliqueeInvalide`) : l'écran prévient, le
   // serveur refuse. La règle n'est jamais appliquée « côté UI seulement ».
   const tropExplique =
-    ecart !== null && ecart < 0 && explique.trim() !== ''
+    ecart !== null && Math.abs(ecart) > 0.01 && explique.trim() !== ''
     && Number(explique) > Math.abs(ecart) + 0.001;
   const couleurEcart =
     ecart === null ? 'text-doux' : ecart === 0 ? 'text-ok' : ecart < 0 ? 'text-alerte' : 'text-info';
@@ -351,8 +351,12 @@ function CarteProduit({
         </div>
       )}
 
-      {/* Un manquant ouvre la justification : quantité expliquée + texte libre. */}
-      {ecart !== null && ecart < 0 && !verrouille && (
+      {/* TOUT écart ouvre la justification, manquant comme surplus (2026-08-24).
+          Le surplus était muet : le caissier ne pouvait rien dire, alors qu'une
+          retenue s'y applique côté SamerTrackly. « D'où sortent ces 3 pains ? »
+          mérite une réponse — livraison non saisie, vente annulée, erreur de
+          comptage — avant que le vérificateur tranche. */}
+      {ecart !== null && Math.abs(ecart) > 0.01 && !verrouille && (
         <div className="mt-3 grid gap-2 rounded-jeton bg-surface-douce p-3 sm:grid-cols-[140px_1fr]">
           <div>
             <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-doux">
@@ -371,10 +375,12 @@ function CarteProduit({
                 tropExplique ? 'border-alerte focus:border-alerte' : 'border-bordure focus:border-marque'
               }`}
             />
-            <div className="mt-1 text-[11px] text-doux">sur {qte(Math.abs(ecart))} manquante(s)</div>
+            <div className="mt-1 text-[11px] text-doux">
+              sur {qte(Math.abs(ecart))} {ecart < 0 ? 'manquante(s)' : 'en trop'}
+            </div>
             {tropExplique && (
               <div className="mt-1 text-[11px] font-semibold text-alerte">
-                Plus que ce qui manque. Saisissez un nombre d’unités, pas un montant.
+                Plus que l’écart constaté. Saisissez un nombre d’unités, pas un montant.
               </div>
             )}
           </div>
@@ -385,7 +391,7 @@ function CarteProduit({
               value={texte}
               onChange={(e) => setTexte(e.target.value)}
               onBlur={envoyer}
-              placeholder="Ex. casse, offert, chute au sol…"
+              placeholder={ecart < 0 ? 'Ex. casse, offert, chute au sol…' : 'Ex. livraison non saisie, vente annulée…'}
               className="w-full rounded-btn border border-bordure bg-surface px-3 py-2 outline-none focus:border-marque"
             />
           </div>
@@ -397,7 +403,7 @@ function CarteProduit({
           7E le 2026-08-23 — « manquant 3, expliqué 24 000 »). */}
       {ligne.manque_chiffre > 0 && (
         <div className="mt-2 text-xs font-medium text-doux">
-          Montant du manquant non justifié : {fcfa(ligne.manque_chiffre)}
+          Montant de l’écart non justifié : {fcfa(ligne.manque_chiffre)}
         </div>
       )}
     </div>

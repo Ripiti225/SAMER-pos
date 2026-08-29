@@ -260,14 +260,17 @@ export function bilan(lignes: LigneCalculee[]): Bilan {
  * juste au-dessus, il recopie ce nombre. Le manquant passait alors pour
  * entièrement justifié et la retenue tombait à zéro.
  *
- * Ne concerne QUE les manquants : un surplus (écart positif) n'entre dans aucun
- * calcul de retenue, une valeur saisie là est sans effet.
+ * S'applique aux DEUX SENS depuis le 2026-08-24 : un surplus est une anomalie
+ * au même titre qu'un manquant (« d'où sortent ces 3 pains ? ») et Samtrackly
+ * le facture déjà — `montantDeduit()` y calcule sur `Math.abs(ecart)`. Le
+ * caissier peut donc désormais justifier un surplus, et la même borne
+ * s'applique : pas plus d'unités que l'écart constaté.
  *
  * La tolérance absorbe les arrondis des quantités fractionnaires (sachets de
  * frites, boules de glace) : expliquer 0,65 pour un manquant de 0,65 doit
  * passer, malgré la virgule flottante.
  */
 export function expliqueeInvalide(ecart: number | null, quantiteExpliquee: number): boolean {
-  if (ecart === null || ecart >= 0) return false;
+  if (ecart === null || Math.abs(ecart) < 0.01) return false;
   return quantiteExpliquee > Math.abs(ecart) + 0.001;
 }
