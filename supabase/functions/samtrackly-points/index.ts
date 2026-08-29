@@ -30,7 +30,6 @@ import {
   journeeExploitation,
   journeePourTransfert,
   aDejaEtePlace,
-  doitTransferer,
   totalVentePoint,
   totalVenteMachinePoint,
   type ServiceCloud,
@@ -57,6 +56,7 @@ import {
   correspondanceRompue,
   type InventaireServiceCloud,
 } from '../_shared/samtrackly-inventaire.ts';
+import { chargerServicesEnAttente, chargerToutesLesPages } from '../_shared/samtrackly-selection.ts';
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 /** Services traités par passage. Le cron repasse dans 5 minutes pour la suite. */
@@ -425,10 +425,16 @@ Deno.serve(async (req) => {
   // deux fois).
   const dejaAbouti = new Set<string>();
   try {
-    const { data } = await admin
-      .from('samtrackly_transferts')
-      .select('service_id, journee, point_id');
-    for (const t of data ?? []) {
+    const places = await chargerToutesLesPages(async (debut, fin) => {
+      const { data, error } = await admin
+        .from('samtrackly_transferts')
+        .select('service_id, journee, point_id')
+        .order('service_id', { ascending: true })
+        .range(debut, fin);
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    });
+    for (const t of places) {
       if (aDejaEtePlace(t)) dejaAbouti.add(t.service_id as string);
     }
   } catch { /* au pire on traite comme neuf : le comportement d'avant */ }
@@ -487,21 +493,23 @@ Deno.serve(async (req) => {
   // réécrite par UPSERT à chaque montée du site. Les services rattrapés
   // ci-dessus ont transfere_le remis à NULL : ils apparaissent donc ici
   // naturellement, sans traitement à part.
-  const { data: dejaFaits } = await admin
-    .from('samtrackly_transferts')
-    .select('service_id')
-    .not('transfere_le', 'is', null);
-  const faits = new Set((dejaFaits ?? []).map((t) => t.service_id as string));
-
-  const { data: services, error } = await admin
-    .from('services_caisse')
-    .select('id, restaurant_id, caissier_id, ouvert_le, cloture_le, fond_de_caisse, especes_comptees, especes_theorique, ecart, explication_ecart, remis_le, rapport_z')
-    .eq('statut', 'CLOTURE')
-    .not('remis_le', 'is', null)
-    .order('cloture_le', { ascending: true })
-    .limit(LOT_MAX * 4);
-
-  if (error) return json({ erreur: `Lecture des services impossible : ${error.message}` }, 500);
+  let faits: Set<string>;
+  try {
+    const dejaFaits = await chargerToutesLesPages(async (debut, fin) => {
+      const { data, error } = await admin
+        .from('samtrackly_transferts')
+        .select('service_id')
+        .not('transfere_le', 'is', null)
+        .order('service_id', { ascending: true })
+        .range(debut, fin);
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    });
+    faits = new Set(dejaFaits.map((t) => t.service_id as string));
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return json({ erreur: `Lecture des transferts impossible : ${message}` }, 500);
+  }
 
   // Reprise par site : depuis quand ce site transfère, et vers quel restaurant
   // SamerTrackly. Un site absent de cette table ne transfère RIEN — c'est ce qui
@@ -512,10 +520,29 @@ Deno.serve(async (req) => {
     .select('restaurant_id, samtrackly_id, transferer_depuis, actif');
   const configParResto = new Map((configs ?? []).map((c) => [c.restaurant_id as string, c]));
 
-  const aTraiter = (services ?? [])
-    .filter((s) => !faits.has(s.id))
-    .filter((s) => doitTransferer(s, configParResto.get(s.restaurant_id)))
-    .slice(0, LOT_MAX);
+  let aTraiter;
+  try {
+    aTraiter = await chargerServicesEnAttente(
+      async (debut, fin) => {
+        const { data, error } = await admin
+          .from('services_caisse')
+          .select('id, restaurant_id, caissier_id, ouvert_le, cloture_le, fond_de_caisse, especes_comptees, especes_theorique, ecart, explication_ecart, remis_le, rapport_z')
+          .eq('statut', 'CLOTURE')
+          .not('remis_le', 'is', null)
+          .order('cloture_le', { ascending: true })
+          .order('id', { ascending: true })
+          .range(debut, fin);
+        if (error) throw new Error(error.message);
+        return data ?? [];
+      },
+      faits,
+      configParResto,
+      LOT_MAX,
+    );
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return json({ erreur: `Lecture des services impossible : ${message}` }, 500);
+  }
 
   // Points dont un shift vient d'être écrit : leur `vente_total` doit être
   // recalculé une fois tous les shifts du passage traités, jamais avant —
