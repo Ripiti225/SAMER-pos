@@ -10,6 +10,7 @@ import {
   ModifierItemSchema,
   RemiseSchema,
   ReouvrirSchema,
+  estLivraisonSansEncaissement,
   estTableKdo,
 } from '@pos/shared';
 import { db } from '../../db/client.js';
@@ -181,6 +182,13 @@ export function routesCommandes(app: FastifyInstance): void {
     const { id } = req.params as { id: string };
     const vue = await chargerCommandeVue(db, id);
     await exigerAccesTable(db, req.session!, vue.table_id);
+    // Livraison externe (Yango/Glovo) : rien à imprimer. Le partenaire facture
+    // le client à SES prix (plus élevés que la carte du restaurant) et sa
+    // tablette sort déjà le document au livreur — une facture de caisse ici ne
+    // ferait qu'annoncer un montant qui n'est pas celui payé.
+    if (estLivraisonSansEncaissement(vue.partenaire)) {
+      throw new ErreurMetier('Une livraison Yango/Glovo n’imprime pas de facture', 400);
+    }
     const facture = construireFactureDisponible(vue);
     if (facture.items.length === 0) {
       throw new ErreurMetier('Aucun article à facturer', 400);
