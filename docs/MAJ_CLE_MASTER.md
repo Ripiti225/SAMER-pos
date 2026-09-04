@@ -5,10 +5,13 @@
 La clé a été copiée le **2026-08-17 à 05h01:32**, avec l'identité neutre `A_CONFIGURER`
 et les deux seuls comptes propriétaire. Tout ce qui est écrit ici est **postérieur**.
 
-> **Report effectué le 2026-08-21 à 15h48** via `mettre-a-jour-cle.ps1` (`data\` exclu,
-> la base neutre de la clé est intacte). **Toutes les entrées ci-dessous sont désormais
-> sur la clé**, code et `apps/caisse/dist` compris. Les entrées ajoutées après cette
-> date ne le seront pas : recommencer le report avant tout nouveau déploiement.
+> **Report effectué le 2026-09-04 à 21h52** via `mettre-a-jour-cle.ps1` (`data\` exclu,
+> la base neutre de la clé est intacte — inchangée depuis le 18/07 14h24). **Toutes les
+> entrées ci-dessous sont désormais sur la clé**, code, migrations jusqu'à la **0032** et
+> `apps/caisse/dist` du 04/09 21h40 compris. Les entrées ajoutées après cette date ne le
+> seront pas : recommencer le report avant tout nouveau déploiement.
+>
+> *(Report précédent : 2026-08-21 à 15h48, la clé s'arrêtait alors à la migration 0025.)*
 
 Le poste **Samer Angré 7E** (`C:\Users\PC\Documents\POS-Samer-deploiement`) est le
 **site de test** du groupe : c'est ici qu'on essaie, qu'on casse et qu'on corrige
@@ -24,27 +27,30 @@ avant que les 6 autres restaurants ne reçoivent quoi que ce soit.
   pour toute modif SERVEUR (tsx lit les sources, sans watch).
 - « Repackager » = `pnpm --filter @pos/desktop build` — seulement si `apps/desktop`
   change. **Aucune entrée de ce journal ne l'exige à ce jour.**
-- **Une migration a été ajoutée depuis la clé** : la **0026**, écrite le 21/08. La
-  clé s'arrête à la 0025. Tout poste qui reçoit cette mise à jour doit passer
-  `pnpm db:migrate` — c'est la seule entrée de ce journal qui l'exige.
+- « Migrer » = `pnpm db:migrate`. La clé porte les migrations jusqu'à la **0032**.
+  **Tout poste installé depuis une clé antérieure au 04/09 doit passer `pnpm db:migrate`**
+  après avoir reçu cette mise à jour : **sept migrations** séparent la clé du 17/08
+  (arrêtée à la 0025) de l'état actuel — 0026 à 0032 — et le serveur ne démarre pas sans
+  elles.
 
 ## État de synthèse
 
 | | |
 |---|---|
-| Dernière migration | **0027** (`0027_contact_livraison.sql`) — **pas sur la clé** |
-| Migrations ajoutées depuis la clé | **2 — la 0026 et la 0027** (`pnpm db:migrate` obligatoire) |
-| Rebuild caisse | **À REFAIRE** — `dist` du 18/08 23h30, antérieur aux sources d'`apps/caisse` |
-| Report du code sur la clé master | **à refaire** — dernier report le 21/08 15h48 ; la clé s'arrête à la migration 0025 |
-| Repackaging `PosSamer.exe` nécessaire | non |
-| Redéploiement Edge Function | **OUI — `siege`** (nouvelle action `siege_livraisons_caissier`), plus `sync-push` (fait le 17/08) et `samtrackly-points` (à confirmer déployée) |
-| Migrations CLOUD à appliquer | **3** — `20260817140000_pont_samtrackly`, `20260821150000_inventaire_snapshot_produit`, `20260825030000_livraisons_partenaires` |
-| Tests | **42 fichiers, 263 tests verts** (POS) + **103 tests** du pont (`pnpm test:functions`) |
+| Dernière migration | **0032** (`0032_disponibilite_horaire.sql`) — **sur la clé** ✔ |
+| Migrations ajoutées depuis la clé | **aucune** : la clé du 04/09 les porte toutes. Un poste installé depuis une clé plus ancienne doit passer `pnpm db:migrate` (0026 → 0032) |
+| Rebuild caisse | **à jour** — `dist` du 04/09 21h40, postérieur aux sources d'`apps/caisse` |
+| Report du code sur la clé master | **fait le 04/09 21h52** (`data\` exclu, 406 fichiers, 0 échec) |
+| Repackaging `PosSamer.exe` nécessaire | non — `apps/desktop` inchangé depuis la clé |
+| Redéploiement Edge Function | **`samtrackly-points` : OUI** (pagination de la sélection + services clôturés sans `remis_le`). `sync-push` : redéployée le 04/09. `siege` : statut du 21/08 inchangé, **à confirmer déployée** |
+| Migrations CLOUD à appliquer | **1 nouvelle** — `20260901110000_explication_ecart_samtrackly`. Les 3 listées le 21/08 (`20260817140000_pont_samtrackly`, `20260821150000_inventaire_snapshot_produit`, `20260825030000_livraisons_partenaires`) **restent à confirmer appliquées** |
+| Rattrapage à lancer par site | `pnpm services:republier` — republie les explications d'écart que le cloud jetait entre le 28/08 et le 04/09 |
+| Tests | **à revérifier** — dernier comptage connu : 42 fichiers / 263 tests verts (POS) + 103 tests du pont (`pnpm test` et `pnpm test:functions`), relevé le 21/08, avant les entrées du 25/08 au 04/09 |
 
-> **Trou de journal à combler.** Ce fichier s'arrête au 21/08 ; les commits du
-> 22 au 25/08 (séquences, ordres du siège, console du siège, republication des
-> rôles et de la salle, reçu PDF, correctif UUID en contexte non sécurisé) n'y
-> ont pas d'entrée. Ils sont dans le dépôt, pas ici : relire `git log` avant un
+> **Trou de journal à combler.** Le journal reprend au 25/08, mais les commits du
+> **22 au 24/08** (séquences, ordres du siège, console du siège, republication des
+> rôles et de la salle, reçu PDF, correctif UUID en contexte non sécurisé) n'y ont
+> toujours pas d'entrée. Ils sont dans le dépôt, pas ici : relire `git log` avant un
 > déploiement plutôt que de se fier à ce seul journal.
 
 ---
@@ -827,3 +833,151 @@ Audit des deux autres écouteurs clavier globaux de la caisse : `Paiement.tsx` a
 la garde, `Login.tsx` n'affiche aucun champ de saisie. Rien d'autre à corriger.
 
 Rien à migrer, rien à passer au cloud : `pnpm --filter caisse build` puis relancer l'exe.
+
+---
+
+## 2026-08-29 — L'inventaire : un surplus se justifie aussi
+
+Le bloc de justification d'écart ne s'ouvrait que sur un écart **négatif**. Le surplus
+était donc muet — alors que côté SamerTrackly la retenue se calcule sur `|écart|` :
+`montantDeduit` ne regarde pas le signe. Le caissier voyait une retenue tomber sur un
+excédent sans avoir eu la moindre case où écrire pourquoi. Sur les huit derniers jours,
+**425 820 F** de retenues étaient dans ce cas : indéfendables, faute d'avoir laissé
+quelqu'un s'expliquer.
+
+`apps/server/src/modules/inventaire/calcul.ts` et la route associée acceptent désormais
+la justification dans les deux sens, `apps/caisse/src/screens/Inventaire.tsx` ouvre le
+champ dès qu'il y a un écart, quel que soit son signe.
+
+**Déploiement** : rebuild caisse + relancer l'exe. Rien à migrer.
+
+---
+
+## 2026-08-29 — Le pont SamerTrackly : deux services qui ne remontaient jamais
+
+Deux blocages distincts, tous deux dans `samtrackly-points`.
+
+**1. La clôture suffit, le clic du caissier n'est pas une condition.** La fonction ne
+prenait que les services `CLOTURE` **et** `remis_le IS NOT NULL`. Or `remis_le` n'est
+qu'un accusé de lecture du caissier : la clôture, elle, a déjà figé le rapport Z et les
+montants. Attendre ce clic faisait disparaître de SamerTrackly une vente pourtant
+visible au siège. Le filtre `.not('remis_le', 'is', null)` a sauté.
+
+**2. Le lot se remplissait de lignes déjà traitées.** La sélection lisait *un seul*
+`limit(100)` puis filtrait ce qui restait à faire. Dès que 100 services déjà transférés
+occupaient le haut du tri, le lot ressortait vide et **le pont se bloquait
+définitivement** : il relisait éternellement les mêmes cent lignes. Nouveau module
+partagé `supabase/functions/_shared/samtrackly-selection.ts` : il parcourt les services
+**par pages** jusqu'à remplir le lot réellement en attente, et lit les tables entières
+sans buter sur la limite API de 1000 lignes.
+
+**Déploiement** : purement cloud. `supabase functions deploy samtrackly-points`.
+Rien à faire sur les postes.
+
+---
+
+## 2026-09-01 — Yango et Glovo : ni reçu, ni facture
+
+Valider une livraison Yango/Glovo sortait un reçu de caisse jeté aussitôt. La tablette
+du partenaire imprime déjà le sien pour le livreur, et surtout : **les prix du canal
+Yango/Glovo sont plus élevés que la carte du restaurant**, donc le ticket POS
+n'affichait même pas le montant réellement payé par le client. Du papier, et un chiffre
+faux.
+
+- `cloturer-livraison` n'appelle plus `imprimerTicket` (la route rejette déjà tout ce
+  qui n'est pas Yango/Glovo, aucune condition supplémentaire n'était nécessaire) ;
+- la route `/facture` refuse une commande Yango/Glovo (400) ;
+- le bouton **Facture** est masqué sur ces commandes, la grille passe en 2 colonnes ;
+- le toast ne promet plus un reçu imprimé.
+
+**Samer Delly encaisse au comptoir** : son reçu et sa facture sont conservés. Le bon de
+préparation cuisine n'est pas concerné.
+
+**Déploiement** : rebuild caisse + relancer l'exe.
+
+---
+
+## 2026-09-04 — Rattraper les explications d'écart perdues par le cloud
+
+Le 28/08, `explication_ecart` et `remis_le` ont été ajoutés à la liste blanche de
+`sync-push` (`_shared/tables.ts`). **La fonction n'a été redéployée que le 04/09.**
+Entre les deux, le site envoyait bien l'explication de la caissière et le cloud la
+**jetait en silence** : `ligneAutorisee()` ne recopie que les colonnes de la liste. Les
+écarts remontaient donc dans SamerTrackly sans un mot d'explication, et le rattrapage
+automatique du pont n'avait rien à rattraper — il ne peut envoyer que ce que
+`services_caisse` contient côté cloud.
+
+Une ligne d'outbox déjà acquittée ne repart jamais toute seule. D'où
+`pnpm services:republier` (`apps/server/src/scripts/republier-services.ts`) : il remet
+dans l'outbox les services clôturés **qui portent une explication**, sans rien modifier
+en local — il n'écrit que dans `sync_outbox`, que le moteur videra à son prochain cycle
+de montée (30 s). Rejouable sans risque : `sync-push` écrit en UPSERT sur
+`(restaurant_id, id)`.
+
+Côté cloud, la migration `20260901110000_explication_ecart_samtrackly.sql` ajoute
+`samtrackly_transferts.explication_ecart_transferee` : le pont compare le texte reçu à
+celui déjà transféré et ne rejoue **que** les services réellement modifiés. Les anciens
+transferts restent à NULL, donc rejoués une fois.
+
+**Déploiement** : migration CLOUD + redéploiement de `sync-push` et `samtrackly-points`,
+puis `pnpm services:republier` **sur chaque site concerné**. Rien à migrer en local.
+
+---
+
+## 2026-09-04 — À la Braise : la troisième marque du groupe
+
+Nouveau restaurant, nouvelle marque. Trois choses en découlent.
+
+**La base.** `0031_a_la_braise.sql` élargit la contrainte : `marque IN ('SAMER',
+'AL_KAYAN','A_LA_BRAISE')`. Sans elle, l'import du profil échoue sur un `CHECK`.
+
+**L'identité.** Logo ticket (`apps/server/assets/logo-a-la-braise.png`) et bloc de thème
+`:root[data-marque='A_LA_BRAISE']` dans `packages/theme/theme.css` : **noir, or et
+rouge braise**, placé *après* le mode sombre pour rester prioritaire partout. Le noir est
+ici une couleur de marque, pas un mode d'affichage — d'où `color-scheme: dark` forcé,
+quel que soit le réglage du poste.
+
+**Le profil.** `config/restaurants/a-la-braise/profil.json` + 46 photos catalogue
+optimisées. `pnpm profil:importer -- --code=ALA_BRAISE` crée un UUID de restaurant neuf
+et installe l'identité, les 34 tables physiques plus GLOVO / YANGO / LIVRAISON DIRECTE,
+le menu, les options à 500 FCFA, les horaires, les photos, les cinq produits de stock
+initiaux et les recettes poulet/boissons. L'import est **rejouable tant qu'aucune vente
+n'existe** ; il est refusé si le poste appartient déjà à un autre restaurant ou si des
+lignes de commande existent.
+
+Procédure complète, contrôles avant ouverture compris :
+**`docs/INSTALLATION_A_LA_BRAISE.md`**. Les tarifs GLOVO/YANGO y utilisent
+provisoirement le prix sur place, en attendant les tarifs majorés.
+
+**Déploiement** : `pnpm db:migrate` (0031) + rebuild caisse + relancer l'exe. Le profil
+ne s'importe **que** sur le mini-PC destiné à À la Braise : le seed commun reste neutre.
+
+---
+
+## 2026-09-04 — Des catégories qui s'ouvrent à l'heure, et qui se lisent
+
+**Les horaires.** `0032_disponibilite_horaire.sql` ajoute à `categories` :
+`heure_debut`, `heure_fin`, `jour_semaine` (1–7) et `disponibilite_forcee`, avec un
+`CHECK` qui interdit une plage à moitié remplie (`(heure_debut IS NULL) = (heure_fin IS
+NULL)`). Une catégorie hors de sa plage n'est plus proposée à la vente. Chez À la
+Braise : Placali 04h–10h, Sauces 10h–16h, Barbecues 16h–00h.
+
+`apps/server/src/modules/catalogue/horaires.ts` porte le calcul : **début inclus, fin
+exclue**, une fin à `00:00` couvrant jusqu'à minuit, et les plages qui franchissent
+minuit gérées explicitement. L'heure de référence est **celle d'Abidjan**
+(`Africa/Abidjan`), pas celle du PC : un poste mal réglé n'ouvre pas les barbecues à
+14 h.
+
+`disponibilite_forcee` est la **dérogation du gérant** : Réglages → Plats du jour,
+`PATCH /api/admin/disponibilite/categories/:id/derogation`, permission
+`reglages.disponibilite`. Le **motif est obligatoire** (3 à 200 caractères) et
+journalisé à l'audit — rouvrir une catégorie hors de son créneau se justifie.
+
+**La lisibilité.** La colonne des catégories tronquait les noms (`truncate` sur 186 px) :
+avec les libellés d'À la Braise, plusieurs catégories devenaient impossibles à
+distinguer. Colonne élargie à **245 px** et nom sur **deux lignes** (`line-clamp-2`), le
+badge « Hors horaire » passant sous le nom au lieu de lui disputer la place. Les classes
+sont sorties dans `apps/caisse/src/mise-en-page-categories.ts` pour être testables —
+`mise-en-page-categories.test.ts` verrouille le fait qu'on ne retronque pas.
+
+**Déploiement** : `pnpm db:migrate` (0032) + rebuild caisse + relancer l'exe.
