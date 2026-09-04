@@ -364,10 +364,14 @@ function listerImprimantesUnix(): Promise<ImprimanteSysteme[]> {
  * Imprimantes (`ticket_logo`) : par défaut `aucun`, car une commande image non
  * reconnue sort en charabia juste avant les articles.
  */
-function entete(r: Ruban, resto: { nom: string; entete: string; marque: Marque; logo: ModeLogo }, c: CommandeVue, titre: string): void {
-  r.init().centre();
+function ajouterLogo(r: Ruban, resto: { marque: Marque; logo: ModeLogo }): void {
   const logo = logoTicket(resto.marque, resto.logo);
   if (logo) r.brut(logo).ligne();
+}
+
+function entete(r: Ruban, resto: { nom: string; entete: string; marque: Marque; logo: ModeLogo }, c: CommandeVue, titre: string): void {
+  r.init().centre();
+  ajouterLogo(r, resto);
   r.taille(2).gras(true).ligne(resto.nom).taille().gras(false);
   if (resto.entete) for (const l of resto.entete.split('\n')) r.ligne(l);
   r.ligne().gras(true).ligne(titre).gras(false);
@@ -558,6 +562,7 @@ export class EscposPrinter implements PrinterService {
       () => {
         const r = new Ruban(info.colonnes);
         r.init().centre();
+        ajouterLogo(r, info);
         r.gras(true).ligne(info.nom).gras(false);
         r.ligne().gras(true).ligne(`BON ${LIBELLES_POSTE_IMPRESSION[poste].toUpperCase()}`).gras(false);
         // Code TRÈS gros : c'est le repère qui accompagne le plat en salle.
@@ -589,7 +594,9 @@ export class EscposPrinter implements PrinterService {
     await this.envoyer(
       () => {
         const r = new Ruban(info.colonnes);
-        r.init().centre().gras(true).taille(2).ligne('RAPPORT Z').taille().gras(false);
+        r.init().centre();
+        ajouterLogo(r, info);
+        r.gras(true).taille(2).ligne('RAPPORT Z').taille().gras(false);
         r.ligne(z.caissier).ligne(horodatage(new Date(z.ouvert_le))).gauche().tiret();
         r.duo('Commandes encaissees', String(z.nb_commandes_payees));
         r.duo('Commandes annulees', String(z.nb_commandes_annulees));
@@ -711,7 +718,9 @@ export class EscposPrinter implements PrinterService {
     await this.envoyer(
       () => {
         const r = new Ruban(info.colonnes);
-        r.init().centre().gras(true).ligne(info.nom).gras(false);
+        r.init().centre();
+        ajouterLogo(r, info);
+        r.gras(true).ligne(info.nom).gras(false);
         r.taille(1, 2).gras(true).ligne('ETAT DU STOCK').gras(false).taille();
         r.ligne(horodatage(new Date(etat.genere_le)));
         r.ligne(`${etat.genere_par} - service de ${heure(new Date(etat.service_ouvert_le))}`);
@@ -768,6 +777,7 @@ export class EscposPrinter implements PrinterService {
       () => {
         const r = new Ruban(info.colonnes);
         r.init().centre();
+        ajouterLogo(r, info);
         r.taille(2).gras(true).ligne('RECAP').ligne('SEQUENCE').taille().gras(false);
         r.ligne(info.nom);
         r.gauche().tiret();
