@@ -673,7 +673,10 @@ function AjoutTable({ onAjouter }: { onAjouter: (numero: string) => void }) {
 // ---------------------------------------------------------------------------
 // Disponibilité (plats du jour)
 // ---------------------------------------------------------------------------
-interface ArticleDispo { id: string; nom: string; categorie: string | null; image_url: string | null; disponible: boolean }
+interface ArticleDispo {
+  id: string; nom: string; categorie_id: string; categorie: string | null; image_url: string | null; disponible: boolean;
+  categorie_heure_debut: string | null; categorie_heure_fin: string | null; categorie_disponibilite_forcee: boolean;
+}
 
 function Disponibilite() {
   const qc = useQueryClient();
@@ -684,6 +687,16 @@ function Disponibilite() {
   const basculer = useMutation({
     mutationFn: (v: { id: string; disponible: boolean }) => api(`/api/admin/disponibilite/${v.id}`, { method: 'PATCH', corps: { disponible: v.disponible } }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin', 'disponibilite'] }),
+  });
+  const deroger = useMutation({
+    mutationFn: (v: { categorieId: string; active: boolean; motif: string }) => api(
+      `/api/admin/disponibilite/categories/${v.categorieId}/derogation`,
+      { method: 'PATCH', corps: { active: v.active, motif: v.motif } },
+    ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'disponibilite'] });
+      void qc.invalidateQueries({ queryKey: ['catalogue'] });
+    },
   });
 
   // Regroupé par catégorie (ordre serveur conservé), comme le menu.
@@ -702,7 +715,22 @@ function Disponibilite() {
       <div className="space-y-6">
         {parCategorie.map((g) => (
           <div key={g.categorie}>
-            <h3 className="mb-2 font-bold text-marque-fonce">{g.categorie}</h3>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="font-bold text-marque-fonce">{g.categorie}</h3>
+              {g.articles[0]?.categorie_heure_debut && (
+                <button
+                  type="button"
+                  className={g.articles[0].categorie_disponibilite_forcee ? 'btn-accent' : 'btn-blanc'}
+                  onClick={() => {
+                    const active = !g.articles[0]!.categorie_disponibilite_forcee;
+                    const motif = window.prompt(active ? 'Motif de la réactivation exceptionnelle :' : 'Motif de la fin de réactivation :');
+                    if (motif?.trim()) deroger.mutate({ categorieId: g.articles[0]!.categorie_id, active, motif });
+                  }}
+                >
+                  {g.articles[0].categorie_disponibilite_forcee ? 'Désactiver la réactivation' : 'Réactiver exceptionnellement'}
+                </button>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
               {g.articles.map((a) => (
                 <button
@@ -713,7 +741,7 @@ function Disponibilite() {
                 >
                   <div className="relative aspect-[4/3] w-full overflow-hidden bg-marque-tint">
                     {a.image_url ? (
-                      <img src={a.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+                      <img src={a.image_url} alt="" loading="lazy" className="h-full w-full object-contain" />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-xl font-black text-marque-fonce/30">
                         {a.nom.slice(0, 2).toUpperCase()}

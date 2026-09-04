@@ -111,7 +111,11 @@ export async function importerProfilRestaurant(code: string): Promise<void> {
     for (const categorie of profil.categories) {
       const categorieId = idStable(`${profil.code}:categorie:${categorie.nom}`);
       categorieIds.set(categorie.nom, categorieId);
-      await client.query('INSERT INTO categories(id,nom,ordre,actif) VALUES($1,$2,$3,TRUE)', [categorieId, categorie.nom, categorie.ordre]);
+      await client.query(
+        `INSERT INTO categories(id,nom,ordre,actif,heure_debut,heure_fin,jour_semaine)
+         VALUES($1,$2,$3,TRUE,$4::time,$5::time,$6)`,
+        [categorieId, categorie.nom, categorie.ordre, categorie.horaire?.debut ?? null, categorie.horaire?.fin ?? null, categorie.jour ?? null],
+      );
       for (const article of categorie.articles) {
         const articleId = idStable(`${profil.code}:article:${article.nom}`);
         await client.query(

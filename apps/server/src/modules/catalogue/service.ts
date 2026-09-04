@@ -14,6 +14,7 @@ import {
 import { promotionActive } from './promos.js';
 import { lireDisponibilites } from './disponibilite.js';
 import { resoudreOptionsParArticle } from './options.js';
+import { categorieDisponibleMaintenant, jourAbidjan } from './horaires.js';
 
 /**
  * Charge le catalogue complet (caisse et tablette serveur).
@@ -46,6 +47,15 @@ export async function chargerCatalogue(): Promise<CatalogueVue> {
   ]);
 
   const maintenant = new Date();
+  const disponibiliteCategories = new Map(
+    cats.map((c) => [c.id, categorieDisponibleMaintenant(c, maintenant)]),
+  );
+  const jourActuel = jourAbidjan(maintenant);
+  const categoriesOrdonnees = [...cats].sort((a, b) => {
+    const prioriteA = a.jour_semaine === jourActuel ? -1 : 0;
+    const prioriteB = b.jour_semaine === jourActuel ? -1 : 0;
+    return prioriteA - prioriteB || a.ordre - b.ordre;
+  });
   // Options d'un article = celles liées à sa CATÉGORIE + celles liées à lui.
   const extrasParArticle = resoudreOptionsParArticle(arts, optsCat, liaisons);
   const vueArticles: ArticleVue[] = arts.map((a) => ({
@@ -56,7 +66,7 @@ export async function chargerCatalogue(): Promise<CatalogueVue> {
     prix_base: a.prix_base,
     image_url: a.image_url,
     // Source de vérité : disponibilite_locale (TRUE par défaut, 2.3).
-    disponible: dispo.get(a.id) ?? true,
+    disponible: (dispo.get(a.id) ?? true) && (disponibiliteCategories.get(a.categorie_id) ?? true),
     prix_canaux: Object.fromEntries(
       canaux.filter((c) => c.article_id === a.id).map((c) => [c.canal, c.prix]),
     ),
@@ -64,7 +74,17 @@ export async function chargerCatalogue(): Promise<CatalogueVue> {
   }));
 
   return {
-    categories: cats.map((c) => ({ id: c.id, nom: c.nom, ordre: c.ordre, partenaires: c.partenaires })),
+    categories: categoriesOrdonnees.map((c) => ({
+      id: c.id,
+      nom: c.nom,
+      ordre: c.ordre,
+      partenaires: c.partenaires,
+      heure_debut: c.heure_debut,
+      heure_fin: c.heure_fin,
+      disponibilite_forcee: c.disponibilite_forcee,
+      disponible_maintenant: disponibiliteCategories.get(c.id) ?? true,
+      jour_semaine: c.jour_semaine,
+    })),
     articles: vueArticles,
     combos: cbs.map((c) => ({
       id: c.id,

@@ -225,6 +225,13 @@
       "when": 1788512400000,
       "tag": "0031_a_la_braise",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1788520000000,
+      "tag": "0032_disponibilite_horaire",
+      "breakpoints": true
     }
   ]
 }

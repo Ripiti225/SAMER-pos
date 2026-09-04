@@ -244,7 +244,7 @@ export function PriseCommande({
             >
               <div className="relative aspect-[4/3] w-full overflow-hidden bg-marque-tint">
                 {a.image_url ? (
-                  <img src={a.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+                  <img src={a.image_url} alt="" loading="lazy" className="h-full w-full object-contain" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-xl font-black text-marque-fonce/30">
                     {a.nom.slice(0, 2).toUpperCase()}

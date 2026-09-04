@@ -479,6 +479,10 @@ export const ModifierTableSchema = z.object({
 
 /** Disponibilité locale d'un article (2.3). */
 export const DisponibiliteSchema = z.object({ disponible: z.boolean() });
+export const DerogationDisponibiliteSchema = z.object({
+  active: z.boolean(),
+  motif: z.string().trim().min(3).max(200),
+});
 
 /** Modification d'un paramètre local (2.6). */
 export const ModifierParametreSchema = z.object({

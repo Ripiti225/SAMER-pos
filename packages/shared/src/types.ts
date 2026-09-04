@@ -74,6 +74,11 @@ export interface CategorieVue {
   id: string;
   nom: string;
   ordre: number;
+  heure_debut: string | null;
+  heure_fin: string | null;
+  disponibilite_forcee: boolean;
+  disponible_maintenant: boolean;
+  jour_semaine: number | null;
   /**
    * Catégorie réservée à des partenaires de livraison (migration 0023).
    * `null` = catégorie normale, visible partout. Sinon elle n'apparaît que sur

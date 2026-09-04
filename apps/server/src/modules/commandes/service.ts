@@ -29,6 +29,8 @@ import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { promotionActive, type PromotionDb } from '../catalogue/promos.js';
 import { optionsAutoriseesPourArticle } from '../catalogue/options.js';
+import { articleDisponible } from '../catalogue/disponibilite.js';
+import { categorieDisponibleMaintenant } from '../catalogue/horaires.js';
 
 export type CommandeDb = typeof commandes.$inferSelect;
 export type ItemDb = typeof commandeItems.$inferSelect;
@@ -131,14 +133,22 @@ export async function figerNouvelItem(
   if (corps.article_id) {
     const [article] = await tx.select().from(articles).where(eq(articles.id, corps.article_id));
     if (!article || !article.actif) throw introuvable('Article');
-    if (!article.disponible) throw new ErreurMetier('Cet article n’est plus disponible aujourd’hui', 409);
+    if (!article.disponible || !(await articleDisponible(tx, article.id))) {
+      throw new ErreurMetier('Cet article n’est plus disponible aujourd’hui', 409);
+    }
 
     // Catégorie réservée à un partenaire (migration 0023) : la règle est
     // appliquée ICI et pas seulement à l'affichage. Les trois apps masquent
     // déjà ces catégories, mais un plat « Glovo spéciale » vendu en salle
     // fausserait la facturation du partenaire — la carte n'est pas la même.
     const [categorie] = await tx
-      .select({ nom: categories.nom, partenaires: categories.partenaires })
+      .select({
+        nom: categories.nom,
+        partenaires: categories.partenaires,
+        heure_debut: categories.heure_debut,
+        heure_fin: categories.heure_fin,
+        disponibilite_forcee: categories.disponibilite_forcee,
+      })
       .from(categories)
       .where(eq(categories.id, article.categorie_id));
     if (!categorieVisiblePour(categorie?.partenaires, c.partenaire)) {
@@ -146,6 +156,9 @@ export async function figerNouvelItem(
         `« ${article.nom} » ne se vend que pour ${(categorie?.partenaires ?? []).map(libellePartenaire).join(' ou ')}`,
         409,
       );
+    }
+    if (categorie && !categorieDisponibleMaintenant(categorie)) {
+      throw new ErreurMetier(`La catégorie « ${categorie.nom} » n’est pas disponible à cette heure`, 409);
     }
     const canaux = await tx.select().from(prixCanaux).where(eq(prixCanaux.article_id, article.id));
     nomSnapshot = article.nom;

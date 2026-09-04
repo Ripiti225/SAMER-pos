@@ -94,7 +94,12 @@ CREATE TABLE categories (
   parent_id   UUID REFERENCES categories(id),
   nom         TEXT NOT NULL,
   ordre       SMALLINT NOT NULL DEFAULT 0,
-  actif       BOOLEAN NOT NULL DEFAULT TRUE
+  actif       BOOLEAN NOT NULL DEFAULT TRUE,
+  heure_debut TIME,
+  heure_fin   TIME,
+  disponibilite_forcee BOOLEAN NOT NULL DEFAULT FALSE,
+  jour_semaine SMALLINT CHECK (jour_semaine BETWEEN 1 AND 7),
+  CHECK ((heure_debut IS NULL) = (heure_fin IS NULL))
 );
 
 CREATE TABLE articles (

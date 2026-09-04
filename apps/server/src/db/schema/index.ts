@@ -149,6 +149,10 @@ export const categories = pgTable('categories', {
   nom: text('nom').notNull(),
   ordre: smallint('ordre').notNull().default(0),
   actif: boolean('actif').notNull().default(true),
+  heure_debut: time('heure_debut'),
+  heure_fin: time('heure_fin'),
+  disponibilite_forcee: boolean('disponibilite_forcee').notNull().default(false),
+  jour_semaine: smallint('jour_semaine'),
   /**
    * Catégorie réservée à un ou plusieurs partenaires de livraison (migration
    * 0023). NULL = catégorie normale, visible partout. Sinon, elle n'apparaît
@@ -157,7 +161,10 @@ export const categories = pgTable('categories', {
    * table ou au serveur qui prend une commande en salle.
    */
   partenaires: text('partenaires').array(),
-});
+}, (table) => [
+  check('categories_horaires_coherents', sql`(${table.heure_debut} IS NULL) = (${table.heure_fin} IS NULL)`),
+  check('categories_jour_semaine_check', sql`${table.jour_semaine} IS NULL OR ${table.jour_semaine} BETWEEN 1 AND 7`),
+]);
 
 export const articles = pgTable('articles', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),

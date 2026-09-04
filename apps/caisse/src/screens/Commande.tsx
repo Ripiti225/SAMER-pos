@@ -274,6 +274,7 @@ export function Commande() {
                   style={{ background: couleurCategorie(c.nom) }}
                 />
                 <span className="truncate">{c.nom}</span>
+                {!c.disponible_maintenant && <span className="text-[9px] font-bold text-ambre-300">Hors horaire</span>}
                 <span className="ml-auto flex-none text-[11.5px] font-semibold text-ard-txt-faible">{nb}</span>
               </button>
             );
@@ -356,7 +357,7 @@ export function Commande() {
                         src={a.image_url}
                         alt=""
                         loading="lazy"
-                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                        className="h-full w-full object-contain transition duration-300 group-hover:scale-105"
                       />
                     ) : (
                       <div
@@ -910,7 +911,7 @@ function ModaleArticle({
           style={{ background: `color-mix(in srgb, ${couleur} 11%, var(--carte))` }}
         >
           {article.image_url ? (
-            <img src={article.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+            <img src={article.image_url} alt="" loading="lazy" className="h-full w-full object-contain" />
           ) : (
             <div
               className="flex h-full w-full items-center justify-center text-4xl font-bold"
