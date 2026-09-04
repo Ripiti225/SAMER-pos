@@ -80,7 +80,7 @@ export const restaurant = pgTable('restaurant', {
   couleur_hex: text('couleur_hex').notNull(),
   actif: boolean('actif').notNull().default(true),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [check('restaurant_marque_check', sql`${t.marque} IN ('SAMER','AL_KAYAN')`)]);
+}, (t) => [check('restaurant_marque_check', sql`${t.marque} IN ('SAMER','AL_KAYAN','A_LA_BRAISE')`)]);
 
 export const parametresLocaux = pgTable('parametres_locaux', {
   cle: text('cle').primaryKey(),

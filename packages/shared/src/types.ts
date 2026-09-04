@@ -37,7 +37,7 @@ export interface SessionInfo {
   restaurant: {
     code: string;
     nom: string;
-    marque: 'SAMER' | 'AL_KAYAN';
+    marque: 'SAMER' | 'AL_KAYAN' | 'A_LA_BRAISE';
     couleur_hex: string;
     /** Contact + message sous le logo de la facture (param ticket_entete). */
     entete?: string;
@@ -245,7 +245,7 @@ export interface TableClientVue {
   table_id: string;
   numero: string;
   zone_nom: string;
-  restaurant: { nom: string; marque: 'SAMER' | 'AL_KAYAN'; couleur_hex: string };
+  restaurant: { nom: string; marque: 'SAMER' | 'AL_KAYAN' | 'A_LA_BRAISE'; couleur_hex: string };
   etat: import('./constantes.js').EtatTable;
 }
 
@@ -378,7 +378,7 @@ export interface CarteKds {
 
 export interface KdsVue {
   /** Marque pour le thème — le KDS n'a pas de session utilisateur. */
-  marque: 'SAMER' | 'AL_KAYAN';
+  marque: 'SAMER' | 'AL_KAYAN' | 'A_LA_BRAISE';
   couleur_hex: string;
   seuils: { orange_minutes: number; rouge_minutes: number };
   en_cuisine: CarteKds[];

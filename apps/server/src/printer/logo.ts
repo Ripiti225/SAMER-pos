@@ -38,7 +38,7 @@ export function estModeLogo(v: unknown): v is ModeLogo {
   return typeof v === 'string' && (MODES_LOGO as readonly string[]).includes(v);
 }
 
-export type Marque = 'SAMER' | 'AL_KAYAN';
+export type Marque = 'SAMER' | 'AL_KAYAN' | 'A_LA_BRAISE';
 
 /** Bitmap monochrome : 1 bit par point, `true` = encré. */
 interface Bitmap {
@@ -51,7 +51,11 @@ const cacheBitmap = new Map<Marque, Bitmap | null>();
 const cacheEncode = new Map<string, Buffer | null>();
 
 function cheminLogo(marque: Marque): string {
-  const fichier = marque === 'AL_KAYAN' ? 'logo-alkayan.png' : 'logo-samer.png';
+  const fichier = marque === 'AL_KAYAN'
+    ? 'logo-alkayan.png'
+    : marque === 'A_LA_BRAISE'
+      ? 'logo-a-la-braise.png'
+      : 'logo-samer.png';
   return resolve(dirname(fileURLToPath(import.meta.url)), '../../assets', fichier);
 }
 
@@ -77,14 +81,19 @@ function bitmap(marque: Marque): Bitmap | null {
         // Moyenne de l'opacité sur le bloc source correspondant (anti-crénelage).
         const x0 = Math.floor(tx / echelle), x1 = Math.max(x0 + 1, Math.floor((tx + 1) / echelle));
         const y0 = Math.floor(ty / echelle), y1 = Math.max(y0 + 1, Math.floor((ty + 1) / echelle));
-        let somme = 0, n = 0;
+        let sommeAlpha = 0, sommeLumiere = 0, n = 0;
         for (let y = y0; y < y1 && y < sh; y++) {
           for (let x = x0; x < x1 && x < sw; x++) {
-            somme += data[(y * sw + x) * 4 + 3]!; // canal alpha
+            const i = (y * sw + x) * 4;
+            sommeLumiere += Math.max(data[i]!, data[i + 1]!, data[i + 2]!);
+            sommeAlpha += data[i + 3]!;
             n++;
           }
         }
-        if (n > 0 && somme / n > SEUIL_ALPHA) points[ty * tw + tx] = 1;
+        const visible = marque === 'A_LA_BRAISE'
+          ? sommeLumiere / n > 72
+          : sommeAlpha / n > SEUIL_ALPHA;
+        if (n > 0 && visible) points[ty * tw + tx] = 1;
       }
     }
     resultat = { largeur: tw, hauteur: th, points };

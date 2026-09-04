@@ -83,7 +83,7 @@ export function Sequences({ filtre, onFiltre }: { filtre: FiltreResto; onFiltre:
   const [msg, setMsg] = useState<{ texte: string; ok?: boolean } | null>(null);
 
   const nomResto = useMemo(() => {
-    const m = new Map<string, { nom: string; marque: 'SAMER' | 'AL_KAYAN' }>();
+    const m = new Map<string, { nom: string; marque: 'SAMER' | 'AL_KAYAN' | 'A_LA_BRAISE' }>();
     for (const r of restos?.restaurants ?? []) if (r.restaurant_id) m.set(r.restaurant_id, { nom: r.nom, marque: r.marque });
     return m;
   }, [restos]);

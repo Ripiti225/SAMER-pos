@@ -69,7 +69,7 @@ export interface RestoGroupe {
   restaurant_id: string | null;
   samtrackly_id: string;
   nom: string;
-  marque: 'SAMER' | 'AL_KAYAN';
+  marque: 'SAMER' | 'AL_KAYAN' | 'A_LA_BRAISE';
   /** false = ce POS ne synchronise pas encore, donc aucune vente ici. */
   enrole: boolean;
 }

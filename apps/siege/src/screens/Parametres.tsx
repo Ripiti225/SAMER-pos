@@ -71,7 +71,7 @@ export function Parametres({ filtre }: { filtre: FiltreResto; onFiltre: (v: Filt
 
   const instances = roleNom ? (parNom.get(roleNom) ?? []) : [];
   const nomResto = useMemo(() => {
-    const m = new Map<string, { nom: string; marque: 'SAMER' | 'AL_KAYAN'; sid: string }>();
+    const m = new Map<string, { nom: string; marque: 'SAMER' | 'AL_KAYAN' | 'A_LA_BRAISE'; sid: string }>();
     for (const r of enroles) if (r.restaurant_id) m.set(r.restaurant_id, { nom: r.nom, marque: r.marque, sid: r.samtrackly_id });
     return m;
   }, [enroles]);

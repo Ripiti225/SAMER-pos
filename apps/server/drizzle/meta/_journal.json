@@ -218,6 +218,13 @@
       "when": 1787961600000,
       "tag": "0030_monnaie_rendue",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1788512400000,
+      "tag": "0031_a_la_braise",
+      "breakpoints": true
     }
   ]
 }

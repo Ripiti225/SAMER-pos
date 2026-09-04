@@ -19,13 +19,15 @@ export function Squelette({ lignes = 3 }: { lignes?: number }) {
   );
 }
 
-/** Pastille de marque : le vert Al Kayan se distingue de l'orange Chez Samer. */
-export function PastilleMarque({ marque }: { marque: 'SAMER' | 'AL_KAYAN' }) {
+/** Pastille de marque : chaque enseigne garde sa couleur d'accent. */
+export function PastilleMarque({ marque }: { marque: 'SAMER' | 'AL_KAYAN' | 'A_LA_BRAISE' }) {
+  const couleur = marque === 'AL_KAYAN' ? '#2d7d46' : marque === 'A_LA_BRAISE' ? '#d89a2b' : '#ef9f27';
+  const titre = marque === 'AL_KAYAN' ? 'Al Kayan' : marque === 'A_LA_BRAISE' ? 'À la Braise' : 'Chez Samer';
   return (
     <span
       className="inline-block h-2.5 w-2.5 flex-none rounded-full"
-      style={{ background: marque === 'AL_KAYAN' ? '#2d7d46' : '#ef9f27' }}
-      title={marque === 'AL_KAYAN' ? 'Al Kayan' : 'Chez Samer'}
+      style={{ background: couleur }}
+      title={titre}
     />
   );
 }

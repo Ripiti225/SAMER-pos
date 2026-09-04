@@ -93,7 +93,7 @@ export function routesClient(app: FastifyInstance): void {
       zone_nom: zone?.nom ?? '',
       restaurant: {
         nom: resto?.nom ?? '',
-        marque: (resto?.marque ?? 'SAMER') as 'SAMER' | 'AL_KAYAN',
+        marque: (resto?.marque ?? 'SAMER') as 'SAMER' | 'AL_KAYAN' | 'A_LA_BRAISE',
         couleur_hex: resto?.couleur_hex ?? '#EF9F27',
       },
       etat: await etatDUneTable(table.id, table.statut),

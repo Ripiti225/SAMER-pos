@@ -64,7 +64,7 @@ async function construireSessionInfo(session: SessionUtilisateur): Promise<Sessi
     restaurant: {
       code: resto.code,
       nom: resto.nom,
-      marque: resto.marque as 'SAMER' | 'AL_KAYAN',
+      marque: resto.marque as 'SAMER' | 'AL_KAYAN' | 'A_LA_BRAISE',
       couleur_hex: resto.couleur_hex,
       entete: lireTexte('ticket_entete'),
       pied: lireTexte('ticket_pied'),

@@ -25,7 +25,7 @@ CREATE TABLE restaurant (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   code          TEXT NOT NULL UNIQUE,           -- ex: 'SAMER_ANGRE7E'
   nom           TEXT NOT NULL,                  -- ex: 'Chez Samer Angré 7E'
-  marque        TEXT NOT NULL CHECK (marque IN ('SAMER','AL_KAYAN')),
+  marque        TEXT NOT NULL CHECK (marque IN ('SAMER','AL_KAYAN','A_LA_BRAISE')),
   couleur_hex   TEXT NOT NULL,                  -- '#EF9F27' ou '#2D7D46'
   actif         BOOLEAN NOT NULL DEFAULT TRUE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
