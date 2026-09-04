@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "code": "ALA_BRAISE",
+  "restaurant": {
+    "nom": "À la Braise",
+    "nom_complet": "À la Braise chez Mapau",
+    "marque": "A_LA_BRAISE",
+    "couleur_hex": "#D99A2B",
+    "couleur_secondaire": "#BE2E36",
+    "telephone": "07 01 11 11 18",
+    "adresse": "Yopougon Maroc, à 100 m de l’antenne Maroc",
+    "latitude": 5.3430833333,
+    "longitude": -4.1004444444,
+    "google_maps": "https://maps.app.goo.gl/fdjXuftprfN4RWQ27",
+    "instagram": "ala.braise",
+    "facebook": "À la Braise chez Mapau",
+    "tiktok": "A la Braise chez Mapau",
+    "ouverture": "24 h/24, 7 j/7"
+  },
+  "parametres": {
+    "ticket_entete": "À LA BRAISE\nYopougon Maroc\nÀ 100 m de l’antenne Maroc\nTél. : 07 01 11 11 18",
+    "ticket_pied": "",
+    "ticket_logo": "raster",
+    "adresse_restaurant": "Yopougon Maroc, à 100 m de l’antenne Maroc",
+    "coordonnees_gps": { "latitude": 5.3430833333, "longitude": -4.1004444444 },
+    "google_maps": "https://maps.app.goo.gl/fdjXuftprfN4RWQ27",
+    "reseaux_sociaux": { "instagram": "ala.braise", "facebook": "À la Braise chez Mapau", "tiktok": "A la Braise chez Mapau" }
+  },
+  "zones": [
+    { "nom": "RC", "ordre": 1, "tables": [
+      { "numero": "RC 1" }, { "numero": "RC 2" }, { "numero": "RC 3" }, { "numero": "RC 4" }
+    ] },
+    { "nom": "Salle", "ordre": 2, "tables": [
+      { "numero": "Salle 1" }, { "numero": "Salle 2" }, { "numero": "Salle 3" }, { "numero": "Salle 4" }, { "numero": "Salle 5" },
+      { "numero": "Salle 6" }, { "numero": "Salle 7" }, { "numero": "Salle 8" }, { "numero": "Salle 9" }, { "numero": "Salle 10" },
+      { "numero": "Salle 11" }, { "numero": "Salle 12" }, { "numero": "Salle 13" }, { "numero": "Salle 14" }, { "numero": "Salle 15" }
+    ] },
+    { "nom": "Terrasse", "ordre": 3, "tables": [
+      { "numero": "Terrasse 1" }, { "numero": "Terrasse 2" }, { "numero": "Terrasse 3" }, { "numero": "Terrasse 4" }, { "numero": "Terrasse 5" },
+      { "numero": "Terrasse 6" }, { "numero": "Terrasse 7" }, { "numero": "Terrasse 8" }, { "numero": "Terrasse 9" }, { "numero": "Terrasse 10" },
+      { "numero": "Terrasse 11" }, { "numero": "Terrasse 12" }, { "numero": "Terrasse 13" }, { "numero": "Terrasse 14" }, { "numero": "Terrasse 15" }
+    ] },
+    { "nom": "Livraison", "ordre": 4, "tables": [
+      { "numero": "GLOVO", "partenaire": "GLOVO" },
+      { "numero": "YANGO", "partenaire": "YANGO" },
+      { "numero": "LIVRAISON DIRECTE", "partenaire": "LIVRAISON_DIRECTE" }
+    ] }
+  ],
+  "categories": [
+    { "nom": "Sauces — Tous les jours", "ordre": 10, "horaire": { "debut": "10:00", "fin": "16:00" }, "articles": [
+      { "nom": "Graine + Foutou — pondeuse fumée", "prix": 4000 },
+      { "nom": "Graine + Foutou — escargot, queue de bœuf et poisson fumé", "prix": 5000 }
+    ] },
+    { "nom": "Sauces — Lundi", "ordre": 11, "jour": 1, "horaire": { "debut": "10:00", "fin": "16:00" }, "articles": [
+      { "nom": "Gombo grillé + Riz — viande de bœuf", "prix": 3000 },
+      { "nom": "Aubergine + Foutou — patte de bœuf et poisson fumé", "prix": 5000 }
+    ] },
+    { "nom": "Sauces — Mardi", "ordre": 12, "jour": 2, "horaire": { "debut": "10:00", "fin": "16:00" }, "articles": [
+      { "nom": "Gouagouassou + Foutou — patte de bœuf, poisson fumé et crabes", "prix": 3000 },
+      { "nom": "Sauce légumes + Riz — poisson grillé et viande de bœuf fumée", "prix": 3500 }
+    ] },
+    { "nom": "Sauces — Mercredi", "ordre": 13, "jour": 3, "horaire": { "debut": "10:00", "fin": "16:00" }, "articles": [
+      { "nom": "Tomate + Riz — poisson grillé et viande de bœuf", "prix": 3000 }, { "nom": "Tchep au poisson", "prix": 2000 }, { "nom": "Tchep à la viande", "prix": 2500 }
+    ] },
+    { "nom": "Sauces — Jeudi", "ordre": 14, "jour": 4, "horaire": { "debut": "10:00", "fin": "16:00" }, "articles": [
+      { "nom": "Arachide + Riz — viande de bœuf", "prix": 3000 }, { "nom": "Arachide + Riz — poulet pondeuse", "prix": 4000 }, { "nom": "Sauce claire + Foufou — poisson frais", "prix": 3000 }
+    ] },
+    { "nom": "Sauces — Vendredi", "ordre": 15, "jour": 5, "horaire": { "debut": "10:00", "fin": "16:00" }, "articles": [
+      { "nom": "Biekosseu + Foutou — poisson carpe", "prix": 3000 }, { "nom": "Biekosseu + Foutou — poulet pondeuse", "prix": 4000 }, { "nom": "Feuilles + Riz — poisson fumé et viande de bœuf", "prix": 3000 }
+    ] },
+    { "nom": "Sauces — Samedi", "ordre": 16, "jour": 6, "horaire": { "debut": "10:00", "fin": "16:00" }, "articles": [
+      { "nom": "Lokossoukouê — poisson sec et viande fumée", "prix": 2500 }, { "nom": "Lokossoukouê — pondeuse fumée et poisson fumé", "prix": 3000 }, { "nom": "Pistache — viande de bœuf", "prix": 3000 }, { "nom": "Pistache — pondeuse", "prix": 4000 }
+    ] },
+    { "nom": "Sauces — Dimanche", "ordre": 17, "jour": 7, "horaire": { "debut": "10:00", "fin": "16:00" }, "articles": [
+      { "nom": "Soumara Lafri + poisson", "prix": 2500 }, { "nom": "Soumara Lafri + viande de bœuf", "prix": 3000 }, { "nom": "Soumara Lafri + pondeuse", "prix": 3500 }, { "nom": "Soumara Lafri + pintade", "prix": 4000 },
+      { "nom": "Soupe de carpe + attiéké rouge", "prix": 2500 }, { "nom": "Soupe de mouton + attiéké rouge", "prix": 3000 }, { "nom": "Soupe de cabri + attiéké rouge", "prix": 3000 }
+    ] },
+    { "nom": "Barbecues", "ordre": 20, "horaire": { "debut": "16:00", "fin": "00:00" }, "articles": [
+      { "nom": "Poulet braisé de chair — entier", "prix": 8000 }, { "nom": "Poulet braisé hybride — entier", "prix": 10000 }, { "nom": "Lapin braisé", "prix": 4000 }, { "nom": "Cabri braisé", "prix": 5000 }, { "nom": "Mouton braisé", "prix": 5000 },
+      { "nom": "Carpe braisée — petite", "prix": 5000 }, { "nom": "Carpe braisée — grande", "prix": 6000 }, { "nom": "Machoiron piqué", "prix": 6000 }, { "nom": "Sol braisé", "prix": 4500 }, { "nom": "Brochette de caille braisée", "prix": 7000 },
+      { "nom": "Brochette de gésier", "prix": 4000 }, { "nom": "Brochette d’escargot", "prix": 5000 }, { "nom": "Brochette de poulet de chair", "prix": 5500 }, { "nom": "Choukouya de bœuf", "prix": 7500 }
+    ] },
+    { "nom": "Kedjenou", "ordre": 30, "articles": [
+      { "nom": "Kedjenou de lapin — demi", "prix": 5000 }, { "nom": "Kedjenou de lapin — entier", "prix": 8000 },
+      { "nom": "Kedjenou de poulet hybride — demi", "prix": 5000 }, { "nom": "Kedjenou de poulet hybride — entier", "prix": 9500 },
+      { "nom": "Kedjenou de pintade — demi", "prix": 6000 }, { "nom": "Kedjenou de pintade — entier", "prix": 10000 }, { "nom": "Kedjenou d’escargot", "prix": 7000 }
+    ] },
+    { "nom": "Assiettes", "ordre": 40, "articles": [
+      { "nom": "Soupe de machoiron", "prix": 7000 }, { "nom": "Soupe du pêcheur — demi", "prix": 6000 }, { "nom": "Soupe du pêcheur — entier", "prix": 12000 }
+    ] },
+    { "nom": "Desserts", "ordre": 50, "articles": [
+      { "nom": "2 boules de glace", "prix": 1000 }, { "nom": "Dêguê au couscous", "prix": 1500 }, { "nom": "Dêguê au mil", "prix": 1500 }, { "nom": "Cake à l’orange", "prix": 2000 }, { "nom": "Salade de fruits", "prix": 2000 }, { "nom": "Cake au chocolat", "prix": 2500 }, { "nom": "Crêpe au Nutella", "prix": 3000 }
+    ] },
+    { "nom": "Accompagnements", "ordre": 60, "articles": [
+      { "nom": "Attiéké", "prix": 500 }, { "nom": "Riz nature", "prix": 1000 }, { "nom": "Alloco", "prix": 1500 }, { "nom": "Igname grillée", "prix": 1500 }, { "nom": "Pomme de terre sautée", "prix": 1500 }, { "nom": "Poêlée de légumes", "prix": 2000 }, { "nom": "Riz cantonais", "prix": 2500 }, { "nom": "Poutine — frites, fromage et viande hachée", "prix": 2500 }
+    ] },
+    { "nom": "Placali et Cabato", "ordre": 70, "horaire": { "debut": "04:00", "fin": "10:00" }, "articles": [
+      { "nom": "Formule Placali ou Cabato — classique", "prix": 3000, "description": "Deux boules, kplo, crabe, poisson, tripe, sauces gombo et kpala incluses" },
+      { "nom": "Formule Placali ou Cabato — escargot", "prix": 5000, "description": "Deux boules, kplo, crabe, poisson, tripe, escargot, sauces gombo et kpala incluses" },
+      { "nom": "Formule Placali ou Cabato — sauce graine", "prix": 3500, "description": "Deux boules, sauce graine, escargot, sauce gombo ou kpala" }
+    ] },
+    { "nom": "Boissons", "ordre": 80, "articles": [
+      { "nom": "Eau petite bouteille", "prix": 500 }, { "nom": "Eau grande bouteille", "prix": 1000 }, { "nom": "Boisson 1 000", "prix": 1000 }, { "nom": "Boisson 1 500", "prix": 1500 }, { "nom": "Bissap menthe et ananas", "prix": 1500 },
+      { "nom": "Jus de gingembre", "prix": 1500 }, { "nom": "Jus de passion", "prix": 2000 }, { "nom": "Jus de tamarin", "prix": 2000 }, { "nom": "Limonade", "prix": 1500 }, { "nom": "Citron menthe", "prix": 2500 }
+    ] }
+  ],
+  "options": [
+    { "nom": "Riz supplémentaire", "prix": 500, "categories": ["Sauces — Tous les jours", "Sauces — Lundi", "Sauces — Mardi", "Sauces — Mercredi", "Sauces — Jeudi", "Sauces — Vendredi", "Sauces — Samedi", "Sauces — Dimanche"] },
+    { "nom": "Attiéké supplémentaire", "prix": 500, "categories": ["Sauces — Tous les jours", "Sauces — Lundi", "Sauces — Mardi", "Sauces — Mercredi", "Sauces — Jeudi", "Sauces — Vendredi", "Sauces — Samedi", "Sauces — Dimanche"] },
+    { "nom": "Foutou supplémentaire", "prix": 500, "categories": ["Sauces — Tous les jours", "Sauces — Lundi", "Sauces — Mardi", "Sauces — Mercredi", "Sauces — Jeudi", "Sauces — Vendredi", "Sauces — Samedi", "Sauces — Dimanche"] },
+    { "nom": "Placali supplémentaire", "prix": 500, "categories": ["Placali et Cabato"] },
+    { "nom": "Cabato supplémentaire", "prix": 500, "categories": ["Placali et Cabato"] },
+    { "nom": "Riz supplémentaire (Placali)", "prix": 500, "categories": ["Placali et Cabato"] }
+  ],
+  "inventaire": [
+    { "code": "ALA-POUL-CHAIR", "categorie": "POUL", "nom": "Poulet de chair", "unite": "u" },
+    { "code": "ALA-POUL-HYBRIDE", "categorie": "POUL", "nom": "Poulet hybride", "unite": "u" },
+    { "code": "ALA-PINTADE", "categorie": "POUL", "nom": "Pintade", "unite": "u" },
+    { "code": "ALA-BOIS-1000", "categorie": "BOIS", "nom": "Boisson 1 000", "unite": "u" },
+    { "code": "ALA-BOIS-1500", "categorie": "BOIS", "nom": "Boisson 1 500", "unite": "u" }
+  ]
+}
