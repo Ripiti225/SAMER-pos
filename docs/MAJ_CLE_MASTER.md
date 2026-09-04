@@ -5,11 +5,12 @@
 La clé a été copiée le **2026-08-17 à 05h01:32**, avec l'identité neutre `A_CONFIGURER`
 et les deux seuls comptes propriétaire. Tout ce qui est écrit ici est **postérieur**.
 
-> **Report effectué le 2026-09-04 à 21h52** via `mettre-a-jour-cle.ps1` (`data\` exclu,
-> la base neutre de la clé est intacte — inchangée depuis le 18/07 14h24). **Toutes les
-> entrées ci-dessous sont désormais sur la clé**, code, migrations jusqu'à la **0032** et
-> `apps/caisse/dist` du 04/09 21h40 compris. Les entrées ajoutées après cette date ne le
-> seront pas : recommencer le report avant tout nouveau déploiement.
+> **Report effectué le 2026-09-04 au soir** via `mettre-a-jour-cle.ps1` (`data\` exclu,
+> la base neutre de la clé est intacte — inchangée depuis le 18/07 14h24) : **le code à
+> 21h52**, puis **ce journal et ses six nouvelles entrées dans une seconde passe**.
+> **Tout ce qui est écrit ci-dessous est donc sur la clé**, migrations jusqu'à la **0032**
+> et `apps/caisse/dist` du 04/09 21h40 compris. Les entrées ajoutées après cette date ne
+> le seront pas : recommencer le report avant tout nouveau déploiement.
 >
 > *(Report précédent : 2026-08-21 à 15h48, la clé s'arrêtait alors à la migration 0025.)*
 
