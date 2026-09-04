@@ -52,47 +52,47 @@
       { "nom": "Graine + Foutou — escargot, queue de bœuf et poisson fumé", "prix": 5000 }
     ] },
     { "nom": "Sauces — Lundi", "ordre": 11, "jour": 1, "horaire": { "debut": "10:00", "fin": "16:00" }, "articles": [
-      { "nom": "Gombo grillé + Riz — viande de bœuf", "prix": 3000 },
+      { "nom": "Gombo grillé + Riz — viande de bœuf", "prix": 3000, "image_url": "/catalogue/a-la-braise/gombo-grille.webp" },
       { "nom": "Aubergine + Foutou — patte de bœuf et poisson fumé", "prix": 5000 }
     ] },
     { "nom": "Sauces — Mardi", "ordre": 12, "jour": 2, "horaire": { "debut": "10:00", "fin": "16:00" }, "articles": [
-      { "nom": "Gouagouassou + Foutou — patte de bœuf, poisson fumé et crabes", "prix": 3000 },
+      { "nom": "Gouagouassou + Foutou — patte de bœuf, poisson fumé et crabes", "prix": 3000, "image_url": "/catalogue/a-la-braise/gouagouassou.webp" },
       { "nom": "Sauce légumes + Riz — poisson grillé et viande de bœuf fumée", "prix": 3500 }
     ] },
     { "nom": "Sauces — Mercredi", "ordre": 13, "jour": 3, "horaire": { "debut": "10:00", "fin": "16:00" }, "articles": [
-      { "nom": "Tomate + Riz — poisson grillé et viande de bœuf", "prix": 3000 }, { "nom": "Tchep au poisson", "prix": 2000 }, { "nom": "Tchep à la viande", "prix": 2500 }
+      { "nom": "Tomate + Riz — poisson grillé et viande de bœuf", "prix": 3000 }, { "nom": "Tchep au poisson", "prix": 2000, "image_url": "/catalogue/a-la-braise/tchep-poisson.webp" }, { "nom": "Tchep à la viande", "prix": 2500, "image_url": "/catalogue/a-la-braise/tchep-a-la-viande.webp" }
     ] },
     { "nom": "Sauces — Jeudi", "ordre": 14, "jour": 4, "horaire": { "debut": "10:00", "fin": "16:00" }, "articles": [
-      { "nom": "Arachide + Riz — viande de bœuf", "prix": 3000 }, { "nom": "Arachide + Riz — poulet pondeuse", "prix": 4000 }, { "nom": "Sauce claire + Foufou — poisson frais", "prix": 3000 }
+      { "nom": "Arachide + Riz — viande de bœuf", "prix": 3000, "image_url": "/catalogue/a-la-braise/foutou-sauce-arachide.webp" }, { "nom": "Arachide + Riz — poulet pondeuse", "prix": 4000 }, { "nom": "Sauce claire + Foufou — poisson frais", "prix": 3000 }
     ] },
     { "nom": "Sauces — Vendredi", "ordre": 15, "jour": 5, "horaire": { "debut": "10:00", "fin": "16:00" }, "articles": [
-      { "nom": "Biekosseu + Foutou — poisson carpe", "prix": 3000 }, { "nom": "Biekosseu + Foutou — poulet pondeuse", "prix": 4000 }, { "nom": "Feuilles + Riz — poisson fumé et viande de bœuf", "prix": 3000 }
+      { "nom": "Biekosseu + Foutou — poisson carpe", "prix": 3000 }, { "nom": "Biekosseu + Foutou — poulet pondeuse", "prix": 4000 }, { "nom": "Feuilles + Riz — poisson fumé et viande de bœuf", "prix": 3000, "image_url": "/catalogue/a-la-braise/sauce-feuilles.webp" }
     ] },
     { "nom": "Sauces — Samedi", "ordre": 16, "jour": 6, "horaire": { "debut": "10:00", "fin": "16:00" }, "articles": [
       { "nom": "Lokossoukouê — poisson sec et viande fumée", "prix": 2500 }, { "nom": "Lokossoukouê — pondeuse fumée et poisson fumé", "prix": 3000 }, { "nom": "Pistache — viande de bœuf", "prix": 3000 }, { "nom": "Pistache — pondeuse", "prix": 4000 }
     ] },
     { "nom": "Sauces — Dimanche", "ordre": 17, "jour": 7, "horaire": { "debut": "10:00", "fin": "16:00" }, "articles": [
-      { "nom": "Soumara Lafri + poisson", "prix": 2500 }, { "nom": "Soumara Lafri + viande de bœuf", "prix": 3000 }, { "nom": "Soumara Lafri + pondeuse", "prix": 3500 }, { "nom": "Soumara Lafri + pintade", "prix": 4000 },
+      { "nom": "Soumara Lafri + poisson", "prix": 2500, "image_url": "/catalogue/a-la-braise/riz-soumara-au-poisson.webp" }, { "nom": "Soumara Lafri + viande de bœuf", "prix": 3000, "image_url": "/catalogue/a-la-braise/riz-soumara-viande.webp" }, { "nom": "Soumara Lafri + pondeuse", "prix": 3500, "image_url": "/catalogue/a-la-braise/riz-soumara-poulet.webp" }, { "nom": "Soumara Lafri + pintade", "prix": 4000, "image_url": "/catalogue/a-la-braise/riz-soumara-pintade.webp" },
       { "nom": "Soupe de carpe + attiéké rouge", "prix": 2500 }, { "nom": "Soupe de mouton + attiéké rouge", "prix": 3000 }, { "nom": "Soupe de cabri + attiéké rouge", "prix": 3000 }
     ] },
     { "nom": "Barbecues", "ordre": 20, "horaire": { "debut": "16:00", "fin": "00:00" }, "articles": [
-      { "nom": "Poulet braisé de chair — entier", "prix": 8000 }, { "nom": "Poulet braisé hybride — entier", "prix": 10000 }, { "nom": "Lapin braisé", "prix": 4000 }, { "nom": "Cabri braisé", "prix": 5000 }, { "nom": "Mouton braisé", "prix": 5000 },
-      { "nom": "Carpe braisée — petite", "prix": 5000 }, { "nom": "Carpe braisée — grande", "prix": 6000 }, { "nom": "Machoiron piqué", "prix": 6000 }, { "nom": "Sol braisé", "prix": 4500 }, { "nom": "Brochette de caille braisée", "prix": 7000 },
-      { "nom": "Brochette de gésier", "prix": 4000 }, { "nom": "Brochette d’escargot", "prix": 5000 }, { "nom": "Brochette de poulet de chair", "prix": 5500 }, { "nom": "Choukouya de bœuf", "prix": 7500 }
+      { "nom": "Poulet braisé de chair — entier", "prix": 8000, "image_url": "/catalogue/a-la-braise/poulet-braise.webp" }, { "nom": "Poulet braisé hybride — entier", "prix": 10000, "image_url": "/catalogue/a-la-braise/poulet-braise.webp" }, { "nom": "Lapin braisé", "prix": 4000, "image_url": "/catalogue/a-la-braise/lapin-braise.webp" }, { "nom": "Cabri braisé", "prix": 5000, "image_url": "/catalogue/a-la-braise/mouton-et-cabri-braise.webp" }, { "nom": "Mouton braisé", "prix": 5000, "image_url": "/catalogue/a-la-braise/mouton-et-cabri-braise.webp" },
+      { "nom": "Carpe braisée — petite", "prix": 5000, "image_url": "/catalogue/a-la-braise/carpe-braise.webp" }, { "nom": "Carpe braisée — grande", "prix": 6000, "image_url": "/catalogue/a-la-braise/carpe-braise.webp" }, { "nom": "Machoiron piqué", "prix": 6000, "image_url": "/catalogue/a-la-braise/machoiron-braise.webp" }, { "nom": "Sol braisé", "prix": 4500, "image_url": "/catalogue/a-la-braise/sol-braise.webp" }, { "nom": "Brochette de caille braisée", "prix": 7000 },
+      { "nom": "Brochette de gésier", "prix": 4000 }, { "nom": "Brochette d’escargot", "prix": 5000, "image_url": "/catalogue/a-la-braise/brochette-d-escargot.webp" }, { "nom": "Brochette de poulet de chair", "prix": 5500, "image_url": "/catalogue/a-la-braise/brochette-de-poulets.webp" }, { "nom": "Choukouya de bœuf", "prix": 7500 }
     ] },
     { "nom": "Kedjenou", "ordre": 30, "articles": [
       { "nom": "Kedjenou de lapin — demi", "prix": 5000 }, { "nom": "Kedjenou de lapin — entier", "prix": 8000 },
-      { "nom": "Kedjenou de poulet hybride — demi", "prix": 5000 }, { "nom": "Kedjenou de poulet hybride — entier", "prix": 9500 },
-      { "nom": "Kedjenou de pintade — demi", "prix": 6000 }, { "nom": "Kedjenou de pintade — entier", "prix": 10000 }, { "nom": "Kedjenou d’escargot", "prix": 7000 }
+      { "nom": "Kedjenou de poulet hybride — demi", "prix": 5000, "image_url": "/catalogue/a-la-braise/kedjenou-poulet-hybride-pintade.webp" }, { "nom": "Kedjenou de poulet hybride — entier", "prix": 9500, "image_url": "/catalogue/a-la-braise/kedjenou-poulet-hybride-pintade.webp" },
+      { "nom": "Kedjenou de pintade — demi", "prix": 6000, "image_url": "/catalogue/a-la-braise/kedjenou-poulet-hybride-pintade.webp" }, { "nom": "Kedjenou de pintade — entier", "prix": 10000, "image_url": "/catalogue/a-la-braise/kedjenou-poulet-hybride-pintade.webp" }, { "nom": "Kedjenou d’escargot", "prix": 7000 }
     ] },
     { "nom": "Assiettes", "ordre": 40, "articles": [
       { "nom": "Soupe de machoiron", "prix": 7000 }, { "nom": "Soupe du pêcheur — demi", "prix": 6000 }, { "nom": "Soupe du pêcheur — entier", "prix": 12000 }
     ] },
     { "nom": "Desserts", "ordre": 50, "articles": [
-      { "nom": "2 boules de glace", "prix": 1000 }, { "nom": "Dêguê au couscous", "prix": 1500 }, { "nom": "Dêguê au mil", "prix": 1500 }, { "nom": "Cake à l’orange", "prix": 2000 }, { "nom": "Salade de fruits", "prix": 2000 }, { "nom": "Cake au chocolat", "prix": 2500 }, { "nom": "Crêpe au Nutella", "prix": 3000 }
+      { "nom": "2 boules de glace", "prix": 1000, "image_url": "/catalogue/a-la-braise/glace-2-boules.webp" }, { "nom": "Dêguê au couscous", "prix": 1500, "image_url": "/catalogue/a-la-braise/degue-couscouss.webp" }, { "nom": "Dêguê au mil", "prix": 1500, "image_url": "/catalogue/a-la-braise/degue-au-mil.webp" }, { "nom": "Cake à l’orange", "prix": 2000, "image_url": "/catalogue/a-la-braise/cake-a-l-orange.webp" }, { "nom": "Salade de fruits", "prix": 2000, "image_url": "/catalogue/a-la-braise/salade-de-fruit.webp" }, { "nom": "Cake au chocolat", "prix": 2500, "image_url": "/catalogue/a-la-braise/cake-au-chocolat.webp" }, { "nom": "Crêpe au Nutella", "prix": 3000, "image_url": "/catalogue/a-la-braise/crepe-nutella.webp" }
     ] },
     { "nom": "Accompagnements", "ordre": 60, "articles": [
-      { "nom": "Attiéké", "prix": 500 }, { "nom": "Riz nature", "prix": 1000 }, { "nom": "Alloco", "prix": 1500 }, { "nom": "Igname grillée", "prix": 1500 }, { "nom": "Pomme de terre sautée", "prix": 1500 }, { "nom": "Poêlée de légumes", "prix": 2000 }, { "nom": "Riz cantonais", "prix": 2500 }, { "nom": "Poutine — frites, fromage et viande hachée", "prix": 2500 }
+      { "nom": "Attiéké", "prix": 500, "image_url": "/catalogue/a-la-braise/attieke.webp" }, { "nom": "Riz nature", "prix": 1000, "image_url": "/catalogue/a-la-braise/riz-nature.webp" }, { "nom": "Alloco", "prix": 1500, "image_url": "/catalogue/a-la-braise/alloco.webp" }, { "nom": "Igname grillée", "prix": 1500, "image_url": "/catalogue/a-la-braise/igname-grille.webp" }, { "nom": "Pomme de terre sautée", "prix": 1500, "image_url": "/catalogue/a-la-braise/pomme-de-terre-saute.webp" }, { "nom": "Poêlée de légumes", "prix": 2000, "image_url": "/catalogue/a-la-braise/poelee-de-legumes.webp" }, { "nom": "Riz cantonais", "prix": 2500, "image_url": "/catalogue/a-la-braise/riz-cantonnais.webp" }, { "nom": "Poutine — frites, fromage et viande hachée", "prix": 2500, "image_url": "/catalogue/a-la-braise/poutine.webp" }
     ] },
     { "nom": "Placali et Cabato", "ordre": 70, "horaire": { "debut": "04:00", "fin": "10:00" }, "articles": [
       { "nom": "Formule Placali ou Cabato — classique", "prix": 3000, "description": "Deux boules, kplo, crabe, poisson, tripe, sauces gombo et kpala incluses" },
@@ -100,8 +100,8 @@
       { "nom": "Formule Placali ou Cabato — sauce graine", "prix": 3500, "description": "Deux boules, sauce graine, escargot, sauce gombo ou kpala" }
     ] },
     { "nom": "Boissons", "ordre": 80, "articles": [
-      { "nom": "Eau petite bouteille", "prix": 500 }, { "nom": "Eau grande bouteille", "prix": 1000 }, { "nom": "Boisson 1 000", "prix": 1000 }, { "nom": "Boisson 1 500", "prix": 1500 }, { "nom": "Bissap menthe et ananas", "prix": 1500 },
-      { "nom": "Jus de gingembre", "prix": 1500 }, { "nom": "Jus de passion", "prix": 2000 }, { "nom": "Jus de tamarin", "prix": 2000 }, { "nom": "Limonade", "prix": 1500 }, { "nom": "Citron menthe", "prix": 2500 }
+      { "nom": "Eau petite bouteille", "prix": 500 }, { "nom": "Eau grande bouteille", "prix": 1000 }, { "nom": "Boisson 1 000", "prix": 1000 }, { "nom": "Boisson 1 500", "prix": 1500 }, { "nom": "Bissap menthe et ananas", "prix": 1500, "image_url": "/catalogue/a-la-braise/bissap-menthe-ananas.webp" },
+      { "nom": "Jus de gingembre", "prix": 1500, "image_url": "/catalogue/a-la-braise/jus-de-gingembre.webp" }, { "nom": "Jus de passion", "prix": 2000, "image_url": "/catalogue/a-la-braise/jus-de-passion.webp" }, { "nom": "Jus de tamarin", "prix": 2000, "image_url": "/catalogue/a-la-braise/jus-de-tamarin.webp" }, { "nom": "Limonade", "prix": 1500, "image_url": "/catalogue/a-la-braise/limonade.webp" }, { "nom": "Citron menthe", "prix": 2500, "image_url": "/catalogue/a-la-braise/citron-menthe.webp" }
     ] }
   ],
   "options": [
@@ -118,5 +118,15 @@
     { "code": "ALA-PINTADE", "categorie": "POUL", "nom": "Pintade", "unite": "u" },
     { "code": "ALA-BOIS-1000", "categorie": "BOIS", "nom": "Boisson 1 000", "unite": "u" },
     { "code": "ALA-BOIS-1500", "categorie": "BOIS", "nom": "Boisson 1 500", "unite": "u" }
+  ],
+  "recettes": [
+    { "code_produit": "ALA-POUL-CHAIR", "article": "Poulet braisé de chair — entier", "quantite": 1 },
+    { "code_produit": "ALA-POUL-HYBRIDE", "article": "Poulet braisé hybride — entier", "quantite": 1 },
+    { "code_produit": "ALA-POUL-HYBRIDE", "article": "Kedjenou de poulet hybride — demi", "quantite": 0.5 },
+    { "code_produit": "ALA-POUL-HYBRIDE", "article": "Kedjenou de poulet hybride — entier", "quantite": 1 },
+    { "code_produit": "ALA-PINTADE", "article": "Kedjenou de pintade — demi", "quantite": 0.5 },
+    { "code_produit": "ALA-PINTADE", "article": "Kedjenou de pintade — entier", "quantite": 1 },
+    { "code_produit": "ALA-BOIS-1000", "article": "Boisson 1 000", "quantite": 1 },
+    { "code_produit": "ALA-BOIS-1500", "article": "Boisson 1 500", "quantite": 1 }
   ]
 }

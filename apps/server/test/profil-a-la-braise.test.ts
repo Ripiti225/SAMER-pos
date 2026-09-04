@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { db, fermerDb } from '../src/db/client.js';
-import { articles, categories, restaurant, tablesSalle, zones } from '../src/db/schema/index.js';
+import { articles, categories, inventaireConsommations, produitsInventaire, restaurant, tablesSalle, zones } from '../src/db/schema/index.js';
 import { resetDonnees } from './aide.js';
 
 interface Profil {
@@ -65,6 +65,10 @@ describe('profil d’installation À la Braise', () => {
     expect(await db.select().from(tablesSalle)).toHaveLength(37);
     expect(await db.select().from(categories)).toHaveLength(15);
     expect((await db.select().from(articles)).length).toBeGreaterThanOrEqual(70);
+    expect(await db.select().from(produitsInventaire)).toHaveLength(5);
+    const consommations = await db.select().from(inventaireConsommations);
+    expect(consommations).toHaveLength(8);
+    expect(consommations.filter((c) => c.quantite === '0.500')).toHaveLength(2);
   });
 });
 

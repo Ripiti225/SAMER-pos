@@ -9,6 +9,7 @@ const ArticleSchema = z.object({
   nom: z.string().min(1),
   prix: z.number().int().nonnegative(),
   description: z.string().optional(),
+  image_url: z.string().startsWith('/catalogue/').optional(),
 });
 const ProfilSchema = z.object({
   code: z.string().min(1),
@@ -27,6 +28,7 @@ const ProfilSchema = z.object({
   })),
   options: z.array(z.object({ nom: z.string(), prix: z.number().int(), categories: z.array(z.string()) })).default([]),
   inventaire: z.array(z.object({ code: z.string(), categorie: z.string(), nom: z.string(), unite: z.string() })).default([]),
+  recettes: z.array(z.object({ code_produit: z.string(), article: z.string(), quantite: z.number().positive() })).default([]),
 });
 
 export type ProfilRestaurant = z.infer<typeof ProfilSchema>;
@@ -103,11 +105,14 @@ export async function importerProfilRestaurant(code: string): Promise<void> {
     await client.query('DELETE FROM mapping_poste_categorie');
     await client.query('DELETE FROM routage_article');
     await client.query('DELETE FROM routage_categorie');
+    await client.query('DELETE FROM inventaire_consommations');
+    await client.query('DELETE FROM produits_inventaire');
     await client.query('UPDATE promotions SET article_id=NULL');
     await client.query('DELETE FROM articles');
     await client.query('DELETE FROM categories');
 
     const categorieIds = new Map<string, string>();
+    const articleIds = new Map<string, string>();
     for (const categorie of profil.categories) {
       const categorieId = idStable(`${profil.code}:categorie:${categorie.nom}`);
       categorieIds.set(categorie.nom, categorieId);
@@ -118,13 +123,33 @@ export async function importerProfilRestaurant(code: string): Promise<void> {
       );
       for (const article of categorie.articles) {
         const articleId = idStable(`${profil.code}:article:${article.nom}`);
+        articleIds.set(article.nom, articleId);
         await client.query(
           `INSERT INTO articles(id,categorie_id,nom,description,prix_base,image_url,disponible,actif)
-           VALUES($1,$2,$3,$4,$5,NULL,TRUE,TRUE)`,
-          [articleId, categorieId, article.nom, article.description ?? null, article.prix],
+           VALUES($1,$2,$3,$4,$5,$6,TRUE,TRUE)`,
+          [articleId, categorieId, article.nom, article.description ?? null, article.prix, article.image_url ?? null],
         );
         await client.query('INSERT INTO disponibilite_locale(article_id,disponible) VALUES($1,TRUE)', [articleId]);
       }
+    }
+    const produitIds = new Map<string, string>();
+    for (const produit of profil.inventaire) {
+      const produitId = idStable(`${profil.code}:inventaire:${produit.code}`);
+      produitIds.set(produit.code, produitId);
+      await client.query(
+        `INSERT INTO produits_inventaire(id,code,categorie,nom,unite,role,prix)
+         VALUES($1,$2,$3,$4,$5,'COMPTE',0)`,
+        [produitId, produit.code, produit.categorie, produit.nom, produit.unite],
+      );
+    }
+    for (const recette of profil.recettes) {
+      const produitId = produitIds.get(recette.code_produit);
+      const articleId = articleIds.get(recette.article);
+      if (!produitId || !articleId) throw new Error(`Recette d’inventaire invalide : ${recette.article}`);
+      await client.query(
+        'INSERT INTO inventaire_consommations(produit_id,article_id,quantite) VALUES($1,$2,$3)',
+        [produitId, articleId, recette.quantite],
+      );
     }
     for (const option of profil.options) {
       const optionId = idStable(`${profil.code}:option:${option.nom}`);
