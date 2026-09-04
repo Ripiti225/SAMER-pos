@@ -205,7 +205,7 @@ export function Commande() {
     const article = articleId ? catalogue.articles.find((a) => a.id === articleId) : undefined;
     // Un combo n'appartient à aucune catégorie : il prend la couleur de marque.
     if (!article) return 'var(--marque)';
-    return couleurCategorie(nomCategorie.get(article.categorie_id) ?? '');
+    return couleurCategorie(nomCategorie.get(article.categorie_id) ?? '', session?.restaurant.marque);
   };
 
   /**
@@ -272,7 +272,7 @@ export function Commande() {
               >
                 <span
                   className={`h-2.5 w-2.5 flex-none rounded-full transition-transform duration-200 ${actif ? 'scale-150' : ''}`}
-                  style={{ background: couleurCategorie(c.nom) }}
+                  style={{ background: couleurCategorie(c.nom, session?.restaurant.marque) }}
                 />
                 <span className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className={CLASSES_CATEGORIES.nom}>{c.nom}</span>

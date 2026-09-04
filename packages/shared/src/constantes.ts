@@ -168,8 +168,13 @@ const PALETTE_CATEGORIE = [
 ];
 
 /** Couleur du code menu pour une catégorie, par son nom. */
-export function couleurCategorie(nom: string): string {
+export function couleurCategorie(nom: string, marque?: string): string {
   const cle = normaliserNomCategorie(nom);
+  if (marque === 'A_LA_BRAISE') {
+    let somme = 0;
+    for (let i = 0; i < cle.length; i += 1) somme = (somme * 31 + cle.charCodeAt(i)) % 100_000;
+    return `var(--serie-${(somme % 8) + 1})`;
+  }
   const connue = COULEURS_CATEGORIE[cle];
   if (connue) return connue;
   let somme = 0;

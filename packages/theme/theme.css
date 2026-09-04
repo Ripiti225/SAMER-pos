@@ -257,6 +257,65 @@
   --ombre-2: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
+/* --- À la Braise : identité noire, or et rouge dans les deux modes --------
+   Le noir est ici une couleur de marque, pas seulement un mode d'affichage.
+   Ce bloc vient après le mode sombre afin de rester prioritaire partout. */
+:root[data-marque='A_LA_BRAISE'] {
+  color-scheme: dark;
+  --ard-900: #070604;
+  --ard-850: #0c0a07;
+  --ard-800: #100e0b;
+  --ard-750: #18140f;
+  --ard-700: #241d14;
+  --ard-650: #332719;
+  --ard-600: #493722;
+  --ard-txt: #fff8e8;
+  --ard-txt-doux: #d0bea0;
+  --ard-txt-faible: #8f7c60;
+
+  --plan: #12100d;
+  --carte: #1d1913;
+  --carte-douce: #282117;
+  --filet: #3b2e1d;
+  --filet-fort: #584326;
+  --txt: #fff8e8;
+  --txt-doux: #d0bea0;
+  --txt-faible: #9b896d;
+
+  --marque: #d99a2b;
+  --marque-txt: #f2ba50;
+  --marque-clair: #f6c45e;
+  --marque-tint: color-mix(in srgb, #d99a2b 18%, var(--carte));
+  --marque-sur-plan: #f6c45e;
+  --sur-marque: #160f04;
+  --braise-rouge: #be2e36;
+  --alerte: var(--braise-rouge);
+  --alerte-tint: color-mix(in srgb, var(--braise-rouge) 22%, var(--carte));
+  --alerte-txt: #ff9aa0;
+
+  --vitrine-fond: #070604;
+  --vitrine-surface: #100e0b;
+  --vitrine-surface-2: #18140f;
+  --vitrine-bordure: #3b2e1d;
+  --vitrine-txt: #fff8e8;
+  --vitrine-txt-doux: #d0bea0;
+  --vitrine-txt-faible: #8f7c60;
+  --vitrine-ombre: 0 10px 32px rgba(0, 0, 0, 0.62);
+
+  --cat-chawarmas: var(--braise-rouge);
+  --cat-pizzas: var(--braise-rouge);
+  --cat-grillades: var(--marque);
+  --cat-boissons: #b86628;
+  --serie-1: #d99a2b;
+  --serie-2: #be2e36;
+  --serie-3: #b86628;
+  --serie-4: #f0bd58;
+  --serie-5: #8f2029;
+  --serie-6: #8b5a24;
+  --serie-7: #e2ad45;
+  --serie-8: #d64a42;
+}
+
 html {
   -webkit-tap-highlight-color: transparent;
   font-family: 'Work Sans Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
