@@ -293,10 +293,18 @@ Le pied reste vide jusqu’à sa saisie pendant l’installation. Conserver dans
 paramètres locaux l’adresse, les coordonnées, le lien Google Maps et les réseaux
 sociaux si le schéma restaurant ne les porte pas déjà.
 
+Le logo officiel À la Braise est obligatoire sur les tickets de vente, reçus,
+duplicatas, rapports Z et tickets de test. L’implémentation doit prendre en
+charge les deux encodages ESC/POS déjà proposés (`raster` et `bandes`), fournir
+un bitmap monochrome lisible et ne jamais utiliser le logo Samer comme repli
+pour la marque `A_LA_BRAISE`. L’installation n’est pas acceptée tant qu’un
+ticket de test réel n’a pas confirmé le rendu du logo.
+
 ## Tests et acceptation
 
 Les tests automatisés doivent prouver : compatibilité de la troisième marque,
-logo correct, import idempotent, 34 tables physiques et 3 virtuelles, catalogue
+logo À la Braise présent en modes ESC/POS `raster` et `bandes`, import
+idempotent, 34 tables physiques et 3 virtuelles, catalogue
 et prix attendus, repli des prix livraison, trois créneaux horaires dont minuit,
 refus serveur hors créneau, autorisation manager persistante et auditée, ordre
 de la catégorie du jour, stocks à zéro, consommation exacte des demi-portions,
