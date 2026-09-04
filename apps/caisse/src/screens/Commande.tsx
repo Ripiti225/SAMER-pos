@@ -169,6 +169,9 @@ export function Commande() {
   const combosVisibles = !enRecherche && categorieActive === categories[0]?.id ? catalogue.combos : [];
   const itemsActifs = commande.items.filter((i) => i.statut_cuisine !== 'ANNULE');
   const prenom = session?.utilisateur.nom_complet.split(' ')[0] ?? '';
+  // Livraison Yango/Glovo : rien ne s'imprime sur ce parcours (le partenaire
+  // facture à ses propres prix et sa tablette sort déjà le document).
+  const livraisonExterne = estLivraisonSansEncaissement(commande.partenaire);
 
   /**
    * Sortir d'une table où RIEN n'a été tapé la relibère : la commande vide est
@@ -582,7 +585,7 @@ export function Commande() {
                 est destructif, il ne doit jamais se toucher par erreur en
                 visant l'encaissement. Il ouvre de toute façon une confirmation
                 (PIN manager + motif dès qu'un produit a été tapé). */}
-            <div className="grid grid-cols-3 gap-2">
+            <div className={`grid ${livraisonExterne ? 'grid-cols-2' : 'grid-cols-3'} gap-2`}>
               <button
                 type="button"
                 onClick={() => setRemiseOuverte(true)}
@@ -591,14 +594,16 @@ export function Commande() {
               >
                 <IconTag size={18} /> Remise
               </button>
-              <button
-                type="button"
-                onClick={() => imprimerFacture.mutate()}
-                disabled={itemsActifs.length === 0 || imprimerFacture.isPending || saisie.enAttente}
-                className="flex h-12 items-center justify-center gap-1.5 rounded-[13px] bg-ard-750 text-[13.5px] font-semibold text-ard-txt transition hover:bg-ard-700 disabled:opacity-40"
-              >
-                <IconPrinter size={18} /> {imprimerFacture.isPending ? '…' : 'Facture'}
-              </button>
+              {!livraisonExterne && (
+                <button
+                  type="button"
+                  onClick={() => imprimerFacture.mutate()}
+                  disabled={itemsActifs.length === 0 || imprimerFacture.isPending || saisie.enAttente}
+                  className="flex h-12 items-center justify-center gap-1.5 rounded-[13px] bg-ard-750 text-[13.5px] font-semibold text-ard-txt transition hover:bg-ard-700 disabled:opacity-40"
+                >
+                  <IconPrinter size={18} /> {imprimerFacture.isPending ? '…' : 'Facture'}
+                </button>
+              )}
               {/* Rien de tapé : la commande n'existe pas pour la salle, on la
                   referme sans rien demander. Un seul article, même pas encore
                   parti en cuisine : c'est une annulation de commande. */}

@@ -56,7 +56,12 @@ import {
   correspondanceRompue,
   type InventaireServiceCloud,
 } from '../_shared/samtrackly-inventaire.ts';
-import { chargerServicesEnAttente, chargerToutesLesPages } from '../_shared/samtrackly-selection.ts';
+import {
+  chargerServicesEnAttente,
+  chargerToutesLesPages,
+  normaliserExplicationEcart,
+  servicesAvecExplicationARejouer,
+} from '../_shared/samtrackly-selection.ts';
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 /** Services traités par passage. Le cron repasse dans 5 minutes pour la suite. */
@@ -488,6 +493,53 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Une explication peut être saisie après la clôture, alors que les ventes
+  // ont déjà été transférées. Compare le texte actuel au dernier texte envoyé
+  // et rouvre uniquement les services réellement modifiés. Les anciens
+  // transferts ont un marqueur NULL : leurs explications sont donc rattrapées
+  // automatiquement, puis le marqueur empêche tout nouveau rejeu identique.
+  try {
+    const transfertsAvecMarqueur = await chargerToutesLesPages(async (debut, fin) => {
+      const { data, error } = await admin
+        .from('samtrackly_transferts')
+        .select('service_id, explication_ecart_transferee')
+        .not('transfere_le', 'is', null)
+        .order('service_id', { ascending: true })
+        .range(debut, fin);
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    });
+
+    if (transfertsAvecMarqueur.length > 0) {
+      const idsTransferes = new Set(transfertsAvecMarqueur.map((t) => t.service_id as string));
+      const tousLesServicesClotures = await chargerToutesLesPages(async (debut, fin) => {
+        const { data, error } = await admin
+          .from('services_caisse')
+          .select('id, explication_ecart')
+          .eq('statut', 'CLOTURE')
+          .order('id', { ascending: true })
+          .range(debut, fin);
+        if (error) throw new Error(error.message);
+        return data ?? [];
+      });
+      const servicesClotures = tousLesServicesClotures
+        .filter((service) => idsTransferes.has(service.id as string));
+      const idsExplications = servicesAvecExplicationARejouer(
+        transfertsAvecMarqueur,
+        servicesClotures,
+      );
+      if (idsExplications.length > 0) {
+        const { error } = await admin.rpc('rejouer_transferts', { p_service_ids: idsExplications });
+        if (error) throw new Error(error.message);
+      }
+    }
+  } catch (e) {
+    bilan.details.push({
+      service: 'rattrapage-explications',
+      resultat: `rattrapage automatique non tenté — ${e instanceof Error ? e.message : String(e)}`,
+    });
+  }
+
   // Les services clôturés dont aucun transfert n'a abouti. On relit la table de
   // suivi plutôt que de se fier à une colonne de `services_caisse`, qui est
   // réécrite par UPSERT à chaque montée du site. Les services rattrapés
@@ -585,6 +637,7 @@ Deno.serve(async (req) => {
         // Vide plutôt que NULL : la vue de suivi distingue « aucune présence
         // écartée » d'un transfert antérieur à cette colonne.
         presences_ignorees: r.ignores,
+        explication_ecart_transferee: normaliserExplicationEcart(service.explication_ecart),
         derniere_erreur: null,
         derniere_tentative: new Date().toISOString(),
       });

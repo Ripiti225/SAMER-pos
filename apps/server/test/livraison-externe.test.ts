@@ -4,8 +4,10 @@
  * (bucket « livraisons »), hors du théorique espèces. Samer Delly, livraison
  * propre du restaurant, encaisse normalement au comptoir.
  */
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import type { PrinterService } from '../src/printer/PrinterService.js';
 import { construireApp } from '../src/app.js';
 import { fermerDb } from '../src/db/client.js';
 import { PIN_CAISSIER, resetDonnees, seConnecter, validerInventaire, type Donnees } from './aide.js';
@@ -13,6 +15,17 @@ import { PIN_CAISSIER, resetDonnees, seConnecter, validerInventaire, type Donnee
 let app: FastifyInstance;
 let donnees: Donnees;
 let cookies: Record<string, string>;
+/**
+ * Espions sur les DEUX reçus de caisse possibles : une commande soldée d'un
+ * coup passe par `imprimerSousNote` (le serveur crée tout seul une sous-note au
+ * premier encaissement), les autres clôtures par `imprimerTicket`. Une livraison
+ * Yango/Glovo ne doit déclencher ni l'un ni l'autre.
+ */
+let espionTicket: MockInstance<PrinterService['imprimerTicket']>;
+let espionSousNote: MockInstance<PrinterService['imprimerSousNote']>;
+/** Nombre de reçus partis à l'imprimante, tous formats confondus. */
+const recusImprimes = () => espionTicket.mock.calls.length + espionSousNote.mock.calls.length;
+const oublierRecus = () => { espionTicket.mockClear(); espionSousNote.mockClear(); };
 
 /** Crée une commande d'un chawarma (3000) pour un type/partenaire donnés. */
 async function commande(type: string, partenaire?: string): Promise<string> {
@@ -45,6 +58,8 @@ beforeAll(async () => {
   donnees = await resetDonnees();
   app = await construireApp();
   cookies = await seConnecter(app, donnees.caissier_id, PIN_CAISSIER);
+  espionTicket = vi.spyOn(app.imprimante, 'imprimerTicket');
+  espionSousNote = vi.spyOn(app.imprimante, 'imprimerSousNote');
   await app.inject({ method: 'POST', url: '/api/services/ouvrir', cookies, payload: { fond_de_caisse: 25000 } });
 });
 
@@ -56,12 +71,17 @@ afterAll(async () => {
 describe('Clôture d’une livraison externe (sans encaissement)', () => {
   it('Yango : la commande passe à PAYEE sans aucune ligne de paiement', async () => {
     const id = await commande('LIVRAISON', 'YANGO');
+    oublierRecus();
     const rep = await app.inject({ method: 'POST', url: `/api/commandes/${id}/cloturer-livraison`, cookies });
     expect(rep.statusCode).toBe(200);
     const vue = rep.json();
     expect(vue.statut).toBe('PAYEE');
     expect(vue.paiements).toHaveLength(0);
     expect(vue.paye).toBe(0); // aucun encaissement : reste = total, réglé par le partenaire
+    // Aucun reçu : la tablette du partenaire sort déjà le sien, et à des prix
+    // canal plus élevés que la carte du restaurant. Le ticket partait à la
+    // poubelle (décision du 2026-09-01).
+    expect(recusImprimes()).toBe(0);
   });
 
   it('Samer Delly est refusé : il encaisse normalement en caisse', async () => {
@@ -78,7 +98,11 @@ describe('Clôture d’une livraison externe (sans encaissement)', () => {
     const id = await commande('EMPORTER');
     const rep = await app.inject({ method: 'POST', url: `/api/commandes/${id}/cloturer-livraison`, cookies });
     expect(rep.statusCode).toBe(400);
+    oublierRecus();
     await payerEspeces(id, 3000); // soldée normalement pour ne pas bloquer la clôture
+    // Non-régression : la suppression du reçu ne concerne QUE Yango/Glovo, un
+    // encaissement normal imprime toujours le sien.
+    expect(recusImprimes()).toBe(1);
   });
 });
 

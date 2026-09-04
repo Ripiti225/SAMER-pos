@@ -51,4 +51,39 @@ describe('facture (addition) avant paiement', () => {
     expect(rep.statusCode).toBe(400);
     expect(rep.json().erreur).toBe('Aucun article à facturer');
   });
+
+  /**
+   * Livraisons Yango/Glovo : rien ne s'imprime sur ce parcours. Le partenaire
+   * facture le client à SES prix (plus élevés que la carte) et sa tablette sort
+   * déjà le document — une facture de caisse annoncerait un montant qui n'est
+   * pas celui payé. Samer Delly, lui, encaisse au comptoir : il la garde.
+   */
+  it('refuse la facture d’une livraison Yango/Glovo, mais pas d’une Samer Delly', async () => {
+    const livraison = async (partenaire: string) => {
+      const creation = await app.inject({
+        method: 'POST',
+        url: '/api/commandes',
+        cookies,
+        payload: { type: 'LIVRAISON', partenaire },
+      });
+      const id = creation.json().id as string;
+      await app.inject({
+        method: 'POST',
+        url: `/api/commandes/${id}/items`,
+        cookies,
+        payload: { article_id: donnees.article_id, quantite: 1, options: [], supplements: [] },
+      });
+      return app.inject({ method: 'POST', url: `/api/commandes/${id}/facture`, cookies });
+    };
+
+    const yango = await livraison('YANGO');
+    expect(yango.statusCode).toBe(400);
+    expect(yango.json().erreur).toBe('Une livraison Yango/Glovo n’imprime pas de facture');
+
+    const glovo = await livraison('GLOVO');
+    expect(glovo.statusCode).toBe(400);
+
+    const samerDelly = await livraison('SAMER_DELLY');
+    expect(samerDelly.statusCode).toBe(200);
+  });
 });

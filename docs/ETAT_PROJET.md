@@ -2,7 +2,36 @@
 
 > Fichier de reprise, **actualisé à chaque compaction** de la conversation.
 > Il résume l'état courant pour repartir sans relire tout l'historique.
-> Dernière mise à jour : 2026-08-16.
+> Dernière mise à jour : 2026-09-01.
+
+## Session 2026-09-01 — Plus aucun papier sur le parcours Yango/Glovo
+
+Valider une livraison **Yango/Glovo** sortait un reçu de caisse que le caissier
+jetait aussitôt, pour deux raisons cumulées :
+
+1. la **tablette du partenaire** imprime déjà son propre reçu pour le livreur ;
+2. les **prix canal** Yango/Glovo sont plus élevés que la carte du restaurant —
+   le ticket POS n'affichait même pas le montant réellement payé par le client.
+
+Le parcours partenaire n'imprime donc plus rien :
+
+- `POST /api/commandes/:id/cloturer-livraison` (`modules/paiements/routes.ts`) :
+  l'appel `imprimerTicket` est **supprimé**. La route rejette déjà tout ce qui
+  n'est pas Yango/Glovo, aucune condition n'était nécessaire. Les deux autres
+  appels `imprimerTicket` (encaissement normal, Kdo) sont **intacts**.
+- `POST /api/commandes/:id/facture` (`modules/commandes/routes.ts`) : refuse
+  (400) une commande Yango/Glovo — « Une livraison Yango/Glovo n'imprime pas de
+  facture ». Le bouton **« Facture »** est masqué sur ces commandes dans
+  `caisse/src/screens/Commande.tsx` (grille des actions secondaires en 2
+  colonnes au lieu de 3), et le toast de `Paiement.tsx` ne promet plus « reçu
+  imprimé ».
+- **Samer Delly n'est pas concerné** : il encaisse au comptoir, son reçu reste
+  une vraie pièce. Le **bon de préparation cuisine** non plus — la cuisine
+  continue de recevoir ses bons pour les commandes partenaires.
+- Discriminant inchangé : `estLivraisonSansEncaissement(partenaire)`.
+- Tests : `livraison-externe.test.ts` espionne `imprimerTicket` (aucun appel sur
+  Yango, un appel sur un encaissement normal — non-régression) ;
+  `facture.test.ts` couvre Yango/Glovo refusés et Samer Delly accepté.
 
 ## Session 2026-08-16 — Fin du design v2 : écran de connexion, couleurs de catégorie, doc
 
@@ -992,8 +1021,9 @@ plus demander de mode de paiement.
 - **Endpoint** `POST /api/commandes/:id/cloturer-livraison`
   (`modules/paiements/routes.ts`, permission `caisse.encaisser`) : passe une
   commande Yango/Glovo à **PAYEE sans aucune ligne de paiement** (rattachement au
-  service du caissier, fidélité créditée, reçu imprimé). Refuse (400) tout ce qui
+  service du caissier, fidélité créditée). Refuse (400) tout ce qui
   n'est pas une livraison externe (Samer Deliv, sur place, à emporter).
+  **Aucun reçu imprimé** depuis le 2026-09-01 (voir la session de ce jour).
 - **Réconciliation** (`modules/services/rapport.ts`, `reconciliationAuto`) revue :
   `modes` = paiements HORS partenaires externes (⇒ **Samer Deliv compte dans le
   théorique espèces** comme une vente normale) ; `livraisons` = totaux **Yango/

@@ -266,6 +266,12 @@ export function routesPaiements(app: FastifyInstance): void {
    * paiement — son montant est compté à part (bucket « livraisons » du rapport
    * Z), hors du théorique espèces. Samer Deliv est refusé ici : il encaisse
    * normalement via /paiements.
+   *
+   * AUCUN reçu n'est imprimé ici, volontairement (décision du 2026-09-01) : la
+   * tablette du partenaire sort déjà son propre reçu au livreur, et les prix
+   * canal Yango/Glovo sont plus élevés que les prix restaurant — le ticket de
+   * caisse ne correspondrait même pas à ce que le client a payé. Il partait
+   * directement à la poubelle.
    */
   app.post('/api/commandes/:id/cloturer-livraison', { preHandler: gardeCaisse }, async (req) => {
     const { id } = req.params as { id: string };
@@ -305,7 +311,6 @@ export function routesPaiements(app: FastifyInstance): void {
       return chargerCommandeVue(tx, id);
     });
 
-    await app.imprimante.imprimerTicket(vue);
     app.diffuser('commande', id);
     return vue;
   });

@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { chargerToutesLesPages, chargerServicesEnAttente } from './samtrackly-selection.ts';
+import {
+  chargerToutesLesPages,
+  chargerServicesEnAttente,
+  servicesAvecExplicationARejouer,
+} from './samtrackly-selection.ts';
 
 type Service = {
   id: string;
@@ -95,4 +99,41 @@ test('charge tous les transferts réussis au-delà de la limite API de 1000 lign
   assert.equal(resultat.length, 1001);
   assert.equal(resultat[1000]?.service_id, 'fait-1000');
   assert.deepEqual(pagesLues, [0, 1000]);
+});
+
+test('rejoue une seule fois une explication ajoutée après le premier transfert', () => {
+  const transferts = [
+    { service_id: 'sans-changement', explication_ecart_transferee: null },
+    { service_id: 'explication-tardive', explication_ecart_transferee: null },
+    { service_id: 'deja-a-jour', explication_ecart_transferee: 'Erreur de monnaie' },
+  ];
+  const services = [
+    { id: 'sans-changement', explication_ecart: null },
+    { id: 'explication-tardive', explication_ecart: '  Billet remis en trop  ' },
+    { id: 'deja-a-jour', explication_ecart: 'Erreur de monnaie' },
+  ];
+
+  assert.deepEqual(
+    servicesAvecExplicationARejouer(transferts, services),
+    ['explication-tardive'],
+  );
+});
+
+test('rattrape les anciens marqueurs vides et les modifications, sans dupliquer les caissiers', () => {
+  const transferts = [
+    { service_id: 'ancien-flora' },
+    { service_id: 'modifie-hilary', explication_ecart_transferee: 'Ancien texte' },
+    { service_id: 'inchangé', explication_ecart_transferee: 'Déjà envoyé' },
+  ];
+  const services = [
+    { id: 'ancien-flora', explication_ecart: 'Fond de caisse incomplet' },
+    { id: 'modifie-hilary', explication_ecart: 'Nouveau texte' },
+    { id: 'inchangé', explication_ecart: ' Déjà envoyé ' },
+    { id: 'jamais-transfere', explication_ecart: 'Nouveau shift' },
+  ];
+
+  assert.deepEqual(
+    servicesAvecExplicationARejouer(transferts, services),
+    ['ancien-flora', 'modifie-hilary'],
+  );
 });

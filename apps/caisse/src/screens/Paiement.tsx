@@ -125,12 +125,13 @@ export function Paiement() {
   });
 
   // Livraison externe (Yango/Glovo) : réglée chez le partenaire, aucune saisie
-  // de mode de paiement — un seul bouton clôture la commande en PAYEE.
+  // de mode de paiement — un seul bouton clôture la commande en PAYEE. Aucun
+  // reçu ne sort : le caissier ne doit pas aller en chercher un à l'imprimante.
   const cloturerLivraison = useMutation({
     mutationFn: () => api<CommandeVue>(`/api/commandes/${commandeId}/cloturer-livraison`, { method: 'POST' }),
     onSuccess: (vue) => {
       rafraichir(vue);
-      afficherToast(`Livraison ${vue.partenaire ?? ''} validée ✔ — reçu imprimé`);
+      afficherToast(`Livraison ${vue.partenaire ?? ''} validée ✔`);
     },
     onError: (e: Error) => afficherToast(e.message),
   });

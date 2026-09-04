@@ -7,6 +7,38 @@ export interface ServiceASelectionner {
   cloture_le?: string | null;
 }
 
+interface TransfertAvecExplication {
+  service_id: string;
+  explication_ecart_transferee?: string | null;
+}
+
+interface ServiceAvecExplication {
+  id: string;
+  explication_ecart?: string | null;
+}
+
+export function normaliserExplicationEcart(value: unknown): string | null {
+  const texte = String(value ?? '').trim();
+  return texte || null;
+}
+
+/** Identifie les transferts aboutis dont l'explication POS a changé depuis. */
+export function servicesAvecExplicationARejouer(
+  transferts: readonly TransfertAvecExplication[],
+  services: readonly ServiceAvecExplication[],
+): string[] {
+  const servicesParId = new Map(services.map((service) => [service.id, service]));
+
+  return transferts.flatMap((transfert) => {
+    const service = servicesParId.get(transfert.service_id);
+    if (!service) return [];
+    return normaliserExplicationEcart(service.explication_ecart)
+      !== normaliserExplicationEcart(transfert.explication_ecart_transferee)
+      ? [transfert.service_id]
+      : [];
+  });
+}
+
 /** Lit une table Supabase entière sans dépendre de sa limite API par requête. */
 export async function chargerToutesLesPages<T>(
   chargerPage: (debut: number, fin: number) => Promise<T[]>,
