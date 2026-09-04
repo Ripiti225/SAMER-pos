@@ -12,6 +12,7 @@ import {
   IconTrash,
   IconX,
 } from '@tabler/icons-react';
+import { CLASSES_CATEGORIES } from '../mise-en-page-categories';
 import type { ArticleVue, CommandeItemVue, CommandeVue } from '@pos/shared';
 import {
   categorieVisiblePour,
@@ -247,7 +248,7 @@ export function Commande() {
           toujours en trois colonnes. L'addition vaut les 356 px de la maquette
           dès ~1320 px et se resserre en dessous, pour que la grille d'articles
           reste nettement la plus large sur un écran 1024. */}
-      <div className="grid min-h-0 flex-1 grid-cols-[186px_1fr_clamp(280px,27vw,356px)]">
+      <div className={`grid min-h-0 flex-1 ${CLASSES_CATEGORIES.grille}`}>
         {/* Colonne catégories, en ardoise avec les libellés (pas un rail d'icônes) */}
         <nav className="flex flex-col gap-[7px] overflow-y-auto border-r border-ard-700 bg-ard-800 p-3">
           <p className="px-3 pb-2.5 pt-1.5 text-[10.5px] font-bold uppercase tracking-[0.09em] text-ard-txt-faible">
@@ -273,8 +274,10 @@ export function Commande() {
                   className={`h-2.5 w-2.5 flex-none rounded-full transition-transform duration-200 ${actif ? 'scale-150' : ''}`}
                   style={{ background: couleurCategorie(c.nom) }}
                 />
-                <span className="truncate">{c.nom}</span>
-                {!c.disponible_maintenant && <span className="text-[9px] font-bold text-ambre-300">Hors horaire</span>}
+                <span className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className={CLASSES_CATEGORIES.nom}>{c.nom}</span>
+                  {!c.disponible_maintenant && <span className="text-[9px] font-bold text-ambre-300">Hors horaire</span>}
+                </span>
                 <span className="ml-auto flex-none text-[11.5px] font-semibold text-ard-txt-faible">{nb}</span>
               </button>
             );
