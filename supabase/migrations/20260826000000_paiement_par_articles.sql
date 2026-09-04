@@ -1,4 +1,13 @@
 -- Paiement par articles — miroir cloud multi-restaurant.
+
+-- À FAIRE EN PREMIER. Cette FK, posée par `schema_cloud.sql`, exige que le
+-- caissier existe dans `utilisateurs` — table que le site n'alimente plus
+-- depuis le 2026-08-16 (sa montée est redirigée vers `utilisateurs_site`).
+-- Elle refusait donc toute note payée par un caissier créé sur place, et comme
+-- `montee.ts` pousse en ordre strict de `seq` sans rien acquitter en cas
+-- d'échec, elle a bloqué LA TOTALITÉ de la montée du 7E le 2026-09-04.
+ALTER TABLE notes_split DROP CONSTRAINT IF EXISTS notes_split_payee_par_fk;
+
 ALTER TABLE notes_split
   ADD COLUMN IF NOT EXISTS numero smallint,
   ADD COLUMN IF NOT EXISTS type text DEFAULT 'MONTANT_HISTORIQUE',
@@ -72,9 +81,11 @@ ALTER TABLE notes_split
   ADD CONSTRAINT notes_split_client_fk FOREIGN KEY (restaurant_id, client_fidelite_id)
     REFERENCES clients_fidelite(restaurant_id, id),
   ADD CONSTRAINT notes_split_service_fk FOREIGN KEY (restaurant_id, service_id)
-    REFERENCES services_caisse(restaurant_id, id),
-  ADD CONSTRAINT notes_split_payee_par_fk FOREIGN KEY (restaurant_id, payee_par)
-    REFERENCES utilisateurs(restaurant_id, id);
+    REFERENCES services_caisse(restaurant_id, id);
+-- PAS de FK sur `payee_par` : depuis le 2026-08-16 la montée `utilisateurs` est
+-- redirigée vers `utilisateurs_site` (REDIRECTION_MONTEE, `_shared/tables.ts`),
+-- donc la table `utilisateurs` du cloud ignore les caissiers créés sur place.
+-- La FK posée ici refusait leur ligne et bloquait toute la montée du site.
 
 CREATE TABLE IF NOT EXISTS note_split_items (
   restaurant_id UUID NOT NULL,

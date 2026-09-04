@@ -14,7 +14,8 @@
     "catalogue:importer": "pnpm --filter @pos/server catalogue:importer",
     "profil:importer": "pnpm --filter @pos/server profil:importer",
     "roles:republier": "pnpm --filter @pos/server roles:republier",
-    "salle:republier": "pnpm --filter @pos/server salle:republier"
+    "salle:republier": "pnpm --filter @pos/server salle:republier",
+    "services:republier": "pnpm --filter @pos/server services:republier"
   },
   "packageManager": "pnpm@11.9.0",
   "engines": {

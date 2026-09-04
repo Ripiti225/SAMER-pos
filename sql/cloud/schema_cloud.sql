@@ -417,10 +417,15 @@ BEGIN
     ALTER TABLE notes_split ADD CONSTRAINT notes_split_service_fk
       FOREIGN KEY (restaurant_id, service_id) REFERENCES services_caisse(restaurant_id, id);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'notes_split_payee_par_fk') THEN
-    ALTER TABLE notes_split ADD CONSTRAINT notes_split_payee_par_fk
-      FOREIGN KEY (restaurant_id, payee_par) REFERENCES utilisateurs(restaurant_id, id);
-  END IF;
+  -- PAS de clé étrangère sur `notes_split.payee_par`. Depuis le 2026-08-16, ce
+  -- que le site envoie dans `utilisateurs` est REDIRIGÉ vers `utilisateurs_site`
+  -- (voir REDIRECTION_MONTEE dans `_shared/tables.ts`) : la table `utilisateurs`
+  -- du cloud n'est alimentée QUE par le siège. Un caissier créé sur place
+  -- (`externe_id` NULL) n'y figure donc jamais, et une FK vers elle refuserait
+  -- sa ligne — bloquant TOUTE la montée du site, qui pousse en ordre de `seq`.
+  -- C'est arrivé le 2026-09-04. Aucune autre colonne « utilisateur » du cloud
+  -- (`paiements.encaisse_par`, `services_caisse.caissier_id`, `audit_log.user_id`)
+  -- n'est contrainte : on s'aligne sur elles.
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'note_split_items_note_fk') THEN
     ALTER TABLE note_split_items ADD CONSTRAINT note_split_items_note_fk
       FOREIGN KEY (restaurant_id, note_id) REFERENCES notes_split(restaurant_id, id);

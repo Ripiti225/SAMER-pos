@@ -45,8 +45,9 @@ avant que les 6 autres restaurants ne reçoivent quoi que ce soit.
 | Repackaging `PosSamer.exe` nécessaire | non — `apps/desktop` inchangé depuis la clé |
 | Redéploiement Edge Function | **`samtrackly-points` : OUI** (pagination de la sélection + services clôturés sans `remis_le`). `sync-push` : redéployée le 04/09. `siege` : statut du 21/08 inchangé, **à confirmer déployée** |
 | Migrations CLOUD à appliquer | **1 nouvelle** — `20260901110000_explication_ecart_samtrackly`. Les 3 listées le 21/08 (`20260817140000_pont_samtrackly`, `20260821150000_inventaire_snapshot_produit`, `20260825030000_livraisons_partenaires`) **restent à confirmer appliquées** |
-| Rattrapage à lancer par site | `pnpm services:republier` — republie les explications d'écart que le cloud jetait entre le 28/08 et le 04/09 |
-| Tests | **à revérifier** — dernier comptage connu : 42 fichiers / 263 tests verts (POS) + 103 tests du pont (`pnpm test` et `pnpm test:functions`), relevé le 21/08, avant les entrées du 25/08 au 04/09 |
+| Rattrapage à lancer par site | `pnpm services:republier` — republie les explications d'écart que le cloud jetait entre le 28/08 et le 04/09. **Fait sur le 7E le 04/09** |
+| 🔴 À vérifier sur les 6 autres sites | `SELECT count(*) FROM sync_outbox WHERE synced_at IS NULL;` — la FK `notes_split_payee_par_fk` a gelé 12 h de ventes sur le 7E, elle a pu geler les leurs |
+| Tests | **verts au 04/09** — POS : **48 fichiers / 303 tests** (`apps/server` 47/301, `packages/theme` 1/2) ; pont : **121 tests, 23 suites** (`pnpm test:functions`). ⚠️ voir le point ouvert ci-dessous : `pnpm test` n'exécute réellement que ces deux paquets |
 
 > **Trou de journal à combler.** Le journal reprend au 25/08, mais les commits du
 > **22 au 24/08** (séquences, ordres du siège, console du siège, republication des
@@ -547,6 +548,19 @@ la paie. C'est une erreur d'argent, silencieuse.
 - `pnpm-lock.yaml` : le lock du 7E référençait un workspace `apps/siege` qui n'existe
   dans aucun arbre. Le lock retenu est celui du Mac, sans ce bloc. Si un
   `pnpm install --frozen-lockfile` ronchonne sur un poste, c'est de là que ça vient.
+- **Une contrainte cloud sur une colonne « utilisateur » gèle la montée d'un site.**
+  Vécu le 04/09, 12 h d'arrêt et 1 049 lignes bloquées — voir l'entrée du jour. La leçon
+  dépasse cette FK-là : depuis le 16/08, les caissiers créés sur place ne remontent que
+  dans `utilisateurs_site`, donc **toute contrainte du schéma cloud qui référence
+  `utilisateurs` refusera leurs lignes**. Avant d'ajouter une FK côté cloud, vérifier
+  qu'aucune de ses colonnes ne désigne un employé.
+- **Les tests des fronts ne tournent jamais.** Constaté le 04/09 : `apps/caisse`,
+  `apps/client`, `apps/kds`, `apps/serveur`, `apps/siege`, `packages/shared` et
+  `packages/shared-ui` ont tous `"test": "exit 0"` dans leur `package.json`. Seuls
+  `apps/server` et `packages/theme` lancent vitest. Or `apps/caisse/src` contient deux
+  fichiers de test bien réels — `catalogue-cache.test.ts` et
+  `mise-en-page-categories.test.ts` — qui **ne sont donc jamais exécutés** : ils sont
+  écrits, versionnés, et silencieux. Un `pnpm test` vert ne dit rien de la caisse.
 
 ---
 
@@ -920,8 +934,19 @@ Côté cloud, la migration `20260901110000_explication_ecart_samtrackly.sql` ajo
 celui déjà transféré et ne rejoue **que** les services réellement modifiés. Les anciens
 transferts restent à NULL, donc rejoués une fois.
 
+> **Le raccourci racine manquait.** Le script avait été déclaré dans
+> `apps/server/package.json` mais pas relayé dans le `package.json` de la racine,
+> contrairement à `roles:republier` et `salle:republier` : `pnpm services:republier`
+> répondait `Command "services:republier" not found`. Ajouté le 04/09 — la commande
+> ci-dessous fonctionne désormais telle quelle depuis la racine.
+
 **Déploiement** : migration CLOUD + redéploiement de `sync-push` et `samtrackly-points`,
-puis `pnpm services:republier` **sur chaque site concerné**. Rien à migrer en local.
+puis `pnpm services:republier` **sur chaque site concerné** — chaque poste a sa propre
+outbox, rien ne se rattrape à distance. Rien à migrer en local.
+
+**Fait sur le 7E le 04/09 à 22h10** : 16 services clôturés du 29/08 au 04/09 remis dans
+l'outbox. ⚠️ **Ils n'étaient pas encore montés** : voir le point ouvert « montée bloquée
+depuis le 04/09 10h00 ».
 
 ---
 
@@ -978,7 +1003,84 @@ journalisé à l'audit — rouvrir une catégorie hors de son créneau se justif
 avec les libellés d'À la Braise, plusieurs catégories devenaient impossibles à
 distinguer. Colonne élargie à **245 px** et nom sur **deux lignes** (`line-clamp-2`), le
 badge « Hors horaire » passant sous le nom au lieu de lui disputer la place. Les classes
-sont sorties dans `apps/caisse/src/mise-en-page-categories.ts` pour être testables —
-`mise-en-page-categories.test.ts` verrouille le fait qu'on ne retronque pas.
+sont sorties dans `apps/caisse/src/mise-en-page-categories.ts` pour être testables, et
+`mise-en-page-categories.test.ts` vérifie qu'on ne retronque pas — **mais ce test ne
+tourne pas** : `apps/caisse` a `"test": "exit 0"` (voir Points ouverts). Le garde-fou
+existe sur le papier, pas dans `pnpm test`.
 
 **Déploiement** : `pnpm db:migrate` (0032) + rebuild caisse + relancer l'exe.
+
+---
+
+## 2026-09-04 — Une clé étrangère a gelé douze heures de ventes
+
+Le soir du déploiement À la Braise, en vérifiant que la republication des explications
+d'écart partait bien : **elle ne partait pas**. Et pas qu'elle.
+
+`sync_outbox` portait **1 049 lignes en attente**, la plus ancienne créée à **10h00 le
+matin même** : 255 commandes, 224 utilisateurs, 147 lignes d'audit, 137 lignes de
+commande, 125 lignes d'inventaire, 44 notes_split, les paiements, les dépenses. **Douze
+heures de ventes du 7E n'étaient jamais arrivées au siège.** Le voyant, lui, ne criait
+pas : la descente fonctionnait (`sync_etat` à jour à la minute près), donc internet et
+clé de site étaient bons. Seule la montée était morte.
+
+La caisse affichait pourtant la bonne information : « le cloud a refusé notes_split ».
+
+### La cause
+
+```
+notes_split_payee_par_fk :  notes_split(restaurant_id, payee_par)
+                         →  utilisateurs(restaurant_id, id)
+```
+
+Or **depuis le 2026-08-16, le site n'alimente plus `utilisateurs`** : sa montée est
+redirigée vers `utilisateurs_site` (`REDIRECTION_MONTEE`, `_shared/tables.ts`), parce que
+SamerTrackly est maître de la fiche employé. Un caissier **créé sur place** (`externe_id`
+NULL) ne figure donc jamais dans `utilisateurs`. La première note qu'il encaisse est
+refusée par la FK — et comme `montee.ts` pousse en **ordre strict de `seq` et n'acquitte
+rien en cas d'échec**, cette seule ligne a gelé les 1 048 suivantes.
+
+Cette FK est la **seule** du schéma cloud à référencer `utilisateurs`. Ni
+`paiements.encaisse_par`, ni `services_caisse.caissier_id`, ni `audit_log.user_id` n'en
+ont. Elle a été posée le 26/08 — dix jours après la décision qui la rendait intenable.
+
+### Pourquoi ça a explosé ce soir-là et pas avant
+
+Tant que la fonction `sync-push` déployée ignorait `notes_split`, les lignes passaient
+à la trappe **en silence** : jamais montées, jamais refusées, personne alerté. Son
+redéploiement du 04/09 — fait pour récupérer les explications d'écart — a remis
+`notes_split` dans le circuit. Le blocage n'est pas né ce soir-là : il est devenu
+visible ce soir-là. Ce qui, entre les deux comportements, est de très loin préférable.
+
+### Le correctif
+
+Une ligne dans le SQL Editor :
+
+```sql
+ALTER TABLE notes_split DROP CONSTRAINT IF EXISTS notes_split_payee_par_fk;
+```
+
+Les 1 049 lignes sont montées **en 57 secondes** (22h37:14 → 22h38:11), sans redémarrer
+quoi que ce soit : le moteur réessaie tout seul toutes les 30 s.
+
+Dans le dépôt, la FK est retirée de `sql/cloud/schema_cloud.sql` — sinon le prochain
+restaurant installé la reprendrait — et `20260826000000_paiement_par_articles.sql`
+commence désormais par ce `DROP CONSTRAINT IF EXISTS`. Les deux fichiers portent
+l'explication, pour que personne ne la remette « parce qu'il manquait une FK ».
+
+### Ce que ça laisse comme dette
+
+Un blocage de montée est **silencieux pour l'exploitant** : les ventes continuent, la
+caisse ne montre rien d'alarmant, et seul le siège constate — beaucoup plus tard — qu'un
+site a cessé d'exister. Le voyant passe orange (« hors ligne / en attente »), pas rouge,
+tant que l'échec a moins de 24 h. Douze heures d'arrêt tiennent entièrement dans cette
+fenêtre. À reconsidérer : un seuil sur le **nombre de lignes en attente**, pas seulement
+sur l'ancienneté de l'échec.
+
+**Déploiement** : purement cloud, rien à faire sur les postes. Mais **vérifier l'outbox
+de chacun des 6 autres restaurants** — la même FK y refuse les mêmes notes, et rien ne
+dit qu'ils ne sont pas gelés eux aussi depuis le redéploiement de `sync-push` :
+
+```sql
+SELECT count(*) FROM sync_outbox WHERE synced_at IS NULL;
+```
