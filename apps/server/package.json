@@ -13,7 +13,8 @@
     "catalogue:importer": "tsx src/scripts/importer-catalogue.ts",
     "test": "vitest run",
     "roles:republier": "tsx src/scripts/republier-roles.ts",
-    "salle:republier": "tsx src/scripts/republier-salle.ts"
+    "salle:republier": "tsx src/scripts/republier-salle.ts",
+    "services:republier": "tsx src/scripts/republier-services.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
