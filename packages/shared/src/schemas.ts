@@ -421,15 +421,29 @@ const NomCompletSchema = z.string().trim().min(2, 'Nom trop court').max(80, 'Nom
 const TelephoneSchema = z.string().trim().regex(/^[+0-9][0-9 ]{5,19}$/, 'Numéro de téléphone invalide').optional();
 const PosteCuisineSchema = z.enum(['CUISINIER', 'PIZZAIOLO', 'COMPTOIRISTE']).nullish();
 
-/** Création d'un employé (le PIN est posé ensuite par l'employé lui-même). */
-export const CreerEmployeSchema = z.object({
-  nom_complet: NomCompletSchema,
-  role_id: z.string().uuid('Rôle invalide'),
-  poste_cuisine: PosteCuisineSchema,
-  telephone: TelephoneSchema,
-});
+/**
+ * Taux journalier en FCFA. Champ vide = effacer le taux (retour à « pas de taux
+ * journalier »), pas « taux à zéro » : un salaire nul et un salaire inconnu ne
+ * se disent pas pareil, et c'est ce taux qui pré-remplit la paie et déclenche
+ * l'exigence de motif quand le montant payé en diffère.
+ */
+const TauxJournalierSchema = z
+  .union([
+    z.literal('').transform(() => null),
+    z.null(),
+    z.coerce
+      .number()
+      .int('Le taux journalier doit être un nombre entier de FCFA')
+      .min(0, 'Le taux journalier ne peut pas être négatif')
+      .max(1_000_000, 'Taux journalier irréaliste (max 1 000 000 FCFA)'),
+  ])
+  .optional();
 
-/** Modification d'un employé (rôle, poste, téléphone, intitulé, photo). */
+// Pas de schéma de CRÉATION d'employé : depuis le 2026-09-04, on n'embauche pas
+// depuis la caisse. Un employé arrive par la descente SamerTrackly, qui construit
+// sa fiche elle-même (`sync-samtrackly.ts`).
+
+/** Modification d'un employé (rôle, poste, téléphone, intitulé, photo, taux). */
 export const ModifierEmployeSchema = z.object({
   nom_complet: NomCompletSchema.optional(),
   role_id: z.string().uuid('Rôle invalide').optional(),
@@ -438,6 +452,7 @@ export const ModifierEmployeSchema = z.object({
   // Intitulé de poste RH (libre) et photo (URL) — chaîne vide = effacer.
   poste: z.string().trim().max(60, 'Intitulé trop long').nullish(),
   photo_url: z.string().trim().max(500, 'URL trop longue').nullish(),
+  taux_journalier: TauxJournalierSchema,
 });
 
 /** Changement de disponibilité RH d'un employé (présent / malade / congé / permission). */
@@ -497,4 +512,3 @@ export type PaiementInput = z.infer<typeof PaiementSchema>;
 export type CreerSousNoteInput = z.infer<typeof CreerSousNoteSchema>;
 export type CreerRoleInput = z.infer<typeof CreerRoleSchema>;
 export type ModifierRoleInput = z.infer<typeof ModifierRoleSchema>;
-export type CreerEmployeInput = z.infer<typeof CreerEmployeSchema>;

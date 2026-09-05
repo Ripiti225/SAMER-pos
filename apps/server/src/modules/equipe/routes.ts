@@ -1,13 +1,17 @@
 /**
  * SPRINT 4C — Équipe (2.1). Guard : permission `reglages.equipe`.
- * Le PIN n'est jamais saisi par l'encadrant : à la création / réinitialisation,
- * un code temporaire à usage unique est émis, l'employé pose son PIN ensuite
- * (route publique /api/auth/poser-pin). Jamais de suppression, seulement
- * désactivation. Invariant 1.3 appliqué côté serveur.
+ * Le PIN n'est jamais saisi par l'encadrant : à l'arrivée dans l'équipe ou à la
+ * réinitialisation, un code temporaire à usage unique est émis, l'employé pose
+ * son PIN ensuite (route publique /api/auth/poser-pin). Jamais de suppression,
+ * seulement désactivation. Invariant 1.3 appliqué côté serveur.
+ *
+ * ON N'AJOUTE PAS UN EMPLOYÉ ICI (2026-09-04) : l'embauche se décide au siège,
+ * et l'employé descend de SamerTrackly. Le poste lit, modifie, réinitialise un
+ * PIN et désactive — il ne recrute pas.
  */
 import type { FastifyInstance } from 'fastify';
 import { desc, eq, sql } from 'drizzle-orm';
-import { CreerEmployeSchema, MajDisponibiliteSchema, ModifierEmployeSchema } from '@pos/shared';
+import { MajDisponibiliteSchema, ModifierEmployeSchema } from '@pos/shared';
 import { db } from '../../db/client.js';
 import { equipeService, roles, utilisateurs } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
@@ -18,7 +22,6 @@ import type { SessionUtilisateur } from '../../plugins/sessions.js';
 import {
   estRoleSensible,
   genererCodeTemporaire,
-  hachInutilisable,
   hacher,
   nomDuRole,
 } from './service.js';
@@ -73,6 +76,7 @@ export function routesEquipe(app: FastifyInstance): void {
         photo_url: utilisateurs.photo_url,
         disponibilite: utilisateurs.disponibilite,
         telephone: utilisateurs.telephone,
+        taux_journalier: utilisateurs.taux_journalier,
         actif: utilisateurs.actif,
         doit_definir_pin: utilisateurs.doit_definir_pin,
       })
@@ -90,41 +94,27 @@ export function routesEquipe(app: FastifyInstance): void {
     return lignes.map((l) => ({ ...l, derniere_presence: parUser.get(l.id) ?? null }));
   });
 
-  // Créer un employé (le PIN est posé ensuite par l'employé)
-  app.post('/api/admin/equipe', { preHandler: garde }, async (req) => {
-    const corps = valider(CreerEmployeSchema, req.body);
-    const nouveauNom = await nomDuRole(db, corps.role_id);
-    if (!nouveauNom) throw new ErreurMetier('Rôle inconnu', 400);
-    await exigerDroitCompte(req.session!, null, nouveauNom, `Création employé rôle ${nouveauNom}`);
-
-    const code = genererCodeTemporaire();
-    const expire = new Date(Date.now() + CODE_VALIDE_JOURS * 24 * 3600 * 1000);
-    const cree = await db.transaction(async (tx) => {
-      const [u] = await tx
-        .insert(utilisateurs)
-        .values({
-          nom_complet: corps.nom_complet,
-          role_id: corps.role_id,
-          poste_cuisine: corps.poste_cuisine ?? null,
-          telephone: corps.telephone ?? null,
-          pin_hash: await hachInutilisable(),
-          doit_definir_pin: true,
-          pin_temporaire_hash: await hacher(code),
-          pin_temporaire_expire: expire,
-        })
-        .returning();
-      await ecrireOutbox(tx, 'utilisateurs', 'INSERT', u!.id, u as unknown as Record<string, unknown>);
-      await journaliser(tx, {
-        user_id: req.session!.utilisateur_id,
-        action: 'CREATION_EMPLOYE',
-        entite: 'utilisateurs',
-        entite_id: u!.id,
-        meta: { nom_complet: u!.nom_complet, role: nouveauNom },
-      });
-      return u!;
-    });
-    // Le code n'est montré QU'UNE FOIS à l'écran de l'encadrant.
-    return { id: cree.id, code_temporaire: code, expire_le: expire.toISOString() };
+  // PAS DE CRÉATION D'EMPLOYÉ SUR LE POS — décision du 2026-09-04.
+  //
+  // L'embauche se décide au siège, et SamerTrackly est maître de la fiche
+  // employé depuis le 2026-08-16. Un compte créé sur place existait dans un seul
+  // restaurant, sans dossier RH, avec un `externe_id` NULL que la descente ne
+  // pouvait plus rapprocher de personne : deux fiches pour la même personne dès
+  // que le siège la saisissait à son tour.
+  //
+  // Un nouvel employé arrive donc UNIQUEMENT par
+  // `POST /api/admin/equipe/synchroniser` (descente SamerTrackly), qui le crée
+  // avec son code temporaire — exactement comme le faisait cette route. Sur le
+  // poste, l'encadrant garde tout le reste : lire, modifier la fiche,
+  // réinitialiser un PIN, changer la disponibilité, désactiver.
+  //
+  // La route répond 405 plutôt que 404 : un vieux client qui l'appelle encore
+  // doit lire pourquoi, pas croire à une faute de frappe dans l'URL.
+  app.post('/api/admin/equipe', { preHandler: garde }, async () => {
+    throw new ErreurMetier(
+      'On n’ajoute pas un employé depuis la caisse : il se crée au siège, puis arrive ici par Réglages › Équipe › Synchroniser (SamerTrackly).',
+      405,
+    );
   });
 
   // Modifier un employé (rôle, poste, téléphone)
@@ -143,12 +133,15 @@ export function routesEquipe(app: FastifyInstance): void {
     const nouveauPoste = corps.poste === undefined ? cible.poste : (corps.poste || null);
     const nouvellePhoto = corps.photo_url === undefined ? cible.photo_url : (corps.photo_url || null);
     const nouveauTel = corps.telephone === undefined ? cible.telephone : (corps.telephone ?? null);
+    const nouveauTaux =
+      corps.taux_journalier === undefined ? cible.taux_journalier : corps.taux_journalier;
     const verrous = new Set<string>(Array.isArray(cible.champs_manuels) ? (cible.champs_manuels as string[]) : []);
     if (corps.nom_complet !== undefined && corps.nom_complet !== cible.nom_complet) verrous.add('nom_complet');
     if (corps.role_id !== undefined && corps.role_id !== cible.role_id) verrous.add('role');
     if (nouveauPoste !== cible.poste) verrous.add('poste');
     if (nouvellePhoto !== cible.photo_url) verrous.add('photo_url');
     if (nouveauTel !== cible.telephone) verrous.add('telephone');
+    if (nouveauTaux !== cible.taux_journalier) verrous.add('taux_journalier');
 
     const maj = await db.transaction(async (tx) => {
       const [u] = await tx
@@ -160,6 +153,7 @@ export function routesEquipe(app: FastifyInstance): void {
           poste: nouveauPoste,
           photo_url: nouvellePhoto,
           telephone: nouveauTel,
+          taux_journalier: nouveauTaux,
           champs_manuels: [...verrous],
           // Le changement de rôle système efface l'ancien enum (source = role_id).
           role: corps.role_id ? null : cible.role,
@@ -173,7 +167,12 @@ export function routesEquipe(app: FastifyInstance): void {
         action: 'MODIF_EMPLOYE',
         entite: 'utilisateurs',
         entite_id: id,
-        meta: { avant: { role: cibleNom }, apres: { role: nouveauNom } },
+        // Le taux journalier fixe un salaire : sa modification est tracée
+        // nommément, sans quoi une paie contestée n'aurait aucun historique.
+        meta: {
+          avant: { role: cibleNom, taux_journalier: cible.taux_journalier },
+          apres: { role: nouveauNom, taux_journalier: nouveauTaux },
+        },
       });
       return u!;
     });

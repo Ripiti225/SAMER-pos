@@ -142,6 +142,7 @@ interface Employe {
   photo_url: string | null;
   disponibilite: Disponibilite;
   telephone: string | null;
+  taux_journalier: number | null;
   actif: boolean;
   doit_definir_pin: boolean;
   derniere_presence: string | null;
@@ -210,6 +211,14 @@ function CarteEmploye({
         <div className="flex justify-between gap-3">
           <dt className="text-doux">Téléphone</dt>
           <dd className="truncate font-medium tabular-nums">{e.telephone || '—'}</dd>
+        </div>
+        {/* Le taux pré-remplit la paie dans Dépenses › Paie & départs : sans lui,
+            la caissière ressaisit le salaire et doit motiver chaque écart. */}
+        <div className="flex justify-between gap-3">
+          <dt className="text-doux">Taux journalier</dt>
+          <dd className={`truncate font-medium tabular-nums ${e.taux_journalier === null ? 'text-doux' : ''}`}>
+            {e.taux_journalier === null ? 'à définir' : `${formatFCFA(e.taux_journalier)} / jour`}
+          </dd>
         </div>
         <div className="flex justify-between gap-3">
           <dt className="text-doux">Dernière présence</dt>
@@ -300,7 +309,6 @@ interface RoleAdmin {
 function Equipe() {
   const qc = useQueryClient();
   const [msg, setMsg] = useState<{ texte: string; ok?: boolean } | null>(null);
-  const [nouveau, setNouveau] = useState<{ nom_complet: string; role_id: string; telephone: string } | null>(null);
   const [code, setCode] = useState<string | null>(null);
   /** Une seule fiche ouverte à la fois : sinon la grille redevient un mur. */
   const [detailsOuverts, setDetailsOuverts] = useState<string | null>(null);
@@ -310,15 +318,6 @@ function Equipe() {
 
   const rolesActifs = (roles ?? []).filter((r) => r.actif);
 
-  const creer = useMutation({
-    mutationFn: (corps: Record<string, unknown>) => api<{ code_temporaire: string }>('/api/admin/equipe', { method: 'POST', corps }),
-    onSuccess: (r) => {
-      setCode(r.code_temporaire);
-      setNouveau(null);
-      void qc.invalidateQueries({ queryKey: ['admin', 'equipe'] });
-    },
-    onError: (e: Error) => setMsg({ texte: e.message }),
-  });
   const reinit = useMutation({
     mutationFn: (id: string) => api<{ code_temporaire: string }>(`/api/admin/equipe/${id}/reinit-pin`, { method: 'POST' }),
     onSuccess: (r) => setCode(r.code_temporaire),
@@ -359,14 +358,12 @@ function Equipe() {
     <section>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-xl font-bold">Équipe</h2>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className="btn-blanc" disabled={sync.isPending} onClick={() => sync.mutate()}>
-            {sync.isPending ? 'Synchronisation…' : 'Synchroniser (SamerTrackly)'}
-          </button>
-          <button type="button" className="btn-accent" onClick={() => setNouveau({ nom_complet: '', role_id: rolesActifs[0]?.id ?? '', telephone: '' })}>
-            + Ajouter un employé
-          </button>
-        </div>
+        {/* Plus de bouton « Ajouter un employé » : l'embauche se décide au
+            siège (2026-09-04). La synchro devient donc l'action principale de
+            cet écran — c'est par elle qu'un nouvel employé arrive. */}
+        <button type="button" className="btn-accent" disabled={sync.isPending} onClick={() => sync.mutate()}>
+          {sync.isPending ? 'Synchronisation…' : 'Synchroniser (SamerTrackly)'}
+        </button>
       </div>
       <Message texte={msg?.texte ?? null} ok={msg?.ok} />
       {code && (
@@ -395,27 +392,11 @@ function Equipe() {
           />
         ))}
         {(employes ?? []).length === 0 && (
-          <p className="text-doux">Aucun employé. Ajoutez-le à la main, ou synchronisez depuis SamerTrackly.</p>
+          <p className="text-doux">
+            Aucun employé. L’équipe se crée au siège : lancez « Synchroniser (SamerTrackly) » pour la faire descendre ici.
+          </p>
         )}
       </div>
-
-      {nouveau && (
-        <div className="mt-4 rounded-jeton border border-bordure p-4">
-          <h3 className="mb-3 font-bold">Nouvel employé</h3>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <input className="champ" placeholder="Nom complet" value={nouveau.nom_complet} onChange={(ev) => setNouveau({ ...nouveau, nom_complet: ev.target.value })} />
-            <select className="champ" value={nouveau.role_id} onChange={(ev) => setNouveau({ ...nouveau, role_id: ev.target.value })}>
-              {rolesActifs.map((r) => <option key={r.id} value={r.id}>{r.nom}</option>)}
-            </select>
-            <input className="champ" placeholder="Téléphone (optionnel)" value={nouveau.telephone} onChange={(ev) => setNouveau({ ...nouveau, telephone: ev.target.value })} />
-          </div>
-          <div className="mt-3 flex gap-2">
-            <button type="button" className="btn-accent" onClick={() => creer.mutate({ nom_complet: nouveau.nom_complet, role_id: nouveau.role_id, telephone: nouveau.telephone || undefined })}>Créer</button>
-            <button type="button" className="btn-blanc" onClick={() => setNouveau(null)}>Annuler</button>
-          </div>
-          <p className="mt-2 text-sm text-doux">L’employé saisira lui-même son PIN avec le code temporaire.</p>
-        </div>
-      )}
 
       {edition && (
         <EditionEmploye
@@ -449,7 +430,10 @@ function EditionEmploye({
   const [poste, setPoste] = useState(employe.poste ?? '');
   const [tel, setTel] = useState(employe.telephone ?? '');
   const [photo, setPhoto] = useState(employe.photo_url ?? '');
+  const [taux, setTaux] = useState(employe.taux_journalier === null ? '' : String(employe.taux_journalier));
   const { data: postes } = useQuery({ queryKey: ['admin', 'postes'], queryFn: () => api<string[]>('/api/admin/postes') });
+  // Champ vide = « pas de taux », pas « taux zéro » (voir TauxJournalierSchema).
+  const tauxInvalide = taux.trim() !== '' && !/^\d{1,7}$/.test(taux.trim());
 
   return (
     <Modale titre={`Modifier ${employe.nom_complet}`} onFermer={onFermer} enfants={
@@ -476,6 +460,20 @@ function EditionEmploye({
         <label className="block text-sm text-doux">Téléphone
           <input className="champ mt-1" value={tel} onChange={(e) => setTel(e.target.value)} placeholder="ex : 0700000000" />
         </label>
+        <label className="block text-sm text-doux">Taux journalier (FCFA)
+          <input
+            className="champ mt-1 tabular-nums"
+            inputMode="numeric"
+            value={taux}
+            onChange={(e) => setTaux(e.target.value)}
+            placeholder="ex : 5000"
+          />
+          <span className="mt-1 block text-xs text-doux">
+            {tauxInvalide
+              ? 'Un montant en chiffres seulement, sans espace ni virgule.'
+              : 'Pré-remplit la paie dans Dépenses › Paie & départs. Laisser vide si le salaire n’est pas fixé.'}
+          </span>
+        </label>
         <label className="block text-sm text-doux">Photo (URL)
           <input className="champ mt-1" value={photo} onChange={(e) => setPhoto(e.target.value)} placeholder="https://…" />
         </label>
@@ -483,13 +481,14 @@ function EditionEmploye({
           <button
             type="button"
             className="btn-accent flex-1"
-            disabled={enCours || nom.trim().length < 2 || !roleId}
+            disabled={enCours || nom.trim().length < 2 || !roleId || tauxInvalide}
             onClick={() => onEnregistrer({
               nom_complet: nom.trim(),
               role_id: roleId,
               poste: poste.trim(),
               telephone: tel.trim() || undefined,
               photo_url: photo.trim(),
+              taux_journalier: taux.trim(),
             })}
           >
             {enCours ? 'Enregistrement…' : 'Enregistrer'}
