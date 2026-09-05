@@ -4,6 +4,7 @@ import type { TableVue } from '@pos/shared';
 import { api } from '../api';
 import { sons } from '../sons';
 import { useCaisse } from '../stores/session';
+import { destinationAddition } from '../navigation-addition';
 
 /**
  * Correction 2 : notification visible et persistante des demandes d'addition.
@@ -56,17 +57,22 @@ export function BandeauAdditions() {
               <span className="text-fort">
                 Table <span className="font-black">{t.numero}</span> ({t.zone_nom}) demande l’addition
               </span>
-              <button
-                type="button"
-                className="btn-accent ml-auto min-h-[40px] px-4"
-                onClick={() => {
-                  marquerTableVue(t.id);
-                  if (t.commande_id) aller('paiement', t.commande_id);
-                  else aller('tables');
-                }}
-              >
-                Encaisser
-              </button>
+              <div className="ml-auto flex flex-none gap-2">
+                <button type="button" className="btn-blanc min-h-[40px] px-3" onClick={() => marquerTableVue(t.id)}>
+                  Fermer
+                </button>
+                <button
+                  type="button"
+                  className="btn-accent min-h-[40px] px-4"
+                  onClick={() => {
+                    marquerTableVue(t.id);
+                    const destination = destinationAddition(t);
+                    aller(destination.ecran, destination.commandeId);
+                  }}
+                >
+                  Ouvrir la table
+                </button>
+              </div>
             </div>
           ))}
         </div>

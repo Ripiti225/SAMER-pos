@@ -4,6 +4,7 @@ import type { ArticleVue, CatalogueVue, CommandeVue, TableVue } from '@pos/share
 import { categorieVisiblePour, formatFCFA, uuidLocal } from '@pos/shared';
 import { api, Modale } from '@pos/shared-ui';
 import { fileAttente } from '../file-attente';
+import { FactureNumerique } from '../components/FactureNumerique';
 
 interface LignePanier {
   cle: string;
@@ -31,10 +32,12 @@ interface LignePanier {
  */
 export function PriseCommande({
   tableId,
+  restaurant,
   onRetour,
   afficherToast,
 }: {
   tableId: string;
+  restaurant: string;
   onRetour: () => void;
   afficherToast: (m: string) => void;
 }) {
@@ -42,6 +45,7 @@ export function PriseCommande({
   const [articleOuvert, setArticleOuvert] = useState<ArticleVue | null>(null);
   const [panier, setPanier] = useState<LignePanier[]>([]);
   const [tiroirPanier, setTiroirPanier] = useState(false);
+  const [factureOuverte, setFactureOuverte] = useState(false);
 
   const { data: catalogue } = useQuery({
     queryKey: ['catalogue'],
@@ -55,7 +59,7 @@ export function PriseCommande({
   const table = tables?.find((t) => t.id === tableId);
 
   // Commande déjà en cours sur la table (articles déjà envoyés)
-  const { data: commande } = useQuery({
+  const { data: commande, refetch: rafraichirCommande } = useQuery({
     queryKey: ['commande', table?.commande_id],
     queryFn: () => api<CommandeVue>(`/api/commandes/${table!.commande_id}`),
     enabled: !!table?.commande_id,
@@ -116,6 +120,8 @@ export function PriseCommande({
       table_id: tableId,
     });
     afficherToast('Addition demandée — la caisse est prévenue');
+    await rafraichirCommande();
+    setFactureOuverte(true);
   };
 
   // Marquer la commande SERVIE (le serveur peut le faire depuis son app, pas
@@ -148,6 +154,9 @@ export function PriseCommande({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {factureOuverte && commande && (
+        <FactureNumerique commande={commande} restaurant={restaurant} onFermer={() => setFactureOuverte(false)} />
+      )}
       {/* Barre de table — les actions passent à la ligne sur écran étroit. */}
       <div className="marge-sure-cotes flex flex-none flex-wrap items-center gap-2 border-b border-bordure bg-surface p-2 shadow-e1 sm:p-3">
         <button

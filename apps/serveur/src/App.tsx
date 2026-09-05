@@ -97,7 +97,7 @@ export function App() {
 
       <main className="min-h-0 flex-1">
         {tableId ? (
-          <PriseCommande tableId={tableId} onRetour={() => setTableId(null)} afficherToast={afficherToast} />
+          <PriseCommande tableId={tableId} restaurant={session.restaurant.nom} onRetour={() => setTableId(null)} afficherToast={afficherToast} />
         ) : (
           <Salle onTable={setTableId} moiServeurId={session.utilisateur.id} afficherToast={afficherToast} />
         )}
