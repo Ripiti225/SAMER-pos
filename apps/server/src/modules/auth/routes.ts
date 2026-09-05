@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import argon2 from 'argon2';
-import { DeverrouillerSchema, LoginSchema, PoserPinSchema, TOUTES_PERMISSIONS, peutAccederCaisse } from '@pos/shared';
+import { DeverrouillerSchema, LoginSchema, PoserPinSchema, TOUTES_PERMISSIONS, peutAccederCaisse, tientLaCaisse } from '@pos/shared';
 import type { RapportZ, SessionInfo } from '@pos/shared';
 import { db } from '../../db/client.js';
 import { parametresLocaux, restaurant, roles, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
@@ -99,8 +99,18 @@ async function infoRole(roleId: string | null, fallbackEnum: string | null) {
 }
 
 export function routesAuth(app: FastifyInstance): void {
-  // Liste des utilisateurs actifs pour l'écran de connexion (pas de PIN exposé)
-  app.get('/api/auth/utilisateurs', async () => {
+  /**
+   * Liste des utilisateurs actifs pour un écran de connexion (aucun PIN exposé).
+   *
+   * `?ecran=caisse` retire en plus les comptes de SALLE (rôle SERVEUR) : ils se
+   * connectent sur la tablette serveur, pas au comptoir. Sans le paramètre, la
+   * liste reste complète — la tablette serveur en dépend pour afficher ses
+   * propres comptes, et la caisse en a besoin ailleurs qu'au login : transférer
+   * une table demande justement la liste des serveurs (`Tables.tsx`).
+   */
+  app.get('/api/auth/utilisateurs', async (req) => {
+    const { ecran } = req.query as { ecran?: string };
+    const pourLaCaisse = ecran === 'caisse';
     const lignes = await db
       .select({
         id: utilisateurs.id,
@@ -117,10 +127,12 @@ export function routesAuth(app: FastifyInstance): void {
 
     // On n'affiche pas les comptes réservés à la cuisine (KDS) : ils ne se
     // connectent pas au POS caisse (même règle que le login, appliquée serveur).
+    // Et sur la caisse centrale, pas non plus les comptes de salle.
+    const admis = pourLaCaisse ? tientLaCaisse : peutAccederCaisse;
     const avecAcces = await Promise.all(
       lignes.map(async (l) => ({
         ligne: l,
-        acces: peutAccederCaisse(await permissionsEffectives(l.role_nom === 'PROPRIETAIRE', l.role_id)),
+        acces: admis(await permissionsEffectives(l.role_nom === 'PROPRIETAIRE', l.role_id)),
       })),
     );
     return avecAcces.filter((x) => x.acces).map((x) => x.ligne);

@@ -225,6 +225,33 @@ export function peutAccederCaisse(permissions: string[]): boolean {
 }
 
 /**
+ * Permissions purement SALLE : un compte qui n'a QUE celles-ci travaille sur la
+ * tablette serveur, pas sur la caisse centrale. C'est exactement le rôle
+ * SERVEUR — le CAISSIER les possède aussi, mais avec l'encaissement en plus.
+ */
+export const PERMISSIONS_SALLE_SEULE: string[] = ['salle.commande', 'salle.envoyer_cuisine'];
+
+/**
+ * true si le compte a sa place sur l'écran de connexion de la CAISSE CENTRALE :
+ * il possède au moins une permission qui n'est ni purement cuisine, ni purement
+ * salle (2026-09-05).
+ *
+ * Le serveur ne tient pas la caisse : sa liste de noms n'a rien à faire sur
+ * l'écran de connexion du comptoir, où elle allongeait le choix et invitait à
+ * ouvrir un service au nom de quelqu'un qui n'encaisse pas.
+ *
+ * ATTENTION — ceci filtre un AFFICHAGE, pas un droit de connexion. La tablette
+ * serveur se connecte par la même route `/api/auth/login` : y refuser le rôle
+ * SERVEUR fermerait la porte à sa propre application. Ce que le serveur peut
+ * FAIRE reste, comme toujours, gouverné par ses permissions.
+ */
+export function tientLaCaisse(permissions: string[]): boolean {
+  return permissions.some(
+    (p) => !PERMISSIONS_CUISINE_SEULE.includes(p) && !PERMISSIONS_SALLE_SEULE.includes(p),
+  );
+}
+
+/**
  * Catalogue des paramètres locaux éditables depuis Réglages (2.6), avec libellé
  * français, type d'entrée et valeur par défaut. La route serveur n'accepte QUE
  * ces clés (liste blanche). Les paramètres de fidélité sont gérés à part (2.5).

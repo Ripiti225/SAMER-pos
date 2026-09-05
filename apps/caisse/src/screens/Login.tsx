@@ -115,9 +115,14 @@ export function Login() {
   const [nouveauPin, setNouveauPin] = useState('');
   const [confirmation, setConfirmation] = useState('');
 
+  // `?ecran=caisse` : les comptes de SALLE (serveurs) ne sont pas proposés ici,
+  // ils se connectent sur leur tablette. Clé de cache DISTINCTE de celle des
+  // autres écrans (Tables, Clôture) qui, eux, lisent la liste complète — sans
+  // ça, React Query servirait la mauvaise liste au dernier arrivé, et le
+  // transfert de table perdrait ses serveurs.
   const { data: utilisateurs, isError: reseauKo } = useQuery({
-    queryKey: ['utilisateurs-login'],
-    queryFn: () => api<UtilisateurPublic[]>('/api/auth/utilisateurs'),
+    queryKey: ['utilisateurs-login', 'caisse'],
+    queryFn: () => api<UtilisateurPublic[]>('/api/auth/utilisateurs?ecran=caisse'),
   });
 
   const { data: etatPoste } = useQuery({

@@ -115,6 +115,35 @@ describe('la cuisine ne se connecte pas au POS caisse', () => {
     expect(ids).toContain(donnees.serveur_id);
   });
 
+  /**
+   * Caisse centrale (2026-09-05) : le serveur travaille sur sa tablette, son nom
+   * n'a rien à faire sur l'écran de connexion du comptoir.
+   */
+  it('?ecran=caisse retire les serveurs, mais garde ceux qui encaissent', async () => {
+    const rep = await app.inject({ method: 'GET', url: '/api/auth/utilisateurs?ecran=caisse' });
+    expect(rep.statusCode).toBe(200);
+    const ids = (rep.json() as Array<{ id: string }>).map((u) => u.id);
+    expect(ids).not.toContain(donnees.serveur_id);
+    expect(ids).not.toContain(donnees.cuisine_id);
+    expect(ids).toContain(donnees.caissier_id);
+    expect(ids).toContain(donnees.proprio_id);
+  });
+
+  it('sans le paramètre, la liste garde les serveurs (tablette serveur, transfert de table)', async () => {
+    const rep = await app.inject({ method: 'GET', url: '/api/auth/utilisateurs' });
+    const ids = (rep.json() as Array<{ id: string }>).map((u) => u.id);
+    expect(ids).toContain(donnees.serveur_id);
+  });
+
+  it('un serveur retiré de l’écran caisse peut TOUJOURS se connecter (sa tablette passe par la même route)', async () => {
+    const rep = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { utilisateur_id: donnees.serveur_id, pin: PIN_SERVEUR },
+    });
+    expect(rep.statusCode).toBe(200);
+  });
+
   it('laisse un serveur (non-cuisine) se connecter normalement', async () => {
     const rep = await app.inject({
       method: 'POST',
