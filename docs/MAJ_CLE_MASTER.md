@@ -16,6 +16,11 @@ et les deux seuls comptes propriétaire. Tout ce qui est écrit ici est **posté
 >
 > *(Reports précédents : 2026-09-04 à 21h52, la clé s'arrêtait alors au commit `116309a` ;
 > 2026-08-21 à 15h48, à la migration 0025.)*
+>
+> **La clé est désormais sur la branche `siege-8-sites-et-releve`, pas sur `main`.** Elle
+> porte du code que `main` n'a pas encore : À la Braise côté cloud, le report de la
+> relève, les lanceurs `.bat`. C'est voulu — c'est l'état déployé — mais il faut le savoir
+> avant de comparer un poste à `origin/main`.
 
 Le poste **Samer Angré 7E** (`C:\Users\PC\Documents\POS-Samer-deploiement`) est le
 **site de test** du groupe : c'est ici qu'on essaie, qu'on casse et qu'on corrige
@@ -44,7 +49,7 @@ avant que les 7 autres restaurants ne reçoivent quoi que ce soit.
 | Dernière migration | **0032** (`0032_disponibilite_horaire.sql`) — **sur la clé** ✔ |
 | Migrations ajoutées depuis la clé | **aucune** : la clé du 09/09 les porte toutes. Un poste installé depuis une clé plus ancienne doit passer `pnpm db:migrate` (0026 → 0032) |
 | Rebuild caisse | **à jour** — `dist` du 09/09 00h06, postérieur aux sources d'`apps/caisse` |
-| Report du code sur la clé master | **fait le 09/09** (`data\` exclu, base neutre intacte) — la clé passe du commit `116309a` à la branche `siege-8-sites-et-releve` |
+| Report du code sur la clé master | **fait le 09/09 à 15h18** — 483 fichiers copiés, 66 obsolètes retirés (vieux `dist`), **0 échec**. `data\` et `node_modules\` exclus : la base neutre de la clé est intacte, et `pnpm-lock.yaml` est inchangé depuis le 04/09 donc ses `node_modules` restent valables. La clé passe du commit `116309a` (branche `main`) à `387bb69` sur **`siege-8-sites-et-releve`**, arbre de travail propre |
 | Scripts à la racine du dossier portable | ⚠️ **nouveaux `.bat`** : `preparer-app.bat` et `installer-demarrage-auto.bat` accompagnent désormais les `.ps1`. Sur un poste déjà installé, les recopier à la main depuis `app\deploy\windows\` |
 | Repackaging `PosSamer.exe` nécessaire | non — `apps/desktop` inchangé depuis la clé |
 | Redéploiement Edge Function | **`siege` : OUI** (`marqueDe()`, 3e marque, sous-titre compté). **`samtrackly-points` : OUI** (pagination de la sélection + services clôturés sans `remis_le`). `sync-push` : redéployée le 04/09 |
