@@ -5,18 +5,21 @@
 La clé a été copiée le **2026-08-17 à 05h01:32**, avec l'identité neutre `A_CONFIGURER`
 et les deux seuls comptes propriétaire. Tout ce qui est écrit ici est **postérieur**.
 
-> **Report effectué le 2026-09-04 au soir** via `mettre-a-jour-cle.ps1` (`data\` exclu,
-> la base neutre de la clé est intacte — inchangée depuis le 18/07 14h24) : **le code à
-> 21h52**, puis **ce journal et ses six nouvelles entrées dans une seconde passe**.
+> **Report effectué le 2026-09-09** (`data\` exclu, la base neutre de la clé est intacte
+> — inchangée depuis le 18/07 14h24) : **le code d'abord**, puis **ce journal et ses cinq
+> nouvelles entrées dans une seconde passe**. La clé reçoit aussi, pour la première fois,
+> les **lanceurs `.bat`** de `deploy/windows/` à sa racine — sans eux, les scripts
+> d'installation ne partaient sur aucun poste (voir l'entrée du 09/09).
 > **Tout ce qui est écrit ci-dessous est donc sur la clé**, migrations jusqu'à la **0032**
-> et `apps/caisse/dist` du 04/09 21h40 compris. Les entrées ajoutées après cette date ne
+> et `apps/caisse/dist` du 09/09 00h06 compris. Les entrées ajoutées après cette date ne
 > le seront pas : recommencer le report avant tout nouveau déploiement.
 >
-> *(Report précédent : 2026-08-21 à 15h48, la clé s'arrêtait alors à la migration 0025.)*
+> *(Reports précédents : 2026-09-04 à 21h52, la clé s'arrêtait alors au commit `116309a` ;
+> 2026-08-21 à 15h48, à la migration 0025.)*
 
 Le poste **Samer Angré 7E** (`C:\Users\PC\Documents\POS-Samer-deploiement`) est le
 **site de test** du groupe : c'est ici qu'on essaie, qu'on casse et qu'on corrige
-avant que les 6 autres restaurants ne reçoivent quoi que ce soit.
+avant que les 7 autres restaurants ne reçoivent quoi que ce soit.
 
 ## Comment lire ce fichier
 
@@ -39,15 +42,17 @@ avant que les 6 autres restaurants ne reçoivent quoi que ce soit.
 | | |
 |---|---|
 | Dernière migration | **0032** (`0032_disponibilite_horaire.sql`) — **sur la clé** ✔ |
-| Migrations ajoutées depuis la clé | **aucune** : la clé du 04/09 les porte toutes. Un poste installé depuis une clé plus ancienne doit passer `pnpm db:migrate` (0026 → 0032) |
-| Rebuild caisse | **à jour** — `dist` du 04/09 21h40, postérieur aux sources d'`apps/caisse` |
-| Report du code sur la clé master | **fait le 04/09 21h52** (`data\` exclu, 406 fichiers, 0 échec) |
+| Migrations ajoutées depuis la clé | **aucune** : la clé du 09/09 les porte toutes. Un poste installé depuis une clé plus ancienne doit passer `pnpm db:migrate` (0026 → 0032) |
+| Rebuild caisse | **à jour** — `dist` du 09/09 00h06, postérieur aux sources d'`apps/caisse` |
+| Report du code sur la clé master | **fait le 09/09** (`data\` exclu, base neutre intacte) — la clé passe du commit `116309a` à la branche `siege-8-sites-et-releve` |
+| Scripts à la racine du dossier portable | ⚠️ **nouveaux `.bat`** : `preparer-app.bat` et `installer-demarrage-auto.bat` accompagnent désormais les `.ps1`. Sur un poste déjà installé, les recopier à la main depuis `app\deploy\windows\` |
 | Repackaging `PosSamer.exe` nécessaire | non — `apps/desktop` inchangé depuis la clé |
-| Redéploiement Edge Function | **`samtrackly-points` : OUI** (pagination de la sélection + services clôturés sans `remis_le`). `sync-push` : redéployée le 04/09. `siege` : statut du 21/08 inchangé, **à confirmer déployée** |
-| Migrations CLOUD à appliquer | **1 nouvelle** — `20260901110000_explication_ecart_samtrackly`. Les 3 listées le 21/08 (`20260817140000_pont_samtrackly`, `20260821150000_inventaire_snapshot_produit`, `20260825030000_livraisons_partenaires`) **restent à confirmer appliquées** |
+| Redéploiement Edge Function | **`siege` : OUI** (`marqueDe()`, 3e marque, sous-titre compté). **`samtrackly-points` : OUI** (pagination de la sélection + services clôturés sans `remis_le`). `sync-push` : redéployée le 04/09 |
+| Migrations CLOUD à appliquer | **2** — `20260908000000_marque_a_la_braise` (nouvelle, bloque l'enrôlement d'À la Braise tant qu'elle n'est pas passée) et `20260901110000_explication_ecart_samtrackly`. Les 3 listées le 21/08 (`20260817140000_pont_samtrackly`, `20260821150000_inventaire_snapshot_produit`, `20260825030000_livraisons_partenaires`) **restent à confirmer appliquées** |
+| SQL cloud ponctuel | `sql/cloud/ajouts_samerdelly_20260908.sql` — 4 produits SamerDelly, **publication non confirmée** (voir l'entrée du 08/09) |
 | Rattrapage à lancer par site | `pnpm services:republier` — republie les explications d'écart que le cloud jetait entre le 28/08 et le 04/09. **Fait sur le 7E le 04/09** |
-| 🔴 À vérifier sur les 6 autres sites | `SELECT count(*) FROM sync_outbox WHERE synced_at IS NULL;` — la FK `notes_split_payee_par_fk` a gelé 12 h de ventes sur le 7E, elle a pu geler les leurs |
-| Tests | **verts au 04/09** — POS : **48 fichiers / 303 tests** (`apps/server` 47/301, `packages/theme` 1/2) ; pont : **121 tests, 23 suites** (`pnpm test:functions`). ⚠️ voir le point ouvert ci-dessous : `pnpm test` n'exécute réellement que ces deux paquets |
+| 🔴 À vérifier sur les 7 autres sites | `SELECT count(*) FROM sync_outbox WHERE synced_at IS NULL;` — la FK `notes_split_payee_par_fk` a gelé 12 h de ventes sur le 7E, elle a pu geler les leurs |
+| Tests | **verts au 09/09** — POS : **50 fichiers / 319 tests** (`apps/server` 49/317, `packages/theme` 1/2) ; pont : **121 tests, 23 suites** (`pnpm test:functions`). ⚠️ voir le point ouvert ci-dessous : `pnpm test` n'exécute réellement que ces deux paquets. ⚠️ sur ce poste, les tests exigent `PGUSER=postgres` : `vitest.config.ts` pose une URL sans utilisateur, et libpq retombe alors sur le compte Windows (`role "HP" does not exist`) |
 
 > **Trou de journal à combler.** Le journal reprend au 25/08, mais les commits du
 > **22 au 24/08** (séquences, ordres du siège, console du siège, republication des
@@ -1084,3 +1089,151 @@ dit qu'ils ne sont pas gelés eux aussi depuis le redéploiement de `sync-push` 
 ```sql
 SELECT count(*) FROM sync_outbox WHERE synced_at IS NULL;
 ```
+
+---
+
+## 2026-09-05 — L'addition sur la tablette du serveur
+
+**Fichiers** : `apps/serveur/src/{facture-tablette.ts,components/FactureNumerique.tsx,screens/PriseCommande.tsx,App.tsx}`,
+`apps/caisse/src/{navigation-addition.ts,components/BandeauAdditions.tsx,screens/Tables.tsx}`.
+
+Le serveur en salle devait revenir au comptoir pour savoir ce que la table devait.
+La facture s'affiche maintenant sur sa tablette, depuis la prise de commande, et le
+bandeau des additions de la caisse renvoie vers la table concernée au lieu de laisser
+chercher.
+
+**Déploiement** : **rebuild caisse** (`apps/caisse` a changé). `apps/serveur` n'a pas de
+`dist` — `PosSamer.exe` le lance par vite depuis les sources — donc rien à builder de ce
+côté, il suffit de relancer l'exe. Rien côté base.
+
+---
+
+## 2026-09-09 — À la Braise côté cloud : la 3e marque, et la relève qui se reporte
+
+**Migration CLOUD** : `20260908000000_marque_a_la_braise.sql` — **à appliquer**.
+
+Le groupe est passé à **8 restaurants** le 05/09. Le POS local gérait déjà À la Braise
+(migration 0031, thème, logos, profil d'installation) ; le **cloud**, lui, était resté à
+deux marques. Le `CHECK` de `restaurants` refusait `'A_LA_BRAISE'` : l'`INSERT`
+d'enrôlement du nouveau site serait tombé dessus avec un message Postgres illisible pour
+la personne qui installe le mini-PC.
+
+Côté console du siège, `marqueDe()` remplace le test `couleur.includes('vert')`, qui
+classait tout le reste en SAMER — À la Braise, avec son hexadécimal or, s'affichait en
+Chez Samer. L'ordre est désormais : le POS (seule valeur sûre pour un site enrôlé), puis
+l'intitulé `marque` de SamerTrackly, la couleur ne servant plus que de repli pour les
+sites d'origine qui l'ont à NULL. Le sous-titre du tableau de bord **compte** la liste au
+lieu d'écrire « 7 » en dur, et la pastille de marque repasse au `#d99a2b` du thème (elle
+portait `#d89a2b`, un chiffre de travers).
+
+**Relève** : l'employé marqué « Reste » passe au shift suivant. Le drapeau était écrit,
+compté à la clôture et affiché, mais **rien ne le relisait à l'ouverture suivante** — il
+fallait recocher tout le monde à la main. `equipe-proposee` renvoie maintenant
+`reste_precedent` et le poste réellement tenu ; l'écran d'ouverture les **pré-coche**.
+
+Pré-cochés et **non imposés** : l'heure d'arrivée d'un membre coché est datée de
+l'ouverture et **compte pour la paie**, la caissière doit pouvoir décocher un absent.
+Même raison pour la borne de fraîcheur : au-delà d'une durée de service (8 h), plus rien
+n'est reporté — sinon rouvrir la caisse le lendemain créditerait des heures à des gens
+partis depuis longtemps.
+
+**47 mentions périmées** de « les 7 restaurants » ont été remplacées dans le dépôt. Les
+migrations déjà appliquées et les journaux datés (celui-ci, `ETAT_PROJET`) sont laissés
+intacts : ce sont des archives.
+
+**Déploiement** : appliquer la migration cloud, **redéployer la fonction `siege`**, puis
+**rebuild caisse** (`apps/caisse/src/screens/OuvertureService.tsx` a changé) et relancer
+l'exe sur chaque poste (routes serveur `services`).
+
+---
+
+## 2026-09-09 — Les scripts d'installation ne partaient jamais, en silence
+
+**Fichiers** : `deploy/windows/{preparer-app.bat,installer-demarrage-auto.bat}` (nouveaux),
+`deploy/windows/{preparer-app.ps1,installer-demarrage-auto.ps1,README-DEPLOIEMENT.md}`.
+
+Sur ce poste, **ni le démarrage automatique ni la fabrication de `PosSamer.exe` ne se
+sont jamais installés — et sans aucun message d'erreur.** Trois obstacles se cumulaient,
+aucun visible :
+
+1. L'entrée **« Exécuter avec PowerShell » du clic droit n'existe pas sur toutes les
+   machines**. Ici la clé `Microsoft.PowerShellScript.1\Shell\0` est absente et le seul
+   verbe déclaré est `Open → notepad.exe` : le `.ps1` s'ouvre dans le Bloc-notes. C'est
+   le blocage principal, et il est **silencieux** — rien n'échoue, rien ne s'installe.
+2. La stratégie d'exécution est **`Restricted`** (toutes les portées à `Undefined`), donc
+   tout `.ps1` est refusé, même lancé à la main.
+3. `Register-ScheduledTask -RunLevel Highest` exige l'élévation, que ce menu ne demande
+   pas.
+
+Chaque `.ps1` reçoit donc un **lanceur `.bat`**, qui se double-clique toujours. Et dans
+la foulée, le même symptôme côté UAC : `Start-Process -Verb RunAs` lève une erreur quand
+l'UAC est refusé ou ne s'affiche pas, mais le script enchaînait sur `exit /b 0` sans la
+lire — une fenêtre qui clignote, se ferme, et rien n'est dit. L'échec d'élévation est
+maintenant capturé et affiché, un marqueur « déjà-tenté » évite de redemander l'UAC en
+boucle, le code de sortie du `.ps1` est lu et affiché, et **chaque sortie passe par
+`pause`**, y compris les cas d'erreur.
+
+**Déploiement** : recopier **tous** les scripts de `deploy/windows/` à la racine du
+dossier portable — les `.bat` **et** les `.ps1`, chaque `.bat` appelant son `.ps1`
+voisin. La consigne du `README-DEPLOIEMENT.md` change en conséquence : on
+**double-clique `preparer-app.bat`**, on ne fait plus « clic droit → Exécuter avec
+PowerShell ».
+
+---
+
+## 2026-09-08 — Ajouts SamerDelly : 4 produits, et ce qu'on refuse de deviner
+
+**Fichiers** : `sql/cloud/ajouts_samerdelly_20260908.sql`,
+`docs/{AJOUTS_SAMERDELLY_20260908.md,ajouts_samerdelly_20260908.json}`.
+
+Quatre nouveautés (Falafel x6, Mini pizza x3, Tacos burger, Gâteau au chocolat) tirées
+d'un export SamerDelly de 100 lignes. **État : script écrit et vérifié, publication non
+confirmée** — la première tentative a été annulée parce que les catégories Apéritifs,
+Tacos et Desserts n'étaient pas résolues pour le 7E et la Palmeraie, et que la CLI
+Supabase de ce poste n'a pas de session authentifiée.
+
+Ce que le script **ne fait pas**, volontairement : il ne supprime rien (l'export est
+partiel — 4 identifiants n'existent pas dans `catalogue_samer.json`, la suite reste à
+confirmer), ne modifie aucun prix ni aucune disponibilité existants, n'invente aucun
+tarif partenaire, et **s'arrête net** sur une catégorie ambiguë ou désactivée plutôt que
+de choisir à notre place. À la Braise est exclue **par marque, par nom et par code**,
+sans dérogation possible.
+
+Vérifié sur une base PostgreSQL 16 isolée avec huit restaurants fictifs : ajout dans les
+deux sites autorisés, conservation d'un prix déjà défini, exclusion d'À la Braise et des
+sites inactifs ou non enrôlés, publication des six catégories manquantes avec les UUID
+d'origine, et **seconde exécution sans aucun doublon**.
+
+**Déploiement** : exécuter le `.sql` dans l'éditeur SQL de **`pos-samer-cloud`**
+(`vbsmxwlxlcgkodwkbhfa`). Rien sur les postes — mais **une publication cloud ne prouve
+pas que les postes ont reçu les produits** : vérifier `/api/catalogue` après leur
+synchronisation descendante. Les postes non enrôlés restent à traiter une fois raccordés.
+
+---
+
+## 2026-09-09 — Les options du catalogue : un écran vide qui mentait
+
+**Fichiers** : `apps/server/src/modules/catalogue/admin-options.ts`,
+`apps/caisse/src/screens/Reglages.tsx`, `apps/server/test/admin-options.test.ts` (nouveau).
+
+Deux défauts sur le même écran, Réglages → Options.
+
+**Le doublon n'était plus détecté.** `estDoublon()` lisait `e.code === '23505'` sur
+l'erreur reçue. Or Drizzle **encapsule** désormais l'erreur PostgreSQL dans une
+`DrizzleQueryError` : le code `23505` est dans `cause`. La contrainte d'unicité
+`(nom, prix)` de la base tenait toujours, mais l'opérateur ne recevait plus le message
+« Cette option existe déjà avec ce prix » — il tombait sur une erreur brute. Le code lit
+maintenant la `cause`.
+
+**Un chargement en échec ressemblait à un catalogue vide.** `useQuery` n'exposait que
+`data` : réseau coupé, serveur redémarré, requête en erreur — l'écran affichait
+sereinement « Aucune option pour l'instant, créez la première ci-dessus », et on créait
+une option qui existait déjà. L'erreur est désormais affichée avec un bouton
+**Réessayer**, l'état de chargement dit « Chargement des options… », et le message
+« aucune option » n'apparaît **que** si la requête a effectivement abouti sur zéro ligne.
+
+Le nouveau `admin-options.test.ts` couvre la création hors réseau (audit + outbox, sans
+appel `fetch`), le refus du doublon avec son message et sans écriture supplémentaire.
+
+**Déploiement** : modif serveur **et** caisse → **rebuild caisse** puis relancer l'exe.
+Rien côté base.
