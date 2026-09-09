@@ -22,8 +22,10 @@ POS-Samer\
 ├── app\                 <- le dépôt pos-samer (voir 3)
 ├── demarrer-pos.bat     <- lancement manuel (dépannage)
 ├── arreter-pos.bat      <- arrêt manuel (dépannage)
-├── preparer-app.ps1
-├── installer-demarrage-auto.ps1
+├── preparer-app.bat              <- DOUBLE-CLIQUER (fabrique PosSamer.exe)
+├── preparer-app.ps1              <- appelé par le .bat, pas à lancer seul
+├── installer-demarrage-auto.bat  <- DOUBLE-CLIQUER (démarrage auto + raccourci)
+├── installer-demarrage-auto.ps1  <- appelé par le .bat, pas à lancer seul
 └── PosSamer.exe         <- généré par preparer-app.ps1 (voir 4) : app desktop plein écran
 ```
 
@@ -35,8 +37,9 @@ POS-Samer\
    dézipper dans `POS-Samer\runtime\pgsql\` (on doit y trouver `bin\pg_ctl.exe`).
 3. **Le code** : copier le dépôt `pos-samer` dans `POS-Samer\app\`
    (ou `git clone` dedans).
-4. **Assembler** : copier les 4 scripts de ce dossier à la racine `POS-Samer\`,
-   puis clic droit sur **`preparer-app.ps1` → Exécuter avec PowerShell**.
+4. **Assembler** : copier **tous** les scripts de ce dossier à la racine
+   `POS-Samer\` (les `.bat` et les `.ps1` : chaque `.bat` appelle son `.ps1`
+   voisin), puis **double-cliquer `preparer-app.bat`**.
    Il installe les dépendances, crée la base, charge les données, build la
    caisse et produit `POS-Samer\PosSamer.exe` (l'application desktop).
 5. **Clé SamerTrackly** : ouvrir `POS-Samer\app\apps\server\.env` et coller la
@@ -78,10 +81,21 @@ Sur chaque PC (aucune installation, aucun internet requis) :
    → **« Régénérer tous les QR »**. On obtient des jetons **frais et aléatoires**
    (non devinables), puis on **imprime** les QR à poser sur les tables. À refaire
    si un jour on soupçonne qu'un QR a fuité.
-6. **Démarrage automatique** (recommandé) : clic droit sur
-   **`installer-demarrage-auto.ps1` → Exécuter avec PowerShell** → `PosSamer.exe`
-   se lancera tout seul à chaque ouverture de session Windows, et un raccourci
-   est ajouté sur le Bureau pour un lancement manuel rapide si besoin.
+6. **Démarrage automatique** (recommandé) : **double-cliquer
+   `installer-demarrage-auto.bat`**, puis valider la fenêtre Windows qui demande
+   les droits administrateur → `PosSamer.exe` se lancera tout seul à chaque
+   ouverture de session, et un raccourci est ajouté sur le Bureau.
+
+> **Pourquoi des `.bat` et pas les `.ps1` directement ?** Trois obstacles se
+> cumulent sur un Windows par défaut, et aucun ne donne de message clair :
+> la stratégie d'exécution est *Restricted*, donc tout `.ps1` est refusé ;
+> l'entrée « Exécuter avec PowerShell » du clic droit **n'existe pas sur toutes
+> les machines** (là où elle manque, le `.ps1` s'ouvre dans le Bloc-notes et il
+> ne se passe rien) ; et l'installation du démarrage auto exige une élévation
+> que ce menu ne demande pas. Chaque `.bat` traite les trois. **Ne pas toucher
+> à `Set-ExecutionPolicy`** : ce serait desserrer un réglage de sécurité de tout
+> le poste, alors que le `-ExecutionPolicy Bypass` des `.bat` ne vaut que pour
+> leur propre processus.
 
 Chaque installation devient **unique** grâce à l'étape 4, avec le **même**
 dossier partout.
@@ -122,7 +136,8 @@ Sans imprimante configurée, tout marche à l'écran (le ticket retombe en conso
 | Symptôme | Piste |
 |---|---|
 | « pg_ctl n'est pas reconnu » | `runtime\pgsql\bin` mal placé (chemin) |
-| « pnpm n'est pas reconnu » | relancer `preparer-app.ps1` (corepack) |
+| « pnpm n'est pas reconnu » | relancer `preparer-app.bat` (corepack) |
+| Un `.ps1` s'ouvre dans le Bloc-notes, ou « l'exécution de scripts est désactivée » | normal : lancer le `.bat` du même nom, jamais le `.ps1` (voir encadré ci-dessous) |
 | La caisse ne s'ouvre pas | attendre 10-20 s au 1er lancement ; rafraîchir |
 | Liste des restaurants vide | `SAMTRACKLY_KEY` manquante dans `.env` + internet |
 | Pas d'impression | imprimante partagée ? nom de partage == paramètre ? |

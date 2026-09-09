@@ -15,7 +15,14 @@
 #  clair a cette etape (la base/migrations/seed restent quand meme faites).
 # ===========================================================================
 $ErrorActionPreference = 'Stop'
-$root   = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+# A lancer via preparer-app.bat, qui se double-clique et contourne la strategie
+# d'execution. $PSScriptRoot est vide quand le contenu est colle dans une
+# console plutot qu'execute comme fichier : on le dit, au lieu de partir sur un
+# chemin vide et d'echouer dix lignes plus bas sur un dossier introuvable.
+$root = $PSScriptRoot
+if (-not $root) { $root = Split-Path -Parent $MyInvocation.MyCommand.Path }
+if (-not $root) { throw 'Lancez preparer-app.bat plutot que de coller ce script dans une console.' }
 $node   = Join-Path $root 'runtime\node'
 $pgbin  = Join-Path $root 'runtime\pgsql\bin'
 $pgdata = Join-Path $root 'data\pgdata'
