@@ -1212,7 +1212,7 @@ function Options() {
   const [prix, setPrix] = useState('0');
   const [ouverte, setOuverte] = useState<string | null>(null);
 
-  const { data } = useQuery({
+  const { data, error, isPending, isFetching, refetch } = useQuery({
     queryKey: ['admin', 'options'],
     queryFn: () => api<OptionsAdminVue>('/api/admin/options'),
   });
@@ -1267,6 +1267,14 @@ function Options() {
         précis. Un prix de <strong>0</strong> = option offerte. Les commandes déjà passées ne changent jamais.
       </div>
       <Message texte={msg?.texte ?? null} ok={msg?.ok} />
+      {error && (
+        <div className="mb-4" role="alert">
+          <Message texte={`Impossible de charger les options : ${error.message}`} />
+          <button type="button" className="btn-blanc" disabled={isFetching} onClick={() => void refetch()}>
+            {isFetching ? 'Chargement…' : 'Réessayer'}
+          </button>
+        </div>
+      )}
 
       {/* Création */}
       <div className="mb-6 flex flex-wrap items-end gap-3 rounded-jeton border border-bordure p-4">
@@ -1290,6 +1298,7 @@ function Options() {
 
       {/* Liste */}
       <div className="space-y-3">
+        {isPending && <p className="text-doux">Chargement des options…</p>}
         {(data?.options ?? []).map((o) => (
           <div key={o.id} className={`rounded-jeton border border-bordure p-4 ${o.actif ? '' : 'opacity-60'}`}>
             <div className="flex flex-wrap items-center gap-3">
@@ -1357,7 +1366,7 @@ function Options() {
             )}
           </div>
         ))}
-        {(data?.options ?? []).length === 0 && (
+        {data && !error && data.options.length === 0 && (
           <p className="text-doux">Aucune option pour l’instant — créez la première ci-dessus.</p>
         )}
       </div>
