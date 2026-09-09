@@ -35,7 +35,7 @@ const CONFLIT: Record<string, string[]> = {
   // Barème fidélité (2.5) : le siège est maître, clé = cle.
   parametres_locaux: ['cle'],
   // Inventaire (2026-08-17) : un plat et sa recette descendent ensemble.
-  // Sans ça, le siège diffusait un plat sur les 7 sites sans ce qu'il consomme,
+  // Sans ça, le siège diffusait un plat sur tous les sites sans ce qu'il consomme,
   // et l'écart d'inventaire de fin de service devenait faux partout.
   //
   // Clé = `id` comme le reste du catalogue, et NON la clé métier (`code`, ou le

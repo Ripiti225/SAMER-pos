@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { OccupationCaisse, ServiceOuvertVue } from '@pos/shared';
 import { formatFCFA, LIBELLES_POSTES, POSTES_JOUR } from '@pos/shared';
@@ -10,6 +10,8 @@ interface MembrePropose {
   utilisateur_id: string;
   nom_complet: string;
   poste_defaut: string;
+  /** Marqué « Reste » au dernier shift clôturé (§ 6.8) : pré-coché à l'ouverture. */
+  reste_precedent: boolean;
 }
 
 /** Ouverture de service : fond de caisse, puis équipe du jour (allègement). */
@@ -38,6 +40,32 @@ export function OuvertureService() {
     queryFn: () => api<OccupationCaisse>('/api/services/occupation'),
     refetchInterval: 15000,
   });
+
+  /**
+   * Pré-cochage de la relève : qui était marqué « Reste » arrive déjà coché,
+   * avec le poste qu'il tenait — c'était jusqu'ici à ressaisir à la main alors
+   * que l'information existait déjà en base.
+   *
+   * Pré-COCHÉ et non imposé : la caissière peut décocher quelqu'un qui, en
+   * fait, n'est pas là. L'heure d'arrivée d'un membre coché est datée de
+   * l'ouverture et sert à la paie — mieux vaut un geste possible qu'une heure
+   * créditée à tort.
+   *
+   * Une seule fois : le garde empêche qu'un refetch de TanStack Query ne
+   * recoche quelqu'un que la caissière vient justement de décocher.
+   */
+  const preRempli = useRef(false);
+  useEffect(() => {
+    if (preRempli.current || !proposes) return;
+    preRempli.current = true;
+    const restants = proposes.filter((m) => m.reste_precedent);
+    if (restants.length === 0) return;
+    setEquipe((e) => {
+      const copie = { ...e };
+      for (const m of restants) copie[m.utilisateur_id] ??= m.poste_defaut;
+      return copie;
+    });
+  }, [proposes]);
 
   const basculer = (m: MembrePropose) => {
     setEquipe((e) => {

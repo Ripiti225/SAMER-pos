@@ -654,7 +654,7 @@ Les 24 `rounded-xl` de l'écran valaient **24 px** dans ce thème (`borderRadius
 ### 6.12 Console du siège
 
 Une application à part (`apps/siege`), pas un écran de la caisse : elle regarde
-les 7 restaurants depuis un bureau connecté. Elle reprend l'ossature du duo —
+tous les restaurants depuis un bureau connecté. Elle reprend l'ossature du duo —
 barre `ard-900`, colonne d'écrans `ard-800` avec liseré de marque sur l'écran
 ouvert, plan de travail clair — pour qu'on reconnaisse la même maison.
 
@@ -673,7 +673,7 @@ Ce qui change par rapport à la caisse, et pourquoi :
 
 **Le tableau de bord porte une série par restaurant** (§ 4.4). Les barres du
 chiffre d'affaires quotidien sont **empilées** et non groupées : trente jours ×
-sept restaurants font 210 barres larges de deux pixels, illisibles. Empilé, on
+le nombre de restaurants font plusieurs centaines de barres larges de deux pixels, illisibles. Empilé, on
 lit le total du groupe ET sa composition d'un coup, ce qui est la question posée.
 Le détail vient au survol, jamais en écrivant un nombre sur chaque pile.
 
@@ -685,7 +685,7 @@ tableau est trié par courses non rattachées : le caissier à reprendre est en
 haut, sans qu'on ait à faire la soustraction de tête. Voir § 6.4 bis pour la
 saisie côté caisse.
 
-Les **heures de pic** gardent une série unique — superposer sept restaurants sur
+Les **heures de pic** gardent une série unique — superposer tous les restaurants sur
 vingt-quatre heures donnerait une bouillie. L'heure de pointe est en aplat plein
 et porte son étiquette, les autres sont en retrait. Le graphe ne montre que les
 heures réellement travaillées : un restaurant qui ouvre à 10 h n'affiche pas dix

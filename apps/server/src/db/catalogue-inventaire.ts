@@ -1,6 +1,6 @@
 /**
  * Catalogue de COMPTAGE de l'inventaire (DESIGN_V2 § 6.9) — celui de
- * SamerTrackly, identique sur les 7 sites : noms, prix, grammages et ratios
+ * SamerTrackly, identique sur tous les sites : noms, prix, grammages et ratios
  * repris tels quels.
  *
  * POURQUOI IL EST AUSSI ICI, alors que la migration 0021 l'insère déjà :

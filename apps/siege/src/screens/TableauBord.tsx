@@ -203,6 +203,17 @@ export function TableauBord({ filtre, onFiltre }: { filtre: FiltreResto; onFiltr
     [data?.absents, choisi],
   );
 
+  /**
+   * Sous-titre du groupe. Le nombre se COMPTE, il ne s'écrit pas : le groupe
+   * s'agrandit (« À la Braise » le 2026-09-05) et un chiffre en dur se périme en
+   * silence — il annonçait encore 7 sites alors qu'il y en avait 8. Avant que la
+   * liste soit chargée, on reste vague plutôt que d'afficher « Les 0 restaurants ».
+   */
+  const nbRestos = restos?.restaurants.length ?? 0;
+  const sousTitreGroupe = nbRestos
+    ? `Les ${nbRestos} restaurants en un seul endroit`
+    : 'Tous les restaurants en un seul endroit';
+
   const nomResto = useMemo(() => {
     const m = new Map<string, string>();
     for (const r of restos?.restaurants ?? []) if (r.restaurant_id) m.set(r.restaurant_id, r.nom);
@@ -214,7 +225,7 @@ export function TableauBord({ filtre, onFiltre }: { filtre: FiltreResto; onFiltr
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">{choisi ? choisi.nom : 'Tableau de bord'}</h1>
-          <p className="text-doux">{choisi ? 'Un restaurant' : 'Les 7 restaurants en un seul endroit'}</p>
+          <p className="text-doux">{choisi ? 'Un restaurant' : sousTitreGroupe}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <FiltreRestaurant restaurants={restos?.restaurants ?? []} valeur={filtre} onChoisir={onFiltre} />

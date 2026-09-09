@@ -2,7 +2,7 @@
  * Seed de démonstration (voir CLAUDE.md).
  * Réinitialise les données puis insère un site NEUTRE (identité à configurer
  * dans Réglages → Restaurant) : catalogue + rôles + compte propriétaire.
- * Rien de propre à un restaurant précis — l'image est copiée sur les 7 sites.
+ * Rien de propre à un restaurant précis — l'image est copiée sur tous les sites.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -56,7 +56,7 @@ export async function seed(): Promise<void> {
   `);
   await db.execute(sql`ALTER SEQUENCE seq_numero_ticket RESTART WITH 1`);
 
-  // Identité NEUTRE : la même image de déploiement part sur les 7 sites. Chaque
+  // Identité NEUTRE : la même image de déploiement part sur tous les sites. Chaque
   // poste prend son identité (code, nom, marque, couleur, id) à l'étape
   // Réglages → Restaurant. Tant qu'elle n'est pas faite, la caisse affiche
   // « Restaurant à configurer » : l'oubli se voit tout de suite.
@@ -112,7 +112,7 @@ export async function seed(): Promise<void> {
   const rid = (nom: string) => roleIdParNom.get(nom)!;
 
   // --- DEUX comptes propriétaire, et eux seuls, dans l'image de déploiement :
-  // le patron et l'administrateur qui installe/dépanne les 7 sites. Tous les
+  // le patron et l'administrateur qui installe/dépanne tous les sites. Tous les
   // autres employés arrivent ensuite par Réglages → Équipe (ou la descente
   // SamerTrackly) : les seeder ici les enverrait sur tous les restaurants.
   await db.insert(utilisateurs).values([
@@ -122,7 +122,7 @@ export async function seed(): Promise<void> {
 
   // --- Équipe RÉELLE « Samer Angré 7E » (source : docs/effectifs-par-restaurant.md)
   // NE FAIT PAS PARTIE DE L'IMAGE DE DÉPLOIEMENT : le dossier master est copié
-  // tel quel sur les 7 sites, donc seeder cette équipe installerait les comptes
+  // tel quel sur tous les sites, donc seeder cette équipe installerait les comptes
   // (noms, téléphones, photos et PIN utilisables) du 7E chez tous les autres
   // restaurants. Sur un site neuf, l'équipe arrive de SamerTrackly après
   // Réglages → Restaurant. Pour retrouver ces comptes en local (dev, ou

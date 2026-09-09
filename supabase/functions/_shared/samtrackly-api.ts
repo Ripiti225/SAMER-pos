@@ -2,7 +2,7 @@
 // Accès REST à SamerTrackly depuis le cloud POS.
 //
 // La clé vit ici, en secret de fonction, et nulle part ailleurs — surtout pas
-// sur les sept postes Windows en restaurant. C'est le même principe que dans
+// sur tous les postes Windows en restaurant. C'est le même principe que dans
 // `siege/index.ts`, dont ce module généralise le helper de lecture.
 // ──────────────────────────────────────────────────────────────────────────────
 

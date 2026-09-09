@@ -625,7 +625,7 @@ ALTER TABLE notes_split
 -- grammes, la glace en pots (4,5) et les frites en sachets. Seuls les MONTANTS
 -- restent des entiers FCFA (règle du projet).
 
--- Catalogue de comptage — celui de SamerTrackly, identique sur les 7 sites.
+-- Catalogue de comptage — celui de SamerTrackly, identique sur tous les sites.
 -- Distinct du catalogue de VENTE (articles) : les lignes de consommation
 -- (« Manaïche (100g) ») et les totaux dérivés (« Total Fromage ») ne sont pas
 -- vendables. Le pont vers les ventes est la table inventaire_consommations

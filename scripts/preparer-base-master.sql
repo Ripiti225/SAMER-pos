@@ -1,5 +1,5 @@
 -- ===========================================================================
---  PRÉPARATION DE LA BASE MASTER AVANT COPIE SUR LES 7 RESTAURANTS
+--  PRÉPARATION DE LA BASE MASTER AVANT COPIE SUR TOUS LES RESTAURANTS
 --
 --  Le dossier portable est dupliqué tel quel (data/pgdata compris) : tout ce
 --  qui reste ici se retrouve sur CHAQUE site. Ce script retire donc l'identité
@@ -24,7 +24,7 @@
 --  GARDE-FOU : base LOCALE uniquement.
 --
 --  Ce script purge les ventes, l'équipe et l'identité. Sur la base CLOUD, il
---  ferait la même chose pour les 7 restaurants À LA FOIS. Le 2026-08-18 il a
+--  ferait la même chose pour tous les restaurants À LA FOIS. Le 2026-08-18 il a
 --  été lancé par erreur dans l'éditeur SQL Supabase ; il s'est arrêté seul sur
 --  `appels_table` (table locale absente du cloud), donc sans rien effacer — la
 --  transaction n'a jamais atteint son COMMIT. On ne compte pas sur ce hasard
@@ -88,7 +88,7 @@ DELETE FROM clients_fidelite;
 --      * `produits_inventaire`      = catalogue des produits à compter
 --      * `inventaire_consommations` = recettes (ce qu'un plat consomme)
 --    Ce sont des RÉGLAGES, réutilisables partout. Les effacer casserait le
---    calcul d'écart d'inventaire sur les 7 restaurants.
+--    calcul d'écart d'inventaire sur tous les restaurants.
 DELETE FROM entrees_stock;
 DELETE FROM inventaire_lignes;
 DELETE FROM inventaires_service;
@@ -142,7 +142,7 @@ UPDATE parametres_locaux SET valeur = '""'
 -- 8) Compteurs. Les DELETE ci-dessus ne touchent PAS les séquences : sans ce
 --    bloc, le premier ticket de CHAQUE restaurant reprend le compteur du poste
 --    de test (constaté le 2026-08-13 : `seq_numero_ticket` à 13, donc un
---    premier ticket n° 14 sur les 7 sites). Le cahier des charges veut une
+--    premier ticket n° 14 sur tous les sites). Le cahier des charges veut une
 --    séquence continue partant de 1.
 ALTER SEQUENCE seq_numero_ticket   RESTART WITH 1;
 ALTER SEQUENCE audit_log_seq_seq   RESTART WITH 1;

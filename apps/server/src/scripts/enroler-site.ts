@@ -28,7 +28,7 @@ async function main(): Promise<void> {
   }
 
   // Garde-fou anti-mélange : tant que le poste n'a pas pris son identité, il
-  // porte encore celle de l'image de déploiement (même UUID sur les 7 sites).
+  // porte encore celle de l'image de déploiement (même UUID sur tous les sites).
   // L'enrôler ici ferait remonter ses ventes sous l'identité d'un autre site.
   const [confId] = await db
     .select()

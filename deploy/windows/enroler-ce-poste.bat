@@ -40,7 +40,7 @@ if errorlevel 1 (
 )
 
 set "PATH=%~dp0runtime\node;%PATH%"
-REM Adresse du cloud, commune aux sept sites. La cle de site, elle, est propre
+REM Adresse du cloud, commune a tous les sites. La cle de site, elle, est propre
 REM a ce poste et reste en local (parametres_locaux.cle_site).
 set "SUPABASE_SYNC_URL=https://vbsmxwlxlcgkodwkbhfa.supabase.co/functions/v1"
 

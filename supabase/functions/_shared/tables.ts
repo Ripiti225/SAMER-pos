@@ -137,7 +137,7 @@ export const FLUX_DESCENTE: Record<string, string[]> = {
     'categories', 'articles', 'prix_canaux', 'groupes_options', 'options',
     'supplements', 'combos', 'combo_articles',
     // 2026-08-17 — un plat et sa recette d'inventaire voyagent ENSEMBLE.
-    // Sans ces deux tables, le siège pouvait diffuser un plat sur les 7 sites
+    // Sans ces deux tables, le siège pouvait diffuser un plat sur tous les sites
     // sans sa recette : l'inventaire ignorait ce que le plat consomme, et
     // l'écart de fin de service devenait faux partout.
     'produits_inventaire', 'inventaire_consommations',

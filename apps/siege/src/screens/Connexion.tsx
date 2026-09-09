@@ -41,7 +41,7 @@ export function Connexion({ mode, onBasculerMode }: { mode: Mode; onBasculerMode
               S
             </div>
             <h1 className="text-2xl font-bold text-vitrine-txt">Console du siège</h1>
-            <p className="mt-1 text-vitrine-txt-doux">Les 7 restaurants en un seul endroit</p>
+            <p className="mt-1 text-vitrine-txt-doux">Tous les restaurants en un seul endroit</p>
           </div>
 
           {configurationManquante && (

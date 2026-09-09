@@ -46,7 +46,7 @@ interface PointEmpile {
 /**
  * Barres EMPILÉES dans le temps — une pile par jour, un segment par restaurant.
  *
- * Empilées et non groupées : trente jours × sept restaurants font 210 barres
+ * Empilées et non groupées : trente jours × le nombre de restaurants font plusieurs centaines de barres
  * larges de deux pixels, illisibles. Empilé, on lit le total du groupe ET sa
  * composition d'un coup, ce qui est la question posée.
  *

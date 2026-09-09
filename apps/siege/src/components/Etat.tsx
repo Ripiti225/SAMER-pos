@@ -21,7 +21,7 @@ export function Squelette({ lignes = 3 }: { lignes?: number }) {
 
 /** Pastille de marque : chaque enseigne garde sa couleur d'accent. */
 export function PastilleMarque({ marque }: { marque: 'SAMER' | 'AL_KAYAN' | 'A_LA_BRAISE' }) {
-  const couleur = marque === 'AL_KAYAN' ? '#2d7d46' : marque === 'A_LA_BRAISE' ? '#d89a2b' : '#ef9f27';
+  const couleur = marque === 'AL_KAYAN' ? '#2d7d46' : marque === 'A_LA_BRAISE' ? '#d99a2b' : '#ef9f27';
   const titre = marque === 'AL_KAYAN' ? 'Al Kayan' : marque === 'A_LA_BRAISE' ? 'À la Braise' : 'Chez Samer';
   return (
     <span

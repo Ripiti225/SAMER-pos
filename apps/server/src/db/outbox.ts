@@ -54,7 +54,7 @@ export type TableSynchronisee =
    * du site. (Depuis le 2026-08-16 elle est garée dans `sync_rejets` au lieu
    * de bloquer — mais la donnée n'arrive pas pour autant à destination.)
    * Le catalogue de comptage et les recettes ne remontent PAS : le siège les
-   * connaît déjà, ils sont identiques sur les 7 sites.
+   * connaît déjà, ils sont identiques sur tous les sites.
    */
   | 'depenses'
   | 'inventaires_service'

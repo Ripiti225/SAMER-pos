@@ -24,8 +24,8 @@ const cle = (nom: string) => nom.trim().toLowerCase();
  * voie qui existe déjà, celle par laquelle le catalogue descend depuis toujours.
  *
  * **La catégorie se choisit par son NOM, pas par son id.** Chaque site a importé
- * son catalogue localement : « Pizzas » existe sur les 7 restaurants sous 7
- * identifiants différents. L'écran résout donc, restaurant par restaurant, l'id
+ * son catalogue localement : « Pizzas » existe sur chaque restaurant sous un
+ * identifiant différent. L'écran résout donc, restaurant par restaurant, l'id
  * de SA catégorie — et refuse d'envoyer vers un site où ce nom n'existe pas,
  * plutôt que d'y créer un article orphelin.
  */

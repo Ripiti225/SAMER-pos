@@ -1,6 +1,6 @@
 # Console du siège (`apps/siege`)
 
-Vue de groupe sur les 7 restaurants, sans caisse. Elle ne remplace ni le POS,
+Vue de groupe sur tous les restaurants, sans caisse. Elle ne remplace ni le POS,
 ni SamerTrackly : elle les regarde tous les deux au même endroit, et diffuse
 vers plusieurs restaurants en une action.
 
@@ -100,7 +100,7 @@ maintenant, au design « Duo contrasté » (DESIGN_V2 § 6.12).
 
 Tout est agrégé **en SQL** (fonctions `siege_*` de
 `20260825020000_tableau_bord_siege.sql`), jamais dans l'Edge Function : un mois
-de ventes sur 7 restaurants fait ~10 000 lignes de `commandes`, les remonter
+de ventes sur tout le groupe fait plus de 10 000 lignes de `commandes`, les remonter
 dans Deno pour les additionner serait lent et exposé à la troncature de
 PostgREST. Une action, une réponse, quinze agrégats.
 
@@ -158,7 +158,7 @@ Le ticket Z lit cette action à l'ouverture plutôt que de figer la liste dans
 aussi. Le choix est tenu dans `App` et conservé d'un onglet à l'autre : on suit
 un restaurant du tableau de bord à ses clôtures puis à son équipe sans jamais le
 resélectionner. Il transporte le `samtrackly_id`, seul identifiant que possèdent
-les 7 restaurants — un site non enrôlé n'a pas d'UUID POS et doit rester
+tous les restaurants — un site non enrôlé n'a pas d'UUID POS et doit rester
 sélectionnable.
 
 Le seuil de 2 000 F est celui du POS (`parametres_locaux.seuil_alerte_ecart_caisse`),
@@ -196,7 +196,7 @@ Rien n'est perdu pendant ce temps : chaque caisse empile ses ventes dans
   (`admin-catalogue` + descente en moins de 5 min) ; il manque la boucle
   multi-restaurants et l'interface.
 - Écran **Dépenses & inventaire** : les tables cloud existent depuis le 16/08.
-- **Sortir `SAMTRACKLY_KEY` du `.env` des 7 postes** (dette du 13/08). La clé
+- **Sortir `SAMTRACKLY_KEY` du `.env` de tous les postes** (dette du 13/08). La clé
   vivant désormais en secret de fonction, le POS pourra passer par un proxy au
   lieu d'appeler SamerTrackly en direct. Attention : retirer la clé des postes
   **avant** que ce proxy existe couperait la synchro équipe de chaque site.
