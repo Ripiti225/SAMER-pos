@@ -51,16 +51,20 @@ $garde$;
 BEGIN;
 
 -- 1) Activité commerciale. L'ordre respecte les clés étrangères.
+--
+-- `points_fidelite` passe EN PREMIER. Elle référence `commandes` — c'est le
+-- piège constaté le 2026-08-18, qui faisait échouer le script en entier sur une
+-- base qui avait des points — mais AUSSI `notes_split`, ce qu'on avait manqué :
+-- remontée juste au-dessus de `commandes`, elle restait sous `notes_split` et
+-- le même blocage attendait la première base où un paiement PARTAGÉ aurait
+-- rapporté des points. Corrigé le 2026-09-10. Elle ne dépend de rien d'autre :
+-- sa place est tout en haut, pas « juste avant celle qui a posé problème ».
+DELETE FROM points_fidelite;
 DELETE FROM paiements;
 DELETE FROM notes_split;
 DELETE FROM commande_items;
 DELETE FROM appels_table;
 DELETE FROM notations;
--- `points_fidelite` référence `commandes` : elle doit partir AVANT. Cette ligne
--- vivait au bloc 2 et n'avait jamais bloqué — la base de test n'avait aucun
--- point de fidélité. Constaté le 2026-08-18 sur une base qui en avait : le
--- script échouait alors en entier (violation de clé étrangère), donc sans effet.
-DELETE FROM points_fidelite;
 DELETE FROM commandes;
 DELETE FROM equipe_service;
 DELETE FROM services_caisse;
