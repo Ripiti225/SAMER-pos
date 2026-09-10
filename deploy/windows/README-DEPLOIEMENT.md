@@ -64,8 +64,28 @@ Sur chaque PC (aucune installation, aucun internet requis) :
    seuls, puis la caisse s'affiche en plein écran (aucune bordure, aucune
    barre d'adresse). Quitter avec le raccourci **Ctrl+Alt+Q** (utile pour la
    maintenance : le mode plein écran bloque parfois Alt+F4).
-3. Se connecter en **SAMER Zreik (PIN 852741)** ou **Admin Willy (PIN 2212)** — les deux comptes propriétaire de l'image.
-4. **Configurer ce restaurant — ÉTAPE OBLIGATOIRE, AVANT TOUTE VENTE** :
+3. **Mettre la base à jour — À FAIRE SI LA CLÉ EST ANTÉRIEURE AU 10/09/2026.**
+   Le dossier copié embarque une base toute faite : si elle est plus ancienne que
+   le code, **la caisse s'ouvre sur un menu VIDE**, sans le moindre message
+   d'erreur. Le 10/09, deux migrations manquaient à la clé et tous les postes
+   neufs sont sortis sans catalogue. Ouvrir PowerShell **à la racine du dossier
+   copié** (celui qui contient `runtime`, `app`, `data`), `PosSamer.exe` lancé,
+   et coller cette ligne :
+
+   ```powershell
+   $env:Path = "$PWD\runtime\node;$env:Path"; cd app\apps\server; node "..\..\node_modules\tsx\dist\cli.mjs" "src\db\migrate.ts"
+   ```
+
+   Réponse attendue : `Migrations appliquées ✔`. Puis **Ctrl+Alt+Q** et relancer
+   `PosSamer.exe`. C'est sans risque et **rejouable** : une base déjà à jour ne
+   change pas. Dans le doute, la lancer.
+
+   > Un menu vide vient presque toujours de là. Pour en avoir le cœur net :
+   > `.\runtime\pgsql\bin\psql.exe -U postgres -d pos_samer -c "SELECT count(*) FROM drizzle.__drizzle_migrations"`
+   > doit donner **33**.
+
+4. Se connecter en **SAMER Zreik (PIN 852741)** ou **Admin Willy (PIN 2212)** — les deux comptes propriétaire de l'image.
+5. **Configurer ce restaurant — ÉTAPE OBLIGATOIRE, AVANT TOUTE VENTE** :
    Réglages → **Restaurant** → choisir le bon restaurant dans la liste →
    **Configurer**. L'identité (nom, marque, couleur), l'**identifiant de site**
    et l'équipe se mettent en place automatiquement.
@@ -77,11 +97,11 @@ Sur chaque PC (aucune installation, aucun internet requis) :
    Si un jour on **réaffecte un poste** à un autre restaurant, refaire cette
    étape : le poste reçoit un identifiant neuf et il faut **ré-enrôler** le site
    côté cloud (l'ancienne clé est effacée exprès).
-5. **Régénérer les QR avant de les imprimer** (sécurité) : Réglages → **Salle & QR**
+6. **Régénérer les QR avant de les imprimer** (sécurité) : Réglages → **Salle & QR**
    → **« Régénérer tous les QR »**. On obtient des jetons **frais et aléatoires**
    (non devinables), puis on **imprime** les QR à poser sur les tables. À refaire
    si un jour on soupçonne qu'un QR a fuité.
-6. **Démarrage automatique** (recommandé) : **double-cliquer
+7. **Démarrage automatique** (recommandé) : **double-cliquer
    `installer-demarrage-auto.bat`**, puis valider la fenêtre Windows qui demande
    les droits administrateur → `PosSamer.exe` se lancera tout seul à chaque
    ouverture de session, et un raccourci est ajouté sur le Bureau.

@@ -36,18 +36,29 @@ avant que les 7 autres restaurants ne reçoivent quoi que ce soit.
   pour toute modif SERVEUR (tsx lit les sources, sans watch).
 - « Repackager » = `pnpm --filter @pos/desktop build` — seulement si `apps/desktop`
   change. **Aucune entrée de ce journal ne l'exige à ce jour.**
-- « Migrer » = `pnpm db:migrate`. La clé porte les migrations jusqu'à la **0032**.
-  **Tout poste installé depuis une clé antérieure au 04/09 doit passer `pnpm db:migrate`**
-  après avoir reçu cette mise à jour : **sept migrations** séparent la clé du 17/08
-  (arrêtée à la 0025) de l'état actuel — 0026 à 0032 — et le serveur ne démarre pas sans
-  elles.
+- « Migrer » = `pnpm db:migrate`.
+  > ⚠️ **Une migration, c'est DEUX choses : le fichier `.sql` et son application à la
+  > base.** Le report du code met les fichiers sur la clé ; il n'applique rien. Jusqu'au
+  > 10/09 ce journal écrivait « migration 0032 **sur la clé** ✔ » en ne parlant que des
+  > fichiers, et la base neutre de la clé, elle, s'était arrêtée à la **0030** — d'où
+  > l'incident du 10/09 (catalogue vide sur tous les postes neufs). **Ne jamais écrire
+  > qu'une migration est « sur la clé » sans avoir compté les lignes de
+  > `drizzle.__drizzle_migrations` dans la base de la clé.**
+  - **Rien n'applique les migrations au démarrage** : ni `apps/server/src/index.ts`, ni
+    le lanceur Electron. C'est l'opérateur qui doit les passer, ou personne.
+  - Sur un poste, `pnpm` n'existe pas. La commande est, depuis la racine du dossier
+    portable :
+    ```powershell
+    $env:Path = "$PWD\runtime\node;$env:Path"; cd app\apps\server; node "..\..\node_modules\tsx\dist\cli.mjs" "src\db\migrate.ts"
+    ```
 
 ## État de synthèse
 
 | | |
 |---|---|
-| Dernière migration | **0032** (`0032_disponibilite_horaire.sql`) — **sur la clé** ✔ |
-| Migrations ajoutées depuis la clé | **aucune** : la clé du 09/09 les porte toutes. Un poste installé depuis une clé plus ancienne doit passer `pnpm db:migrate` (0026 → 0032) |
+| Dernière migration | **0032** (`0032_disponibilite_horaire.sql`) |
+| Base de la clé | **migrée le 10/09** : `drizzle.__drizzle_migrations` compte **33 lignes sur 33**. Elle en comptait 31 — il lui manquait `0031_a_la_braise` et `0032_disponibilite_horaire`, jamais appliquées. Vérifié après coup : `chargerCatalogue()` renvoie 15 catégories et 131 articles sur cette base |
+| 🔴 Postes déjà installés depuis une clé antérieure au 10/09 | **doivent passer les migrations**, sinon catalogue vide (voir l'entrée du 10/09). Commande dans « Comment lire ce fichier » ci-dessus |
 | Rebuild caisse | **à jour** — `dist` du 09/09 00h06, postérieur aux sources d'`apps/caisse` |
 | Report du code sur la clé master | **fait le 09/09 à 15h18** — 483 fichiers copiés, 66 obsolètes retirés (vieux `dist`), **0 échec**. `data\` et `node_modules\` exclus : la base neutre de la clé est intacte, et `pnpm-lock.yaml` est inchangé depuis le 04/09 donc ses `node_modules` restent valables. La clé passe du commit `116309a` (branche `main`) à `387bb69` sur **`siege-8-sites-et-releve`**, arbre de travail propre |
 | Scripts à la racine du dossier portable | ⚠️ **nouveaux `.bat`** : `preparer-app.bat` et `installer-demarrage-auto.bat` accompagnent désormais les `.ps1`. Sur un poste déjà installé, les recopier à la main depuis `app\deploy\windows\` |
@@ -1242,3 +1253,110 @@ appel `fetch`), le refus du doublon avec son message et sans écriture suppléme
 
 **Déploiement** : modif serveur **et** caisse → **rebuild caisse** puis relancer l'exe.
 Rien côté base.
+
+---
+
+## 2026-09-10 — Catalogue vide sur TOUS les postes neufs : la clé portait les fichiers de migration, pas leur application
+
+**Symptôme terrain** : un site installé depuis la clé affiche une caisse **sans aucun
+produit**. Réglages → Catalogue est vide lui aussi. Constaté d'abord sur À la Braise,
+puis sur un deuxième restaurant installé dans la foulée — donc pas un problème de site.
+
+### Ce que ce n'était pas
+
+Quatre pistes écartées avant de trouver, elles valent d'être notées pour la prochaine
+fois :
+
+- **la descente cloud n'efface rien** — elle est en UPSERT pur (`descente.ts`), elle ne
+  peut pas vider un catalogue local ;
+- **le seed charge bien un catalogue** — 15 catégories et 128 produits depuis
+  `docs/menu_export.json`, un fichier suivi par git, donc présent sur la clé ;
+- **`preparer-base-master.sql` conserve le catalogue**, c'est écrit dans son en-tête ;
+- **ni la marque, ni les horaires, ni le filtre partenaire** ne peuvent masquer *tout*
+  un catalogue.
+
+Et surtout, sur le poste en panne, les produits étaient **bien là** :
+
+```
+ cat | cat_actives | art | art_actifs | ventes
+  16 |          15 | 131 |        131 |      0
+```
+
+### La cause
+
+`count(*)` passait, la caisse non — parce qu'ils ne lisent pas les mêmes colonnes.
+
+La base de la clé avait **31 migrations appliquées sur 33**. Il lui manquait
+`0031_a_la_braise` et `0032_disponibilite_horaire`. Or `0032` ajoute quatre colonnes à
+`categories`, et le code du catalogue les lit toutes :
+
+```
+avant : id, parent_id, nom, ordre, actif, partenaires
+après : id, parent_id, nom, ordre, actif, partenaires,
+        heure_debut, heure_fin, disponibilite_forcee, jour_semaine
+```
+
+`db.select().from(categories)` liste ses colonnes explicitement. Sur une base sans elles,
+la requête part en erreur SQL, `/api/catalogue` renvoie 500, et l'écran s'affiche
+**vide** — pas « en erreur », **vide**. Un `count(*)`, lui, ne touche à aucune de ces
+colonnes : d'où le diagnostic trompeur.
+
+### Pourquoi personne ne l'a vu venir
+
+**Ce journal l'affirmait faux.** Sa ligne de synthèse disait « Dernière migration 0032 —
+**sur la clé** ✔ ». C'était vrai des **fichiers** `.sql`, recopiés par le report du code,
+et faux de la **base**. Le report de code n'applique aucune migration : il copie des
+fichiers, rien d'autre.
+
+**Et rien ne rattrape l'oubli.** Ni `apps/server/src/index.ts` ni le lanceur Electron
+n'appliquent les migrations au démarrage — vérifié. La `PARTIE B` du
+`README-DEPLOIEMENT.md`, celle que suit la personne qui installe, ne mentionnait pas non
+plus `db:migrate` : copier, lancer l'exe, se connecter, configurer le restaurant,
+régénérer les QR, démarrage auto. Six étapes, aucune migration.
+
+Trois manques qui se recouvrent : une doc qui affirme le contraire de la réalité, un
+lanceur qui ne rattrape rien, une procédure d'installation qui n'en parle pas.
+
+### Le correctif
+
+**La base de la clé a été migrée le 10/09**, en travaillant sur une **copie locale** —
+on ne fait pas tourner une base de données sur une clé USB, et le master reste intact si
+quoi que ce soit tourne mal :
+
+1. copie de `D:\POS-Samer\data\pgdata` vers un dossier de travail local ;
+2. démarrage sur le **port 5433** (jamais 5432, pour ne pas risquer la base de dev) ;
+3. `appliquerMigrations()` avec l'URL passée explicitement — 31 → **33 lignes** dans
+   `drizzle.__drizzle_migrations` ;
+4. vérification par le **vrai code** : `chargerCatalogue()` renvoie **15 catégories et
+   131 articles** (Salades, Chawarmas, Sandwiches…) ;
+5. arrêt propre (`pg_ctl -m fast`, aucun `postmaster.pid` résiduel), sauvegarde de la
+   base d'origine de la clé, puis recopie — 38 fichiers, 18,7 Mo, **0 fichier supprimé**.
+
+Le master reste **neutre** après migration : `code = A_CONFIGURER`, 0 vente, 2 comptes
+propriétaire, pas de `cle_site`.
+
+### Ce qu'il faut faire sur les postes déjà installés
+
+Ils ne se réparent pas tout seuls : la clé corrigée ne change rien à une base déjà
+copiée. Sur chacun, depuis la racine du dossier portable, `PosSamer.exe` ouvert :
+
+```powershell
+$env:Path = "$PWD\runtime\node;$env:Path"; cd app\apps\server; node "..\..\node_modules\tsx\dist\cli.mjs" "src\db\migrate.ts"
+```
+
+Puis **Ctrl+Alt+Q** et relancer l'exe. Le menu réapparaît.
+
+### La dette qui reste
+
+Migrer la clé règle le symptôme du jour, **pas le mécanisme** : à la prochaine migration,
+la même mécanique produira le même écran vide sur les postes qui ne l'auront pas passée.
+Deux façons de le rendre impossible à oublier, à trancher :
+
+- **appliquer les migrations au démarrage du serveur** — le poste se répare seul, mais
+  une migration s'exécute alors sans personne devant l'écran ;
+- **un `.bat` de mise à jour** à double-cliquer, dans la lignée des lanceurs du 09/09 —
+  l'opérateur garde la main, mais il faut penser à le lancer.
+
+En attendant, la `PARTIE B` du `README-DEPLOIEMENT.md` porte l'étape, et l'avertissement
+en tête de « Comment lire ce fichier » interdit d'écrire qu'une migration est « sur la
+clé » sans avoir compté les lignes dans la base.
