@@ -167,6 +167,36 @@ export interface Cloture {
   ecart: number | null;
 }
 
+export type StatutExplicationInventaire = 'en_attente' | 'validee' | 'refusee';
+
+/** Une explication d'écart POS telle que SamerTrackly la conserve. */
+export interface ExplicationInventaireSiege {
+  ligne_id: string;
+  inventaire_id: string;
+  point_id: string;
+  pos_service_id: string;
+  restaurant_id: string;
+  restaurant_nom: string;
+  date: string;
+  type_shift: string;
+  heure_debut: string | null;
+  heure_fin: string | null;
+  caissier_id: string | null;
+  caissier_nom: string;
+  produit_code: string;
+  produit_nom: string;
+  stock_theorique: number;
+  stock_compte: number | null;
+  ecart: number | null;
+  quantite_expliquee: number;
+  explication: string | null;
+  montant_deduit: number;
+  statut: StatutExplicationInventaire;
+  quantite_acceptee: number | null;
+  decidee_par: string | null;
+  decidee_le: string | null;
+}
+
 export interface Employe {
   id: string;
   nom: string | null;
