@@ -21,6 +21,11 @@ import {
   type Siege,
 } from '../_shared/auth.ts';
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  construireParametresDecision,
+  lignesExpliquees,
+  type StatutDecisionInventaire,
+} from '../_shared/siege-inventaire.ts';
 
 // ---------------------------------------------------------------------------
 // SamerTrackly — source de vérité des restaurants et des employés.
@@ -32,13 +37,36 @@ import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const ST_URL = Deno.env.get('SAMTRACKLY_URL') ?? '';
 const ST_KEY = Deno.env.get('SAMTRACKLY_KEY') ?? '';
 
-async function samtrackly(chemin: string): Promise<unknown[]> {
+class ErreurSamerTrackly extends Error {
+  constructor(message: string, readonly statut: number) {
+    super(message);
+  }
+}
+
+async function requeteSamtrackly(chemin: string, init: RequestInit = {}): Promise<unknown> {
   if (!ST_URL || !ST_KEY) throw new Error('SamerTrackly non configuré (secrets de la fonction)');
   const rep = await fetch(`${ST_URL}/rest/v1/${chemin}`, {
-    headers: { apikey: ST_KEY, Authorization: `Bearer ${ST_KEY}` },
+    ...init,
+    headers: {
+      apikey: ST_KEY,
+      Authorization: `Bearer ${ST_KEY}`,
+      'content-type': 'application/json',
+      ...(init.headers ?? {}),
+    },
   });
-  if (!rep.ok) throw new Error(`SamerTrackly a répondu ${rep.status}`);
-  return (await rep.json()) as unknown[];
+  const texte = await rep.text();
+  const contenu = texte ? JSON.parse(texte) as unknown : null;
+  if (!rep.ok) {
+    const message = typeof contenu === 'object' && contenu !== null && 'message' in contenu
+      ? String((contenu as { message: unknown }).message)
+      : `SamerTrackly a répondu ${rep.status}`;
+    throw new ErreurSamerTrackly(message, rep.status);
+  }
+  return contenu;
+}
+
+async function samtrackly(chemin: string): Promise<unknown[]> {
+  return (await requeteSamtrackly(chemin)) as unknown[];
 }
 
 interface RestoST {
@@ -322,6 +350,177 @@ Deno.serve(async (req) => {
         if (error) throw new Error('Lecture du rapport impossible');
         if (!data) return jsonCors({ erreur: 'Clôture introuvable' }, 404);
         return jsonCors({ cloture: data });
+      }
+
+      // -- Explications d'écart d'inventaire : SamerTrackly reste la source
+      // -- de vérité. La console est une seconde interface sur le même état,
+      // -- jamais une file qui retarde le transfert automatique du POS.
+      case 'inventaire_explications': {
+        const { debut, fin } = periode(corps);
+        const restaurantFiltre = typeof corps.restaurant_id === 'string' ? corps.restaurant_id : '';
+        const params = new URLSearchParams({
+          select: [
+            'id', 'point_id', 'restaurant_id', 'date', 'type_shift', 'caissier_id',
+            'pos_service_id', 'heure_debut', 'heure_fin',
+            'inventaire_lignes!inner(id,produit_id,produit_nom,stock_initial,entrees,sorties,stock_reel,ecart,nombre_explique,explication,montant_deduit,explication_statut,quantite_acceptee,explication_decidee_par,explication_decidee_at)',
+          ].join(','),
+          pos_service_id: 'not.is.null',
+          'inventaire_lignes.explication_statut': 'not.is.null',
+          order: 'date.desc,created_at.desc',
+        });
+        params.append('date', `gte.${debut.slice(0, 10)}`);
+        params.append('date', `lt.${fin.slice(0, 10)}`);
+        if (restaurantFiltre) params.set('restaurant_id', `eq.${restaurantFiltre}`);
+
+        interface LigneST {
+          id: string;
+          produit_id: string;
+          produit_nom: string | null;
+          stock_initial: number | string | null;
+          entrees: number | string | null;
+          sorties: number | string | null;
+          stock_reel: number | string | null;
+          ecart: number | string | null;
+          nombre_explique: number | string | null;
+          explication: string | null;
+          montant_deduit: number | string | null;
+          explication_statut: 'en_attente' | 'validee' | 'refusee' | null;
+          quantite_acceptee: number | string | null;
+          explication_decidee_par: string | null;
+          explication_decidee_at: string | null;
+        }
+        interface ShiftST {
+          id: string;
+          point_id: string;
+          restaurant_id: string;
+          date: string;
+          type_shift: string;
+          caissier_id: string | null;
+          pos_service_id: string;
+          heure_debut: string | null;
+          heure_fin: string | null;
+          inventaire_lignes: LigneST[];
+        }
+
+        const [shifts, restaurants] = await Promise.all([
+          samtrackly(`inventaires_shifts?${params.toString()}`) as Promise<ShiftST[]>,
+          restaurantsGroupe(admin),
+        ]);
+        const caissierIds = [...new Set(shifts.map((shift) => shift.caissier_id).filter((id): id is string => !!id))];
+        const utilisateurs = caissierIds.length > 0
+          ? await samtrackly(`utilisateurs?select=id,nom&id=in.(${caissierIds.join(',')})`) as { id: string; nom: string | null }[]
+          : [];
+        const nomCaissier = new Map(utilisateurs.map((utilisateur) => [utilisateur.id, utilisateur.nom]));
+        const nomRestaurant = new Map(restaurants.map((restaurant) => [restaurant.samtrackly_id, restaurant.nom]));
+        const n = (valeur: unknown) => {
+          const resultat = Number(valeur);
+          return Number.isFinite(resultat) ? resultat : 0;
+        };
+
+        return jsonCors({
+          lignes: shifts.flatMap((shift) => lignesExpliquees(shift.inventaire_lignes).map((ligne) => ({
+            ligne_id: ligne.id,
+            inventaire_id: shift.id,
+            point_id: shift.point_id,
+            pos_service_id: shift.pos_service_id,
+            restaurant_id: shift.restaurant_id,
+            restaurant_nom: nomRestaurant.get(shift.restaurant_id) ?? 'Restaurant inconnu',
+            date: shift.date,
+            type_shift: shift.type_shift,
+            heure_debut: shift.heure_debut,
+            heure_fin: shift.heure_fin,
+            caissier_id: shift.caissier_id,
+            caissier_nom: shift.caissier_id ? nomCaissier.get(shift.caissier_id) ?? 'Caissier non identifié' : 'Caissier non identifié',
+            produit_code: ligne.produit_id,
+            produit_nom: ligne.produit_nom ?? ligne.produit_id,
+            stock_theorique: n(ligne.stock_initial) + n(ligne.entrees) - n(ligne.sorties),
+            stock_compte: ligne.stock_reel === null ? null : n(ligne.stock_reel),
+            ecart: ligne.ecart === null ? null : n(ligne.ecart),
+            quantite_expliquee: n(ligne.nombre_explique),
+            explication: ligne.explication,
+            montant_deduit: n(ligne.montant_deduit),
+            statut: ligne.explication_statut ?? 'en_attente',
+            quantite_acceptee: ligne.quantite_acceptee === null ? null : n(ligne.quantite_acceptee),
+            decidee_par: ligne.explication_decidee_par,
+            decidee_le: ligne.explication_decidee_at,
+          }))),
+        });
+      }
+
+      case 'decider_explication_inventaire': {
+        exigeAdmin(siege);
+        const ligneId = String(corps.ligne_id ?? '');
+        const statut = String(corps.statut ?? '') as StatutDecisionInventaire;
+        if (!ligneId) return jsonCors({ erreur: 'Explication non précisée' }, 400);
+        if (statut !== 'validee' && statut !== 'refusee') {
+          return jsonCors({ erreur: 'Décision invalide' }, 400);
+        }
+
+        interface LigneDecisionST {
+          id: string;
+          produit_id: string;
+          explication_statut: string | null;
+          inventaires_shifts: { id: string; pos_service_id: string | null; restaurant_id: string } | null;
+        }
+        const select = 'id,produit_id,explication_statut,inventaires_shifts(id,pos_service_id,restaurant_id)';
+        const [ligne] = await samtrackly(
+          `inventaire_lignes?select=${encodeURIComponent(select)}&id=eq.${encodeURIComponent(ligneId)}&limit=1`,
+        ) as LigneDecisionST[];
+        if (!ligne) return jsonCors({ erreur: 'Explication introuvable' }, 404);
+        if (ligne.explication_statut !== 'en_attente') {
+          return jsonCors({ erreur: 'Cette explication a déjà été traitée' }, 409);
+        }
+        const serviceId = ligne.inventaires_shifts?.pos_service_id;
+        if (!serviceId) {
+          return jsonCors({ erreur: 'Cette explication ne provient pas du POS ; traitez-la dans SamerTrackly' }, 409);
+        }
+
+        const { data: inventaire, error: erreurInventaire } = await admin
+          .from('inventaires_service')
+          .select('id')
+          .eq('service_id', serviceId)
+          .maybeSingle();
+        if (erreurInventaire) throw new Error('Lecture de l’inventaire POS impossible');
+        if (!inventaire) return jsonCors({ erreur: 'Inventaire POS introuvable' }, 404);
+
+        const { data: snapshot, error: erreurSnapshot } = await admin
+          .from('inventaire_lignes')
+          .select('produit_prix')
+          .eq('inventaire_id', inventaire.id)
+          .eq('produit_code', ligne.produit_id)
+          .maybeSingle();
+        if (erreurSnapshot) throw new Error('Lecture du prix figé impossible');
+        if (!snapshot || snapshot.produit_prix === null) {
+          return jsonCors({ erreur: 'Prix figé du produit introuvable' }, 409);
+        }
+
+        const parametres = construireParametresDecision({
+          ligneId,
+          statut,
+          prixSnapshot: snapshot.produit_prix,
+          auteur: siege.nomComplet,
+        });
+        try {
+          const resultat = await requeteSamtrackly('rpc/decider_ecart_inventaire_atomique', {
+            method: 'POST',
+            body: JSON.stringify(parametres),
+          });
+          await tracer(admin, siege, 'DECISION_EXPLICATION_INVENTAIRE', {
+            entite: 'inventaire_lignes',
+            entiteId: ligneId,
+            portee: ligne.inventaires_shifts?.restaurant_id ? [ligne.inventaires_shifts.restaurant_id] : [],
+            meta: { statut },
+          });
+          return jsonCors({ decision: Array.isArray(resultat) ? resultat[0] ?? null : resultat });
+        } catch (e) {
+          if (e instanceof ErreurSamerTrackly && /EXPLICATION_DEJA_TRAITEE/.test(e.message)) {
+            return jsonCors({ erreur: 'Cette explication a déjà été traitée' }, 409);
+          }
+          if (e instanceof ErreurSamerTrackly && /EXPLICATION_INTROUVABLE/.test(e.message)) {
+            return jsonCors({ erreur: 'Explication introuvable' }, 404);
+          }
+          throw e;
+        }
       }
 
       // -- Équipe : lue chez SamerTrackly, qui en est maître (décision du
