@@ -54,6 +54,7 @@ import {
   construireLignesInventaire,
   construireEntreesShift,
   correspondanceRompue,
+  doitCreerDetailInventaire,
   type InventaireServiceCloud,
 } from '../_shared/samtrackly-inventaire.ts';
 import {
@@ -326,6 +327,16 @@ async function transfererService(
   let nbLignesInventaire = 0;
   const inventaireDuService = await lireInventaireDuService(admin, service.id);
   if (inventaireDuService) {
+    const [inventaireExistant] = await lire<{ id: string; montant_a_deduire: number | string | null }>(
+      `inventaires_shifts?pos_service_id=eq.${service.id}&select=id,montant_a_deduire&limit=1`,
+    );
+    const lignesExistantes = inventaireExistant
+      ? await lire<{ id: string }>(
+        `inventaire_lignes?inventaire_id=eq.${inventaireExistant.id}&select=id`,
+      )
+      : [];
+    const creerDetail = doitCreerDetailInventaire(lignesExistantes.length);
+
     // Garde-fou (2026-08-21) : refuser d'écrire AVANT de toucher quoi que ce
     // soit. Si aucune des lignes comptées ne se traduit, le catalogue cloud est
     // vide ou porte d'autres uuid que le site — écrire l'en-tête quand même
@@ -333,7 +344,7 @@ async function transfererService(
     // qui lève la bannière « Inventaire du jour requis » en affirmant qu'il n'y
     // a rien à retenir. Mieux vaut un service en échec, visible et rejouable.
     const nbTraduisibles = inventaireDuService.lignes.filter((l) => l.produit_code).length;
-    if (correspondanceRompue(inventaireDuService.lignes.length, nbTraduisibles)) {
+    if (creerDetail && correspondanceRompue(inventaireDuService.lignes.length, nbTraduisibles)) {
       throw new ErreurSamtrackly(
         `Inventaire illisible : ${inventaireDuService.lignes.length} produits comptés, aucun ne `
         + `porte de snapshot produit. Ce site n'a pas encore la migration locale 0026. `
@@ -350,6 +361,13 @@ async function transfererService(
       heureFin: ligneShift.heure_fin,
       posServiceId: service.id,
     });
+    // Un rejeu peut suivre une décision humaine. Dans ce cas le total de
+    // SamerTrackly fait foi : le remettre au montant POS initial annulerait la
+    // validation/refus alors même que les lignes sont préservées ci-dessous.
+    if (!creerDetail && inventaireExistant) {
+      const montant = Number(inventaireExistant.montant_a_deduire);
+      ligneInventaireShift.montant_a_deduire = Number.isFinite(montant) ? montant : 0;
+    }
 
     // L'inventaire est de l'argent, comme le shift : un échec ici doit faire
     // échouer tout le transfert du service (voir le catch de l'appelant), pas
@@ -361,16 +379,19 @@ async function transfererService(
     );
     const invShiftId = (inventaireShiftSt as { id: string }).id;
 
-    const serviceValideNormalement = inventaireDuService.inventaire.valide === true
-      && !inventaireDuService.inventaire.debloque_par;
-    const lignesDetail = construireLignesInventaire(
-      inventaireDuService.lignes,
-      invShiftId,
-      serviceValideNormalement,
-    );
-    await supprimer(`inventaire_lignes?inventaire_id=eq.${invShiftId}`);
-    await inserer('inventaire_lignes', lignesDetail as unknown as Record<string, unknown>[]);
-    nbLignesInventaire = lignesDetail.length;
+    if (creerDetail) {
+      const serviceValideNormalement = inventaireDuService.inventaire.valide === true
+        && !inventaireDuService.inventaire.debloque_par;
+      const lignesDetail = construireLignesInventaire(
+        inventaireDuService.lignes,
+        invShiftId,
+        serviceValideNormalement,
+      );
+      await inserer('inventaire_lignes', lignesDetail as unknown as Record<string, unknown>[]);
+      nbLignesInventaire = lignesDetail.length;
+    } else {
+      nbLignesInventaire = lignesExistantes.length;
+    }
 
     // Les réceptions détaillées sont de la traçabilité, jamais un calcul
     // d'argent (voir samtrackly-inventaire.ts) : une panne ici ne doit jamais

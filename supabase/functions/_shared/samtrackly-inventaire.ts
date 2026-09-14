@@ -295,6 +295,15 @@ export function correspondanceRompue(nbLignesPos: number, nbLignesConstruites: n
   return nbLignesPos > 0 && nbLignesConstruites === 0;
 }
 
+/**
+ * Un détail déjà présent est immuable côté pont : SamerTrackly peut y avoir
+ * inscrit une décision humaine que le rejeu ne doit jamais remettre en attente.
+ * Un ancien en-tête vide reste en revanche réparable.
+ */
+export function doitCreerDetailInventaire(nbLignesExistantes: number): boolean {
+  return nbLignesExistantes === 0;
+}
+
 // ---------------------------------------------------------------------------
 // Les réceptions : entrees_shift
 // ---------------------------------------------------------------------------

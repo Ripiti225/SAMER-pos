@@ -15,6 +15,7 @@ import {
   construireLignesInventaire,
   construireEntreesShift,
   correspondanceRompue,
+  doitCreerDetailInventaire,
 } from './samtrackly-inventaire.ts';
 
 describe('typeShiftDe — le créneau le plus proche', () => {
@@ -253,5 +254,16 @@ describe('correspondanceRompue — le garde-fou du 2026-08-21', () => {
 
   test('aucune ligne comptée → PAS rompue : il n’y avait rien à traduire', () => {
     assert.equal(correspondanceRompue(0, 0), false);
+  });
+});
+
+describe('rejeu — préserver les décisions déjà prises', () => {
+  test('un inventaire déjà détaillé ne doit jamais être supprimé puis recréé', () => {
+    assert.equal(doitCreerDetailInventaire(34), false);
+    assert.equal(doitCreerDetailInventaire(1), false);
+  });
+
+  test('un inventaire neuf ou un ancien en-tête vide reçoit son détail', () => {
+    assert.equal(doitCreerDetailInventaire(0), true);
   });
 });
