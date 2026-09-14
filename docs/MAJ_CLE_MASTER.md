@@ -1084,3 +1084,28 @@ dit qu'ils ne sont pas gelés eux aussi depuis le redéploiement de `sync-push` 
 ```sql
 SELECT count(*) FROM sync_outbox WHERE synced_at IS NULL;
 ```
+
+---
+
+## 2026-09-14 — Décider les explications d’inventaire depuis le siège
+
+La console siège porte désormais un onglet **Inventaire**. Il lit directement les
+explications déjà transmises à SamerTrackly et permet à un compte ADMIN de les accepter
+ou de les refuser. Le transfert POS reste strictement inchangé : aucune explication
+n'attend le siège avant d'arriver dans SamerTrackly.
+
+La décision est atomique dans la base SamerTrackly. La console et l'écran SamerTrackly
+utilisent la même fonction SQL ; la première décision enregistrée gagne et la seconde
+reçoit « Cette explication a déjà été traitée ». Le pont `samtrackly-points` ne supprime
+plus un détail d'inventaire déjà créé lors d'un rejeu, afin de ne jamais remettre une
+décision humaine à `en_attente`.
+
+**Déploiement, dans cet ordre :**
+
+1. exécuter `supabase_decision_inventaire_atomique.sql` sur la base SamerTrackly ;
+2. publier SamerTrackly web + OTA, sans nouveau build natif ;
+3. redéployer les Edge Functions POS `samtrackly-points` puis `siege` ;
+4. reconstruire et publier `apps/siege`.
+
+Ce changement ne nécessite ni migration locale, ni rebuild de la caisse, ni
+redémarrage des mini-PC.

@@ -94,6 +94,7 @@ maintenant, au design « Duo contrasté » (DESIGN_V2 § 6.12).
 | Connexion | e-mail + mot de passe Supabase | — |
 | Tableau de bord | **Refondu le 2026-08-25** — six chiffres d'appel avec variation, CA quotidien empilé par restaurant, heures de pic, comparaisons, top des plats, modes de paiement, tables, canaux, retours, écarts par caissier, **livraisons partenaires par caissier**, dépenses, remises, annulations, inventaire, équipe et heures travaillées | `moi`, `tableau_bord` |
 | Clôtures | fond, compté, théorique, **écart** coloré au-delà de 2 000 F, ticket Z complet à la demande (blocs nommés, tous les champs, JSON brut dépliable) | `restaurants`, `clotures`, `rapport_z` |
+| Inventaire | explications d'écart issues du POS, réparties entre En attente / Validées / Refusées ; un ADMIN peut prendre la même décision que dans SamerTrackly, LECTURE consulte seulement | `inventaire_explications`, `decider_explication_inventaire` |
 | Équipe | les travailleurs du groupe, filtrables par restaurant, **en lecture seule** | `equipe` |
 
 ### Le tableau de bord
@@ -195,7 +196,9 @@ Rien n'est perdu pendant ce temps : chaque caisse empile ses ventes dans
   destinataires, ajuster le prix par restaurant. La voie existe déjà côté cloud
   (`admin-catalogue` + descente en moins de 5 min) ; il manque la boucle
   multi-restaurants et l'interface.
-- Écran **Dépenses & inventaire** : les tables cloud existent depuis le 16/08.
+- Écran **Dépenses** et vue complète des inventaires : le nouvel onglet Inventaire
+  couvre les explications d'écart et leur décision, pas encore les entrées de
+  stock ni le détail des inventaires sans explication.
 - **Sortir `SAMTRACKLY_KEY` du `.env` des 7 postes** (dette du 13/08). La clé
   vivant désormais en secret de fonction, le POS pourra passer par un proxy au
   lieu d'appeler SamerTrackly en direct. Attention : retirer la clé des postes

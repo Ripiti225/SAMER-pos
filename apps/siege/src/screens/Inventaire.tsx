@@ -62,6 +62,7 @@ export function Inventaire({
       fin: periode.fin,
       restaurant_id: filtre || undefined,
     }),
+    refetchInterval: 30_000,
   });
 
   const compteurs = useMemo(() => {

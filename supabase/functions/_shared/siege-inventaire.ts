@@ -29,7 +29,13 @@ export function construireParametresDecision(args: {
   statut: string;
   prixSnapshot: unknown;
   auteur: string;
-}): { p_ligne_id: string; p_statut: StatutDecisionInventaire; p_prix: number; p_par: string } {
+}): {
+  p_ligne_id: string;
+  p_statut: StatutDecisionInventaire;
+  p_quantite_acceptee: null;
+  p_prix: number;
+  p_par: string;
+} {
   if (args.statut !== 'validee' && args.statut !== 'refusee') {
     throw new Error('Décision invalide');
   }
@@ -40,6 +46,9 @@ export function construireParametresDecision(args: {
   return {
     p_ligne_id: args.ligneId,
     p_statut: args.statut,
+    // NULL signifie « accepter la quantité expliquée complète ». SamerTrackly
+    // peut toujours envoyer une valeur pour conserver son acceptation partielle.
+    p_quantite_acceptee: null,
     p_prix: prix,
     p_par: args.auteur.trim() || 'Siège',
   };

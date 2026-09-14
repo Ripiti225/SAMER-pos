@@ -64,7 +64,7 @@ rétablit la déduction pleine. Les deux actions exigent une confirmation.
 ## Décision transactionnelle dans SamerTrackly
 
 Une migration SamerTrackly ajoute une fonction SQL atomique appelée par la
-fonction siège. Elle :
+fonction siège et par l'écran SamerTrackly existant. Elle :
 
 1. verrouille la ligne `inventaire_lignes` concernée ;
 2. vérifie que `explication_statut = 'en_attente'` ;

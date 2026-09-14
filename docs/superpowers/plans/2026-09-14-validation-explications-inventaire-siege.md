@@ -30,7 +30,7 @@
 - Test: `/Users/macbookpro/samtrackly/lib/decisionInventaire.test.mjs`
 
 **Interfaces:**
-- Produces: RPC `decider_ecart_inventaire_atomique(p_ligne_id uuid, p_statut text, p_prix numeric, p_par text)` retournant `statut`, `quantite_acceptee`, `montant_deduit`.
+- Produces: RPC `decider_ecart_inventaire_atomique(p_ligne_id uuid, p_statut text, p_quantite_acceptee numeric, p_prix numeric, p_par text)` retournant `statut`, `quantite_acceptee`, `montant_deduit`.
 - Consumes: colonnes existantes de `inventaire_lignes`, `inventaires_shifts` et `points`.
 
 - [ ] **Step 1: écrire le test en échec du contrat de décision**
@@ -66,6 +66,7 @@ Remplacer les trois écritures de `deciderEcartInventaire()` par :
 const { data, error } = await supabase.rpc('decider_ecart_inventaire_atomique', {
   p_ligne_id: ligneId,
   p_statut: statut,
+  p_quantite_acceptee: quantiteAcceptee,
   p_prix: prix,
   p_par: par || 'Manager',
 })

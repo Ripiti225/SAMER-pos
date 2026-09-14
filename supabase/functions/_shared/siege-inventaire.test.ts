@@ -28,7 +28,7 @@ describe('inventaire siège — décision RPC', () => {
   test('le prix vient du snapshot serveur', () => {
     assert.deepEqual(
       construireParametresDecision({ ligneId: 'l1', statut: 'refusee', prixSnapshot: '8000', auteur: 'Samer' }),
-      { p_ligne_id: 'l1', p_statut: 'refusee', p_prix: 8000, p_par: 'Samer' },
+      { p_ligne_id: 'l1', p_statut: 'refusee', p_quantite_acceptee: null, p_prix: 8000, p_par: 'Samer' },
     );
   });
 
