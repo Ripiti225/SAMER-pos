@@ -169,6 +169,24 @@ export interface Cloture {
 
 export type StatutExplicationInventaire = 'en_attente' | 'validee' | 'refusee';
 
+/** Une réception de stock d'une journée, quelle que soit son origine. */
+export interface EntreeInventaireSiege {
+  entree_id: string;
+  inventaire_id: string;
+  restaurant_id: string;
+  restaurant_nom: string;
+  date: string;
+  type_shift: string;
+  caissier_id: string | null;
+  caissier_nom: string;
+  produit_code: string;
+  produit_nom: string;
+  quantite: number;
+  fournisseur_nom: string | null;
+  origine: 'POS' | 'SAMERTRACKLY';
+  saisie_le: string | null;
+}
+
 /** Une explication d'écart POS telle que SamerTrackly la conserve. */
 export interface ExplicationInventaireSiege {
   ligne_id: string;

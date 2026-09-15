@@ -22,8 +22,10 @@ import {
 } from '../_shared/auth.ts';
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
+  construireEntreesJournee,
   construireParametresDecision,
   lignesExpliquees,
+  type EntreeShiftBrute,
   type StatutDecisionInventaire,
 } from '../_shared/siege-inventaire.ts';
 
@@ -362,10 +364,9 @@ Deno.serve(async (req) => {
           select: [
             'id', 'point_id', 'restaurant_id', 'date', 'type_shift', 'caissier_id',
             'pos_service_id', 'heure_debut', 'heure_fin',
-            'inventaire_lignes!inner(id,produit_id,produit_nom,stock_initial,entrees,sorties,stock_reel,ecart,nombre_explique,explication,montant_deduit,explication_statut,quantite_acceptee,explication_decidee_par,explication_decidee_at)',
+            'inventaire_lignes(id,produit_id,produit_nom,stock_initial,entrees,sorties,stock_reel,ecart,nombre_explique,explication,montant_deduit,explication_statut,quantite_acceptee,explication_decidee_par,explication_decidee_at)',
+            'entrees_shift(id,inventaire_id,produit_id,produit_nom,quantite,fournisseur_nom,source,created_at)',
           ].join(','),
-          pos_service_id: 'not.is.null',
-          'inventaire_lignes.explication_statut': 'not.is.null',
           order: 'date.desc,created_at.desc',
         });
         params.append('date', `gte.${debut.slice(0, 10)}`);
@@ -396,10 +397,11 @@ Deno.serve(async (req) => {
           date: string;
           type_shift: string;
           caissier_id: string | null;
-          pos_service_id: string;
+          pos_service_id: string | null;
           heure_debut: string | null;
           heure_fin: string | null;
           inventaire_lignes: LigneST[];
+          entrees_shift: EntreeShiftBrute[];
         }
 
         const [shifts, restaurants] = await Promise.all([
@@ -416,9 +418,32 @@ Deno.serve(async (req) => {
           const resultat = Number(valeur);
           return Number.isFinite(resultat) ? resultat : 0;
         };
+        const entrees = construireEntreesJournee(shifts);
 
         return jsonCors({
-          lignes: shifts.flatMap((shift) => lignesExpliquees(shift.inventaire_lignes).map((ligne) => ({
+          entrees: entrees.map((entree) => ({
+            entree_id: entree.id,
+            inventaire_id: entree.inventaire_id,
+            restaurant_id: entree.restaurant_id,
+            restaurant_nom: nomRestaurant.get(entree.restaurant_id) ?? 'Restaurant inconnu',
+            date: entree.date,
+            type_shift: entree.type_shift,
+            caissier_id: entree.caissier_id,
+            caissier_nom: entree.caissier_id
+              ? nomCaissier.get(entree.caissier_id) ?? 'Caissier non identifié'
+              : 'Caissier non identifié',
+            produit_code: entree.produit_id,
+            produit_nom: entree.produit_nom,
+            quantite: entree.quantite,
+            fournisseur_nom: entree.fournisseur_nom,
+            origine: entree.origine,
+            saisie_le: entree.created_at,
+          })),
+          lignes: shifts
+            .filter((shift) => !!shift.pos_service_id)
+            .flatMap((shift) => lignesExpliquees(shift.inventaire_lignes)
+              .filter((ligne) => ligne.explication_statut !== null)
+              .map((ligne) => ({
             ligne_id: ligne.id,
             inventaire_id: shift.id,
             point_id: shift.point_id,
