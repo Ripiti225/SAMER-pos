@@ -7,6 +7,9 @@ import { syncOutbox } from './schema/index.js';
 import type { DbOuTx } from './client.js';
 
 export type TableSynchronisee =
+  // Paquet unique de rattrapage du catalogue existant. Il est préparé une
+  // seule fois au démarrage et n'active aucun trigger de montée permanente.
+  | 'catalogue_historique'
   | 'commandes'
   | 'commande_items'
   | 'paiements'

@@ -184,16 +184,11 @@ export function Menu({ filtre }: { filtre: FiltreResto; onFiltre: (v: FiltreRest
           <div className="rounded-jeton border border-filet bg-carte p-4">
             <h2 className="mb-2 text-[12px] font-bold uppercase tracking-wide text-faible">2. Dans quelle catégorie</h2>
             {nomsCategories.length === 0 ? (
-              /* Le cas le plus courant au démarrage, et le plus déroutant : le
-                 catalogue ne remonte JAMAIS des caisses vers le cloud (ni
-                 `categories` ni `articles` ne sont publiées par le POS). Un site
-                 dont le catalogue a été importé en local n'a donc rien ici, même
-                 s'il affiche vingt catégories à sa caisse. On l'explique au lieu
-                 de laisser une liste vide sans raison. */
+              /* Tant que le site n'a pas redémarré avec la version qui prépare
+                 le rattrapage, son catalogue historique peut encore manquer. */
               <div className="rounded-sm bg-attente-tint px-3 py-2.5 text-sm text-attente-txt">
-                <b>Aucune catégorie côté siège.</b> Le catalogue ne voyage que vers le bas : les caisses ne publient
-                jamais le leur. Créez-en une dans l’onglet <b>Catégories</b> — elle descendra vers les restaurants
-                choisis, et vous pourrez y ranger des articles.
+                <b>Aucune catégorie côté siège.</b> Vérifiez que la caisse concernée est à jour, connectée et qu’elle
+                a redémarré : son catalogue historique sera publié automatiquement une seule fois.
               </div>
             ) : (
               <select className="champ" value={categorie} onChange={(e) => setCategorie(e.target.value)}>

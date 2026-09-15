@@ -805,13 +805,9 @@ Deno.serve(async (req) => {
 
       // -- Créer une CATÉGORIE et la diffuser vers un ou plusieurs restaurants.
       // --
-      // -- Le catalogue ne voyage QUE vers le bas : le cloud est maître, les
-      // -- sites ne publient ni `categories` ni `articles` (absentes de la liste
-      // -- de montée comme des tables publiables du POS). Le siège ne peut donc
-      // -- pas savoir ce qu'un site a déjà en local — et `categories.nom` n'y est
-      // -- pas unique : créer « Pizzas » sur un site qui en a déjà une lui en
-      // -- donnera DEUX. La console le dit à l'écran ; elle ne peut pas le
-      // -- vérifier à sa place.
+      // -- Le catalogue COURANT ne voyage que vers le bas. Une publication
+      // -- ponctuelle des catalogues historiques existe dans sync-push ; elle
+      // -- rapproche les noms avant insertion puis laisse le cloud maître.
       case 'categorie_creer': {
         exigeAdmin(siege);
 
