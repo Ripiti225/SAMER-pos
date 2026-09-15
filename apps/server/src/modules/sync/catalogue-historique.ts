@@ -11,7 +11,18 @@ export interface ResultatPreparationCatalogueHistorique {
 export async function preparerRattrapageCatalogueHistorique(): Promise<ResultatPreparationCatalogueHistorique> {
   return db.transaction(async (tx) => {
     const [site] = await tx.select().from(restaurant).limit(1);
-    const lignesCategories = await tx.select().from(categories);
+    // Sélection volontairement minimale : certains postes installés avant les
+    // horaires de catégories n'ont pas encore ces colonnes optionnelles. Le
+    // rattrapage historique ne doit dépendre que du socle du catalogue.
+    const lignesCategories = await tx
+      .select({
+        id: categories.id,
+        parent_id: categories.parent_id,
+        nom: categories.nom,
+        ordre: categories.ordre,
+        actif: categories.actif,
+      })
+      .from(categories);
     if (!site || lignesCategories.length === 0) {
       // Un poste peut démarrer avant son seed/import initial. Aucun marqueur :
       // le prochain démarrage devra retenter.
@@ -31,7 +42,19 @@ export async function preparerRattrapageCatalogueHistorique(): Promise<ResultatP
       .returning({ flux: syncEtat.flux });
     if (marqueur.length === 0) return { prepare: false, categories: 0, articles: 0 };
 
-    const lignesArticles = await tx.select().from(articles);
+    const lignesArticles = await tx
+      .select({
+        id: articles.id,
+        categorie_id: articles.categorie_id,
+        nom: articles.nom,
+        description: articles.description,
+        prix_base: articles.prix_base,
+        image_url: articles.image_url,
+        disponible: articles.disponible,
+        actif: articles.actif,
+        updated_at: articles.updated_at,
+      })
+      .from(articles);
 
     await ecrireOutbox(tx, 'catalogue_historique', 'INSERT', site.id, {
       categories: lignesCategories.map((categorie) => ({
