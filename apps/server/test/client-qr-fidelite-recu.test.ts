@@ -13,7 +13,7 @@ import type { SuiviCommandeClient } from '@pos/shared';
 import { construireApp } from '../src/app.js';
 import { db, fermerDb } from '../src/db/client.js';
 import { clientsFidelite, commandes, pointsFidelite } from '../src/db/schema/index.js';
-import { PIN_CAISSIER, PIN_SERVEUR, resetDonnees, seConnecter, type Donnees } from './aide.js';
+import { creerVisiteQr, PIN_CAISSIER, PIN_SERVEUR, resetDonnees, seConnecter, type Donnees } from './aide.js';
 
 const TELEPHONE = '+2250701020304';
 
@@ -44,16 +44,18 @@ afterAll(async () => {
 async function commanderAuQr(
   telephone?: string,
   qr = donnees.table_qr,
-): Promise<{ statut: number; corps: { commande_id: string; fidelite: { rattache: boolean } } }> {
+): Promise<{ statut: number; corps: { commande_id: string; fidelite: { rattache: boolean } }; visite: Record<string, string> }> {
+  const visite = await creerVisiteQr(app, qr);
   const rep = await app.inject({
     method: 'POST',
     url: `/api/client/${qr}/commande`,
+    headers: visite,
     payload: {
       items: [{ article_id: donnees.article_id, quantite: 1, options: [], supplements: [] }],
       ...(telephone === undefined ? {} : { telephone }),
     },
   });
-  return { statut: rep.statusCode, corps: rep.json() };
+  return { statut: rep.statusCode, corps: rep.json(), visite };
 }
 
 /** Valide la proposition (serveur) puis encaisse le total (caisse). */
@@ -102,9 +104,11 @@ describe('Téléphone facultatif à la commande client', () => {
   });
 
   it('refuse un numéro mal formé plutôt que de le rattacher en silence', async () => {
+    const visite = await creerVisiteQr(app, donnees.table_qr);
     const rep = await app.inject({
       method: 'POST',
       url: `/api/client/${donnees.table_qr}/commande`,
+      headers: visite,
       payload: {
         items: [{ article_id: donnees.article_id, quantite: 1, options: [], supplements: [] }],
         telephone: 'abc',
@@ -145,10 +149,10 @@ describe('Points crédités au client identifié au QR', () => {
 
 describe('Suivi client après paiement', () => {
   it('montre la commande payée avec les points gagnés', async () => {
-    const { corps } = await commanderAuQr(TELEPHONE, donnees.table2_qr);
+    const { corps, visite } = await commanderAuQr(TELEPHONE, donnees.table2_qr);
     const total = await validerEtEncaisser(corps.commande_id);
 
-    const rep = await app.inject({ method: 'GET', url: `/api/client/${donnees.table2_qr}/commandes` });
+    const rep = await app.inject({ method: 'GET', url: `/api/client/${donnees.table2_qr}/commandes`, headers: visite });
     expect(rep.statusCode).toBe(200);
     const suivi = (rep.json() as SuiviCommandeClient[]).find((s) => s.id === corps.commande_id);
     expect(suivi, 'la commande payée doit rester visible pour afficher le reçu').toBeDefined();
@@ -157,10 +161,10 @@ describe('Suivi client après paiement', () => {
   });
 
   it('annonce les points manqués quand aucun numéro n’a été donné', async () => {
-    const { corps } = await commanderAuQr(undefined, donnees.table2_qr);
+    const { corps, visite } = await commanderAuQr(undefined, donnees.table2_qr);
     const total = await validerEtEncaisser(corps.commande_id);
 
-    const rep = await app.inject({ method: 'GET', url: `/api/client/${donnees.table2_qr}/commandes` });
+    const rep = await app.inject({ method: 'GET', url: `/api/client/${donnees.table2_qr}/commandes`, headers: visite });
     const suivi = (rep.json() as SuiviCommandeClient[]).find((s) => s.id === corps.commande_id);
     expect(suivi!.etat).toBe('PAYEE');
     // Le client doit voir ce qu'il a perdu : rattaché = non, mais points chiffrés.
@@ -170,10 +174,11 @@ describe('Suivi client après paiement', () => {
 
 describe('Reçu PDF client', () => {
   it('refuse le reçu tant que la commande n’est pas payée', async () => {
-    const { corps } = await commanderAuQr(TELEPHONE);
+    const { corps, visite } = await commanderAuQr(TELEPHONE);
     const rep = await app.inject({
       method: 'GET',
       url: `/api/client/${donnees.table_qr}/recu/${corps.commande_id}`,
+      headers: visite,
     });
     expect(rep.statusCode).toBe(409);
     expect(rep.json().erreur).toContain('payée');
@@ -182,21 +187,24 @@ describe('Reçu PDF client', () => {
   it('refuse le reçu d’une commande qui n’est pas celle de la table du QR', async () => {
     const { corps } = await commanderAuQr(TELEPHONE);
     await validerEtEncaisser(corps.commande_id);
+    const visiteAutreTable = await creerVisiteQr(app, donnees.table2_qr);
 
     const rep = await app.inject({
       method: 'GET',
       url: `/api/client/${donnees.table2_qr}/recu/${corps.commande_id}`,
+      headers: visiteAutreTable,
     });
     expect(rep.statusCode).toBe(404);
   });
 
   it('sert un vrai PDF téléchargeable une fois la commande payée', async () => {
-    const { corps } = await commanderAuQr(TELEPHONE);
+    const { corps, visite } = await commanderAuQr(TELEPHONE);
     await validerEtEncaisser(corps.commande_id);
 
     const rep = await app.inject({
       method: 'GET',
       url: `/api/client/${donnees.table_qr}/recu/${corps.commande_id}`,
+      headers: visite,
     });
     expect(rep.statusCode, rep.body).toBe(200);
     expect(rep.headers['content-type']).toContain('application/pdf');

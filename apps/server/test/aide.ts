@@ -64,7 +64,7 @@ export async function resetDonnees(): Promise<Donnees> {
     TRUNCATE TABLE appels_table, actions_recues, points_fidelite, clients_fidelite,
       notations, sync_etat, sync_outbox, audit_log, paiements, note_split_items, notes_split, equipe_service,
       depenses, entrees_stock, inventaire_lignes, inventaires_service, produits_inventaire,
-      commande_items, commandes, services_caisse, tables_salle, zones,
+      commande_items, commandes, visites_qr, services_caisse, tables_salle, zones,
       promotions, mapping_poste_categorie, combo_articles, combos, supplements,
       options, groupes_options, prix_canaux, articles, categories,
       role_permissions, utilisateurs, roles,
@@ -183,6 +183,23 @@ export async function seConnecter(
   const cookie = rep.cookies.find((c) => c.name === 'pos_session');
   if (!cookie) throw new Error('Cookie de session absent');
   return { pos_session: cookie.value };
+}
+
+/** Crée la visite anonyme d'un téléphone QR et renvoie son en-tête API. */
+export async function creerVisiteQr(
+  app: FastifyInstance,
+  qrToken: string,
+  localisation?: { latitude: number; longitude: number; precision_metres: number },
+): Promise<Record<string, string>> {
+  const rep = await app.inject({
+    method: 'POST',
+    url: `/api/client/${qrToken}/visite`,
+    payload: localisation ? { localisation } : {},
+  });
+  if (rep.statusCode !== 200) {
+    throw new Error(`Création visite QR échouée (${rep.statusCode}): ${rep.body}`);
+  }
+  return { 'x-visite-qr': (rep.json() as { visite_id: string }).visite_id };
 }
 
 /**

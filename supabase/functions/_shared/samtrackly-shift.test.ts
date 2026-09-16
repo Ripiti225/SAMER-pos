@@ -35,6 +35,9 @@ const RAPPORT_Z = {
   modes_declares: { WAVE: 30_000, ORANGE_MONEY: 18_000 },
   par_mode: { ESPECES: 182_000, WAVE: 30_000, ORANGE_MONEY: 18_000 },
   total_ventes: 287_000,
+  vente_totale: 289_500,
+  total_systeme: 287_000,
+  diff: 2_500,
 };
 
 const DEPENSES = [
@@ -140,11 +143,10 @@ describe('construireShift — les montants', () => {
   });
 
   // ── L'INVARIANT CENTRAL ──
-  // vente du shift − vente système = écart mesuré au comptage. C'est ce qui
-  // rend l'écart théorique/machine lisible : il vaut exactement le manquant
-  // (ou le surplus) que la caissière a au tiroir.
+  // vente du shift − vente système = écart réconcilié. Une mauvaise ventilation
+  // espèces/Wave corrigée au pointage disparaît donc de l'écart imputable.
 
-  test('vente du shift − vente système = écart mesuré', () => {
+  test('vente du shift − vente système = écart réconcilié', () => {
     const s = construireShift(SERVICE, DEPENSES, CTX);
     assert.equal(s.vente_shift - RAPPORT_Z.total_ventes, s.ecart_pos);
   });
@@ -160,7 +162,7 @@ describe('construireShift — les montants', () => {
     assert.equal(construireShift(SERVICE, DEPENSES, CTX).vente_systeme_pos, 287_000);
   });
 
-  test('l’écart mesuré part aussi dans ecart_pos, pour l’imputation', () => {
+  test('l’écart réconcilié part dans ecart_pos, pour l’imputation', () => {
     assert.equal(construireShift(SERVICE, DEPENSES, CTX).ecart_pos, 2_500);
   });
 
@@ -169,6 +171,19 @@ describe('construireShift — les montants', () => {
       construireShift(SERVICE, DEPENSES, CTX).explication_ecart,
       'Deux encaissements espèces ont été inversés.',
     );
+  });
+
+  test('une erreur espèces corrigée en Wave ne devient ni écart ni litige SamerTrackly', () => {
+    const corrige = {
+      ...SERVICE,
+      ecart: -3_000,
+      explication_ecart: 'Paiement remis dans Wave au pointage.',
+      rapport_z: { ...RAPPORT_Z, diff: 0 },
+    };
+
+    const shift = construireShift(corrige, DEPENSES, CTX);
+    assert.equal(shift.ecart_pos, 0);
+    assert.equal(shift.explication_ecart, null);
   });
 });
 

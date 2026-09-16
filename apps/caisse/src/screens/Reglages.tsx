@@ -2028,10 +2028,53 @@ function Parametres() {
     onSuccess: () => { setMsg({ texte: 'Enregistré', ok: true }); void qc.invalidateQueries({ queryKey: ['admin', 'parametres'] }); },
     onError: (e: Error) => setMsg({ texte: e.message }),
   });
+  const positionner = useMutation({
+    mutationFn: async () => {
+      if (!navigator.geolocation) throw new Error('La géolocalisation n’est pas disponible sur cet appareil');
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: 15000,
+        });
+      }).catch(() => {
+        throw new Error('Position impossible à obtenir. Autorisez la localisation puis réessayez.');
+      });
+      await Promise.all([
+        api('/api/admin/parametres', {
+          method: 'PATCH',
+          corps: { cle: 'client_qr_latitude', valeur: position.coords.latitude },
+        }),
+        api('/api/admin/parametres', {
+          method: 'PATCH',
+          corps: { cle: 'client_qr_longitude', valeur: position.coords.longitude },
+        }),
+      ]);
+    },
+    onSuccess: () => {
+      setMsg({ texte: 'Position du restaurant enregistrée', ok: true });
+      void qc.invalidateQueries({ queryKey: ['admin', 'parametres'] });
+    },
+    onError: (e: Error) => setMsg({ texte: e.message }),
+  });
   return (
     <section>
       <h2 className="mb-4 text-xl font-bold">Paramètres</h2>
       <Message texte={msg?.texte ?? null} ok={msg?.ok} />
+      <div className="mb-3 rounded-jeton border border-bordure bg-surface-douce p-4">
+        <div className="font-semibold">Position des commandes QR</div>
+        <p className="mt-1 text-sm text-doux">
+          Placez-vous dans le restaurant puis enregistrez sa position avant d’activer la limite de distance.
+        </p>
+        <button
+          type="button"
+          className="btn-blanc mt-3"
+          disabled={positionner.isPending}
+          onClick={() => positionner.mutate()}
+        >
+          {positionner.isPending ? 'Localisation…' : 'Utiliser ma position actuelle'}
+        </button>
+      </div>
       <div className="grid gap-3">
         {(data ?? []).map((p) => <LigneParam key={p.cle} p={p} onEnregistrer={(v) => maj.mutate({ cle: p.cle, valeur: v })} />)}
       </div>
@@ -2040,14 +2083,27 @@ function Parametres() {
 }
 function LigneParam({ p, onEnregistrer }: { p: ParametreVue; onEnregistrer: (v: unknown) => void }) {
   const [v, setV] = useState(typeof p.valeur === 'object' ? JSON.stringify(p.valeur) : String(p.valeur ?? ''));
+  useEffect(() => {
+    setV(typeof p.valeur === 'object' ? JSON.stringify(p.valeur) : String(p.valeur ?? ''));
+  }, [p.valeur]);
   const soumettre = () => {
     if (p.type === 'entier' || p.type === 'position') onEnregistrer(Number(v));
+    else if (p.type === 'booleen') onEnregistrer(v === 'true');
     else onEnregistrer(v);
   };
   return (
     <div className="flex items-center gap-3 rounded-jeton border border-bordure px-4 py-2">
       <div className="flex-1"><div className="font-semibold">{p.libelle}</div><div className="text-xs text-doux">{p.cle}{p.unite ? ` (${p.unite})` : ''}</div></div>
-      <input className="champ w-40" value={v} onChange={(e) => setV(e.target.value)} />
+      {p.type === 'booleen' ? (
+        <input
+          type="checkbox"
+          className="h-6 w-6 accent-marque"
+          checked={v === 'true'}
+          onChange={(e) => setV(String(e.target.checked))}
+        />
+      ) : (
+        <input className="champ w-40" value={v} onChange={(e) => setV(e.target.value)} />
+      )}
       <button type="button" className="btn-blanc" onClick={soumettre}>OK</button>
     </div>
   );
@@ -2193,7 +2249,7 @@ function Roles() {
 interface ConfigResto {
   actuel: { code: string; nom: string; marque: string; couleur_hex: string } | null;
   samtrackly_restaurant_id: string;
-  restaurants: { id: string; nom: string; couleur: string | null }[];
+  restaurants: { id: string; nom: string; couleur: string | null; source?: 'PROFIL_LOCAL' }[];
 }
 
 function ConfigRestaurant() {
@@ -2207,7 +2263,12 @@ function ConfigRestaurant() {
 
   const configurer = useMutation({
     mutationFn: (id: string) =>
-      api<{ sync_a_reenroler?: boolean }>('/api/admin/restaurant/config', { method: 'POST', corps: { samtrackly_restaurant_id: id } }),
+      api<{ sync_a_reenroler?: boolean }>('/api/admin/restaurant/config', {
+        method: 'POST',
+        corps: id.startsWith('profil:')
+          ? { profil_code: id.slice('profil:'.length) }
+          : { samtrackly_restaurant_id: id },
+      }),
     onSuccess: async (rep) => {
       // Applique la nouvelle identité (nom, marque, couleur) à la session en cours.
       try {
@@ -2261,7 +2322,7 @@ function ConfigRestaurant() {
           <select className="champ w-auto" value={selection} onChange={(e) => setChoix(e.target.value)}>
             <option value="">— choisir un restaurant —</option>
             {data!.restaurants.map((r) => (
-              <option key={r.id} value={r.id}>{r.nom}</option>
+              <option key={r.id} value={r.id}>{r.nom}{r.source === 'PROFIL_LOCAL' ? ' — menu complet' : ''}</option>
             ))}
           </select>
           <button type="button" className="btn-accent" disabled={!selection || configurer.isPending} onClick={() => configurer.mutate(selection)}>

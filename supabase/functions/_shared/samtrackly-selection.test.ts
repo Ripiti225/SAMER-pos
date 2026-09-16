@@ -137,3 +137,18 @@ test('rattrape les anciens marqueurs vides et les modifications, sans dupliquer 
     ['ancien-flora', 'modifie-hilary'],
   );
 });
+
+test('rejoue un ancien faux litige espèces pour retirer son explication après réconciliation', () => {
+  const transferts = [
+    { service_id: 'corrige-wave', explication_ecart_transferee: 'Paiement remis dans Wave' },
+  ];
+  const services = [
+    {
+      id: 'corrige-wave',
+      explication_ecart: 'Paiement remis dans Wave',
+      rapport_z: { ecart: -3_000, diff: 0 },
+    },
+  ];
+
+  assert.deepEqual(servicesAvecExplicationARejouer(transferts, services), ['corrige-wave']);
+});

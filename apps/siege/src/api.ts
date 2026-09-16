@@ -164,7 +164,10 @@ export interface Cloture {
   fond_de_caisse: number;
   especes_comptees: number | null;
   especes_theorique: number | null;
+  /** Écart espèces brut, conservé comme détail du tiroir. */
   ecart: number | null;
+  /** Écart global après correction des modes de paiement — anomalie réelle. */
+  ecart_reconciliation?: number | null;
 }
 
 export type StatutExplicationInventaire = 'en_attente' | 'validee' | 'refusee';

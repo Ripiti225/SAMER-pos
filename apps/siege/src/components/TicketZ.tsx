@@ -76,7 +76,12 @@ export function TicketZ({
   serviceId: string;
   restaurantId: string;
 }) {
-  const ecart = nb(rapport.ecart);
+  const ecartEspeces = nb(rapport.ecart);
+  const ecart = typeof rapport.diff === 'number' && Number.isFinite(rapport.diff)
+    ? rapport.diff
+    : typeof rapport.vente_totale === 'number' && typeof rapport.total_systeme === 'number'
+      ? rapport.vente_totale - rapport.total_systeme
+      : ecartEspeces;
   const graveEcart = Math.abs(ecart) > SEUIL_ECART;
 
   const livraisons = (rapport.livraisons ?? {}) as Record<string, number>;
@@ -110,17 +115,17 @@ export function TicketZ({
         </p>
       </header>
 
-      {/* L'écart de caisse : le chiffre qu'on vient chercher, en très grand. Le
+      {/* L'écart réconcilié : le chiffre qu'on vient chercher, en très grand. Le
           seuil est celui du POS — c'est lui qui a déclenché (ou non) l'entrée
           d'audit ECART_CAISSE sur le site, la console n'en invente pas un autre. */}
       <div className={`rounded-jeton p-4 text-center ${graveEcart ? 'bg-alerte-tint text-alerte-txt' : 'bg-ok-tint text-ok-txt'}`}>
-        <div className="text-sm font-semibold">Écart de caisse (espèces)</div>
+        <div className="text-sm font-semibold">Écart réconcilié</div>
         <div className="chiffres text-4xl font-black">
           {ecart > 0 ? '+' : ''}
           {formatFCFA(ecart)}
         </div>
         <div className="chiffres mt-1 text-xs opacity-80">
-          Comptées {formatFCFA(nb(rapport.especes_comptees))} · Théoriques {formatFCFA(nb(rapport.especes_theorique))}
+          Vente réconciliée {formatFCFA(nb(rapport.vente_totale))} · Système {formatFCFA(nb(rapport.total_systeme))}
           {graveEcart ? ` · au-delà du seuil d’alerte de ${formatFCFA(SEUIL_ECART)}` : ''}
         </div>
       </div>
@@ -130,6 +135,13 @@ export function TicketZ({
             manager doit retrouver son papier, pas déchiffrer une autre mise en page. */}
         <Bloc titre="Réconciliation de fermeture">
           <LigneF libelle="Fond de caisse" montant={nb(rapport.fond_de_caisse)} />
+          <LigneF libelle="Espèces comptées" montant={nb(rapport.especes_comptees)} />
+          <LigneF libelle="Espèces théoriques" montant={nb(rapport.especes_theorique)} />
+          <Ligne
+            libelle="Écart espèces (détail)"
+            valeur={`${ecartEspeces > 0 ? '+' : ''}${formatFCFA(ecartEspeces)}`}
+            zero={ecartEspeces === 0}
+          />
           <LigneF libelle="Dépenses" montant={nb(rapport.depenses)} />
           {Object.entries(livraisons).map(([p, v]) => (
             <LigneF key={p} libelle={libellePartenaire(p)} montant={nb(v)} />

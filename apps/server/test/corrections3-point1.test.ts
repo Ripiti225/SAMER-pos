@@ -17,6 +17,7 @@ import {
   JETON_KDS,
   PIN_CAISSIER,
   PIN_SERVEUR,
+  creerVisiteQr,
   resetDonnees,
   seConnecter,
   type Donnees,
@@ -26,6 +27,8 @@ let app: FastifyInstance;
 let donnees: Donnees;
 let cookiesServeur: Record<string, string>;
 let cookiesCaissier: Record<string, string>;
+let visiteT1: Record<string, string>;
+let visiteT2: Record<string, string>;
 let baseUrl: string;
 
 /** Ouvre une connexion WS authentifiée (cookie serveur) avec heartbeat. */
@@ -49,6 +52,8 @@ beforeAll(async () => {
   baseUrl = `ws://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
   cookiesServeur = await seConnecter(app, donnees.serveur_id, PIN_SERVEUR);
   cookiesCaissier = await seConnecter(app, donnees.caissier_id, PIN_CAISSIER);
+  visiteT1 = await creerVisiteQr(app, donnees.table_qr);
+  visiteT2 = await creerVisiteQr(app, donnees.table2_qr);
   await app.inject({
     method: 'POST',
     url: '/api/services/ouvrir',
@@ -69,6 +74,7 @@ describe('appel client : routage vers le serveur présent', () => {
     const rep = await app.inject({
       method: 'POST',
       url: `/api/client/${donnees.table_qr}/appel`,
+      headers: visiteT1,
       payload: { type: 'APPEL_SERVEUR' },
     });
     expect(rep.statusCode).toBe(200);
@@ -92,6 +98,7 @@ describe('appel client : routage vers le serveur présent', () => {
     const rep = await app.inject({
       method: 'POST',
       url: `/api/client/${donnees.table_qr}/appel`,
+      headers: visiteT1,
       payload: { type: 'APPEL_SERVEUR' },
     });
     expect(rep.statusCode).toBe(200);
@@ -109,6 +116,7 @@ describe('repli caisse : aucun serveur connecté', () => {
     const rep = await app.inject({
       method: 'POST',
       url: `/api/client/${donnees.table2_qr}/appel`,
+      headers: visiteT2,
       payload: { type: 'APPEL_SERVEUR' },
     });
     expect(rep.statusCode).toBe(200);
@@ -119,6 +127,7 @@ describe('repli caisse : aucun serveur connecté', () => {
     const rep = await app.inject({
       method: 'POST',
       url: `/api/client/${donnees.table2_qr}/commande`,
+      headers: visiteT2,
       payload: { items: [{ article_id: donnees.article_id, quantite: 1, options: [], supplements: [] }] },
     });
     expect(rep.statusCode).toBe(200);
@@ -143,6 +152,7 @@ describe('repli caisse : aucun serveur connecté', () => {
     const proposition = await app.inject({
       method: 'POST',
       url: `/api/client/${donnees.table2_qr}/commande`,
+      headers: visiteT2,
       payload: { items: [{ article_id: donnees.article_id, quantite: 2, options: [], supplements: [] }] },
     });
     const commandeId = proposition.json().commande_id as string;
@@ -162,6 +172,7 @@ describe('repli caisse : aucun serveur connecté', () => {
     const proposition = await app.inject({
       method: 'POST',
       url: `/api/client/${donnees.table2_qr}/commande`,
+      headers: visiteT2,
       payload: { items: [{ article_id: donnees.article_id, quantite: 1, options: [], supplements: [] }] },
     });
     const commandeId = proposition.json().commande_id as string;
@@ -174,7 +185,7 @@ describe('repli caisse : aucun serveur connecté', () => {
     });
     expect(refus.statusCode).toBe(200);
 
-    const suivi = await app.inject({ method: 'GET', url: `/api/client/${donnees.table2_qr}/commandes` });
+    const suivi = await app.inject({ method: 'GET', url: `/api/client/${donnees.table2_qr}/commandes`, headers: visiteT2 });
     const ligne = (suivi.json() as { id: string; etat: string; refus_motif: string }[]).find((x) => x.id === commandeId);
     expect(ligne!.etat).toBe('REFUSEE');
     expect(ligne!.refus_motif).toBe('Article épuisé ce soir');
@@ -187,14 +198,15 @@ describe('portée du token QR : une table ne voit QUE ses commandes', () => {
     const surT1 = await app.inject({
       method: 'POST',
       url: `/api/client/${donnees.table_qr}/commande`,
+      headers: visiteT1,
       payload: { items: [{ article_id: donnees.article_id, quantite: 1, options: [], supplements: [] }] },
     });
     const idT1 = surT1.json().commande_id as string;
 
-    const suiviT2 = await app.inject({ method: 'GET', url: `/api/client/${donnees.table2_qr}/commandes` });
+    const suiviT2 = await app.inject({ method: 'GET', url: `/api/client/${donnees.table2_qr}/commandes`, headers: visiteT2 });
     expect((suiviT2.json() as { id: string }[]).some((x) => x.id === idT1)).toBe(false);
 
-    const suiviT1 = await app.inject({ method: 'GET', url: `/api/client/${donnees.table_qr}/commandes` });
+    const suiviT1 = await app.inject({ method: 'GET', url: `/api/client/${donnees.table_qr}/commandes`, headers: visiteT1 });
     expect((suiviT1.json() as { id: string }[]).some((x) => x.id === idT1)).toBe(true);
   });
 

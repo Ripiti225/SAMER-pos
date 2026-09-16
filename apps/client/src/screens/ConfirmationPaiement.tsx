@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { SuiviCommandeClient } from '@pos/shared';
 import { formatFCFA } from '@pos/shared';
 import { api } from '../api';
+import { BoutonRecu } from '../components/BoutonRecu';
 
 /**
  * Écran de fin de repas : dès que la caisse encaisse, le téléphone du client
@@ -11,13 +12,13 @@ import { api } from '../api';
  * C'est aussi le dernier moment utile pour lui montrer ce qu'il perd quand il
  * n'a pas laissé son numéro — le reçu, lui, reste offert dans les deux cas.
  */
-export function ConfirmationPaiement({ jeton }: { jeton: string }) {
+export function ConfirmationPaiement({ jeton, visiteId }: { jeton: string; visiteId: string }) {
   const [ecartees, setEcartees] = useState<string[]>([]);
 
   // Même clé que SuiviCommandes : TanStack Query mutualise la requête.
   const { data } = useQuery({
-    queryKey: ['suivi', jeton],
-    queryFn: () => api<SuiviCommandeClient[]>(`/api/client/${jeton}/commandes`),
+    queryKey: ['suivi', jeton, visiteId],
+    queryFn: () => api<SuiviCommandeClient[]>(`/api/client/${jeton}/commandes`, { visiteId }),
     refetchInterval: 10_000,
   });
 
@@ -63,14 +64,25 @@ export function ConfirmationPaiement({ jeton }: { jeton: string }) {
 
         {/* Le serveur renvoie le PDF en pièce jointe : un lien suffit, aucun
             code de téléchargement à écrire côté téléphone. */}
-        <a
-          href={`/api/client/${jeton}/recu/${payee.id}`}
-          target="_blank"
-          rel="noopener"
+        <BoutonRecu
+          jeton={jeton}
+          visiteId={visiteId}
+          commandeId={payee.id}
+          numeroTicket={payee.numero_ticket}
           className="flex min-h-[56px] w-full items-center justify-center rounded-[13px] bg-marque text-lg font-bold text-sur-marque shadow-e2 transition active:translate-y-px"
         >
-          Continuer · reçu PDF
-        </a>
+          Télécharger mon reçu
+        </BoutonRecu>
+        <button
+          type="button"
+          className="flex min-h-[52px] w-full items-center justify-center rounded-[13px] border-2 border-marque text-base font-bold text-marque-fonce"
+          onClick={() => {
+            setEcartees((l) => [...l, payee.id]);
+            setTimeout(() => document.getElementById('commander')?.scrollIntoView({ behavior: 'smooth' }), 0);
+          }}
+        >
+          Commander autre chose
+        </button>
         <button
           type="button"
           className="text-sm font-medium text-doux underline"

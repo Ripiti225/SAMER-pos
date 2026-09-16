@@ -46,6 +46,34 @@ export interface ServiceCloud {
   journee_exploitation?: string | null;
 }
 
+/**
+ * Écart réellement imputable après réaffectation des modes de paiement.
+ * `service.ecart` n'est que le détail espèces : il peut être compensé par une
+ * correction Wave/OM au pointage et ne constitue alors aucun litige.
+ */
+export function ecartReconciliation(service: ServiceCloud): number {
+  const z = (service.rapport_z ?? {}) as Record<string, unknown>;
+  const diff = Number(z.diff);
+  if (z.diff !== null && z.diff !== undefined && Number.isFinite(diff)) return diff;
+
+  const vente = Number(z.vente_totale);
+  const systeme = Number(z.total_systeme);
+  if (
+    z.vente_totale !== null && z.vente_totale !== undefined
+    && z.total_systeme !== null && z.total_systeme !== undefined
+    && Number.isFinite(vente) && Number.isFinite(systeme)
+  ) return vente - systeme;
+
+  // Compatibilité des rapports antérieurs à l'ajout de la réconciliation.
+  return n(service.ecart);
+}
+
+/** Une explication n'a de sens que si l'écart réconcilié est encore non nul. */
+export function explicationEcartReconciliation(service: ServiceCloud): string | null {
+  if (ecartReconciliation(service) === 0) return null;
+  return service.explication_ecart?.trim() || null;
+}
+
 export interface ContexteShift {
   restaurantId: string;
   pointId: string;
@@ -208,6 +236,7 @@ export interface LigneShift {
   om: number;
   espece: number;
   vente_shift: number;
+  /** Écart réconcilié final du POS, jamais le seul écart espèces brut. */
   ecart_pos: number;
   /** Motif saisi par le caissier, affiché sous son écart. */
   explication_ecart: string | null;
@@ -288,12 +317,11 @@ export function construireShift(
     om,
     espece,
     vente_shift: vente,
-    // Mesuré au comptage à l'aveugle. Négatif = manquant. Il voyage à part pour
-    // rester imputable à une personne — et depuis le 2026-08-20 il se retrouve
-    // AUSSI dans l'écart théorique/machine, puisque `espece` vient du comptage.
-    // Les deux vues montrent le même fait : ne pas déduire deux fois.
-    ecart_pos: n(service.ecart),
-    explication_ecart: service.explication_ecart?.trim() || null,
+    // Seul l'écart global APRÈS correction des modes est imputable. L'écart
+    // espèces brut reste dans le rapport Z du POS, mais ne crée pas de litige
+    // si la caissière l'a correctement réaffecté à Wave/OM/etc.
+    ecart_pos: ecartReconciliation(service),
+    explication_ecart: explicationEcartReconciliation(service),
     // La vente réelle du système, que le gérant tapait à la main jusqu'ici.
     vente_systeme_pos: n(z.total_ventes),
     // Le rapport Z porte déjà ces compteurs. Le pont les perdait à cette

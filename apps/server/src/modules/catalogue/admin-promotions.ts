@@ -47,6 +47,13 @@ function resume(p: typeof promotions.$inferSelect): Record<string, unknown> {
   };
 }
 
+/** Drizzle enveloppe les erreurs PostgreSQL dans `cause` depuis la v0.44. */
+function estReferenceExistante(e: unknown): boolean {
+  if (typeof e !== 'object' || e === null) return false;
+  const erreur = e as { code?: string; cause?: { code?: string } };
+  return erreur.code === '23503' || erreur.cause?.code === '23503';
+}
+
 export function routesPromotionsAdmin(app: FastifyInstance): void {
   const garde = app.exigePermission('reglages.catalogue');
 
@@ -182,7 +189,7 @@ export function routesPromotionsAdmin(app: FastifyInstance): void {
       try {
         await tx.delete(promotions).where(eq(promotions.id, id));
       } catch (e) {
-        if (typeof e === 'object' && e !== null && (e as { code?: string }).code === '23503') {
+        if (estReferenceExistante(e)) {
           throw new ErreurMetier(
             'Cette promotion a déjà été appliquée à des commandes : elle ne peut pas être supprimée. Désactivez-la, elle ne s’appliquera plus.',
             409,

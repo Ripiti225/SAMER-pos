@@ -248,7 +248,7 @@ export function TableauBord({ filtre, onFiltre }: { filtre: FiltreResto; onFiltr
             <TuileChiffre libelle="Panier moyen" valeur={panier} format={formatFCFA} />
             <TuileChiffre libelle="Dépenses de caisse" valeur={depenses} format={formatFCFA} ton="alerte" detail="sorties du tiroir" />
             <TuileChiffre libelle="Retours" valeur={retoursMontant} format={formatFCFA} ton="alerte" detail={`${retoursNb} article(s) refait(s)`} />
-            <TuileChiffre libelle="Écart de caisse" valeur={ecartCumule} format={formatFCFA} ton="alerte" detail="cumulé sur la période" />
+            <TuileChiffre libelle="Écart réconcilié" valeur={ecartCumule} format={formatFCFA} ton="alerte" detail="cumulé sur la période" />
           </div>
 
           {/* ---------- Couche 2 : les deux graphes qui parlent ---------- */}
@@ -317,7 +317,7 @@ export function TableauBord({ filtre, onFiltre }: { filtre: FiltreResto; onFiltr
               />
             </Bloc>
 
-            <Bloc titre="Écarts de caisse par caissier" note="Comptage à l’aveugle : le caissier n’a jamais vu le théorique.">
+            <Bloc titre="Écarts réconciliés par caissier" note="Après correction des modes de paiement ; le détail espèces reste dans chaque ticket Z.">
               <BarresEcarts
                 lignes={mien(data?.ecarts)
                   .sort((a, b) => Math.abs(nb(b.ecart)) - Math.abs(nb(a.ecart)))

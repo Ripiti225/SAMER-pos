@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { EtatSuiviClient, SuiviCommandeClient } from '@pos/shared';
 import { formatFCFA, LIBELLES_SUIVI_CLIENT } from '@pos/shared';
 import { api } from '../api';
+import { BoutonRecu } from '../components/BoutonRecu';
 
 // Étapes visuelles (jauge) du parcours normal d'une commande.
 const ETAPES: EtatSuiviClient[] = ['EN_VALIDATION', 'EN_PREPARATION', 'PRETE', 'SERVIE'];
@@ -10,10 +11,10 @@ const ETAPES: EtatSuiviClient[] = ['EN_VALIDATION', 'EN_PREPARATION', 'PRETE', '
  * « Votre commande » (point 1c) : suivi en temps réel par polling léger
  * (10 s) — pas de WebSocket côté client (port restreint, § RESEAU).
  */
-export function SuiviCommandes({ jeton }: { jeton: string }) {
+export function SuiviCommandes({ jeton, visiteId }: { jeton: string; visiteId: string }) {
   const { data } = useQuery({
-    queryKey: ['suivi', jeton],
-    queryFn: () => api<SuiviCommandeClient[]>(`/api/client/${jeton}/commandes`),
+    queryKey: ['suivi', jeton, visiteId],
+    queryFn: () => api<SuiviCommandeClient[]>(`/api/client/${jeton}/commandes`, { visiteId }),
     refetchInterval: 10_000,
   });
 
@@ -40,14 +41,15 @@ export function SuiviCommandes({ jeton }: { jeton: string }) {
             // lien vers le reçu, tant que la fenêtre côté serveur le permet.
             <div className="flex items-center justify-between rounded-[13px] bg-ok/10 px-3 py-2">
               <span className="font-bold text-ok">{LIBELLES_SUIVI_CLIENT.PAYEE}</span>
-              <a
-                href={`/api/client/${jeton}/recu/${c.id}`}
-                target="_blank"
-                rel="noopener"
+              <BoutonRecu
+                jeton={jeton}
+                visiteId={visiteId}
+                commandeId={c.id}
+                numeroTicket={c.numero_ticket}
                 className="text-sm font-semibold text-marque-fonce underline"
               >
                 Reçu PDF
-              </a>
+              </BoutonRecu>
             </div>
           ) : (
             <Jauge etat={c.etat} />

@@ -1,4 +1,9 @@
-import { doitTransferer, type ConfigPont } from './samtrackly-shift.ts';
+import {
+  doitTransferer,
+  explicationEcartReconciliation,
+  type ConfigPont,
+  type ServiceCloud,
+} from './samtrackly-shift.ts';
 
 export interface ServiceASelectionner {
   id: string;
@@ -15,11 +20,20 @@ interface TransfertAvecExplication {
 interface ServiceAvecExplication {
   id: string;
   explication_ecart?: string | null;
+  rapport_z?: Record<string, unknown> | null;
 }
 
 export function normaliserExplicationEcart(value: unknown): string | null {
   const texte = String(value ?? '').trim();
   return texte || null;
+}
+
+/** Texte qui doit réellement exister dans SamerTrackly pour ce service. */
+export function explicationEcartATransferer(service: ServiceAvecExplication): string | null {
+  // Les appels/tests historiques sans rapport Z gardent l'ancien comportement.
+  // Les vrais services cloud ont toujours le snapshot figé après clôture.
+  if (!service.rapport_z) return normaliserExplicationEcart(service.explication_ecart);
+  return explicationEcartReconciliation(service as ServiceCloud);
 }
 
 /** Identifie les transferts aboutis dont l'explication POS a changé depuis. */
@@ -32,7 +46,7 @@ export function servicesAvecExplicationARejouer(
   return transferts.flatMap((transfert) => {
     const service = servicesParId.get(transfert.service_id);
     if (!service) return [];
-    return normaliserExplicationEcart(service.explication_ecart)
+    return explicationEcartATransferer(service)
       !== normaliserExplicationEcart(transfert.explication_ecart_transferee)
       ? [transfert.service_id]
       : [];

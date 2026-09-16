@@ -51,7 +51,7 @@ export function TableauBord() {
           </div>
           {data.ecarts_par_caissier.length > 0 && (
             <div className="col-span-3">
-              <div className="mb-1 text-sm font-semibold text-doux">Écarts de caisse par caissier</div>
+              <div className="mb-1 text-sm font-semibold text-doux">Écarts réconciliés par caissier</div>
               {data.ecarts_par_caissier.map((e) => (
                 <div key={e.nom} className="flex justify-between text-sm">
                   <span>{e.nom} ({e.nb_services})</span>

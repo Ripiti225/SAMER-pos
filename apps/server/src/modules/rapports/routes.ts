@@ -311,7 +311,7 @@ export function routesRapports(app: FastifyInstance): void {
   /**
    * C3 — Tableau de bord PROPRIÉTAIRE (lecture LOCALE uniquement) : CA, tickets,
    * panier moyen, ventes par heure, top 10 plats, répartition par mode, écarts
-   * de caisse par caissier, sur le jour ou une période glissante 7/30 jours.
+   * réconciliés par caissier, sur le jour ou une période glissante 7/30 jours.
    */
   app.get('/api/rapports/tableau-bord', { preHandler: gardeProprio }, async (req) => {
     const q = (req.query as { periode?: string }).periode ?? 'jour';
@@ -322,7 +322,11 @@ export function routesRapports(app: FastifyInstance): void {
       topAnalytiqueDepuis(depuis),
       db.select({ mode: paiements.mode, total: sql<string>`SUM(${paiements.montant})` }).from(paiements)
         .where(gte(paiements.created_at, depuis)).groupBy(paiements.mode),
-      db.select({ nom: utilisateurs.nom_complet, ecart: sql<string>`SUM(${servicesCaisse.ecart})`, nb: sql<string>`COUNT(*)` })
+      db.select({
+        nom: utilisateurs.nom_complet,
+        ecart: sql<string>`SUM(COALESCE(${servicesCaisse.vente_totale} - ${servicesCaisse.total_systeme}, ${servicesCaisse.ecart}, 0))`,
+        nb: sql<string>`COUNT(*)`,
+      })
         .from(servicesCaisse).innerJoin(utilisateurs, eq(utilisateurs.id, servicesCaisse.caissier_id))
         .where(and(eq(servicesCaisse.statut, 'CLOTURE'), gte(servicesCaisse.ouvert_le, depuis)))
         .groupBy(utilisateurs.nom_complet),

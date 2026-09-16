@@ -28,6 +28,15 @@ interface VentesService {
 
 const nombre = (s: string) => Number(s || '0');
 
+/** Repli pour un ancien rapport Z figé avant l'ajout explicite de `diff`. */
+function ecartReconciliationRapport(rapport: RapportZ): number {
+  if (typeof rapport.diff === 'number' && Number.isFinite(rapport.diff)) return rapport.diff;
+  if (typeof rapport.vente_totale === 'number' && typeof rapport.total_systeme === 'number') {
+    return rapport.vente_totale - rapport.total_systeme;
+  }
+  return rapport.ecart;
+}
+
 /**
  * « J'ai fini » — assistant pas à pas (§15) : Compter → Réconcilier → Confirmer
  * → Ticket. Comptage à l'aveugle préservé : le caissier saisit tout SANS voir
@@ -107,6 +116,7 @@ export function Cloture() {
   // verrait un total différent de celui figé sur son ticket.
   const venteTotale = depenses.total + totalLivraisons + totalModes + offerts.total + nombre(espece) - fond;
   const especeValide = espece !== '' && nombre(espece) >= 0;
+  const ecartReconciliation = rapport ? ecartReconciliationRapport(rapport) : 0;
 
   const cloturer = async () => {
     setEnCours(true);
@@ -348,21 +358,23 @@ export function Cloture() {
             <h1 className="text-center text-2xl font-bold">Ticket de clôture</h1>
             <div className="text-center text-sm text-doux">{rapport.caissier} — {new Date(rapport.cloture_le).toLocaleString('fr-FR')}</div>
 
-            <div className={`rounded-xl p-4 text-center ${rapport.ecart !== 0 ? 'bg-alerte-tint' : 'bg-ok-tint'}`}>
-              <div className="text-sm text-doux">Écart de caisse (espèces)</div>
-              <div className="text-4xl font-black">{rapport.ecart > 0 ? '+' : ''}{formatFCFA(rapport.ecart)}</div>
-              <div className="mt-1 text-xs text-doux">Comptées {formatFCFA(rapport.especes_comptees)} / Théoriques {formatFCFA(rapport.especes_theorique)}</div>
+            <div className={`rounded-xl p-4 text-center ${ecartReconciliation !== 0 ? 'bg-alerte-tint' : 'bg-ok-tint'}`}>
+              <div className="text-sm text-doux">Écart réconcilié</div>
+              <div className="text-4xl font-black">{ecartReconciliation > 0 ? '+' : ''}{formatFCFA(ecartReconciliation)}</div>
+              <div className="mt-1 text-xs text-doux">
+                Vente réconciliée {formatFCFA(rapport.vente_totale)} / Système {formatFCFA(rapport.total_systeme)}
+              </div>
             </div>
 
-            {rapport.ecart !== 0 && (
+            {ecartReconciliation !== 0 && (
               <label className="block space-y-2">
-                <span className="text-sm font-bold text-alerte-txt">Expliquez cet écart *</span>
+                <span className="text-sm font-bold text-alerte-txt">Expliquez cet écart réconcilié *</span>
                 <textarea
                   className="champ min-h-24 w-full resize-y"
                   value={explicationEcart}
                   maxLength={500}
                   onChange={(e) => setExplicationEcart(e.target.value)}
-                  placeholder="Ex. : un billet de 1 000 F manque dans le tiroir…"
+                  placeholder="Ex. : un paiement n’a pas pu être retrouvé…"
                 />
                 <span className="block text-xs text-doux">
                   Cette explication sera affichée dans SamerTrackly sous l’écart de ce point.
@@ -372,6 +384,12 @@ export function Cloture() {
 
             <div className="space-y-1 text-sm">
               <Ligne libelle="Fond de caisse" valeur={formatFCFA(rapport.fond_de_caisse)} />
+              <Ligne libelle="Espèces comptées" valeur={formatFCFA(rapport.especes_comptees)} />
+              <Ligne libelle="Espèces théoriques" valeur={formatFCFA(rapport.especes_theorique)} />
+              <Ligne
+                libelle="Écart espèces (détail)"
+                valeur={`${rapport.ecart > 0 ? '+' : ''}${formatFCFA(rapport.ecart)}`}
+              />
               <Ligne libelle="Dépenses" valeur={formatFCFA(rapport.depenses)} />
               {PARTENAIRES_ORDRE.filter((p) => (rapport.livraisons[p] ?? 0) > 0).map((p) => (
                 <Ligne key={p} libelle={libellePartenaire(p)} valeur={formatFCFA(rapport.livraisons[p] ?? 0)} />
@@ -455,7 +473,7 @@ export function Cloture() {
             <button
               type="button"
               className="btn-accent w-full py-4 text-lg"
-              disabled={rapport.ecart !== 0 && explicationEcart.trim().length < 3}
+              disabled={ecartReconciliation !== 0 && explicationEcart.trim().length < 3}
               onClick={terminer}
             >
               Valider & terminer — se déconnecter

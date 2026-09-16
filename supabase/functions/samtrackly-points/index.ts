@@ -60,7 +60,7 @@ import {
 import {
   chargerServicesEnAttente,
   chargerToutesLesPages,
-  normaliserExplicationEcart,
+  explicationEcartATransferer,
   servicesAvecExplicationARejouer,
 } from '../_shared/samtrackly-selection.ts';
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -536,7 +536,7 @@ Deno.serve(async (req) => {
       const tousLesServicesClotures = await chargerToutesLesPages(async (debut, fin) => {
         const { data, error } = await admin
           .from('services_caisse')
-          .select('id, explication_ecart')
+          .select('id, explication_ecart, rapport_z')
           .eq('statut', 'CLOTURE')
           .order('id', { ascending: true })
           .range(debut, fin);
@@ -658,7 +658,7 @@ Deno.serve(async (req) => {
         // Vide plutôt que NULL : la vue de suivi distingue « aucune présence
         // écartée » d'un transfert antérieur à cette colonne.
         presences_ignorees: r.ignores,
-        explication_ecart_transferee: normaliserExplicationEcart(service.explication_ecart),
+        explication_ecart_transferee: explicationEcartATransferer(service),
         derniere_erreur: null,
         derniere_tentative: new Date().toISOString(),
       });

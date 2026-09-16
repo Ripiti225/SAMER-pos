@@ -628,7 +628,10 @@ export class EscposPrinter implements PrinterService {
         r.duo('Fond de caisse', formatFCFA(z.fond_de_caisse));
         r.duo('Especes comptees', formatFCFA(z.especes_comptees));
         r.duo('Especes theoriques', formatFCFA(z.especes_theorique));
-        r.gras(true).duo('ECART', formatFCFA(z.ecart)).gras(false);
+        r.duo('Ecart especes (detail)', formatFCFA(z.ecart));
+        r.duo('Vente reconciliee', formatFCFA(z.vente_totale));
+        r.duo('Total systeme', formatFCFA(z.total_systeme));
+        r.gras(true).duo('ECART RECONCILIE', formatFCFA(z.diff)).gras(false);
         // Kdo : comptés dans « Total ventes » plus haut, absents du tiroir. La
         // ligne explique l'écart apparent entre les deux.
         if (z.offerts?.total) {
@@ -812,7 +815,7 @@ export class EscposPrinter implements PrinterService {
           // sans cette ligne, le gérant verrait un manquant inexpliqué.
           if (sh.offerts?.total) r.duo(` Kdo offerts (${sh.offerts.nb})`, formatFCFA(sh.offerts.total));
           if (sh.monnaie_rendue) r.duo(' Monnaie rendue', formatFCFA(sh.monnaie_rendue));
-          r.gras(true).duo(' Ecart', formatFCFA(sh.ecart ?? 0)).gras(false);
+          r.gras(true).duo(' Ecart especes', formatFCFA(sh.ecart ?? 0)).gras(false);
         }
 
         r.tiret();

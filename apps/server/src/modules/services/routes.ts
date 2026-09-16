@@ -28,6 +28,21 @@ function vueService(s: typeof servicesCaisse.$inferSelect) {
   };
 }
 
+/**
+ * Seul l'écart GLOBAL après correction des modes de paiement représente une
+ * anomalie réelle. `services_caisse.ecart` reste l'écart espèces brut, utile
+ * pour comprendre le tiroir, mais une erreur espèces remise dans Wave ne doit
+ * ni demander d'explication ni devenir un litige.
+ */
+function ecartReconciliationService(s: typeof servicesCaisse.$inferSelect): number {
+  const z = (s.rapport_z ?? {}) as { diff?: unknown };
+  const diffRapport = Number(z.diff);
+  if (z.diff !== null && z.diff !== undefined && Number.isFinite(diffRapport)) return diffRapport;
+  if (s.vente_totale !== null && s.total_systeme !== null) return s.vente_totale - s.total_systeme;
+  // Compatibilité des très anciens rapports, antérieurs à la réconciliation.
+  return s.ecart ?? 0;
+}
+
 /** Shifts actuellement OUVERTS, avec le nom du caissier (un seul attendu). */
 async function servicesOuverts(): Promise<{ id: string; caissier_id: string; caissier: string; ouvert_le: Date }[]> {
   const lignes = await db
@@ -233,13 +248,14 @@ export function routesServices(app: FastifyInstance): void {
       if (!service) return;
 
       const explication = corps.explication_ecart?.trim() || null;
-      if (service.ecart !== null && service.ecart !== 0 && !explication) {
-        throw new ErreurMetier('Expliquez l’écart de caisse avant de terminer', 400);
+      const ecartReconciliation = ecartReconciliationService(service);
+      if (ecartReconciliation !== 0 && !explication) {
+        throw new ErreurMetier('Expliquez l’écart réconcilié avant de terminer', 400);
       }
 
       const [maj] = await tx
         .update(servicesCaisse)
-        .set({ remis_le: new Date(), explication_ecart: service.ecart === 0 ? null : explication })
+        .set({ remis_le: new Date(), explication_ecart: ecartReconciliation === 0 ? null : explication })
         .where(eq(servicesCaisse.id, service.id))
         .returning();
       await ecrireOutbox(tx, 'services_caisse', 'UPDATE', service.id, maj as unknown as Record<string, unknown>);
@@ -249,8 +265,9 @@ export function routesServices(app: FastifyInstance): void {
           action: 'EXPLICATION_ECART_CAISSE',
           entite: 'services_caisse',
           entite_id: service.id,
-          montant: service.ecart,
+          montant: ecartReconciliation,
           motif: explication,
+          meta: { ecart_especes: service.ecart },
         });
       }
     });
@@ -543,23 +560,30 @@ export function routesServices(app: FastifyInstance): void {
         entite: 'services_caisse',
         entite_id: service.id,
         montant: stats.total_ventes,
-        meta: { ecart, especes_comptees: corps.especes_comptees },
+        meta: { ecart_reconciliation: diff, ecart_especes: ecart, especes_comptees: corps.especes_comptees },
       });
 
-      // Écart au-delà du seuil → audit ECART_CAISSE (notification manager en sprint 1)
+      // Seul l'écart RÉCONCILIÉ ouvre une anomalie. L'écart espèces reste dans
+      // le rapport comme détail : s'il est compensé par Wave/OM/etc., le point
+      // est juste et il n'existe aucun litige à notifier au manager.
       const [param] = await tx
         .select()
         .from(parametresLocaux)
         .where(eq(parametresLocaux.cle, 'seuil_alerte_ecart_caisse'));
       const seuil = typeof param?.valeur === 'number' ? param.valeur : 2000;
-      if (Math.abs(ecart) > seuil) {
+      if (Math.abs(diff) > seuil) {
         await journaliser(tx, {
           user_id: caissierId,
           action: 'ECART_CAISSE',
           entite: 'services_caisse',
           entite_id: service.id,
-          montant: ecart,
-          meta: { seuil, especes_comptees: corps.especes_comptees, especes_theorique: especesTheorique },
+          montant: diff,
+          meta: {
+            seuil,
+            ecart_especes: ecart,
+            especes_comptees: corps.especes_comptees,
+            especes_theorique: especesTheorique,
+          },
         });
       }
 

@@ -66,9 +66,9 @@ export const CloturerServiceSchema = z.object({
   modes: z.record(z.string(), MontantPositif).default({}),
 });
 
-/** Accusé final du ticket. Un écart non nul rend l'explication obligatoire côté serveur. */
+/** Accusé final du ticket. Un écart réconcilié non nul exige une explication. */
 export const RemettreClotureSchema = z.object({
-  explication_ecart: z.string().trim().min(3, 'Expliquez l’écart de caisse avant de terminer').max(500).optional(),
+  explication_ecart: z.string().trim().min(3, 'Expliquez l’écart réconcilié avant de terminer').max(500).optional(),
 });
 
 /**
@@ -342,11 +342,24 @@ export const DemanderAdditionSchema = z.object({
 // CORRECTIONS3 — circuit client ↔ serveur
 // ---------------------------------------------------------------------------
 
+/** Position transmise par le navigateur ; la distance est toujours recalculée côté serveur. */
+export const LocalisationClientSchema = z.object({
+  latitude: z.number().min(-90, 'Latitude invalide').max(90, 'Latitude invalide'),
+  longitude: z.number().min(-180, 'Longitude invalide').max(180, 'Longitude invalide'),
+  precision_metres: z.number().nonnegative('Précision invalide').max(10000, 'Précision invalide'),
+});
+
+/** Création ou reprise de la visite anonyme d'un onglet client. */
+export const VisiteClientSchema = z.object({
+  localisation: LocalisationClientSchema.optional(),
+});
+
 /** Appel client (téléphone via QR) : appeler le serveur ou demander la facture. */
 export const AppelClientSchema = z.object({
   type: z.enum(['APPEL_SERVEUR', 'DEMANDE_FACTURE'], {
     errorMap: () => ({ message: 'Type d’appel invalide' }),
   }),
+  localisation: LocalisationClientSchema.optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -362,6 +375,7 @@ export const TelephoneFideliteSchema = z
 /** Proposition de commande depuis le téléphone client (jamais envoyée en cuisine directement). */
 export const CommandeClientSchema = z.object({
   items: z.array(AjouterItemSchema).min(1, 'Ajoutez au moins un article'),
+  localisation: LocalisationClientSchema.optional(),
   /**
    * Téléphone FACULTATIF : on le demande toujours, on ne bloque jamais la
    * commande. Un champ laissé vide vaut « pas de numéro » — le client perd ses
@@ -460,10 +474,11 @@ export const MajDisponibiliteSchema = z.object({
   disponibilite: z.enum(['PRESENT', 'MALADE', 'CONGE', 'PERMISSION']),
 });
 
-/** Configuration de l'identité du restaurant (choix depuis SamerTrackly). */
-export const ConfigRestaurantSchema = z.object({
-  samtrackly_restaurant_id: z.string().uuid('Restaurant invalide'),
-});
+/** Configuration du restaurant : identité SamerTrackly ou profil local complet. */
+export const ConfigRestaurantSchema = z.union([
+  z.object({ samtrackly_restaurant_id: z.string().uuid('Restaurant invalide') }),
+  z.object({ profil_code: z.literal('ALA_BRAISE') }),
+]);
 
 /** Pose du PIN par l'employé (code temporaire à usage unique + PIN choisi deux fois). */
 export const PoserPinSchema = z

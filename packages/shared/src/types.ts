@@ -252,6 +252,7 @@ export interface TableClientVue {
   zone_nom: string;
   restaurant: { nom: string; marque: 'SAMER' | 'AL_KAYAN' | 'A_LA_BRAISE'; couleur_hex: string };
   etat: import('./constantes.js').EtatTable;
+  geolocalisation: { requise: boolean; rayon_metres: number };
 }
 
 export interface CommandeItemVue {
@@ -398,6 +399,7 @@ export interface RapportZ {
   fond_de_caisse: number;
   especes_comptees: number;
   especes_theorique: number;
+  /** Écart espèces brut : comptées − théoriques, conservé comme diagnostic. */
   ecart: number;
   nb_commandes_payees: number;
   nb_commandes_annulees: number;
@@ -441,6 +443,7 @@ export interface RapportZ {
   modes_declares: Record<string, number>;
   vente_totale: number;
   total_systeme: number;
+  /** Écart réconcilié final : seul écart à expliquer, auditer et imputer. */
   diff: number;
   /**
    * Bloc Inventaire du ticket Z (DESIGN_V2 § 6.10) : conforme, ou nombre de
