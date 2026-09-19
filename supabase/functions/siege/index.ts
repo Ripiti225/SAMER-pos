@@ -351,7 +351,47 @@ Deno.serve(async (req) => {
           .maybeSingle();
         if (error) throw new Error('Lecture du rapport impossible');
         if (!data) return jsonCors({ erreur: 'Clôture introuvable' }, 404);
-        return jsonCors({ cloture: data });
+
+        // Les anciens rapports Z ne contiennent que le total des dépenses.
+        // Les lignes ont toutefois été synchronisées dans `depenses` : on les
+        // relit ici pour que les clôtures historiques affichent le même détail
+        // que les nouvelles, sans modifier le snapshot financier figé.
+        const { data: lignesDepenses, error: erreurDepenses } = await admin
+          .from('depenses')
+          .select('categorie, libelle, montant, agent_id, motif, created_at')
+          .eq('restaurant_id', restaurantId)
+          .eq('service_id', serviceId)
+          .eq('supprime', false)
+          .order('created_at', { ascending: true });
+        if (erreurDepenses) throw new Error('Lecture des dépenses impossible');
+
+        const agents = [...new Set(
+          (lignesDepenses ?? [])
+            .map((ligne) => ligne.agent_id)
+            .filter((id): id is string => typeof id === 'string' && id.length > 0),
+        )];
+        const { data: utilisateurs, error: erreurUtilisateurs } = agents.length > 0
+          ? await admin
+            .from('utilisateurs_site')
+            .select('id, nom_complet')
+            .eq('restaurant_id', restaurantId)
+            .in('id', agents)
+          : { data: [], error: null };
+        if (erreurUtilisateurs) throw new Error('Lecture des bénéficiaires impossible');
+
+        const noms = new Map((utilisateurs ?? []).map((utilisateur) => [utilisateur.id, utilisateur.nom_complet]));
+        const depensesDetail = (lignesDepenses ?? []).map((ligne) => ({
+          categorie: ligne.categorie,
+          libelle: ligne.libelle,
+          montant: ligne.montant,
+          agent_nom: ligne.agent_id ? noms.get(ligne.agent_id) ?? null : null,
+          motif: ligne.motif,
+        }));
+        const rapport = data.rapport_z && typeof data.rapport_z === 'object'
+          ? { ...(data.rapport_z as Record<string, unknown>), depenses_detail: depensesDetail }
+          : data.rapport_z;
+
+        return jsonCors({ cloture: { ...data, rapport_z: rapport } });
       }
 
       // -- Explications d'écart d'inventaire : SamerTrackly reste la source

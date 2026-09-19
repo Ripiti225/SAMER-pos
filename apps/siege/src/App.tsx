@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { IconLogout, IconMoon, IconSun } from '@tabler/icons-react';
+import { IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand, IconLogout, IconMoon, IconSun } from '@tabler/icons-react';
 import { appelSiege, ErreurSiege, type Siege } from './api';
 import { modeInitial, poserMode, type Mode } from './affichage';
 import type { FiltreResto } from './restaurants';
@@ -35,6 +35,7 @@ export function App() {
   const [refus, setRefus] = useState<string | null>(null);
   const [ecran, setEcran] = useState<Ecran>('tableau-bord');
   const [mode, setMode] = useState<Mode>(modeInitial);
+  const [barreRetractee, setBarreRetractee] = useState(false);
   /**
    * Filtre restaurant, tenu ICI et non dans chaque écran : il est commun à tous
    * les onglets et doit SURVIVRE au changement d'onglet — on suit un restaurant
@@ -110,10 +111,21 @@ export function App() {
     <div className="flex h-full flex-col">
       {/* ---------- Barre ardoise (DESIGN_V2 § 6.12) ---------- */}
       <header className="flex h-[62px] flex-none items-center justify-between border-b border-ard-700 bg-ard-900 px-4 text-ard-txt">
-        <div className="min-w-0">
-          <div className="truncate text-[17px] font-semibold tracking-tight">Console du siège</div>
-          <div className="truncate text-[12.5px] font-medium text-ard-txt-doux">
-            {siege.nomComplet} · {siege.niveau === 'ADMIN' ? 'Administrateur' : 'Lecture seule'}
+        <div className="flex min-w-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setBarreRetractee((retractee) => !retractee)}
+            title={barreRetractee ? 'Déployer la barre de navigation' : 'Rétracter la barre de navigation'}
+            aria-label={barreRetractee ? 'Déployer la barre de navigation' : 'Rétracter la barre de navigation'}
+            className="flex h-10 w-10 flex-none items-center justify-center rounded-btn text-ard-txt-doux transition hover:bg-ard-750 hover:text-ard-txt"
+          >
+            {barreRetractee ? <IconLayoutSidebarLeftExpand size={19} /> : <IconLayoutSidebarLeftCollapse size={19} />}
+          </button>
+          <div className="min-w-0">
+            <div className="truncate text-[17px] font-semibold tracking-tight">Console du siège</div>
+            <div className="truncate text-[12.5px] font-medium text-ard-txt-doux">
+              {siege.nomComplet} · {siege.niveau === 'ADMIN' ? 'Administrateur' : 'Lecture seule'}
+            </div>
           </div>
         </div>
         <div className="flex flex-none items-center gap-2">
@@ -136,9 +148,9 @@ export function App() {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[214px_1fr]">
+      <div className={`grid min-h-0 flex-1 ${barreRetractee ? 'grid-cols-[64px_1fr]' : 'grid-cols-[214px_1fr]'}`}>
         {/* Colonne des écrans, en ardoise — même ossature que la caisse. */}
-        <nav className="flex flex-col overflow-y-auto border-r border-ard-700 bg-ard-800 p-2.5">
+        <nav className={`flex flex-col overflow-y-auto border-r border-ard-700 bg-ard-800 p-2.5 ${barreRetractee ? 'items-center' : ''}`}>
           {SECTIONS.map((s) => {
             const actif = s.cle === ecran;
             return (
@@ -146,12 +158,15 @@ export function App() {
                 key={s.cle}
                 type="button"
                 onClick={() => setEcran(s.cle)}
-                className={`relative flex w-full items-center rounded-btn py-3 pl-3.5 pr-3 text-left text-[14.5px] font-semibold leading-tight transition ${
+                title={barreRetractee ? s.libelle : undefined}
+                className={`relative flex items-center rounded-btn py-3 text-left text-[14.5px] font-semibold leading-tight transition ${
+                  barreRetractee ? 'w-10 justify-center px-0' : 'w-full pl-3.5 pr-3'
+                } ${
                   actif ? 'bg-ard-700 text-ard-txt' : 'text-ard-txt-doux hover:bg-ard-750 hover:text-ard-txt'
                 }`}
               >
                 {actif && <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-marque" />}
-                <span className="truncate">{s.libelle}</span>
+                {!barreRetractee && <span className="truncate">{s.libelle}</span>}
               </button>
             );
           })}

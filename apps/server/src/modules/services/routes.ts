@@ -464,6 +464,17 @@ export function routesServices(app: FastifyInstance): void {
        * et un total saisi à la main pouvait diverger de ses propres lignes.
        */
       const montantDepenses = await totalDepenses(tx, service.id);
+      const depensesDetail = await tx
+        .select({
+          categorie: depenses.categorie,
+          libelle: depenses.libelle,
+          montant: depenses.montant,
+          agent_nom: utilisateurs.nom_complet,
+          motif: depenses.motif,
+        })
+        .from(depenses)
+        .leftJoin(utilisateurs, eq(utilisateurs.id, depenses.agent_id))
+        .where(eq(depenses.service_id, service.id));
       // Théorique = fond + espèces encaissées (HORS livraisons externes) − les
       // dépenses payées en espèces depuis le tiroir. L'argent du tiroir est
       // fongible : une dépense sort du tiroir (fond ou recette), donc sans la
@@ -516,6 +527,7 @@ export function routesServices(app: FastifyInstance): void {
         especes_theorique: especesTheorique,
         ecart,
         depenses: montantDepenses,
+        depenses_detail: depensesDetail,
         livraisons,
         offerts,
         modes_declares: modesDeclares,

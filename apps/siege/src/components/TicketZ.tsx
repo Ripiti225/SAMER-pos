@@ -102,6 +102,7 @@ export function TicketZ({
   const inventaire = rapport.inventaire;
   const equipe = rapport.equipe;
   const offerts = rapport.offerts;
+  const depensesDetail = rapport.depenses_detail ?? [];
 
   const autres = Object.entries(rapport).filter(([k]) => !CONNUS.has(k));
 
@@ -171,6 +172,37 @@ export function TicketZ({
           <LigneF libelle="Promotions automatiques" montant={nb(rapport.total_promos)} />
           <LigneF libelle="Fidélité" montant={nb(rapport.total_fidelite)} />
           <Ligne libelle="Commandes annulées" valeur={nb(rapport.nb_commandes_annulees).toLocaleString('fr-FR')} zero={nb(rapport.nb_commandes_annulees) === 0} />
+        </Bloc>
+
+        <Bloc titre="Dépenses du caissier" large>
+          {depensesDetail.length === 0 ? (
+            <p className="text-faible">
+              {nb(rapport.depenses) > 0
+                ? 'Ce ticket ancien ne contient que le total des dépenses.'
+                : 'Aucune dépense enregistrée pour ce service.'}
+            </p>
+          ) : (
+            <>
+              <div className="space-y-1">
+                {depensesDetail.map((depense, index) => (
+                  <div key={`${depense.categorie}-${depense.libelle}-${index}`} className="flex items-start justify-between gap-4 border-b border-filet py-2 last:border-0">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-fort">{depense.libelle}</div>
+                      <div className="text-xs text-doux">
+                        {depense.categorie}
+                        {depense.agent_nom ? ` · pour ${depense.agent_nom}` : ''}
+                        {depense.motif ? ` · ${depense.motif}` : ''}
+                      </div>
+                    </div>
+                    <span className="chiffres whitespace-nowrap">{formatFCFA(nb(depense.montant))}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 border-t border-filet pt-2">
+                <LigneF libelle="Total dépenses du service" montant={nb(rapport.depenses)} fort />
+              </div>
+            </>
+          )}
         </Bloc>
 
         {/* TOUS les modes, zéros compris : « personne n'a payé par Wave » est une

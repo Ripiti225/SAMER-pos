@@ -425,6 +425,14 @@ export interface RapportZ {
   annulations_detail: { numero_ticket: number; total: number }[];
   // Réconciliation de fermeture (déclarés par le caissier + calculés).
   depenses: number;
+  /** Lignes de dépenses figées à la clôture, pour le détail par service/caissier. */
+  depenses_detail?: {
+    categorie: string;
+    libelle: string;
+    montant: number;
+    agent_nom: string | null;
+    motif: string | null;
+  }[];
   livraisons: Record<string, number>;
   /**
    * Kdo : valeur des repas offerts du shift. Comptée dans `vente_totale` au

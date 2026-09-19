@@ -23,3 +23,6 @@ graphify-out/
 
 # Binaires electron-builder : 340 Mo en local, au-dessus de la limite GitHub.
 apps/desktop/release/
+.vercel
+.env*
+.vscode/
