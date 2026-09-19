@@ -15,16 +15,13 @@ interface CategorieCloud {
  * Onglet Catégories — créer une catégorie et la diffuser vers un ou plusieurs
  * restaurants.
  *
- * **Pourquoi cet écran existe** : le catalogue ne voyage que vers le bas. Le
- * cloud est maître, les sites ne publient ni leurs catégories ni leurs articles.
- * Un site dont le catalogue a été importé en local est donc INVISIBLE d'ici — et
- * sans catégorie côté cloud, l'onglet Menu n'a rien à quoi rattacher un article.
+ * **Pourquoi cet écran existe** : après la publication ponctuelle du catalogue
+ * historique de chaque site, les changements courants ne voyagent que vers le
+ * bas. Le cloud reste maître de tout ce qui est créé ensuite au siège.
  *
- * **Ce que la console ne peut PAS faire pour vous** : vérifier qu'une catégorie
- * du même nom n'existe pas déjà sur le site. Elle ne la voit pas, et
- * `categories.nom` n'est pas unique côté caisse : créer « Pizzas » sur un site
- * qui en a déjà une lui en donnera deux. L'écran le dit, il ne peut pas
- * l'empêcher.
+ * Le rattrapage rapproche les catégories par leur nom normalisé avant de créer
+ * quoi que ce soit : une ancienne « Pizzas » et une « PIZZAS » déjà créée au
+ * siège restent une seule catégorie.
  */
 export function Categories({ filtre }: { filtre: FiltreResto; onFiltre: (v: FiltreResto) => void }) {
   const qc = useQueryClient();
@@ -118,8 +115,8 @@ export function Categories({ filtre }: { filtre: FiltreResto; onFiltre: (v: Filt
               </div>
             )}
             <p className="mt-2 text-xs text-faible">
-              Cette liste est celle du <b>cloud</b>, pas celle des caisses. Un site dont le catalogue a été importé
-              en local n’a rien publié ici : il peut avoir vingt catégories et apparaître vide.
+              Cette liste est celle du <b>cloud</b>. Au premier démarrage synchronisé d’une caisse mise à jour,
+              son ancien catalogue y est publié une seule fois, sans écraser les fiches déjà corrigées au siège.
             </p>
           </div>
 

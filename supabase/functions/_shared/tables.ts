@@ -2,6 +2,10 @@
 // descente (catalogue). Toute colonne absente du payload est ignorée.
 
 export const COLONNES_VENTES: Record<string, string[]> = {
+  // Publication PONCTUELLE du catalogue déjà présent sur une caisse lors de
+  // l'activation de la console siège. Ce paquet est traité spécialement par
+  // sync-push : il ne transforme pas le catalogue en flux montant permanent.
+  catalogue_historique: ['id', 'categories', 'articles'],
   commandes: [
     'id', 'numero_ticket', 'type', 'table_id', 'partenaire', 'ref_partenaire',
     'service_id', 'caissier_id', 'serveur_id', 'statut', 'origine', 'refus_motif',

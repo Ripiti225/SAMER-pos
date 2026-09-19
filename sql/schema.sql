@@ -278,6 +278,20 @@ CREATE TABLE appels_table (
 CREATE UNIQUE INDEX un_appel_en_attente_par_table_type
   ON appels_table (table_id, type) WHERE statut = 'EN_ATTENTE';
 
+-- Une visite QR identifie un téléphone/onglet, jamais la table entière. Le QR
+-- collé reste permanent ; cet UUID temporaire borne les commandes et reçus que
+-- le client a le droit de consulter.
+CREATE TABLE visites_qr (
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  table_id              UUID NOT NULL REFERENCES tables_salle(id) ON DELETE CASCADE,
+  cree_le               TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expire_le             TIMESTAMPTZ NOT NULL,
+  derniere_activite_le  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  distance_metres       INTEGER,
+  precision_metres      INTEGER
+);
+CREATE INDEX idx_visites_qr_table_expire ON visites_qr (table_id, expire_le);
+
 -- ============================================================================
 -- 4. SERVICES CAISSE / SHIFTS (§5.7, §14.3)
 -- ============================================================================
@@ -372,6 +386,7 @@ CREATE TABLE commandes (
   code_commande  TEXT,
   type           type_commande NOT NULL,
   table_id       UUID REFERENCES tables_salle(id),
+  visite_qr_id   UUID REFERENCES visites_qr(id),
   partenaire     TEXT,                              -- YANGO/GLOVO/SAMER_DELLY si livraison
   ref_partenaire TEXT,                              -- n° de commande côté partenaire
   contact_client TEXT,                              -- téléphone du client livré (saisi à l'envoi en cuisine)
@@ -411,6 +426,7 @@ CREATE TABLE commandes (
 );
 CREATE INDEX idx_commandes_service ON commandes (service_id);
 CREATE INDEX idx_commandes_jour ON commandes (created_at);
+CREATE INDEX idx_commandes_visite_qr ON commandes (visite_qr_id);
 -- Code court unique dans un même service (retry serveur en cas de collision).
 CREATE UNIQUE INDEX uniq_code_commande_service
   ON commandes (service_id, code_commande) WHERE code_commande IS NOT NULL;

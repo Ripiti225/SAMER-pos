@@ -41,6 +41,18 @@ describe('paramètres du restaurant (2.6)', () => {
     expect(seuil!.valeur).toBe(2000);
   });
 
+  it('propose la géolocalisation QR désactivée avec un rayon de 50 mètres', async () => {
+    const rep = await app.inject({ method: 'GET', url: '/api/admin/parametres', cookies: cookiesManager });
+    expect(rep.statusCode).toBe(200);
+    const params = new Map(
+      (rep.json() as Array<{ cle: string; valeur: unknown }>).map((p) => [p.cle, p.valeur]),
+    );
+    expect(params.get('client_qr_geolocalisation_activee')).toBe(false);
+    expect(params.get('client_qr_latitude')).toBe(0);
+    expect(params.get('client_qr_longitude')).toBe(0);
+    expect(params.get('client_qr_rayon_metres')).toBe(50);
+  });
+
   it('modifie un paramètre (effet immédiat + audit)', async () => {
     const rep = await app.inject({
       method: 'PATCH',

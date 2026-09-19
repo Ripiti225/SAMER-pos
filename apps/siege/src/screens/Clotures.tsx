@@ -71,14 +71,17 @@ export function Clotures({ filtre, onFiltre }: { filtre: FiltreResto; onFiltre: 
                 <th className="px-4 py-3 text-right font-semibold">Fond</th>
                 <th className="px-4 py-3 text-right font-semibold">Compté</th>
                 <th className="px-4 py-3 text-right font-semibold">Théorique</th>
-                <th className="px-4 py-3 text-right font-semibold">Écart</th>
+                <th className="px-4 py-3 text-right font-semibold">Écart espèces</th>
+                <th className="px-4 py-3 text-right font-semibold">Écart réconc.</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody>
               {lignes.map((c) => {
                 const r = nomResto.get(c.restaurant_id);
-                const ecart = c.ecart;
+                // Repli temporaire tant que la migration cloud n'est pas
+                // encore appliquée sur un environnement ancien.
+                const ecart = c.ecart_reconciliation ?? c.ecart;
                 // Au-delà du seuil, le POS écrit déjà une entrée d'audit
                 // ECART_CAISSE : la console montre le même seuil, pas un autre.
                 const grave = ecart !== null && Math.abs(ecart) > SEUIL_ECART;
@@ -108,6 +111,15 @@ export function Clotures({ filtre, onFiltre }: { filtre: FiltreResto; onFiltre: 
                       {c.especes_theorique === null ? '—' : formatFCFA(c.especes_theorique)}
                     </td>
                     <td className="px-4 py-3 text-right">
+                      {c.ecart === null ? (
+                        <span className="text-doux">—</span>
+                      ) : (
+                        <span className="chiffres text-doux">
+                          {c.ecart > 0 ? '+' : ''}{formatFCFA(c.ecart)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
                       {ecart === null ? (
                         <span className="text-doux">—</span>
                       ) : (
@@ -133,7 +145,7 @@ export function Clotures({ filtre, onFiltre }: { filtre: FiltreResto; onFiltre: 
               })}
               {lignes.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-6 text-center text-doux">
+                  <td colSpan={9} className="px-4 py-6 text-center text-doux">
                     {choisi ? `Aucune clôture pour ${choisi.nom} sur cette période.` : 'Aucune clôture sur cette période.'}
                   </td>
                 </tr>

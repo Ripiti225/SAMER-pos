@@ -88,6 +88,12 @@ export async function seed(): Promise<void> {
     // Vide = le serveur détecte l'IP LAN automatiquement (joignable depuis un
     // téléphone). On ne renseigne ici que pour figer un domaine/IP en prod.
     { cle: 'url_base_client', valeur: '' },
+    // Contrôle de proximité des QR clients. Désactivé tant que l'installateur
+    // n'a pas enregistré la position exacte du restaurant dans Réglages.
+    { cle: 'client_qr_geolocalisation_activee', valeur: false },
+    { cle: 'client_qr_latitude', valeur: 0 },
+    { cle: 'client_qr_longitude', valeur: 0 },
+    { cle: 'client_qr_rayon_metres', valeur: 50 },
     // SamerTrackly : PAS de restaurant par défaut. L'image de déploiement est
     // copiée telle quelle (même `data/pgdata`) sur tous les postes : un id seedé
     // ici ferait descendre l'équipe de CE restaurant-là sur TOUS les sites.

@@ -86,7 +86,7 @@ Tout ce qui existe déjà au moment de l'enrôlement n'a donc jamais été publi
 |---|---|---|
 | Rôles et permissions | migrations SQL `0006`, `0024` (`INSERT INTO roles …`) | **non** — une migration n'écrit pas dans l'outbox |
 | Zones et tables de salle | seed / installation, avant l'enrôlement | **non** — et un plan de salle ne change presque jamais ensuite |
-| Catalogue (catégories, articles) | `pnpm catalogue:importer`, en local | **non** — et par conception : le catalogue ne remonte jamais |
+| Catalogue (catégories, articles) | `pnpm catalogue:importer`, en local | **une fois** au premier démarrage synchronisé après mise à jour ; ensuite le cloud reste maître et le flux ne va que vers les caisses |
 | Ventes, clôtures, dépenses | à l'usage, après l'enrôlement | oui |
 
 `pnpm roles:republier` remet tous les rôles et leurs permissions dans l'outbox

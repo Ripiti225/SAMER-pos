@@ -11,6 +11,7 @@ import {
   JETON_KDS,
   PIN_CAISSIER,
   PIN_SERVEUR,
+  creerVisiteQr,
   resetDonnees,
   seConnecter,
   type Donnees,
@@ -20,6 +21,7 @@ let app: FastifyInstance;
 let donnees: Donnees;
 let cookiesServeur: Record<string, string>;
 let cookiesCaissier: Record<string, string>;
+let visiteClient: Record<string, string>;
 
 const kds = { 'x-jeton-kds': JETON_KDS };
 
@@ -53,6 +55,7 @@ beforeAll(async () => {
   app = await construireApp();
   cookiesServeur = await seConnecter(app, donnees.serveur_id, PIN_SERVEUR);
   cookiesCaissier = await seConnecter(app, donnees.caissier_id, PIN_CAISSIER);
+  visiteClient = await creerVisiteQr(app, donnees.table_qr);
   await app.inject({ method: 'POST', url: '/api/services/ouvrir', cookies: cookiesCaissier, payload: { fond_de_caisse: 25000 } });
 });
 
@@ -70,6 +73,7 @@ describe('état dérivé identique sur caisse / serveur / client', () => {
     await app.inject({
       method: 'POST',
       url: `/api/client/${donnees.table_qr}/commande`,
+      headers: visiteClient,
       payload: { items: [{ article_id: donnees.article_id, quantite: 1, options: [], supplements: [] }] },
     });
     expect(await memeEtatPartout()).toBe('COMMANDE_CLIENT_A_VALIDER');
@@ -96,6 +100,7 @@ describe('état dérivé identique sur caisse / serveur / client', () => {
     await app.inject({
       method: 'POST',
       url: `/api/client/${donnees.table_qr}/appel`,
+      headers: visiteClient,
       payload: { type: 'APPEL_SERVEUR' },
     });
     const caisse = await etatCaisse(donnees.table_id);

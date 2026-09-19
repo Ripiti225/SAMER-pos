@@ -11,6 +11,7 @@ import { tirerCatalogue } from './descente.js';
 import { executerOrdre, type EffetsOrdre } from './ordres.js';
 import { hier, reconcilierJour } from './reconcile.js';
 import { etatSync } from './etat.js';
+import { preparerRattrapageCatalogueHistorique } from './catalogue-historique.js';
 
 export class MoteurSync {
   private client: ClientCloud | null = null;
@@ -43,6 +44,16 @@ export class MoteurSync {
     if (!cfg.actif || !cfg.url || !cfg.cleSite) {
       console.log('Synchro cloud désactivée (SUPABASE_SYNC_URL / CLE_SITE manquants).');
       return;
+    }
+    const rattrapage = await preparerRattrapageCatalogueHistorique().catch((e) => {
+      console.error('Préparation du catalogue historique :', e);
+      return null;
+    });
+    if (rattrapage?.prepare) {
+      console.log(
+        `Catalogue historique préparé : ${rattrapage.categories} catégorie(s), ` +
+          `${rattrapage.articles} article(s).`,
+      );
     }
     this.client = new ClientCloud(cfg.url, cfg.cleSite);
     etatSync.majEnAttente(await compterEnAttente().catch(() => 0));

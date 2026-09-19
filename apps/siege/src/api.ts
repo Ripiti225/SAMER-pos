@@ -164,7 +164,58 @@ export interface Cloture {
   fond_de_caisse: number;
   especes_comptees: number | null;
   especes_theorique: number | null;
+  /** Écart espèces brut, conservé comme détail du tiroir. */
   ecart: number | null;
+  /** Écart global après correction des modes de paiement — anomalie réelle. */
+  ecart_reconciliation?: number | null;
+}
+
+export type StatutExplicationInventaire = 'en_attente' | 'validee' | 'refusee';
+
+/** Une réception de stock d'une journée, quelle que soit son origine. */
+export interface EntreeInventaireSiege {
+  entree_id: string;
+  inventaire_id: string;
+  restaurant_id: string;
+  restaurant_nom: string;
+  date: string;
+  type_shift: string;
+  caissier_id: string | null;
+  caissier_nom: string;
+  produit_code: string;
+  produit_nom: string;
+  quantite: number;
+  fournisseur_nom: string | null;
+  origine: 'POS' | 'SAMERTRACKLY';
+  saisie_le: string | null;
+}
+
+/** Une explication d'écart POS telle que SamerTrackly la conserve. */
+export interface ExplicationInventaireSiege {
+  ligne_id: string;
+  inventaire_id: string;
+  point_id: string;
+  pos_service_id: string;
+  restaurant_id: string;
+  restaurant_nom: string;
+  date: string;
+  type_shift: string;
+  heure_debut: string | null;
+  heure_fin: string | null;
+  caissier_id: string | null;
+  caissier_nom: string;
+  produit_code: string;
+  produit_nom: string;
+  stock_theorique: number;
+  stock_compte: number | null;
+  ecart: number | null;
+  quantite_expliquee: number;
+  explication: string | null;
+  montant_deduit: number;
+  statut: StatutExplicationInventaire;
+  quantite_acceptee: number | null;
+  decidee_par: string | null;
+  decidee_le: string | null;
 }
 
 export interface Employe {

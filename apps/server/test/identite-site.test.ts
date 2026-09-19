@@ -7,7 +7,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { construireApp } from '../src/app.js';
 import { db, fermerDb } from '../src/db/client.js';
 import { parametresLocaux, restaurant } from '../src/db/schema/index.js';
@@ -65,6 +65,22 @@ afterAll(async () => {
 });
 
 describe('identité de site (déploiement multi-restaurants)', () => {
+  it('propose le profil local À la Braise dans la liste de configuration', async () => {
+    const rep = await app.inject({
+      method: 'GET',
+      url: '/api/admin/restaurant/config',
+      cookies,
+    });
+
+    expect(rep.statusCode, rep.body).toBe(200);
+    expect(rep.json().restaurants).toContainEqual({
+      id: 'profil:ALA_BRAISE',
+      nom: 'À la Braise',
+      couleur: '#D99A2B',
+      source: 'PROFIL_LOCAL',
+    });
+  });
+
   it('la première configuration donne un identifiant NEUF et invalide l’enrôlement cloud', async () => {
     // Le poste sort de l'image master : id commun à tous les sites + clé de
     // site éventuellement héritée d'un enrôlement précédent.
@@ -109,5 +125,23 @@ describe('identité de site (déploiement multi-restaurants)', () => {
     const r = await synchroniserEquipe(null);
     expect(r.saute).toBe(true);
     expect(r.total).toBe(0);
+  });
+
+  it('applique le profil local À la Braise depuis le même écran', async () => {
+    donnees = await resetDonnees();
+    await db.execute(sql`UPDATE restaurant SET code = 'A_CONFIGURER', nom = 'Restaurant à configurer'`);
+    cookies = await seConnecter(app, donnees.proprio_id, PIN_PROPRIO);
+
+    const rep = await app.inject({
+      method: 'POST',
+      url: '/api/admin/restaurant/config',
+      cookies,
+      payload: { profil_code: 'ALA_BRAISE' },
+    });
+
+    expect(rep.statusCode, rep.body).toBe(200);
+    expect(rep.json()).toMatchObject({ code: 'ALA_BRAISE', nom: 'À la Braise' });
+    const [identite] = await db.select().from(restaurant).limit(1);
+    expect(identite).toMatchObject({ code: 'ALA_BRAISE', nom: 'À la Braise', marque: 'A_LA_BRAISE' });
   });
 });

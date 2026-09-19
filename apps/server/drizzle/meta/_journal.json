@@ -232,6 +232,13 @@
       "when": 1788520000000,
       "tag": "0032_disponibilite_horaire",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1789430000000,
+      "tag": "0033_visites_qr",
+      "breakpoints": true
     }
   ]
 }

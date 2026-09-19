@@ -9,11 +9,13 @@
  * Sécurité : toutes ces routes sont ouvertes (pas de session), mais bornées à
  * la table du qr_token — un jeton ne voit et ne touche QUE sa propre table.
  */
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { and, desc, eq, gt, gte, inArray, or, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import {
   AppelClientSchema,
   CommandeClientSchema,
+  VisiteClientSchema,
   type CatalogueVue,
   type EtatSuiviClient,
   type SuiviCommandeClient,
@@ -28,6 +30,7 @@ import {
   pointsFidelite,
   restaurant,
   tablesSalle,
+  visitesQr,
   zones,
 } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
@@ -44,6 +47,7 @@ import { lireBareme, pointsGagnes, soldePoints, trouverOuCreer } from '../fideli
 import { calculerDestinataire } from '../routage/routage.js';
 import { etatDUneTable } from '../tables/etat.js';
 import { construireRecuPdf, construireRecuSousNotePdf } from '../../printer/recu-pdf.js';
+import { configurationGeolocalisationClient, verifierProximiteClient } from './geolocalisation.js';
 
 /**
  * Durée pendant laquelle une commande payée reste accessible au téléphone qui
@@ -52,6 +56,8 @@ import { construireRecuPdf, construireRecuSousNotePdf } from '../../printer/recu
  * table suivante ne récupère rien.
  */
 const FENETRE_RECU_MS = 45 * 60 * 1000;
+const DUREE_VISITE_MS = 6 * 60 * 60 * 1000;
+const IdVisiteSchema = z.string().uuid();
 
 /** Limiteur de débit simple par (jeton, action) — anti-abus (§1a). */
 const dernierAppel = new Map<string, number>();
@@ -68,6 +74,29 @@ async function tableParJeton(qrToken: string) {
   const [table] = await db.select().from(tablesSalle).where(eq(tablesSalle.qr_token, qrToken));
   if (!table) throw introuvable('Table');
   return table;
+}
+
+function idVisiteDans(req: FastifyRequest): string | null {
+  const brut = req.headers['x-visite-qr'];
+  const valeur = Array.isArray(brut) ? brut[0] : brut;
+  const resultat = IdVisiteSchema.safeParse(valeur);
+  return resultat.success ? resultat.data : null;
+}
+
+async function exigerVisite(req: FastifyRequest, tableId: string) {
+  const visiteId = idVisiteDans(req);
+  if (!visiteId) throw new ErreurMetier('Cette visite QR est inconnue, rescannez le code de la table', 401);
+  const [visite] = await db
+    .select()
+    .from(visitesQr)
+    .where(and(
+      eq(visitesQr.id, visiteId),
+      eq(visitesQr.table_id, tableId),
+      gt(visitesQr.expire_le, new Date()),
+    ));
+  if (!visite) throw introuvable('Visite QR');
+  await db.update(visitesQr).set({ derniere_activite_le: new Date() }).where(eq(visitesQr.id, visite.id));
+  return visite;
 }
 
 function etatSuivi(statut: string, origine: string): EtatSuiviClient {
@@ -87,6 +116,7 @@ export function routesClient(app: FastifyInstance): void {
     const table = await tableParJeton(qr_token);
     const [zone] = await db.select().from(zones).where(eq(zones.id, table.zone_id));
     const [resto] = await db.select().from(restaurant).limit(1);
+    const geolocalisation = await configurationGeolocalisationClient(db);
     return {
       table_id: table.id,
       numero: table.numero,
@@ -97,7 +127,55 @@ export function routesClient(app: FastifyInstance): void {
         couleur_hex: resto?.couleur_hex ?? '#EF9F27',
       },
       etat: await etatDUneTable(table.id, table.statut),
+      geolocalisation: {
+        requise: geolocalisation.activee,
+        rayon_metres: geolocalisation.rayon_metres,
+      },
     };
+  });
+
+  /** Crée une nouvelle visite ou reprend celle conservée par l'onglet. */
+  app.post('/api/client/:qr_token/visite', async (req) => {
+    const { qr_token } = req.params as { qr_token: string };
+    const corps = valider(VisiteClientSchema, req.body ?? {});
+    const table = await tableParJeton(qr_token);
+    if (table.partenaire) throw new ErreurMetier('Cette table ne prend pas de commande', 400);
+    const position = await verifierProximiteClient(db, corps.localisation);
+
+    const visiteId = idVisiteDans(req);
+    if (visiteId) {
+      const [existante] = await db
+        .select()
+        .from(visitesQr)
+        .where(and(
+          eq(visitesQr.id, visiteId),
+          eq(visitesQr.table_id, table.id),
+          gt(visitesQr.expire_le, new Date()),
+        ));
+      if (existante) {
+        const [maj] = await db
+          .update(visitesQr)
+          .set({
+            derniere_activite_le: new Date(),
+            distance_metres: position.distance_metres,
+            precision_metres: position.precision_metres,
+          })
+          .where(eq(visitesQr.id, existante.id))
+          .returning();
+        return { visite_id: maj!.id, expire_le: maj!.expire_le.toISOString() };
+      }
+    }
+
+    const [visite] = await db
+      .insert(visitesQr)
+      .values({
+        table_id: table.id,
+        expire_le: new Date(Date.now() + DUREE_VISITE_MS),
+        distance_metres: position.distance_metres,
+        precision_metres: position.precision_metres,
+      })
+      .returning();
+    return { visite_id: visite!.id, expire_le: visite!.expire_le.toISOString() };
   });
 
   app.get('/api/client/:qr_token/catalogue', async (req): Promise<CatalogueVue> => {
@@ -112,6 +190,7 @@ export function routesClient(app: FastifyInstance): void {
   app.get('/api/client/:qr_token/commandes', async (req): Promise<SuiviCommandeClient[]> => {
     const { qr_token } = req.params as { qr_token: string };
     const table = await tableParJeton(qr_token);
+    const visite = await exigerVisite(req, table.id);
     // Les commandes payées restent visibles le temps de la FENETRE_RECU : c'est
     // ce qui permet à l'écran d'annoncer « Vous venez de payer… » et de servir
     // le reçu. Au-delà, elles disparaissent — la table sera à quelqu'un d'autre.
@@ -121,6 +200,7 @@ export function routesClient(app: FastifyInstance): void {
       .where(
         and(
           eq(commandes.table_id, table.id),
+          eq(commandes.visite_qr_id, visite.id),
           or(
             sql`${commandes.statut} <> 'PAYEE'`,
             gte(commandes.updated_at, new Date(Date.now() - FENETRE_RECU_MS)),
@@ -138,8 +218,7 @@ export function routesClient(app: FastifyInstance): void {
         statut_cuisine: commandeItems.statut_cuisine,
       })
       .from(commandeItems)
-      .innerJoin(commandes, eq(commandes.id, commandeItems.commande_id))
-      .where(eq(commandes.table_id, table.id));
+      .where(inArray(commandeItems.commande_id, lignes.map((c) => c.id)));
 
     const parCommande = new Map<string, { nom: string; quantite: number }[]>();
     for (const it of items) {
@@ -188,11 +267,12 @@ export function routesClient(app: FastifyInstance): void {
   app.get('/api/client/:qr_token/recu/:commande_id', async (req, rep) => {
     const { qr_token, commande_id } = req.params as { qr_token: string; commande_id: string };
     const table = await tableParJeton(qr_token);
+    const visite = await exigerVisite(req, table.id);
 
     const [c] = await db.select().from(commandes).where(eq(commandes.id, commande_id));
     // Une commande d'une AUTRE table est traitée comme inexistante : le jeton ne
     // doit rien apprendre du reste de la salle.
-    if (!c || c.table_id !== table.id) throw introuvable('Commande');
+    if (!c || c.table_id !== table.id || c.visite_qr_id !== visite.id) throw introuvable('Commande');
     if (c.statut !== 'PAYEE') throw new ErreurMetier('Cette commande n’est pas encore payée', 409);
     if (Date.now() - new Date(c.updated_at).getTime() > FENETRE_RECU_MS) {
       throw new ErreurMetier('Ce reçu n’est plus disponible, demandez-le à votre serveur', 410);
@@ -236,8 +316,9 @@ export function routesClient(app: FastifyInstance): void {
   app.get('/api/client/:qr_token/recu/:commande_id/:note_id', async (req, rep) => {
     const { qr_token, commande_id, note_id } = req.params as { qr_token: string; commande_id: string; note_id: string };
     const table = await tableParJeton(qr_token);
+    const visite = await exigerVisite(req, table.id);
     const [c] = await db.select().from(commandes).where(eq(commandes.id, commande_id));
-    if (!c || c.table_id !== table.id) throw introuvable('Commande');
+    if (!c || c.table_id !== table.id || c.visite_qr_id !== visite.id) throw introuvable('Commande');
     const vue = await chargerCommandeVue(db, commande_id);
     const note = vue.notes.find((candidate) => candidate.id === note_id);
     if (!note || note.statut !== 'PAYEE' || !note.payee_le) throw new ErreurMetier('Ce paiement n’est pas encore soldé', 409);
@@ -282,8 +363,15 @@ export function routesClient(app: FastifyInstance): void {
     const { qr_token } = req.params as { qr_token: string };
     const corps = valider(AppelClientSchema, req.body);
     const table = await tableParJeton(qr_token);
+    const visite = await exigerVisite(req, table.id);
+    const position = await verifierProximiteClient(db, corps.localisation);
+    await db.update(visitesQr).set({
+      derniere_activite_le: new Date(),
+      distance_metres: position.distance_metres,
+      precision_metres: position.precision_metres,
+    }).where(eq(visitesQr.id, visite.id));
 
-    if (tropTot(`${qr_token}:${corps.type}`)) {
+    if (tropTot(`${visite.id}:${corps.type}`)) {
       throw new ErreurMetier('Appel déjà envoyé, patientez quelques secondes', 429);
     }
 
@@ -333,6 +421,8 @@ export function routesClient(app: FastifyInstance): void {
     const corps = valider(CommandeClientSchema, req.body);
     const table = await tableParJeton(qr_token);
     if (table.partenaire) throw new ErreurMetier('Cette table ne prend pas de commande', 400);
+    const visite = await exigerVisite(req, table.id);
+    const position = await verifierProximiteClient(db, corps.localisation);
 
     const { commandeId, destinataire, rattache } = await db.transaction(async (tx) => {
       await tx.select().from(tablesSalle).where(eq(tablesSalle.id, table.id)).for('update');
@@ -347,6 +437,7 @@ export function routesClient(app: FastifyInstance): void {
           type: 'SUR_PLACE',
           code_commande: code,
           table_id: table.id,
+          visite_qr_id: visite.id,
           origine: 'CLIENT_QR',
           client_fidelite_id: client?.id ?? null,
         })
@@ -356,6 +447,11 @@ export function routesClient(app: FastifyInstance): void {
         await figerNouvelItem(tx, commande!, item, false); // NON envoyé en cuisine
       }
       await recalculerTotaux(tx, commande!.id);
+      await tx.update(visitesQr).set({
+        derniere_activite_le: new Date(),
+        distance_metres: position.distance_metres,
+        precision_metres: position.precision_metres,
+      }).where(eq(visitesQr.id, visite.id));
       const dest = await calculerDestinataire(tx, app.presence, table.id);
       return { commandeId: commande!.id, destinataire: dest, rattache: client !== null };
     });

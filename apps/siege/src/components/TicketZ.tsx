@@ -76,7 +76,12 @@ export function TicketZ({
   serviceId: string;
   restaurantId: string;
 }) {
-  const ecart = nb(rapport.ecart);
+  const ecartEspeces = nb(rapport.ecart);
+  const ecart = typeof rapport.diff === 'number' && Number.isFinite(rapport.diff)
+    ? rapport.diff
+    : typeof rapport.vente_totale === 'number' && typeof rapport.total_systeme === 'number'
+      ? rapport.vente_totale - rapport.total_systeme
+      : ecartEspeces;
   const graveEcart = Math.abs(ecart) > SEUIL_ECART;
 
   const livraisons = (rapport.livraisons ?? {}) as Record<string, number>;
@@ -97,6 +102,7 @@ export function TicketZ({
   const inventaire = rapport.inventaire;
   const equipe = rapport.equipe;
   const offerts = rapport.offerts;
+  const depensesDetail = rapport.depenses_detail ?? [];
 
   const autres = Object.entries(rapport).filter(([k]) => !CONNUS.has(k));
 
@@ -110,17 +116,17 @@ export function TicketZ({
         </p>
       </header>
 
-      {/* L'écart de caisse : le chiffre qu'on vient chercher, en très grand. Le
+      {/* L'écart réconcilié : le chiffre qu'on vient chercher, en très grand. Le
           seuil est celui du POS — c'est lui qui a déclenché (ou non) l'entrée
           d'audit ECART_CAISSE sur le site, la console n'en invente pas un autre. */}
       <div className={`rounded-jeton p-4 text-center ${graveEcart ? 'bg-alerte-tint text-alerte-txt' : 'bg-ok-tint text-ok-txt'}`}>
-        <div className="text-sm font-semibold">Écart de caisse (espèces)</div>
+        <div className="text-sm font-semibold">Écart réconcilié</div>
         <div className="chiffres text-4xl font-black">
           {ecart > 0 ? '+' : ''}
           {formatFCFA(ecart)}
         </div>
         <div className="chiffres mt-1 text-xs opacity-80">
-          Comptées {formatFCFA(nb(rapport.especes_comptees))} · Théoriques {formatFCFA(nb(rapport.especes_theorique))}
+          Vente réconciliée {formatFCFA(nb(rapport.vente_totale))} · Système {formatFCFA(nb(rapport.total_systeme))}
           {graveEcart ? ` · au-delà du seuil d’alerte de ${formatFCFA(SEUIL_ECART)}` : ''}
         </div>
       </div>
@@ -130,6 +136,13 @@ export function TicketZ({
             manager doit retrouver son papier, pas déchiffrer une autre mise en page. */}
         <Bloc titre="Réconciliation de fermeture">
           <LigneF libelle="Fond de caisse" montant={nb(rapport.fond_de_caisse)} />
+          <LigneF libelle="Espèces comptées" montant={nb(rapport.especes_comptees)} />
+          <LigneF libelle="Espèces théoriques" montant={nb(rapport.especes_theorique)} />
+          <Ligne
+            libelle="Écart espèces (détail)"
+            valeur={`${ecartEspeces > 0 ? '+' : ''}${formatFCFA(ecartEspeces)}`}
+            zero={ecartEspeces === 0}
+          />
           <LigneF libelle="Dépenses" montant={nb(rapport.depenses)} />
           {Object.entries(livraisons).map(([p, v]) => (
             <LigneF key={p} libelle={libellePartenaire(p)} montant={nb(v)} />
@@ -159,6 +172,37 @@ export function TicketZ({
           <LigneF libelle="Promotions automatiques" montant={nb(rapport.total_promos)} />
           <LigneF libelle="Fidélité" montant={nb(rapport.total_fidelite)} />
           <Ligne libelle="Commandes annulées" valeur={nb(rapport.nb_commandes_annulees).toLocaleString('fr-FR')} zero={nb(rapport.nb_commandes_annulees) === 0} />
+        </Bloc>
+
+        <Bloc titre="Dépenses du caissier" large>
+          {depensesDetail.length === 0 ? (
+            <p className="text-faible">
+              {nb(rapport.depenses) > 0
+                ? 'Ce ticket ancien ne contient que le total des dépenses.'
+                : 'Aucune dépense enregistrée pour ce service.'}
+            </p>
+          ) : (
+            <>
+              <div className="space-y-1">
+                {depensesDetail.map((depense, index) => (
+                  <div key={`${depense.categorie}-${depense.libelle}-${index}`} className="flex items-start justify-between gap-4 border-b border-filet py-2 last:border-0">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-fort">{depense.libelle}</div>
+                      <div className="text-xs text-doux">
+                        {depense.categorie}
+                        {depense.agent_nom ? ` · pour ${depense.agent_nom}` : ''}
+                        {depense.motif ? ` · ${depense.motif}` : ''}
+                      </div>
+                    </div>
+                    <span className="chiffres whitespace-nowrap">{formatFCFA(nb(depense.montant))}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 border-t border-filet pt-2">
+                <LigneF libelle="Total dépenses du service" montant={nb(rapport.depenses)} fort />
+              </div>
+            </>
+          )}
         </Bloc>
 
         {/* TOUS les modes, zéros compris : « personne n'a payé par Wave » est une

@@ -19,6 +19,7 @@ import { restaurantsSamtrackly } from '../equipe/sync-samtrackly.js';
 import { moteurSync } from '../sync/moteur.js';
 import { CLE_COLONNES, CLE_LOGO, colonnesValides, COLONNES_POSSIBLES, imprimerTest, listerImprimantes, queuePoste } from '../../printer/escpos.js';
 import { estModeLogo, type Marque } from '../../printer/logo.js';
+import { importerProfilRestaurant, lireProfilRestaurant } from '../../profils/importer.js';
 
 /**
  * Recette d'un produit d'inventaire : la quantité n'est PAS un entier (0,5
@@ -394,7 +395,16 @@ export function routesReglages(app: FastifyInstance): void {
   app.get('/api/admin/restaurant/config', { preHandler: gardeResto }, async () => {
     const [resto] = await db.select().from(restaurant).limit(1);
     const [p] = await db.select().from(parametresLocaux).where(eq(parametresLocaux.cle, 'samtrackly_restaurant_id'));
-    const restaurants = await restaurantsSamtrackly();
+    const profil = await lireProfilRestaurant('ALA_BRAISE');
+    const restaurants = [
+      {
+        id: `profil:${profil.code}`,
+        nom: profil.restaurant.nom,
+        couleur: profil.restaurant.couleur_hex,
+        source: 'PROFIL_LOCAL' as const,
+      },
+      ...(await restaurantsSamtrackly()),
+    ];
     return {
       actuel: resto ? { code: resto.code, nom: resto.nom, marque: resto.marque, couleur_hex: resto.couleur_hex } : null,
       samtrackly_restaurant_id: typeof p?.valeur === 'string' ? p.valeur : '',
@@ -403,7 +413,32 @@ export function routesReglages(app: FastifyInstance): void {
   });
 
   app.post('/api/admin/restaurant/config', { preHandler: gardeResto }, async (req) => {
-    const { samtrackly_restaurant_id } = valider(ConfigRestaurantSchema, req.body);
+    const corps = valider(ConfigRestaurantSchema, req.body);
+    if ('profil_code' in corps) {
+      await importerProfilRestaurant(corps.profil_code);
+      const [cleExistante] = await db
+        .select()
+        .from(parametresLocaux)
+        .where(eq(parametresLocaux.cle, 'cle_site'));
+      await db.delete(parametresLocaux).where(eq(parametresLocaux.cle, 'cle_site'));
+      await db.delete(parametresLocaux).where(eq(parametresLocaux.cle, 'samtrackly_restaurant_id'));
+      await journaliser(db, {
+        user_id: req.session!.utilisateur_id,
+        action: 'MODIF_PARAMETRE',
+        entite: 'restaurant',
+        meta: { detail: 'Import profil restaurant', profil_code: corps.profil_code },
+      });
+      if (cleExistante) moteurSync.arreter();
+      const profil = await lireProfilRestaurant(corps.profil_code);
+      return {
+        code: profil.code,
+        nom: profil.restaurant.nom,
+        marque: profil.restaurant.marque,
+        couleur_hex: profil.restaurant.couleur_hex,
+        sync_a_reenroler: !!cleExistante,
+      };
+    }
+    const { samtrackly_restaurant_id } = corps;
     const choisi = (await restaurantsSamtrackly()).find((r) => r.id === samtrackly_restaurant_id);
     if (!choisi) throw new ErreurMetier('Restaurant SamerTrackly introuvable (clé/connexion ?)', 404);
 

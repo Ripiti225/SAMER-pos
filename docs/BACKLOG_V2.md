@@ -30,6 +30,10 @@ Toute idée hors périmètre du sprint 1 est notée ici, jamais implémentée en
 - Servir la PWA compilée directement depuis le serveur Fastify (déploiement mono-processus sur le mini-PC).
 
 ## Idées notées pendant le sprint 4
+- SamerTrackly — écart global de clôture : afficher en indicateur principal
+  l'**écart de réconciliation** (`rapport_z.diff`), et non l'écart de caisse
+  espèces (`services_caisse.ecart`). L'écart espèces peut rester disponible
+  comme détail secondaire pour le contrôle du tiroir.
 - Fidélité — rapprochement cloud (fusions_clients) : la fusion des clients POS
   et SAMER DELIV sur le même téléphone se fait côté cloud (Edge Function à la
   montée) et redescend une table `fusions_clients(ancien_id, id_retenu)`

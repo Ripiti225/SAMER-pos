@@ -375,6 +375,22 @@ export const sessions = pgTable('sessions', {
   expire_a: timestamp('expire_a', { withTimezone: true }).notNull(),
 });
 
+/**
+ * Visite anonyme d'un téléphone ayant ouvert le QR permanent d'une table.
+ * L'UUID est le jeton opaque conservé dans le sessionStorage de l'onglet.
+ */
+export const visitesQr = pgTable('visites_qr', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  table_id: uuid('table_id').notNull().references(() => tablesSalle.id, { onDelete: 'cascade' }),
+  cree_le: timestamp('cree_le', { withTimezone: true }).notNull().defaultNow(),
+  expire_le: timestamp('expire_le', { withTimezone: true }).notNull(),
+  derniere_activite_le: timestamp('derniere_activite_le', { withTimezone: true }).notNull().defaultNow(),
+  distance_metres: integer('distance_metres'),
+  precision_metres: integer('precision_metres'),
+}, (t) => [
+  index('idx_visites_qr_table_expire').on(t.table_id, t.expire_le),
+]);
+
 // ---------------------------------------------------------------------------
 // 5. Commandes (§5.1) — cœur du sprint 1
 // ---------------------------------------------------------------------------
@@ -390,6 +406,7 @@ export const commandes = pgTable('commandes', {
   code_commande: text('code_commande'),
   type: typeCommande('type').notNull(),
   table_id: uuid('table_id').references(() => tablesSalle.id),
+  visite_qr_id: uuid('visite_qr_id').references(() => visitesQr.id),
   partenaire: text('partenaire'),
   // Saisis dans la modale qui s'ouvre au lancement en cuisine d'une commande
   // partenaire. Facultatifs (le caissier peut fermer) : le ticket Z compte les
@@ -422,6 +439,7 @@ export const commandes = pgTable('commandes', {
 }, (t) => [
   index('idx_commandes_service').on(t.service_id),
   index('idx_commandes_jour').on(t.created_at),
+  index('idx_commandes_visite_qr').on(t.visite_qr_id),
   // Le code court est unique par service (retry côté serveur en cas de collision).
   uniqueIndex('uniq_code_commande_service')
     .on(t.service_id, t.code_commande)

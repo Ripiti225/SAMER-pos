@@ -4,6 +4,10 @@
 // on n'acquitte que jusqu'au dernier seq appliqué sans trou.
 import { clientAdmin, ErreurAuth, json, verifierCleSite } from '../_shared/auth.ts';
 import { cibleMontee, ligneAutorisee } from '../_shared/tables.ts';
+import {
+  planifierRattrapageCatalogue,
+  type CatalogueHistorique,
+} from '../_shared/catalogue-rattrapage.ts';
 
 interface LignePush {
   seq: number;
@@ -11,6 +15,44 @@ interface LignePush {
   record_id: string;
   operation: 'INSERT' | 'UPDATE';
   payload: Record<string, unknown>;
+}
+
+async function appliquerCatalogueHistorique(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  restaurantId: string,
+  ligne: Record<string, unknown>,
+): Promise<void> {
+  const catalogue: CatalogueHistorique = {
+    categories: Array.isArray(ligne.categories) ? ligne.categories as CatalogueHistorique['categories'] : [],
+    articles: Array.isArray(ligne.articles) ? ligne.articles as CatalogueHistorique['articles'] : [],
+  };
+  const [categories, articles] = await Promise.all([
+    admin.from('categories').select('id,nom,actif').eq('restaurant_id', restaurantId),
+    admin.from('articles').select('id,categorie_id,nom').eq('restaurant_id', restaurantId),
+  ]);
+  if (categories.error) throw new Error(`lecture catégories : ${categories.error.message}`);
+  if (articles.error) throw new Error(`lecture articles : ${articles.error.message}`);
+
+  const plan = planifierRattrapageCatalogue({
+    restaurantId,
+    catalogue,
+    categoriesCloud: categories.data ?? [],
+    articlesCloud: articles.data ?? [],
+  });
+
+  if (plan.categoriesAInserer.length > 0) {
+    const { error } = await admin
+      .from('categories')
+      .upsert(plan.categoriesAInserer, { onConflict: 'restaurant_id,id', ignoreDuplicates: true });
+    if (error) throw new Error(`insertion catégories : ${error.message}`);
+  }
+  if (plan.articlesAInserer.length > 0) {
+    const { error } = await admin
+      .from('articles')
+      .upsert(plan.articlesAInserer, { onConflict: 'restaurant_id,id', ignoreDuplicates: true });
+    if (error) throw new Error(`insertion articles : ${error.message}`);
+  }
 }
 
 /**
@@ -98,6 +140,18 @@ Deno.serve(async (req) => {
         break;
       }
       acquitteJusqua = l.seq;
+      continue;
+    }
+    if (l.table_name === 'catalogue_historique') {
+      try {
+        await appliquerCatalogueHistorique(admin, restaurantId, ligne);
+        acquitteJusqua = l.seq;
+      } catch (e) {
+        const raison = `rattrapage catalogue : ${e instanceof Error ? e.message : String(e)}`;
+        blocage = { seq: l.seq, table_name: l.table_name, raison };
+        await tracerBlocage(admin, restaurantId, l, raison);
+        break;
+      }
       continue;
     }
     // Clé composite : un site ne peut jamais réécrire la ligne d'un autre,

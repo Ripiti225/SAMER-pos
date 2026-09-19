@@ -176,7 +176,7 @@ export function Sequence() {
                   <th className="p-3">Raser</th>
                   <th className="p-3">Caissier</th><th className="p-3">Statut</th>
                   <th className="p-3 text-right">Vente</th><th className="p-3 text-right">Espèces</th>
-                  <th className="p-3 text-right">Écart</th>
+                  <th className="p-3 text-right">Écart espèces</th>
                 </tr>
               </thead>
               <tbody>

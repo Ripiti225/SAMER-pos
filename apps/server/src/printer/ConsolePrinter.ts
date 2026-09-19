@@ -168,7 +168,10 @@ export class ConsolePrinter implements PrinterService {
       ligne('Fond de caisse', formatFCFA(z.fond_de_caisse)),
       ligne('Espèces comptées', formatFCFA(z.especes_comptees)),
       ligne('Espèces théoriques', formatFCFA(z.especes_theorique)),
-      ligne('ÉCART', formatFCFA(z.ecart)),
+      ligne('Écart espèces (détail)', formatFCFA(z.ecart)),
+      ligne('Vente réconciliée', formatFCFA(z.vente_totale)),
+      ligne('Total système', formatFCFA(z.total_systeme)),
+      ligne('ÉCART RÉCONCILIÉ', formatFCFA(z.diff)),
       '-'.repeat(LARGEUR),
       'Récap partenaires :',
       ...Object.entries(z.partenaires).flatMap(([p, s]) => [
@@ -252,7 +255,7 @@ export class ConsolePrinter implements PrinterService {
       lignes.push(`${sh.caissier} (${sh.statut === 'CLOTURE' ? 'clôturé' : 'OUVERT'})`);
       lignes.push(ligne('  Ventes', formatFCFA(sh.vente_totale ?? 0)));
       lignes.push(ligne('  Espèces comptées', formatFCFA(sh.especes_comptees ?? 0)));
-      lignes.push(ligne('  Écart', formatFCFA(sh.ecart ?? 0)));
+      lignes.push(ligne('  Écart espèces', formatFCFA(sh.ecart ?? 0)));
       if (sh.offerts?.total) lignes.push(ligne(`  Kdo offerts (${sh.offerts.nb})`, formatFCFA(sh.offerts.total)));
     }
     lignes.push(

@@ -5,6 +5,7 @@ import { formatFCFA, LIBELLES_ETAT_TABLE, uuidLocal } from '@pos/shared';
 import { api } from '../api';
 import { ConfirmationPaiement } from './ConfirmationPaiement';
 import { SuiviCommandes } from './SuiviCommandes';
+import { positionActuelle } from '../visite';
 
 interface LignePanier {
   cle: string;
@@ -14,7 +15,7 @@ interface LignePanier {
   quantite: number;
 }
 
-export function PageTable({ jeton, table }: { jeton: string; table: TableClientVue }) {
+export function PageTable({ jeton, table, visiteId }: { jeton: string; table: TableClientVue; visiteId: string }) {
   const queryClient = useQueryClient();
   const [categorieId, setCategorieId] = useState<string | null>(null);
   const [panier, setPanier] = useState<LignePanier[]>([]);
@@ -33,22 +34,32 @@ export function PageTable({ jeton, table }: { jeton: string; table: TableClientV
   };
 
   const appeler = useMutation({
-    mutationFn: (type: 'APPEL_SERVEUR' | 'DEMANDE_FACTURE') =>
-      api<{ confirmation: string }>(`/api/client/${jeton}/appel`, { method: 'POST', corps: { type } }),
+    mutationFn: async (type: 'APPEL_SERVEUR' | 'DEMANDE_FACTURE') => {
+      const localisation = await positionActuelle(table.geolocalisation.requise);
+      return api<{ confirmation: string }>(`/api/client/${jeton}/appel`, {
+        method: 'POST',
+        corps: { type, ...(localisation ? { localisation } : {}) },
+        visiteId,
+      });
+    },
     onSuccess: (r) => flash(r.confirmation),
     onError: (e: Error) => flash(e.message),
   });
 
   const envoyer = useMutation({
-    mutationFn: () =>
-      api<{ confirmation: string }>(`/api/client/${jeton}/commande`, {
+    mutationFn: async () => {
+      const localisation = await positionActuelle(table.geolocalisation.requise);
+      return api<{ confirmation: string }>(`/api/client/${jeton}/commande`, {
         method: 'POST',
         corps: {
           items: panier.map((l) => ({ article_id: l.article_id, quantite: l.quantite, options: [], supplements: [] })),
           // Champ vide = pas de numéro : le serveur l'accepte, sans fidélité.
           telephone: telephone.trim(),
+          ...(localisation ? { localisation } : {}),
         },
-      }),
+        visiteId,
+      });
+    },
     onSuccess: (r) => {
       setPanier([]);
       flash(r.confirmation);
@@ -107,10 +118,10 @@ export function PageTable({ jeton, table }: { jeton: string; table: TableClientV
         </div>
 
         {/* Suivi de commande (point 1c) */}
-        <SuiviCommandes jeton={jeton} />
+        <SuiviCommandes jeton={jeton} visiteId={visiteId} />
 
         {/* Menu + panier */}
-        <section>
+        <section id="commander">
           <h2 className="mb-2 text-lg font-bold">Commander</h2>
           <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
             {categories.map((c) => (
@@ -217,7 +228,7 @@ export function PageTable({ jeton, table }: { jeton: string; table: TableClientV
         </div>
       )}
 
-      <ConfirmationPaiement jeton={jeton} />
+      <ConfirmationPaiement jeton={jeton} visiteId={visiteId} />
     </div>
   );
 }
