@@ -47,11 +47,37 @@ SUPABASE_SYNC_URL="https://<REF>.supabase.co/functions/v1" pnpm site:enroler
 ```
 
 Le script :
-1. génère la clé de site et la garde **en local** (`parametres_locaux.cle_site`) ;
+1. réutilise la clé locale/sauvegardée ou en génère une, puis la garde
+   **en local** (`parametres_locaux.cle_site`) ;
 2. affiche un `INSERT INTO sites_autorises …` à **coller dans le SQL Editor**
    (seul le sha256 de la clé y est stocké).
 
 Colle ce SQL dans Supabase pour autoriser le site.
+
+### Remplacer un mini-PC endommagé sans créer un nouveau site
+
+Sur le nouveau mini-PC, ouvrez **Réglages → Restaurant**, choisissez le
+restaurant, puis cochez **Ce poste remplace un mini-PC endommagé**. Saisissez
+l'**ID POS** du site existant, visible dans la console du siège ou sur l'ancien
+poste. Le nom du restaurant ne suffit pas : c'est cet UUID qui conserve la
+continuité des ventes cloud et SamerTrackly.
+
+Cette action est refusée si la base locale contient déjà une vente ou un
+service de caisse. Le mode remplacement est réservé à une installation neuve.
+
+Ensuite :
+
+- si l'ancienne clé a été sauvegardée, placez-la dans `CLE_SITE` puis lancez
+  `pnpm site:enroler` : elle sera réutilisée telle quelle ;
+- si l'ancienne clé est perdue, laissez `CLE_SITE` vide et lancez la même
+  commande : une nouvelle clé secrète sera générée, puis le SQL affiché mettra
+  à jour la ligne `sites_autorises` du **même `restaurant_id`**.
+
+Dans les deux cas, exécutez le SQL affiché dans Supabase. En mode remplacement,
+le script produit volontairement un `UPDATE` strict, sans `INSERT` ni
+`ON CONFLICT`. Si l'UUID et le code du site existant ne correspondent pas, le
+SQL lève une erreur et ne crée rien : une mauvaise saisie ne peut donc jamais
+fabriquer un deuxième enrôlement.
 
 ## Étape 4 — Configurer le serveur local
 

@@ -476,6 +476,11 @@ export const MajDisponibiliteSchema = z.object({
 
 /** Configuration du restaurant : identité SamerTrackly ou profil local complet. */
 export const ConfigRestaurantSchema = z.union([
+  z.object({
+    mode: z.literal('REMPLACEMENT'),
+    samtrackly_restaurant_id: z.string().uuid('Restaurant invalide'),
+    restaurant_id_existant: z.string().uuid('Identifiant POS existant invalide'),
+  }),
   z.object({ samtrackly_restaurant_id: z.string().uuid('Restaurant invalide') }),
   z.object({ profil_code: z.literal('ALA_BRAISE') }),
 ]);

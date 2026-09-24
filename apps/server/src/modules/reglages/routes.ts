@@ -6,11 +6,11 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
-import { and, asc, desc, eq, gte, lte } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, lte } from 'drizzle-orm';
 import { z } from 'zod';
 import { clePosteImprimante, CLES_PARAMETRES_EDITABLES, ConfigRestaurantSchema, ModifierParametreSchema, PARAMETRES_EDITABLES, POSTE_IMPRESSION_DEFAUT, POSTES_IMPRESSION, type PosteImpression } from '@pos/shared';
 import { db } from '../../db/client.js';
-import { articles, auditLog, categories, inventaireConsommations, parametresLocaux, produitsInventaire, restaurant, routageArticle, routageCategorie, utilisateurs } from '../../db/schema/index.js';
+import { articles, auditLog, categories, commandes, inventaireConsommations, parametresLocaux, produitsInventaire, restaurant, routageArticle, routageCategorie, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
 import { appliquerRecettesDefaut } from '../inventaire/recettes-defaut.js';
 import { ErreurMetier } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
@@ -407,6 +407,7 @@ export function routesReglages(app: FastifyInstance): void {
     ];
     return {
       actuel: resto ? { code: resto.code, nom: resto.nom, marque: resto.marque, couleur_hex: resto.couleur_hex } : null,
+      restaurant_id: resto?.id ?? '',
       samtrackly_restaurant_id: typeof p?.valeur === 'string' ? p.valeur : '',
       restaurants,
     };
@@ -422,6 +423,7 @@ export function routesReglages(app: FastifyInstance): void {
         .where(eq(parametresLocaux.cle, 'cle_site'));
       await db.delete(parametresLocaux).where(eq(parametresLocaux.cle, 'cle_site'));
       await db.delete(parametresLocaux).where(eq(parametresLocaux.cle, 'samtrackly_restaurant_id'));
+      await db.delete(parametresLocaux).where(eq(parametresLocaux.cle, 'mode_configuration_site'));
       await journaliser(db, {
         user_id: req.session!.utilisateur_id,
         action: 'MODIF_PARAMETRE',
@@ -439,6 +441,8 @@ export function routesReglages(app: FastifyInstance): void {
       };
     }
     const { samtrackly_restaurant_id } = corps;
+    const remplacement = 'mode' in corps && corps.mode === 'REMPLACEMENT';
+    const restaurantIdExistant = remplacement ? corps.restaurant_id_existant : null;
     const choisi = (await restaurantsSamtrackly()).find((r) => r.id === samtrackly_restaurant_id);
     if (!choisi) throw new ErreurMetier('Restaurant SamerTrackly introuvable (clé/connexion ?)', 404);
 
@@ -450,26 +454,42 @@ export function routesReglages(app: FastifyInstance): void {
       .select()
       .from(parametresLocaux)
       .where(eq(parametresLocaux.cle, 'samtrackly_restaurant_id'));
-    // Le site change de restaurant (ou est configuré pour la 1re fois) → il lui
-    // faut une IDENTITÉ CLOUD NEUVE. Sans ça, tous les postes gardent l'UUID du
-    // master copié : `sites_autorises` étant indexé par restaurant_id, les 7
-    // restaurants remonteraient leurs ventes dans le même seau.
+    // Installation neuve : une identité cloud neuve empêche les copies de
+    // l'image master de partager le même UUID. Remplacement matériel : on fait
+    // exactement l'inverse et on reprend l'UUID cloud du site existant afin de
+    // garder son historique et sa ligne `sites_autorises`.
     const changeDeResto = (typeof dejaPose?.valeur === 'string' ? dejaPose.valeur : '') !== samtrackly_restaurant_id;
     let identiteRegeneree = false;
     let syncInvalidee = false;
 
     await db.transaction(async (tx) => {
+      if (remplacement) {
+        const [compteCommandes] = await tx.select({ nb: count() }).from(commandes);
+        const [compteServices] = await tx.select({ nb: count() }).from(servicesCaisse);
+        if (Number(compteCommandes?.nb ?? 0) > 0 || Number(compteServices?.nb ?? 0) > 0) {
+          throw new ErreurMetier(
+            'Le remplacement doit être configuré sur une base neuve, sans vente ni service de caisse',
+            409,
+          );
+        }
+      }
       const [resto] = await tx.select().from(restaurant).limit(1);
       const champs = { code, nom: choisi.nom, marque, couleur_hex: couleur };
       if (resto) {
-        if (changeDeResto) {
+        if (remplacement) {
+          await tx
+            .update(restaurant)
+            .set({ ...champs, id: restaurantIdExistant! })
+            .where(eq(restaurant.id, resto.id));
+          identiteRegeneree = resto.id !== restaurantIdExistant;
+        } else if (changeDeResto) {
           await tx.update(restaurant).set({ ...champs, id: randomUUID() }).where(eq(restaurant.id, resto.id));
           identiteRegeneree = true;
         } else {
           await tx.update(restaurant).set(champs).where(eq(restaurant.id, resto.id));
         }
       } else {
-        await tx.insert(restaurant).values(champs);
+        await tx.insert(restaurant).values(remplacement ? { ...champs, id: restaurantIdExistant! } : champs);
         identiteRegeneree = true;
       }
 
@@ -488,6 +508,13 @@ export function routesReglages(app: FastifyInstance): void {
         .insert(parametresLocaux)
         .values({ cle: 'samtrackly_restaurant_id', valeur: samtrackly_restaurant_id as never })
         .onConflictDoUpdate({ target: parametresLocaux.cle, set: { valeur: samtrackly_restaurant_id as never } });
+      await tx
+        .insert(parametresLocaux)
+        .values({ cle: 'mode_configuration_site', valeur: (remplacement ? 'REMPLACEMENT' : 'NOUVEAU') as never })
+        .onConflictDoUpdate({
+          target: parametresLocaux.cle,
+          set: { valeur: (remplacement ? 'REMPLACEMENT' : 'NOUVEAU') as never },
+        });
       await journaliser(tx, {
         user_id: req.session!.utilisateur_id,
         action: 'MODIF_PARAMETRE',
@@ -497,6 +524,8 @@ export function routesReglages(app: FastifyInstance): void {
           nom: choisi.nom,
           marque,
           samtrackly_restaurant_id,
+          mode: remplacement ? 'REMPLACEMENT' : 'NOUVEAU',
+          restaurant_id_repris: remplacement ? restaurantIdExistant : null,
           identite_regeneree: identiteRegeneree,
           sync_a_reenroler: syncInvalidee,
         },
@@ -506,7 +535,18 @@ export function routesReglages(app: FastifyInstance): void {
     // Coupe les boucles de synchro en cours : elles tournent avec l'ancienne clé.
     if (syncInvalidee) moteurSync.arreter();
 
-    return { code, nom: choisi.nom, marque, couleur_hex: couleur, sync_a_reenroler: syncInvalidee };
+    return {
+      code,
+      nom: choisi.nom,
+      marque,
+      couleur_hex: couleur,
+      restaurant_id: restaurantIdExistant,
+      identite_reprise: remplacement,
+      sync_a_reenroler: syncInvalidee,
+      // Même si l'image neuve ne contenait aucune clé à effacer, le poste de
+      // remplacement doit recevoir/récupérer la clé du site avant la synchro.
+      sync_a_activer: remplacement || syncInvalidee,
+    };
   });
 
   // ---- Journal d'audit : lecture seule + filtres (2.7) ----

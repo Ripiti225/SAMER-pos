@@ -2257,6 +2257,7 @@ function Roles() {
 // ---------------------------------------------------------------------------
 interface ConfigResto {
   actuel: { code: string; nom: string; marque: string; couleur_hex: string } | null;
+  restaurant_id: string;
   samtrackly_restaurant_id: string;
   restaurants: { id: string; nom: string; couleur: string | null; source?: 'PROFIL_LOCAL' }[];
 }
@@ -2266,17 +2267,26 @@ function ConfigRestaurant() {
   const { poserSession } = useCaisse();
   const [msg, setMsg] = useState<{ texte: string; ok?: boolean } | null>(null);
   const [choix, setChoix] = useState('');
+  const [remplacement, setRemplacement] = useState(false);
+  const [idPosExistant, setIdPosExistant] = useState('');
 
   const { data } = useQuery({ queryKey: ['admin', 'restaurant-config'], queryFn: () => api<ConfigResto>('/api/admin/restaurant/config') });
   const selection = choix || data?.samtrackly_restaurant_id || '';
+  const remplacementActif = remplacement && !!selection && !selection.startsWith('profil:');
 
   const configurer = useMutation({
     mutationFn: (id: string) =>
-      api<{ sync_a_reenroler?: boolean }>('/api/admin/restaurant/config', {
+      api<{ identite_reprise?: boolean; sync_a_reenroler?: boolean; sync_a_activer?: boolean }>('/api/admin/restaurant/config', {
         method: 'POST',
         corps: id.startsWith('profil:')
           ? { profil_code: id.slice('profil:'.length) }
-          : { samtrackly_restaurant_id: id },
+          : remplacementActif
+            ? {
+                mode: 'REMPLACEMENT',
+                samtrackly_restaurant_id: id,
+                restaurant_id_existant: idPosExistant.trim(),
+              }
+            : { samtrackly_restaurant_id: id },
       }),
     onSuccess: async (rep) => {
       // Applique la nouvelle identité (nom, marque, couleur) à la session en cours.
@@ -2291,10 +2301,13 @@ function ConfigRestaurant() {
       } catch { /* ignore */ }
       // Le poste a reçu une identité neuve : l'ancienne clé de synchro cloud a
       // été effacée exprès (elle appartenait au restaurant précédent).
-      const reenroler = rep?.sync_a_reenroler
-        ? ' ⚠ Synchro cloud à ré-enrôler (`pnpm site:enroler`) avant la prochaine remontée.'
-        : '';
-      setMsg({ texte: `Restaurant configuré.${equipe}${reenroler}`, ok: true });
+      const synchro = rep?.identite_reprise
+        ? ' Identité du site existant reprise. Activez maintenant la synchro en faisant tourner la clé sur cette même identité.'
+        : rep?.sync_a_reenroler
+          ? ' ⚠ Synchro cloud à enrôler (`pnpm site:enroler`) avant la prochaine remontée.'
+          : '';
+      setMsg({ texte: `Restaurant configuré.${equipe}${synchro}`, ok: true });
+      if (rep?.identite_reprise) setRemplacement(false);
       void qc.invalidateQueries();
     },
     onError: (e: Error) => setMsg({ texte: e.message }),
@@ -2313,6 +2326,7 @@ function ConfigRestaurant() {
             <div className="text-sm text-doux">
               {data.actuel.marque === 'AL_KAYAN' ? 'Al Kayan' : 'Chez Samer'} · {data.actuel.code}
             </div>
+            <div className="mt-1 font-mono text-xs text-doux">ID POS : {data.restaurant_id}</div>
           </div>
         </div>
       )}
@@ -2334,9 +2348,56 @@ function ConfigRestaurant() {
               <option key={r.id} value={r.id}>{r.nom}{r.source === 'PROFIL_LOCAL' ? ' — menu complet' : ''}</option>
             ))}
           </select>
-          <button type="button" className="btn-accent" disabled={!selection || configurer.isPending} onClick={() => configurer.mutate(selection)}>
-            {configurer.isPending ? 'Configuration…' : 'Configurer ce restaurant'}
+          <button
+            type="button"
+            className="btn-accent"
+            disabled={!selection || (remplacementActif && !idPosExistant.trim()) || configurer.isPending}
+            onClick={() => configurer.mutate(selection)}
+          >
+            {configurer.isPending
+              ? 'Configuration…'
+              : remplacementActif
+                ? 'Reprendre ce site existant'
+                : 'Configurer ce restaurant'}
           </button>
+        </div>
+      )}
+
+      {selection && !selection.startsWith('profil:') && (
+        <div className="rounded-jeton border border-bordure bg-surface p-4">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-1 h-5 w-5"
+              checked={remplacement}
+              onChange={(e) => setRemplacement(e.target.checked)}
+            />
+            <span>
+              <span className="block font-bold">Ce poste remplace un mini-PC endommagé</span>
+              <span className="mt-1 block text-sm text-doux">
+                Le nouveau poste reprendra l’identité cloud existante. Aucun nouveau restaurant ne sera créé.
+              </span>
+            </span>
+          </label>
+
+          {remplacement && (
+            <div className="mt-4 border-t border-bordure pt-4">
+              <label className="mb-1 block text-sm font-semibold" htmlFor="restaurant-id-existant">
+                Identifiant POS du site existant
+              </label>
+              <input
+                id="restaurant-id-existant"
+                className="champ w-full font-mono"
+                value={idPosExistant}
+                onChange={(e) => setIdPosExistant(e.target.value)}
+                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                autoComplete="off"
+              />
+              <p className="mt-2 text-xs text-doux">
+                Copiez l’ID POS affiché dans la console du siège ou dans l’ancien poste. Le nom du restaurant ne suffit pas.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

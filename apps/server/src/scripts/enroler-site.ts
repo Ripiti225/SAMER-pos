@@ -1,13 +1,16 @@
 /**
  * Enrôlement d'un site (§ config sprint 3) : `pnpm site:enroler`.
- * Génère la clé de site, la stocke en local (parametres_locaux.cle_site) et
+ * Réutilise la clé locale/sauvegardée ou en génère une, la stocke en local
+ * (parametres_locaux.cle_site) et
  * affiche le SQL à exécuter côté cloud pour l'enregistrer dans sites_autorises.
  * La clé n'est JAMAIS envoyée en clair au cloud : seul son sha256 y est stocké.
  */
+import '../env.js';
 import { randomBytes, createHash } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db, fermerDb } from '../db/client.js';
 import { parametresLocaux, restaurant } from '../db/schema/index.js';
+import { choisirCleSite, sqlAutorisationSite, type ModeConfigurationSite } from '../modules/sync/enrolement.js';
 
 function sha256Hex(v: string): string {
   return createHash('sha256').update(v).digest('hex');
@@ -43,27 +46,31 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // Réutilise la clé existante si déjà enrôlé (idempotent), sinon en génère une.
+  // Priorité : clé locale, puis sauvegarde CLE_SITE, sinon nouvelle clé.
   const [existant] = await db.select().from(parametresLocaux).where(eq(parametresLocaux.cle, 'cle_site'));
-  const cleSite = typeof existant?.valeur === 'string' ? existant.valeur : randomBytes(32).toString('hex');
+  const [modeParam] = await db
+    .select()
+    .from(parametresLocaux)
+    .where(eq(parametresLocaux.cle, 'mode_configuration_site'));
+  const mode: ModeConfigurationSite = modeParam?.valeur === 'REMPLACEMENT' ? 'REMPLACEMENT' : 'NOUVEAU';
+  const cleSite = choisirCleSite(
+    existant?.valeur,
+    process.env.CLE_SITE,
+    () => randomBytes(32).toString('hex'),
+  );
   const hash = sha256Hex(cleSite);
 
   await poserParam('cle_site', cleSite);
   const urlEnv = process.env.SUPABASE_SYNC_URL;
   if (urlEnv) await poserParam('supabase_sync_url', urlEnv);
 
-  console.log('\n===================  ENRÔLEMENT DU SITE  ===================');
+  console.log('\n=============  ENRÔLEMENT / REMPLACEMENT DU SITE  =============');
   console.log(`Restaurant  : ${resto.nom} (${resto.code})`);
   console.log(`restaurant_id : ${resto.id}`);
   console.log('\nClé de site (gardée en local, ne pas partager) :');
   console.log(`  ${cleSite}`);
   console.log('\nÀ EXÉCUTER dans l’éditeur SQL Supabase (enregistre le site) :\n');
-  console.log(
-    `INSERT INTO sites_autorises (restaurant_id, code, cle_hash, actif)\n` +
-      `VALUES ('${resto.id}', '${resto.code}', '${hash}', TRUE)\n` +
-      `ON CONFLICT (restaurant_id) DO UPDATE SET cle_hash = EXCLUDED.cle_hash, actif = TRUE\n` +
-      `  WHERE sites_autorises.code = EXCLUDED.code;`,
-  );
+  console.log(sqlAutorisationSite({ mode, restaurantId: resto.id, code: resto.code, hash }));
 
   // Annuaire de la console siège : c'est le SEUL moment où l'on connaît en même
   // temps l'UUID POS du site et son identifiant SamerTrackly. `parametres_locaux`
