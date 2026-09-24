@@ -10,12 +10,13 @@ import type { FastifyInstance } from 'fastify';
 import { eq, sql } from 'drizzle-orm';
 import { construireApp } from '../src/app.js';
 import { db, fermerDb } from '../src/db/client.js';
-import { parametresLocaux, restaurant } from '../src/db/schema/index.js';
+import { commandes, parametresLocaux, restaurant } from '../src/db/schema/index.js';
 import { synchroniserEquipe } from '../src/modules/equipe/sync-samtrackly.js';
 import { PIN_PROPRIO, resetDonnees, seConnecter, type Donnees } from './aide.js';
 
 const RESTO_A = { id: 'aaaaaaaa-0000-4000-8000-000000000001', nom: 'Chez Samer Palmeraie', couleur: '#EF9F27' };
 const RESTO_B = { id: 'bbbbbbbb-0000-4000-8000-000000000002', nom: 'Chez Samer Angré 7E', couleur: '#EF9F27' };
+const ID_POS_EXISTANT = 'cccccccc-0000-4000-8000-000000000003';
 
 let app: FastifyInstance;
 let donnees: Donnees;
@@ -73,6 +74,7 @@ describe('identité de site (déploiement multi-restaurants)', () => {
     });
 
     expect(rep.statusCode, rep.body).toBe(200);
+    expect(rep.json().restaurant_id).toBe(await idRestaurant());
     expect(rep.json().restaurants).toContainEqual({
       id: 'profil:ALA_BRAISE',
       nom: 'À la Braise',
@@ -118,6 +120,60 @@ describe('identité de site (déploiement multi-restaurants)', () => {
     const apres = await idRestaurant();
     expect(apres).not.toBe(avant);
     expect(await param('cle_site')).toBeUndefined();
+  });
+
+  it('un mini-PC de remplacement reprend l’identifiant POS existant sans créer un nouveau site', async () => {
+    donnees = await resetDonnees();
+    await db.execute(sql`UPDATE restaurant SET code = 'A_CONFIGURER', nom = 'Restaurant à configurer'`);
+    await db.insert(parametresLocaux).values({ cle: 'cle_site', valeur: 'cle-heritee-du-master' as never });
+    cookies = await seConnecter(app, donnees.proprio_id, PIN_PROPRIO);
+
+    const rep = await app.inject({
+      method: 'POST',
+      url: '/api/admin/restaurant/config',
+      cookies,
+      payload: {
+        mode: 'REMPLACEMENT',
+        samtrackly_restaurant_id: RESTO_A.id,
+        restaurant_id_existant: ID_POS_EXISTANT,
+      },
+    });
+
+    expect(rep.statusCode, rep.body).toBe(200);
+    expect(rep.json()).toMatchObject({
+      identite_reprise: true,
+      restaurant_id: ID_POS_EXISTANT,
+      sync_a_activer: true,
+    });
+    expect(await idRestaurant()).toBe(ID_POS_EXISTANT);
+    expect(await param('samtrackly_restaurant_id')).toBe(RESTO_A.id);
+    expect(await param('mode_configuration_site')).toBe('REMPLACEMENT');
+    expect(await param('cle_site')).toBeUndefined();
+  });
+
+  it('refuse de transformer en remplacement une base qui contient déjà des ventes', async () => {
+    donnees = await resetDonnees();
+    await db.execute(sql`UPDATE restaurant SET code = 'A_CONFIGURER', nom = 'Restaurant à configurer'`);
+    await db.insert(commandes).values({ type: 'EMPORTER' });
+    cookies = await seConnecter(app, donnees.proprio_id, PIN_PROPRIO);
+    const avant = await idRestaurant();
+
+    const rep = await app.inject({
+      method: 'POST',
+      url: '/api/admin/restaurant/config',
+      cookies,
+      payload: {
+        mode: 'REMPLACEMENT',
+        samtrackly_restaurant_id: RESTO_A.id,
+        restaurant_id_existant: ID_POS_EXISTANT,
+      },
+    });
+
+    expect(rep.statusCode, rep.body).toBe(409);
+    expect(rep.json()).toMatchObject({
+      erreur: expect.stringContaining('base neuve'),
+    });
+    expect(await idRestaurant()).toBe(avant);
   });
 
   it('sans restaurant configuré, la synchro équipe ne descend l’équipe de PERSONNE', async () => {
