@@ -932,7 +932,7 @@ export function vueBord(data: Bord | undefined, ctx: ContexteVue): VueBord {
 - [ ] **Step 4: Lancer les tests pour vérifier qu'ils passent**
 
 Run: `cd /Users/macbookpro/pos-samer && pnpm --filter @pos/siege test`
-Expected: PASS — 21 tests verts (10 de la tâche 1, 11 ici).
+Expected: PASS — 20 tests verts (10 de la tâche 1, 10 ici).
 
 - [ ] **Step 5: Vérifier la compilation stricte**
 
@@ -1208,7 +1208,7 @@ Run: `cd /Users/macbookpro/pos-samer && pnpm --filter @pos/siege build`
 Expected: aucune erreur.
 
 Run: `cd /Users/macbookpro/pos-samer && pnpm --filter @pos/siege test`
-Expected: PASS — 22 tests.
+Expected: PASS — 20 tests.
 
 Run: `cd /Users/macbookpro/pos-samer && pnpm --filter @pos/siege dev`
 
@@ -1578,7 +1578,7 @@ export function synthese(a: VueBord, b: VueBord): { phrase: string; lignes: Ecar
 - [ ] **Step 4: Lancer les tests pour vérifier qu'ils passent**
 
 Run: `cd /Users/macbookpro/pos-samer && pnpm --filter @pos/siege test`
-Expected: PASS — 37 tests verts.
+Expected: PASS — 36 tests verts.
 
 - [ ] **Step 5: Vérifier la compilation**
 
@@ -1923,7 +1923,7 @@ Run: `cd /Users/macbookpro/pos-samer && pnpm --filter @pos/siege build`
 Expected: aucune erreur.
 
 Run: `cd /Users/macbookpro/pos-samer && pnpm --filter @pos/siege test`
-Expected: PASS — 37 tests.
+Expected: PASS — 36 tests.
 
 Run: `cd /Users/macbookpro/pos-samer && pnpm --filter @pos/siege dev`
 
@@ -1967,7 +1967,7 @@ Avant de déclarer le travail terminé, lancer et **lire la sortie** :
 
 ```bash
 cd /Users/macbookpro/pos-samer
-pnpm --filter @pos/siege test     # 37 tests verts
+pnpm --filter @pos/siege test     # 36 tests verts
 pnpm --filter @pos/siege build    # aucune erreur TypeScript
 ```
 
