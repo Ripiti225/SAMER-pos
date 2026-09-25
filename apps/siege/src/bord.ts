@@ -38,7 +38,16 @@ export interface LigneBarre {
  * raison de son existence. Elle est testable sans React et sans réseau.
  */
 export interface ContexteVue {
-  /** Le restaurant regardé, ou `null` pour le groupe entier. */
+  /**
+   * La clé qui filtre les lignes de vente — `null`, et seulement `null`, dit
+   * le groupe entier.
+   *
+   * Ce n'est pas forcément un `restaurant_id` POS : un site NON ENRÔLÉ n'en a
+   * pas encore et reste pourtant choisissable dans le filtre. L'appelant passe
+   * alors une clé qui ne correspond à aucune vente, et c'est voulu — la vue
+   * sort vide, ce qui est la vérité : ce site n'a jamais rien remonté. Lui
+   * laisser `null` le ferait passer pour « tous les restaurants ».
+   */
   restaurantId: string | null;
   /** Son nom, pour les en-têtes et la synthèse. */
   nom: string;
@@ -50,6 +59,12 @@ export interface ContexteVue {
 
 /** Tout ce qu'une colonne du tableau de bord a besoin de savoir. Rien de plus. */
 export interface VueBord {
+  /**
+   * La clé de filtre du contexte, reconduite telle quelle — à lire en
+   * `=== null` (« regarde-t-on le groupe ? ») et rien d'autre : hors de ce
+   * test elle ne promet pas d'être un `restaurant_id` POS, donc elle n'ouvre
+   * ni `noms`, ni une couleur de série, ni un appel à l'API.
+   */
   restaurantId: string | null;
   nom: string;
   enrole: boolean;
