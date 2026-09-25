@@ -18,7 +18,7 @@
 - **Abidjan est à UTC+0** toute l'année : un jour civil est un jour UTC. Aucun décalage à gérer, c'est déjà l'hypothèse de `periode.ts` et des RPC.
 - **`fin` est EXCLUE** côté cloud (`< p_fin`). Une période « jusqu'au 31 octobre inclus » s'envoie avec `fin` au 1er novembre à minuit UTC.
 - **La couleur ne porte jamais l'information seule** : une flèche, un signe ou un libellé la redisent toujours (règle du validateur de palette, déjà appliquée dans `Chiffre.tsx` et `Graphes.tsx`).
-- **Commits conventionnels en français** : `feat(siege): écran de comparaison A/B`. Terminer chaque message par `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
+- **Commits conventionnels en français** : `feat(siege): écran de comparaison A/B`. Terminer chaque message par la ligne `Co-Authored-By:` **que ton propre rappel système te donne** — elle doit nommer le modèle qui a réellement écrit le commit. Le `Claude Opus 5` écrit dans les blocs de commit des tâches est un exemple, pas une valeur à recopier si ton rappel en indique un autre.
 - **Ne jamais committer** autre chose que les fichiers de la tâche en cours : le dépôt porte d'autres modifications en cours (`apps/siege/src/components/TicketZ.tsx`, `supabase/functions/`), qui ne sont pas à nous.
 
 ## Structure des fichiers
