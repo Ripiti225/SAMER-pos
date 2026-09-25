@@ -55,6 +55,8 @@ export interface VueBord {
   enrole: boolean;
   /** Aucune vente sur la période — à distinguer d'un site non enrôlé. */
   vide: boolean;
+  /** Nom de chaque restaurant : les blocs en vue groupe l'écrivent ligne à ligne. */
+  noms: Map<string, string>;
 
   ca: number;
   caPrecedent: number;
@@ -65,6 +67,9 @@ export interface VueBord {
   retoursMontant: number;
   retoursNb: number;
   ecartCumule: number;
+  /** Combien de personnes ont pointé — `equipe` est coupée à 12 pour le graphe
+   *  et ne peut donc pas servir de compteur. */
+  personnes: number;
   heuresTravaillees: number;
   salaires: number;
 
@@ -190,6 +195,7 @@ export function vueBord(data: Bord | undefined, ctx: ContexteVue): VueBord {
     nom: ctx.nom,
     enrole: ctx.enrole,
     vide: ca === 0 && commandes === 0,
+    noms,
 
     ca,
     caPrecedent,
@@ -200,6 +206,7 @@ export function vueBord(data: Bord | undefined, ctx: ContexteVue): VueBord {
     retoursMontant: retoursSource.reduce((s, r) => s + nb(r.montant), 0),
     retoursNb: retoursSource.reduce((s, r) => s + nb(r.quantite), 0),
     ecartCumule: mien(data?.ecarts).reduce((s, e) => s + nb(e.ecart), 0),
+    personnes: equipeSource.length,
     heuresTravaillees: equipeSource.reduce((s, e) => s + e.heures, 0),
     salaires: equipeSource.reduce((s, e) => s + nb(e.salaire), 0),
 
