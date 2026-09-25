@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "exit 0"
+    "test": "vitest run"
   },
   "dependencies": {
     "@pos/shared": "workspace:*",
@@ -26,6 +26,7 @@
     "postcss": "^8.5.4",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
   }
 }

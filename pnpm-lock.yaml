@@ -361,6 +361,9 @@ importers:
       vite:
         specifier: ^6.3.5
         version: 6.4.3(@types/node@22.20.0)(jiti@1.21.7)(terser@5.48.0)(tsx@4.23.0)
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.6(@types/debug@4.1.13)(@types/node@22.20.0)(jiti@1.21.7)(terser@5.48.0)(tsx@4.23.0)
 
   packages/shared:
     dependencies:
