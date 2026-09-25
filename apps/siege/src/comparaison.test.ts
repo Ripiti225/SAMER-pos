@@ -151,16 +151,31 @@ describe('synthese', () => {
   });
 
   it('trie par écart RELATIF, pas absolu', () => {
-    // dépenses : +300 % · commandes : −10 % · panier : −50 %
-    const a = vue({ nom: 'A', ca: 1, commandes: 100, panier: 100, depenses: 100 });
-    const b = vue({ nom: 'B', ca: 1, commandes: 90, panier: 50, depenses: 400 });
+    // Les trois tris doivent DIFFÉRER : dépenses +300 %, commandes +90 %,
+    // panier −50 % en relatif ; mais en ABSOLU le panier écrase tout avec
+    // −500 000. Un test où les deux ordres coïncident ne prouve rien.
+    const a = vue({ nom: 'A', ca: 1, commandes: 10, panier: 1_000_000, depenses: 100 });
+    const b = vue({ nom: 'B', ca: 1, commandes: 19, panier: 500_000, depenses: 400 });
 
-    expect(synthese(a, b).lignes.map((l) => l.cle)).toEqual(['depenses', 'panier', 'commandes']);
+    expect(synthese(a, b).lignes.map((l) => l.cle)).toEqual(['depenses', 'commandes', 'panier']);
   });
 
   it('A à zéro : la phrase le dit au lieu d’un pourcentage', () => {
     const s = synthese(vue({ nom: 'Angré', ca: 0 }), vue({ nom: 'Riviera', ca: 980_000 }));
     expect(s.phrase).toContain('Angré');
+    expect(s.phrase).not.toContain('%');
+  });
+
+  /**
+   * Le piège : un site non enrôlé a TOUJOURS un CA à zéro. Tester la valeur
+   * avant `enrole` fait donc dire à la synthèse « il n'a rien vendu » — un
+   * constat commercial, là où la vérité est qu'on ne sait rien de ses ventes.
+   */
+  it('un site non enrôlé n’est jamais décrit comme n’ayant rien vendu', () => {
+    const s = synthese(vue({ nom: 'Yopougon', ca: 0, enrole: false }), vue({ nom: 'Angré', ca: 1_000_000 }));
+    expect(s.phrase).toContain('Yopougon');
+    expect(s.phrase).toContain('synchronise');
+    expect(s.phrase).not.toContain('rien vendu');
     expect(s.phrase).not.toContain('%');
   });
 

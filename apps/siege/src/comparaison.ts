@@ -110,8 +110,14 @@ export function synthese(a: VueBord, b: VueBord): { phrase: string; lignes: Ecar
   if (!principal) return { phrase: '', lignes };
 
   if (principal.raison) {
+    // Un site qui ne synchronise pas n’a PAS « rien vendu » : on ne sait rien
+    // de ses ventes. Réécrire sa raison en constat commercial produirait
+    // exactement la conclusion fausse que la règle interdit — et comme un site
+    // non enrôlé a toujours un CA à zéro, un test sur la valeur seule mord
+    // systématiquement sur lui.
+    const muet = !a.enrole || !b.enrole;
     const phrase =
-      principal.valeurA === 0 && principal.valeurB > 0
+      !muet && principal.valeurA === 0 && principal.valeurB > 0
         ? `${a.nom} n’a rien vendu sur cette période — ${b.nom} a fait ${formatFCFA(principal.valeurB)}.`
         : principal.raison;
     return { phrase, lignes };
