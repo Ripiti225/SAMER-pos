@@ -257,7 +257,7 @@ export function personnalisee(du: string, au: string, maintenant = new Date()): 
 - [ ] **Step 5: Lancer les tests pour vérifier qu'ils passent**
 
 Run: `cd /Users/macbookpro/pos-samer && pnpm --filter @pos/siege test`
-Expected: PASS — 11 tests verts.
+Expected: PASS — 10 tests verts.
 
 Si `libellePlage` rend « 1 → 31 oct. 2024 » là où le test attend « 1 → 31 oct. », vérifier que `maintenant` est bien passé jusqu'au bout : c'est le seul paramètre qui décide d'écrire l'année.
 
@@ -925,7 +925,7 @@ export function vueBord(data: Bord | undefined, ctx: ContexteVue): VueBord {
 - [ ] **Step 4: Lancer les tests pour vérifier qu'ils passent**
 
 Run: `cd /Users/macbookpro/pos-samer && pnpm --filter @pos/siege test`
-Expected: PASS — 22 tests verts (11 de la tâche 1, 11 ici).
+Expected: PASS — 21 tests verts (10 de la tâche 1, 11 ici).
 
 - [ ] **Step 5: Vérifier la compilation stricte**
 
@@ -1571,7 +1571,7 @@ export function synthese(a: VueBord, b: VueBord): { phrase: string; lignes: Ecar
 - [ ] **Step 4: Lancer les tests pour vérifier qu'ils passent**
 
 Run: `cd /Users/macbookpro/pos-samer && pnpm --filter @pos/siege test`
-Expected: PASS — 38 tests verts.
+Expected: PASS — 37 tests verts.
 
 - [ ] **Step 5: Vérifier la compilation**
 
@@ -1916,7 +1916,7 @@ Run: `cd /Users/macbookpro/pos-samer && pnpm --filter @pos/siege build`
 Expected: aucune erreur.
 
 Run: `cd /Users/macbookpro/pos-samer && pnpm --filter @pos/siege test`
-Expected: PASS — 38 tests.
+Expected: PASS — 37 tests.
 
 Run: `cd /Users/macbookpro/pos-samer && pnpm --filter @pos/siege dev`
 
@@ -1960,7 +1960,7 @@ Avant de déclarer le travail terminé, lancer et **lire la sortie** :
 
 ```bash
 cd /Users/macbookpro/pos-samer
-pnpm --filter @pos/siege test     # 38 tests verts
+pnpm --filter @pos/siege test     # 37 tests verts
 pnpm --filter @pos/siege build    # aucune erreur TypeScript
 ```
 
