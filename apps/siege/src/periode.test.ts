@@ -23,7 +23,7 @@ describe('personnalisee — les bornes envoyées au cloud', () => {
     expect(r.periode.fin).toBe('2025-10-08T00:00:00.000Z');
   });
 
-  it('porte la clé "perso", qui n\'est pas une chip relative', () => {
+  it("porte la clé « perso », qui n'est pas une chip relative", () => {
     const r = personnalisee('2025-10-01', '2025-10-31');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -32,12 +32,12 @@ describe('personnalisee — les bornes envoyées au cloud', () => {
 });
 
 describe('personnalisee — les refus', () => {
-  it('refuse une plage incomplete', () => {
+  it('refuse une plage incomplète', () => {
     expect(personnalisee('', '2025-10-31')).toEqual({ ok: false, refus: 'incomplete' });
     expect(personnalisee('2025-10-01', '')).toEqual({ ok: false, refus: 'incomplete' });
   });
 
-  it('refuse un debut posterieur a la fin', () => {
+  it('refuse un début postérieur à la fin', () => {
     expect(personnalisee('2025-10-31', '2025-10-01')).toEqual({ ok: false, refus: 'inversee' });
   });
 
@@ -60,28 +60,28 @@ describe('personnalisee — les refus', () => {
 describe('personnalisee — le libellé', () => {
   const enOctobre2025 = new Date('2025-10-15T10:00:00.000Z');
 
-  it('meme mois, annee en cours : "1 → 31 oct."', () => {
+  it('même mois, année en cours : « 1 → 31 oct. »', () => {
     const r = personnalisee('2025-10-01', '2025-10-31', enOctobre2025);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.periode.libelle).toBe('1 → 31 oct.');
   });
 
-  it('mois differents, annee en cours : "1 oct. → 15 nov."', () => {
+  it('mois différents, année en cours : « 1 oct. → 15 nov. »', () => {
     const r = personnalisee('2025-10-01', '2025-11-15', enOctobre2025);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.periode.libelle).toBe('1 oct. → 15 nov.');
   });
 
-  it("annee passee : l'annee est ecrite", () => {
+  it("année passée : l'année est écrite", () => {
     const r = personnalisee('2024-10-01', '2024-10-31', enOctobre2025);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.periode.libelle).toBe('1 → 31 oct. 2024');
   });
 
-  it('deux annees differentes : chaque borne porte la sienne', () => {
+  it('deux années différentes : chaque borne porte la sienne', () => {
     const r = personnalisee('2024-12-20', '2025-01-10', enOctobre2025);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
