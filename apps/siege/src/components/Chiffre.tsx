@@ -47,6 +47,7 @@ export function TuileChiffre({
   precedent,
   format,
   ton = 'neutre',
+  ecartAbsolu = false,
 }: {
   libelle: string;
   valeur: number;
@@ -55,12 +56,16 @@ export function TuileChiffre({
   format: (n: number) => string;
   /** `alerte` inverse la lecture : ici, monter est une mauvaise nouvelle. */
   ton?: 'neutre' | 'marque' | 'alerte';
+  /** En comparaison, le pourcentage ne suffit pas : « −21 % » ne dit pas si
+   *  on parle de 260 000 FCFA ou de 2 000. */
+  ecartAbsolu?: boolean;
 }) {
   const anime = useNombreRoulant(valeur);
   const variation =
     precedent !== undefined && precedent > 0 ? Math.round(((valeur - precedent) / precedent) * 100) : null;
   const monte = (variation ?? 0) > 0;
   const bon = ton === 'alerte' ? !monte : monte;
+  const ecart = precedent !== undefined ? valeur - precedent : 0;
 
   return (
     <div className="rounded-jeton border border-filet bg-carte p-4 shadow-e1">
@@ -77,6 +82,12 @@ export function TuileChiffre({
         {variation !== null && variation !== 0 && (
           <span className={`chiffres font-semibold ${bon ? 'text-ok-txt' : 'text-alerte-txt'}`}>
             {monte ? '▲' : '▼'} {Math.abs(variation)} %
+            {ecartAbsolu && (
+              <span className="ml-1.5 font-normal">
+                {ecart > 0 ? '+' : ''}
+                {format(ecart)}
+              </span>
+            )}
           </span>
         )}
         {variation === 0 && <span className="chiffres text-faible">= stable</span>}
