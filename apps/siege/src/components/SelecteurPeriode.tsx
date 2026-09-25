@@ -50,7 +50,14 @@ export function SelecteurPeriode({ valeur, onChoisir }: { valeur: Periode; onCho
             key={p.cle}
             type="button"
             onClick={() => {
+              // Une chip relative reprend la main : le panneau personnalisé
+              // repart à blanc. Sans ça, le rouvrir ressusciterait le message
+              // d'erreur et les dates de la saisie précédente, alors que
+              // l'utilisateur n'a rien retapé.
               setOuvert(false);
+              setDu('');
+              setAu('');
+              setRefus(null);
               onChoisir(p);
             }}
             className={classeChip(p.cle === valeur.cle)}
