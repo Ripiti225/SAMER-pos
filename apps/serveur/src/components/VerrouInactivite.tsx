@@ -69,6 +69,7 @@ export function VerrouInactivite({
             valeur={pin}
             onChange={setPin}
             longueurMax={6}
+            code
             onValider={deverrouiller}
             libelleValider={enCours ? 'Vérification…' : 'Déverrouiller'}
             validerDesactive={pin.length < 4 || enCours}

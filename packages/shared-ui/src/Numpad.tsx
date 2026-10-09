@@ -5,13 +5,19 @@ interface Props {
   onValider?: () => void;
   libelleValider?: string;
   validerDesactive?: boolean;
+  /**
+   * Saisie d'un CODE (PIN, code temporaire) : le 0 de tête compte. Sans ce
+   * drapeau, le pavé se comporte en montant et « 0 » puis « 5 » donne « 5 » —
+   * un PIN ou un code commençant par 0 devenait impossible à taper.
+   */
+  code?: boolean;
 }
 
 /** Pavé numérique tactile (boutons ≥ 48 px). */
-export function Numpad({ valeur, onChange, longueurMax = 9, onValider, libelleValider = 'Valider', validerDesactive }: Props) {
+export function Numpad({ valeur, onChange, longueurMax = 9, onValider, libelleValider = 'Valider', validerDesactive, code = false }: Props) {
   const taper = (c: string) => {
     if (valeur.length >= longueurMax) return;
-    onChange(valeur === '0' ? c : valeur + c);
+    onChange(valeur === '0' && !code ? c : valeur + c);
   };
   return (
     <div className="grid grid-cols-3 gap-2">
