@@ -220,9 +220,14 @@ async function envoyerRawWindowsUNC(partage: string, data: Buffer): Promise<void
 }
 
 // Script PowerShell (P/Invoke winspool) qui envoie des octets RAW à une
-// imprimante par son NOM, sans partage. Écrit une fois dans le dossier temp.
-const SCRIPT_RAW_PS1 = `param([Parameter(Mandatory=$true)][string]$Printer,[Parameter(Mandatory=$true)][string]$Path)
-$ErrorActionPreference = 'Stop'
+// imprimante par son NOM, sans partage. Il n'est JAMAIS écrit sur disque : un
+// .ps1 déposé dans %TEMP% disparaît au premier nettoyage (Storage Sense,
+// antivirus) et toutes les impressions échouaient ensuite jusqu'au redémarrage.
+// Il part en -EncodedCommand ; nom et chemin arrivent par l'environnement.
+const SCRIPT_RAW_PS1 = `$ErrorActionPreference = 'Stop'
+$Printer = $env:POS_RAW_PRINTER
+$Path = $env:POS_RAW_PATH
+if (-not $Printer -or -not $Path) { throw 'Imprimante ou fichier non transmis au script.' }
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
@@ -254,29 +259,27 @@ try {
 } finally { [void][PosRawPrinter]::ClosePrinter($h) }
 `;
 
-let cheminScriptRaw: string | null = null;
-async function scriptRawPret(): Promise<string> {
-  if (cheminScriptRaw) return cheminScriptRaw;
-  const p = join(tmpdir(), 'pos-raw-print.ps1');
-  await writeFile(p, SCRIPT_RAW_PS1, 'utf8');
-  cheminScriptRaw = p;
-  return p;
+/** Arguments PowerShell + environnement pour envoyer `chemin` à l'imprimante `nom`. */
+export function commandeRawSpooler(nom: string, chemin: string): { args: string[]; env: Record<string, string> } {
+  return {
+    args: [
+      '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+      '-EncodedCommand', Buffer.from(SCRIPT_RAW_PS1, 'utf16le').toString('base64'),
+    ],
+    env: { POS_RAW_PRINTER: nom, POS_RAW_PATH: chemin },
+  };
 }
 
 /** Windows : impression RAW par NOM d'imprimante via le spooler (winspool). */
 async function envoyerRawWindowsSpooler(nom: string, data: Buffer): Promise<void> {
-  const script = await scriptRawPret();
   const tmp = join(tmpdir(), `pos-ticket-${randomBytes(6).toString('hex')}.bin`);
   await writeFile(tmp, data);
   try {
     await new Promise<void>((res, rej) => {
-      // Nom et chemin passés en arguments (argv) au script : pas de shell,
-      // donc aucune injection possible même si le nom contient des espaces.
-      const p = spawn(
-        'powershell',
-        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script, '-Printer', nom, '-Path', tmp],
-        { windowsHide: true },
-      );
+      // Nom et chemin passés par variables d'environnement, jamais interpolés
+      // dans le script : aucune injection possible, espaces compris.
+      const { args, env } = commandeRawSpooler(nom, tmp);
+      const p = spawn('powershell', args, { windowsHide: true, env: { ...process.env, ...env } });
       let err = '';
       p.stderr.on('data', (b) => (err += b.toString()));
       p.on('error', rej);
