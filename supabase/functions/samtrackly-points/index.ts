@@ -21,8 +21,9 @@
 //
 //  3. Écrire deux fois ne double rien. Le shift retombe sur `pos_service_id`,
 //     les dépenses sur leur `id` du POS, les présences sur le trio
-//     (point_id, caissier_id, travailleur_id). Rejouer est donc sans danger,
-//     et c'est ce qui permet de réessayer sans réfléchir.
+//     (point_id, caissier_id, travailleur_id), ou sur la paire historique
+//     (point_id, travailleur_id) lorsque le caissier n'est pas résolu. Rejouer
+//     est donc sans danger, et c'est ce qui permet de réessayer sans réfléchir.
 // ──────────────────────────────────────────────────────────────────────────────
 import { clientAdmin, json } from '../_shared/auth.ts';
 import {
@@ -42,6 +43,7 @@ import {
   type FicheRH,
 } from '../_shared/samtrackly-detail.ts';
 import { ErreurSamtrackly, lire, inserer, upsert, patch, supprimer, samtracklyConfigure } from '../_shared/samtrackly-api.ts';
+import { ecrirePresences } from '../_shared/samtrackly-presences.ts';
 import {
   servicesARattraper,
   construireJournalRattrapage,
@@ -308,10 +310,9 @@ async function transfererService(
   // le prochain passage rejouera tout — sans rien doubler.
   await upsert('points_shifts', [ligneShift as unknown as Record<string, unknown>], 'pos_service_id');
   await upsert('depenses', lignesDepenses as unknown as Record<string, unknown>[], 'id');
-  await upsert(
-    'presences',
+  await ecrirePresences(
     lignesPresences as unknown as Record<string, unknown>[],
-    'point_id,caissier_id,travailleur_id',
+    { lire, inserer, upsert, patch },
   );
 
   // Qui n'a pas pu être inscrit en présence, faute de fiche RH. On le NOTE :
