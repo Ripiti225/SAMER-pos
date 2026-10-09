@@ -197,7 +197,7 @@ export function Parametres({ filtre }: { filtre: FiltreResto; onFiltre: (v: Filt
                 {SECTIONS_PERMISSIONS.map((sec) => (
                   <div key={sec.cle} className="mb-3 last:mb-0">
                     <p className="mb-1 text-xs font-bold uppercase tracking-wide text-faible">{sec.libelle}</p>
-                    <div className="grid gap-1 sm:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
                       {sec.permissions.map((p) => {
                         // La permission protégée n'est proposée à AUCUN autre
                         // rôle : la donner, c'est donner tout le reste ensuite.
@@ -237,7 +237,7 @@ export function Parametres({ filtre }: { filtre: FiltreResto; onFiltre: (v: Filt
                     Tout décocher
                   </button>
                 </div>
-                <div className="grid gap-1.5 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                   {instances.map((i) => {
                     const r = nomResto.get(i.restaurant_id);
                     return (

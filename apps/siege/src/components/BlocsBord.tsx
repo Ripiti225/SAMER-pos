@@ -58,7 +58,7 @@ export function TuilesBord({
   const absolu = sansVariation ? undefined : ecartAbsolu;
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       <TuileChiffre libelle="Chiffre d’affaires" valeur={vue.ca} precedent={contre((v) => v.ca, vue.caPrecedent)} ecartAbsolu={absolu} format={formatFCFA} ton="marque" />
       <TuileChiffre libelle="Commandes payées" valeur={vue.commandes} precedent={contre((v) => v.commandes, vue.commandesPrecedent)} ecartAbsolu={absolu} format={(n) => n.toLocaleString('fr-FR')} />
       <TuileChiffre libelle="Panier moyen" valeur={vue.panier} precedent={contre((v) => v.panier)} ecartAbsolu={absolu} format={formatFCFA} />
@@ -111,7 +111,7 @@ export function BlocsBord({
       {repartition}
 
       {/* ---------- Couche 4 : ce que seul le POS possède ---------- */}
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Bloc titre="Top des plats" note="Libellé figé au moment de la vente — aucun catalogue n’est nécessaire.">
           <BarresHorizontales lignes={vue.plats} max={maxima?.plats} vide="Aucun plat vendu sur cette période." />
         </Bloc>
@@ -151,7 +151,7 @@ export function BlocsBord({
         </Bloc>
 
         <Bloc titre="Remises et annulations">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <p className="chiffres text-2xl font-bold">{formatFCFA(vue.remises.reduce((s, r) => s + nb(r.montant), 0))}</p>
               <p className="text-xs text-doux">{vue.remises.length} remise(s) accordée(s)</p>
@@ -265,7 +265,7 @@ export function BlocsBord({
 
       {/* ---------- Couche 5 : l'équipe ---------- */}
       <Bloc titre="Équipe" note="Arrivée = l’heure du clic sur « Pointer ». Fin = heure de paie pour qui est payé à la journée, heure de clôture sinon.">
-        <div className="mb-3 grid gap-3 sm:grid-cols-3">
+        <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>
             <p className="chiffres text-2xl font-bold">{vue.personnes}</p>
             <p className="text-xs text-doux">personne(s) en poste sur la période</p>

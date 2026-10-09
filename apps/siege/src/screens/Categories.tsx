@@ -101,12 +101,12 @@ export function Categories({ filtre }: { filtre: FiltreResto; onFiltre: (v: Filt
                 {enroles.map((r) => {
                   const cats = existantes.get(r.restaurant_id!) ?? [];
                   return (
-                    <div key={r.samtrackly_id} className="flex items-baseline justify-between gap-3 border-b border-filet py-1.5 last:border-0">
-                      <span className="flex min-w-0 items-center gap-2 font-semibold">
+                    <div key={r.samtrackly_id} className="flex flex-col gap-0.5 border-b border-filet py-1.5 last:border-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+                      <span className="flex min-w-0 flex-none items-center gap-2 font-semibold sm:max-w-[45%]">
                         <PastilleMarque marque={r.marque} />
                         <span className="truncate">{r.nom}</span>
                       </span>
-                      <span className={`flex-none text-sm ${cats.length === 0 ? 'text-faible' : 'text-doux'}`}>
+                      <span className={`min-w-0 text-sm sm:text-right ${cats.length === 0 ? 'text-faible' : 'text-doux'}`}>
                         {cats.length === 0 ? 'aucune' : cats.map((c) => c.nom).join(', ')}
                       </span>
                     </div>
@@ -122,7 +122,7 @@ export function Categories({ filtre }: { filtre: FiltreResto; onFiltre: (v: Filt
 
           <div className="rounded-jeton border border-filet bg-carte p-4">
             <h2 className="mb-2 text-[12px] font-bold uppercase tracking-wide text-faible">La catégorie</h2>
-            <div className="grid gap-3 sm:grid-cols-[1fr_140px]">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_140px]">
               <label className="block text-sm text-doux">
                 Nom
                 <input className="champ mt-1" value={nom} onChange={(e) => setNom(e.target.value)} placeholder="Pizzas" />
@@ -155,7 +155,7 @@ export function Categories({ filtre }: { filtre: FiltreResto; onFiltre: (v: Filt
                 Tout décocher
               </button>
             </div>
-            <div className="grid gap-1.5 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
               {enroles.map((r) => (
                 <label key={r.samtrackly_id} className="flex cursor-pointer items-center gap-2.5 rounded-btn border border-filet px-3 py-2.5 transition hover:border-marque">
                   <input

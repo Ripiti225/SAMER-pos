@@ -85,7 +85,7 @@ export function Equipe({ filtre, onFiltre }: { filtre: FiltreResto; onFiltre: (v
       {isPending ? (
         <Squelette lignes={4} />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {visibles.map((e) => (
             <article key={e.id} className="flex items-center gap-3 rounded-jeton border border-filet bg-carte p-4 shadow-e1">
               {e.photo_url ? (

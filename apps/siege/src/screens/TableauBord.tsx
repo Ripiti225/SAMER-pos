@@ -287,7 +287,7 @@ export function TableauBord({ filtre, onFiltre }: { filtre: FiltreResto; onFiltr
           ) : vueA && vueB ? (
             <>
               <Synthese a={vueA} b={vueB} />
-              <div className="grid gap-4 xl:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                 <div className="space-y-4">
                   <EnteteColonne lettre="A" titre={entetes.a.titre} sous={entetes.a.sous} />
                   {/* Aucune flèche sur A : sa variation contre son propre passé
@@ -326,7 +326,7 @@ export function TableauBord({ filtre, onFiltre }: { filtre: FiltreResto; onFiltr
             series={seriesDe(choisi)}
             repartition={
               !choisi && (
-                <div className="grid gap-4 xl:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                   <Bloc titre="Chiffre d’affaires par restaurant">
                     <BarresHorizontales
                       lignes={[...classement]

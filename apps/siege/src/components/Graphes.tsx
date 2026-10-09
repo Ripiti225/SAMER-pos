@@ -246,7 +246,7 @@ export function BarresHorizontales({
           <div className="flex items-baseline justify-between gap-3 text-sm">
             <span className="min-w-0 truncate">
               {l.libelle}
-              {l.detail && <span className="ml-1.5 text-xs text-faible">{l.detail}</span>}
+              {l.detail && <span className="block truncate text-xs text-faible sm:ml-1.5 sm:inline">{l.detail}</span>}
             </span>
             <span className="chiffres flex-none font-semibold">{format(l.valeur)}</span>
           </div>
@@ -288,7 +288,7 @@ export function BarresEcarts({
             <div className="flex items-baseline justify-between gap-3 text-sm">
               <span className="min-w-0 truncate">
                 {l.libelle}
-                {l.detail && <span className="ml-1.5 text-xs text-faible">{l.detail}</span>}
+                {l.detail && <span className="block truncate text-xs text-faible sm:ml-1.5 sm:inline">{l.detail}</span>}
               </span>
               <span className={`chiffres flex-none font-semibold ${negatif ? 'text-alerte-txt' : 'text-ok-txt'}`}>
                 {l.valeur > 0 ? '+' : ''}
