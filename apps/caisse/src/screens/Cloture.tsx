@@ -619,7 +619,7 @@ function ModaleTransfert({
           <div className="champ flex items-center justify-center text-2xl tracking-[0.5em]">
             {'•'.repeat(pin.length) || <span className="text-base tracking-normal text-doux">PIN du receveur…</span>}
           </div>
-          <Numpad valeur={pin} onChange={setPin} longueurMax={6} onValider={transferer} libelleValider={enCours ? 'Transfert…' : 'Accepter le transfert'} validerDesactive={pin.length < 4 || enCours} />
+          <Numpad valeur={pin} onChange={setPin} longueurMax={6} code onValider={transferer} libelleValider={enCours ? 'Transfert…' : 'Accepter le transfert'} validerDesactive={pin.length < 4 || enCours} />
           <button type="button" className="btn-blanc w-full" onClick={() => { setReceveur(null); setPin(''); }}>← Changer de caissier</button>
         </div>
       )

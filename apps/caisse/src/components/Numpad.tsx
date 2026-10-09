@@ -7,13 +7,19 @@ interface Props {
   onValider?: () => void;
   libelleValider?: string;
   validerDesactive?: boolean;
+  /**
+   * Saisie d'un CODE (PIN) : le 0 de tête compte. Sans ce drapeau, le pavé se
+   * comporte en montant et « 0 » puis « 5 » donne « 5 » — un PIN commençant
+   * par 0 devenait impossible à taper.
+   */
+  code?: boolean;
 }
 
 /** Pavé numérique tactile (boutons ≥ 48 px) + clavier physique en dev. */
-export function Numpad({ valeur, onChange, longueurMax = 9, onValider, libelleValider = 'Valider', validerDesactive }: Props) {
+export function Numpad({ valeur, onChange, longueurMax = 9, onValider, libelleValider = 'Valider', validerDesactive, code = false }: Props) {
   const taper = (c: string) => {
     if (valeur.length >= longueurMax) return;
-    onChange(valeur === '0' ? c : valeur + c);
+    onChange(valeur === '0' && !code ? c : valeur + c);
   };
 
   // Support clavier (dev) : 0-9, Backspace, Enter/Return, Escape (clear)
