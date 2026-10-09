@@ -9,7 +9,7 @@ import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
 import { verifierPinUtilisateur } from '../auth/pin.js';
-import { abandonnerCommandesVidesDuService } from '../commandes/service.js';
+import { abandonnerCommandesVidesDuService, codeLibreDansService } from '../commandes/service.js';
 import { calculerStatsService, reconciliationAuto, retoursDuService } from './rapport.js';
 import { sequenceOuverte } from './sequences.js';
 import { totalDepenses } from '../depenses/service.js';
@@ -164,7 +164,11 @@ export function routesServices(app: FastifyInstance): void {
       for (const c of transferees) {
         const [maj] = await tx
           .update(commandes)
-          .set({ service_id: s!.id, updated_at: new Date() })
+          .set({
+            service_id: s!.id,
+            code_commande: await codeLibreDansService(tx, c, s!.id, caissierId),
+            updated_at: new Date(),
+          })
           .where(eq(commandes.id, c.id))
           .returning();
         await ecrireOutbox(tx, 'commandes', 'UPDATE', c.id, maj as unknown as Record<string, unknown>);
@@ -339,6 +343,9 @@ export function routesServices(app: FastifyInstance): void {
           .set({
             caissier_id: receveur.id,
             service_id: serviceReceveur?.id ?? null,
+            code_commande: serviceReceveur
+              ? await codeLibreDansService(tx, c, serviceReceveur.id, donneurId)
+              : c.code_commande,
             updated_at: new Date(),
           })
           .where(eq(commandes.id, c.id))

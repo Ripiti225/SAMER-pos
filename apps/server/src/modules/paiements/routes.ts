@@ -10,6 +10,7 @@ import { journaliser } from '../audit/audit.js';
 import { crediterVente } from '../fidelite/service.js';
 import {
   chargerCommandeVue,
+  codeLibreDansService,
   majStatutTable,
   serviceOuvertDe,
   verrouillerCommande,
@@ -201,7 +202,11 @@ export function routesPaiements(app: FastifyInstance): void {
       if (c.service_id === null) {
         const [maj] = await tx
           .update(commandes)
-          .set({ service_id: service.id, updated_at: new Date() })
+          .set({
+            service_id: service.id,
+            code_commande: await codeLibreDansService(tx, c, service.id, req.session!.utilisateur_id),
+            updated_at: new Date(),
+          })
           .where(eq(commandes.id, id))
           .returning();
         await ecrireOutbox(tx, 'commandes', 'UPDATE', id, maj as unknown as Record<string, unknown>);
@@ -291,7 +296,12 @@ export function routesPaiements(app: FastifyInstance): void {
       const serviceId = c.service_id ?? service.id;
       const [maj] = await tx
         .update(commandes)
-        .set({ statut: 'PAYEE', service_id: serviceId, updated_at: new Date() })
+        .set({
+          statut: 'PAYEE',
+          service_id: serviceId,
+          code_commande: await codeLibreDansService(tx, c, serviceId, req.session!.utilisateur_id),
+          updated_at: new Date(),
+        })
         .where(eq(commandes.id, id))
         .returning();
       await ecrireOutbox(tx, 'commandes', 'UPDATE', id, maj as unknown as Record<string, unknown>);
@@ -341,7 +351,13 @@ export function routesPaiements(app: FastifyInstance): void {
       const serviceId = c.service_id ?? service.id;
       const [maj] = await tx
         .update(commandes)
-        .set({ statut: 'PAYEE', motif_offert: corps.motif, service_id: serviceId, updated_at: new Date() })
+        .set({
+          statut: 'PAYEE',
+          motif_offert: corps.motif,
+          service_id: serviceId,
+          code_commande: await codeLibreDansService(tx, c, serviceId, req.session!.utilisateur_id),
+          updated_at: new Date(),
+        })
         .where(eq(commandes.id, id))
         .returning();
       await ecrireOutbox(tx, 'commandes', 'UPDATE', id, maj as unknown as Record<string, unknown>);
