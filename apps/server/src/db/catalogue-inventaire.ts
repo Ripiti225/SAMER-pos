@@ -85,7 +85,8 @@ export const CATALOGUE_INVENTAIRE: ProduitInventaireSeed[] = [
   { code: 'b4', categorie: 'BOIS', nom: 'Boisson 1000f', prix: 1000, unite: 'u', role: 'COMPTE', ratio: null, ordre: 4 },
   { code: 'b5', categorie: 'BOIS', nom: 'Boisson 1500f', prix: 1500, unite: 'u', role: 'COMPTE', ratio: null, ordre: 5 },
   { code: 'b6', categorie: 'BOIS', nom: 'Pot Fresco', prix: 1000, unite: 'u', role: 'COMPTE', ratio: null, ordre: 6 },
-  { code: 'b7', categorie: 'BOIS', nom: 'Darina', prix: 0, unite: 'u', role: 'DARINA', ratio: null, ordre: 7 },
+  // Elle rentre en sachets et sort au Pot Fresco : 1 sachet = 9 pots (ratio).
+  { code: 'b7', categorie: 'BOIS', nom: 'Darina', prix: 0, unite: 'sachet', role: 'DARINA', ratio: '9', ordre: 7 },
   { code: 'b8', categorie: 'BOIS', nom: 'Thé', prix: 1000, unite: 'u', role: 'COMPTE', ratio: null, ordre: 8 },
 
   // Glaces
