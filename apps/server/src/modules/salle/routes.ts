@@ -33,6 +33,7 @@ import {
   verrouillerCommande,
 } from '../commandes/service.js';
 import { calculerDestinataire } from '../routage/routage.js';
+import { marquerPrete, marquerServie } from '../kds/service-statut.js';
 import { imprimerBonsEnvoi } from '../../printer/bons.js';
 import { exigerAccesTable, ouvrirTablePar } from '../tables/propriete.js';
 import { aPermission } from '../../plugins/sessions.js';
@@ -215,6 +216,24 @@ export function routesSalle(app: FastifyInstance): void {
     app.diffuser('commande', id);
     if (vue.table_id) app.diffuser('table:changee', vue.table_id);
     return vue;
+  });
+
+  /**
+   * La CAISSE marque « Prêt » ou « Servi » elle-même : site sans écran
+   * cuisine, cuisine débordée, plat remis au comptoir. « Prêt » fait sonner le
+   * serveur exactement comme l'écran cuisine ; « Servi » peut se faire
+   * directement depuis « en cuisine », sans passer par « Prêt ».
+   */
+  const gardeCaisse = app.exigePermission('caisse.encaisser');
+  app.post('/api/caisse/commandes/:id/pret', { preHandler: gardeCaisse }, async (req) => {
+    const { id } = req.params as { id: string };
+    await marquerPrete(app, id);
+    return chargerCommandeVue(db, id);
+  });
+  app.post('/api/caisse/commandes/:id/servir', { preHandler: gardeCaisse }, async (req) => {
+    const { id } = req.params as { id: string };
+    await marquerServie(app, id, { directDepuisCuisine: true });
+    return chargerCommandeVue(db, id);
   });
 
   /**
