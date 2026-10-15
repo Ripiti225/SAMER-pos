@@ -7,7 +7,7 @@ import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
-import { crediterVente } from '../fidelite/service.js';
+import { crediterVente, debiterPaiementPoints } from '../fidelite/service.js';
 import {
   chargerCommandeVue,
   codeLibreDansService,
@@ -140,6 +140,23 @@ export function routesPaiements(app: FastifyInstance): void {
         }
       }
 
+      // Paiement avec les points du client : TOUT en points ou rien — le solde
+      // couvre le montant entier et rien n'est déjà encaissé sur la cible
+      // (la note de la personne, ou le ticket). Le client est celui de la
+      // note — pour un partage, chacun paie avec SES points, jamais ceux d'un
+      // autre convive rattaché au ticket.
+      let pointsDebites = 0;
+      if (corps.mode === 'POINTS') {
+        const clientPoints = noteCible ? noteCible.client_fidelite_id : c.client_fidelite_id;
+        const payeCible = noteCible
+          ? existants.filter((p) => p.note_id === noteCible!.id).reduce((s, p) => s + p.montant, 0)
+          : dejaPaye;
+        const montantCible = noteCible ? noteCible.montant : c.total;
+        pointsDebites = await debiterPaiementPoints(
+          tx, clientPoints, id, noteId, montantCible - payeCible, payeCible, corps.montant,
+        );
+      }
+
       const [paiement] = await tx
         .insert(paiements)
         .values({
@@ -154,6 +171,19 @@ export function routesPaiements(app: FastifyInstance): void {
         })
         .returning();
       await ecrireOutbox(tx, 'paiements', 'INSERT', paiement!.id, paiement as unknown as Record<string, unknown>);
+      if (pointsDebites > 0) {
+        await journaliser(tx, {
+          user_id: req.session!.utilisateur_id,
+          action: 'PAIEMENT_POINTS',
+          entite: 'commandes',
+          entite_id: id,
+          montant: corps.montant,
+          meta: { paiement_id: paiement!.id, note_id: noteId, points: pointsDebites },
+        });
+      }
+      // Ce qui a été payé en points ne rapporte pas de points.
+      const enPoints = (filtre: (p: { note_id: string | null }) => boolean) =>
+        [...existants, paiement!].filter((p) => p.mode === 'POINTS' && filtre(p)).reduce((s, p) => s + p.montant, 0);
       if (noteCible) {
         await journaliser(tx, {
           user_id: req.session!.utilisateur_id,
@@ -192,7 +222,8 @@ export function routesPaiements(app: FastifyInstance): void {
         if (noteSoldee) {
           if (noteCible.type === 'ARTICLES') notePayeeId = noteCible.id;
           if (noteCible.type === 'ARTICLES' && noteCible.client_fidelite_id) {
-            await crediterVente(tx, noteCible.client_fidelite_id, id, noteCible.montant, noteCible.id);
+            const credite = noteCible.montant - enPoints((p) => p.note_id === noteCible!.id);
+            await crediterVente(tx, noteCible.client_fidelite_id, id, credite, noteCible.id);
           }
         }
       }
@@ -235,7 +266,7 @@ export function routesPaiements(app: FastifyInstance): void {
         }
         // Sprint 4 B : crédit des points fidélité, dans la transaction du paiement.
         if (!fluxArticles && c.client_fidelite_id) {
-          await crediterVente(tx, c.client_fidelite_id, id, c.total);
+          await crediterVente(tx, c.client_fidelite_id, id, c.total - enPoints(() => true));
         }
         await journaliser(tx, {
           user_id: req.session!.utilisateur_id,

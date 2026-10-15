@@ -8,7 +8,7 @@ import type { FastifyInstance } from 'fastify';
 import type { CommandeVue } from '@pos/shared';
 import { construireApp } from '../src/app.js';
 import { db, fermerDb } from '../src/db/client.js';
-import { auditLog, clientsFidelite, pointsFidelite, syncEtat, syncOutbox } from '../src/db/schema/index.js';
+import { auditLog, clientsFidelite, commandes, pointsFidelite, syncEtat, syncOutbox } from '../src/db/schema/index.js';
 import { PIN_CAISSIER, resetDonnees, seConnecter, type Donnees } from './aide.js';
 
 let app: FastifyInstance;
@@ -124,5 +124,63 @@ describe('règle des 24 h hors ligne', () => {
     });
     expect(rep.statusCode).toBe(409);
     expect(rep.json().erreur).toContain('Solde non vérifiable');
+  });
+});
+
+describe('recherche instantanée du client au paiement', () => {
+  it('« 0769 » trouve tous les numéros qui contiennent ces chiffres, espaces ignorés', async () => {
+    await db.insert(clientsFidelite).values([
+      { id: crypto.randomUUID(), telephone: '0769123456', nom: 'Awa' },
+      { id: crypto.randomUUID(), telephone: '05 07 69 00 11' },
+      { id: crypto.randomUUID(), telephone: '0101010101' },
+    ]);
+    // Un numéro laissé à la livraison, pas encore client fidélité
+    const id = await nouvelleCommande(1);
+    await db.update(commandes).set({ contact_client: '07 69 88 77 66' }).where(eq(commandes.id, id));
+
+    const rep = await app.inject({ method: 'GET', url: '/api/clients/recherche?q=0769', cookies });
+    expect(rep.statusCode).toBe(200);
+    const clients = rep.json().clients as { client_id: string | null; telephone: string; nom: string | null }[];
+    const numeros = clients.map((c) => c.telephone);
+    expect(numeros).toEqual(expect.arrayContaining(['0769123456', '05 07 69 00 11', '07 69 88 77 66']));
+    expect(numeros).not.toContain('0101010101');
+    expect(clients.find((c) => c.telephone === '07 69 88 77 66')!.client_id).toBeNull();
+    expect(clients.find((c) => c.telephone === '0769123456')!.nom).toBe('Awa');
+
+    // Recherche par nom, et rien sous 3 chiffres
+    const parNom = await app.inject({ method: 'GET', url: '/api/clients/recherche?q=aw', cookies });
+    expect(parNom.json().clients.map((c: { telephone: string }) => c.telephone)).toContain('0769123456');
+    const tropCourt = await app.inject({ method: 'GET', url: '/api/clients/recherche?q=07', cookies });
+    expect(tropCourt.json().clients).toEqual([]);
+  });
+
+  it('crédite le client saisi APRÈS un premier versement (5 000 espèces, numéro, reste Wave)', async () => {
+    const TEL2 = '0769123456';
+    const id = await nouvelleCommande(2); // 6000 F
+    const especes = await app.inject({ method: 'POST', url: `/api/commandes/${id}/paiements`, cookies, payload: { mode: 'ESPECES', montant: 5000 } });
+    expect(especes.json().statut).not.toBe('PAYEE');
+
+    const rattach = await app.inject({ method: 'POST', url: `/api/commandes/${id}/fidelite`, cookies, payload: { telephone: TEL2 } });
+    expect(rattach.statusCode).toBe(200);
+    const wave = await app.inject({ method: 'POST', url: `/api/commandes/${id}/paiements`, cookies, payload: { mode: 'WAVE', montant: 1000 } });
+    expect(wave.json().statut).toBe('PAYEE');
+
+    const [cli] = await db.select().from(clientsFidelite).where(eq(clientsFidelite.telephone, TEL2));
+    const lignes = await db.select().from(pointsFidelite).where(eq(pointsFidelite.commande_id, id));
+    expect(lignes.filter((l) => l.client_id === cli!.id && l.points > 0).map((l) => l.points)).toEqual([6]);
+  });
+
+  it('refuse d’utiliser des points une fois un versement enregistré', async () => {
+    await definirDescente(60_000);
+    const id = await nouvelleCommande(1);
+    await app.inject({ method: 'POST', url: `/api/commandes/${id}/paiements`, cookies, payload: { mode: 'ESPECES', montant: 1000 } });
+    const rep = await app.inject({
+      method: 'POST',
+      url: `/api/commandes/${id}/fidelite`,
+      cookies,
+      payload: { telephone: TEL, utiliser_points: 50 },
+    });
+    expect(rep.statusCode).toBe(409);
+    expect(rep.json().erreur).toContain('avant le premier encaissement');
   });
 });

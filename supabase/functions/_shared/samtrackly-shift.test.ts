@@ -157,6 +157,26 @@ describe('construireShift — les montants', () => {
     assert.equal(construireShift(juste, DEPENSES, CTX).vente_shift, RAPPORT_Z.total_ventes);
   });
 
+  test('payé en points : dans la vente du shift, sans toucher aux espèces', () => {
+    // 6 000 F réglés en points : la vente système monte d'autant, le tiroir non.
+    const z = {
+      ...RAPPORT_Z,
+      paye_points: { nb: 1, total: 6_000 },
+      total_ventes: RAPPORT_Z.total_ventes + 6_000,
+      vente_totale: RAPPORT_Z.vente_totale + 6_000,
+      total_systeme: RAPPORT_Z.total_systeme + 6_000,
+    };
+    const juste = { ...SERVICE, especes_comptees: 191_000, ecart: 0, rapport_z: z };
+    const s = construireShift(juste, DEPENSES, CTX);
+    assert.equal(s.points_fidelite, 6_000);
+    assert.equal(s.espece, 191_000 - SERVICE.fond_de_caisse);
+    assert.equal(s.vente_shift, z.total_ventes, 'sans la colonne, le shift manquerait de 6 000');
+  });
+
+  test('un rapport Z figé avant les points vaut 0', () => {
+    assert.equal(construireShift(SERVICE, DEPENSES, CTX).points_fidelite, 0);
+  });
+
   test('la vente système du POS est transmise pour alimenter vente_machine', () => {
     // Le gérant ne tape plus ce chiffre : le POS le connaît exactement.
     assert.equal(construireShift(SERVICE, DEPENSES, CTX).vente_systeme_pos, 287_000);

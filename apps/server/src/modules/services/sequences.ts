@@ -97,6 +97,7 @@ async function detailShifts(dbx: DbOuTx, sequenceId: string): Promise<ShiftSeque
       livraisons?: Record<string, number>;
       // Absent des shifts clôturés AVANT l'arrivée des Kdo : on retombe sur 0.
       offerts?: { nb: number; total: number };
+      paye_points?: { nb: number; total: number };
       modes?: Record<string, number>;
     };
     return {
@@ -114,6 +115,7 @@ async function detailShifts(dbx: DbOuTx, sequenceId: string): Promise<ShiftSeque
       depenses: r.depenses,
       livraisons: rec.livraisons ?? {},
       offerts: rec.offerts ?? { nb: 0, total: 0 },
+      paye_points: rec.paye_points ?? { nb: 0, total: 0 },
       monnaie_rendue: Number(rendusParShift.get(r.id)?.total ?? 0),
       nb_rendus: Number(rendusParShift.get(r.id)?.nb ?? 0),
       modes_declares: rec.modes ?? {},
@@ -126,6 +128,7 @@ function agreger(shifts: ShiftSequence[]): RecapSequence {
   const livraisons = recAdditif();
   const modes = recAdditif();
   const offerts = { nb: 0, total: 0 };
+  const paye_points = { nb: 0, total: 0 };
   let monnaie_rendue = 0;
   let nb_rendus = 0;
   let vente_totale = 0;
@@ -144,10 +147,12 @@ function agreger(shifts: ShiftSequence[]): RecapSequence {
     ajoute(modes, s.modes_declares);
     offerts.nb += s.offerts?.nb ?? 0;
     offerts.total += s.offerts?.total ?? 0;
+    paye_points.nb += s.paye_points?.nb ?? 0;
+    paye_points.total += s.paye_points?.total ?? 0;
     monnaie_rendue += s.monnaie_rendue ?? 0;
     nb_rendus += s.nb_rendus ?? 0;
   }
-  return { vente_totale, total_systeme, diff: vente_totale - total_systeme, especes_comptees, depenses, ecart_especes, livraisons, offerts, monnaie_rendue, nb_rendus, modes };
+  return { vente_totale, total_systeme, diff: vente_totale - total_systeme, especes_comptees, depenses, ecart_especes, livraisons, offerts, paye_points, monnaie_rendue, nb_rendus, modes };
 }
 
 /**

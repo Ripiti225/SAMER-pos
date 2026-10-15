@@ -187,10 +187,11 @@ export async function reconciliationAuto(
   modes: Record<ModePaiement, number>;
   livraisons: Record<string, number>;
   offerts: { nb: number; total: number };
+  paye_points: { nb: number; total: number };
 }> {
   const externes = [...PARTENAIRES_EXTERNES];
   const lignesModes = await dbx
-    .select({ mode: paiements.mode, total: sql<string>`SUM(${paiements.montant})` })
+    .select({ mode: paiements.mode, total: sql<string>`SUM(${paiements.montant})`, nb: sql<string>`COUNT(*)` })
     .from(paiements)
     .innerJoin(commandes, eq(commandes.id, paiements.commande_id))
     .where(
@@ -229,7 +230,12 @@ export async function reconciliationAuto(
     total: Number(ligneOfferts?.total ?? 0),
   };
 
-  return { modes, livraisons, offerts };
+  // Payé avec les points : aucun argent reçu, le caissier n'a rien à déclarer.
+  // Le serveur l'ajoute à la vente comme un Kdo.
+  const lignePoints = lignesModes.find((l) => l.mode === 'POINTS');
+  const paye_points = { nb: Number(lignePoints?.nb ?? 0), total: Number(lignePoints?.total ?? 0) };
+
+  return { modes, livraisons, offerts, paye_points };
 }
 
 export async function calculerStatsService(dbx: DbOuTx, serviceId: string): Promise<StatsService> {

@@ -17,6 +17,7 @@ export const COULEUR_MODE: Record<string, string> = {
   MOOV_MONEY: 'var(--pay-moov)',
   CARTE: 'var(--pay-carte)',
   DJAMO: 'var(--pay-djamo)',
+  POINTS: 'var(--pay-points)',
 };
 
 /** Un nombre qui vient du réseau n'est jamais sûr : NULL, texte, absent. */

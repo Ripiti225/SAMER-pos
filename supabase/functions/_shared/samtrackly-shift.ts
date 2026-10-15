@@ -227,6 +227,12 @@ export interface LigneShift {
   depenses: number;
   fournisseurs: number;
   kdo: number;
+  /**
+   * Achats réglés avec les points fidélité (rapport Z `paye_points`). Comme le
+   * KDO : dans la vente du shift, jamais dans les espèces. Colonne ajoutée par
+   * supabase_points_fidelite.sql côté SamerTrackly — à passer AVANT ce pont.
+   */
+  points_fidelite: number;
   retour: number;
   retour_pos: number;
   yango_cse: number;
@@ -261,6 +267,8 @@ export function construireShift(
   const modes = (z.modes_declares ?? {}) as Record<string, unknown>;
   const parMode = (z.par_mode ?? {}) as Record<string, unknown>;
   const offerts = (z.offerts ?? {}) as Record<string, unknown>;
+  // Absent des rapports Z figés avant le 2026-10-15 : vaut alors 0.
+  const payePoints = (z.paye_points ?? {}) as Record<string, unknown>;
   const partenaires = (z.partenaires ?? {}) as Record<string, unknown>;
   const statPartenaire = (partenaire: string): Record<string, unknown> => {
     const valeur = partenaires[partenaire];
@@ -283,6 +291,7 @@ export function construireShift(
   const espece = n(service.especes_comptees) - n(service.fond_de_caisse);
 
   const kdo = n(offerts.total);
+  const pointsFidelite = n(payePoints.total);
   const yango = n(livraisons.YANGO);
   const glovo = n(livraisons.GLOVO);
   const wave = n(modes.WAVE);
@@ -292,7 +301,7 @@ export function construireShift(
   // La formule de SamerTrackly, à l'identique — celle que `calculerVenteShift()`
   // rejoue quand un manager corrige un point. `paies` y entre parce que la
   // colonne `depenses` ne porte QUE les achats (voir la spec, § 4.1).
-  const vente = achats + paies + kdo + yango + glovo + wave + djamo + om + espece;
+  const vente = achats + paies + kdo + pointsFidelite + yango + glovo + wave + djamo + om + espece;
 
   return {
     point_id: ctx.pointId,
@@ -306,6 +315,7 @@ export function construireShift(
     // Le gérant paie les fournisseurs, dans Déductions gérant. Jamais la caisse.
     fournisseurs: 0,
     kdo,
+    points_fidelite: pointsFidelite,
     // `retour` reste neutre : `calculerVenteShift()` le somme, et le montant
     // rentrerait tout seul dans la vente à la première correction d'un manager.
     retour: 0,

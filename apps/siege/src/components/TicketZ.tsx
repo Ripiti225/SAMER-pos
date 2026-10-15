@@ -34,7 +34,7 @@ const CONNUS = new Set([
   'total_promos', 'total_fidelite', 'panier_moyen',
   'par_mode', 'par_type', 'partenaires', 'top_articles',
   'remises_detail', 'annulations_detail',
-  'depenses', 'depenses_detail', 'livraisons', 'offerts', 'modes_declares',
+  'depenses', 'depenses_detail', 'livraisons', 'offerts', 'paye_points', 'modes_declares',
   'monnaie_rendue', 'nb_rendus', 'sous_notes_incompletes',
   'vente_totale', 'total_systeme', 'diff',
   'inventaire', 'equipe', 'retours',
@@ -103,6 +103,7 @@ export function TicketZ({
   const inventaire = rapport.inventaire;
   const equipe = rapport.equipe;
   const offerts = rapport.offerts;
+  const payePoints = rapport.paye_points;
   const depensesDetail = rapport.depenses_detail ?? [];
   const sousNotes = (rapport.sous_notes_incompletes ?? []) as
     { numero_ticket: number; numero_paiement: number; montant_recu: number; reste: number }[];
@@ -154,6 +155,9 @@ export function TicketZ({
             <LigneF key={m} libelle={`${LIBELLES_MODES[m as ModePaiement] ?? m} (déclaré)`} montant={nb(v)} />
           ))}
           <LigneF libelle={`Kdo offerts (${nb(offerts?.nb)})`} montant={nb(offerts?.total)} />
+          {nb(payePoints?.total) > 0 && (
+            <LigneF libelle={`Payé en points (${nb(payePoints?.nb)})`} montant={nb(payePoints?.total)} />
+          )}
           <div className="my-1 border-t border-filet" />
           <LigneF libelle="Vente totale (réconciliée)" montant={nb(rapport.vente_totale)} fort />
           <LigneF libelle="Total système" montant={nb(rapport.total_systeme)} />

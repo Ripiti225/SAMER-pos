@@ -641,6 +641,10 @@ export class EscposPrinter implements PrinterService {
           r.tiret();
           r.duo(`Kdo offerts (${z.offerts.nb})`, formatFCFA(z.offerts.total));
         }
+        // Même logique que les Kdo : dans la vente, jamais dans le tiroir.
+        if (z.paye_points?.total) {
+          r.duo(`Paye en points (${z.paye_points.nb})`, formatFCFA(z.paye_points.total));
+        }
         if (z.depenses) r.duo('Depenses', formatFCFA(z.depenses));
         // La monnaie rendue ne pèse NI sur la vente NI sur l'écart : le billet
         // entre dans le tiroir quand la monnaie en sort. Elle est imprimée
@@ -817,6 +821,7 @@ export class EscposPrinter implements PrinterService {
           // Les Kdo comptent dans les ventes du shift mais pas dans le tiroir :
           // sans cette ligne, le gérant verrait un manquant inexpliqué.
           if (sh.offerts?.total) r.duo(` Kdo offerts (${sh.offerts.nb})`, formatFCFA(sh.offerts.total));
+          if (sh.paye_points?.total) r.duo(` Paye en points (${sh.paye_points.nb})`, formatFCFA(sh.paye_points.total));
           if (sh.monnaie_rendue) r.duo(' Monnaie rendue', formatFCFA(sh.monnaie_rendue));
           r.gras(true).duo(' Ecart especes', formatFCFA(sh.ecart ?? 0)).gras(false);
         }
@@ -831,6 +836,7 @@ export class EscposPrinter implements PrinterService {
           if (montant > 0) r.duo(libellePartenaire(part), formatFCFA(montant));
         }
         if (s.offerts?.total) r.duo(`Kdo offerts (${s.offerts.nb})`, formatFCFA(s.offerts.total));
+        if (s.paye_points?.total) r.duo(`Paye en points (${s.paye_points.nb})`, formatFCFA(s.paye_points.total));
         if (s.depenses) r.duo('Depenses', formatFCFA(s.depenses));
         r.tiret();
         // Ce que la journée a coûté en petite monnaie : le gérant prépare le
@@ -840,6 +846,7 @@ export class EscposPrinter implements PrinterService {
         r.tiret();
         r.gras(true).taille(1, 2).duo('VENTE TOTALE', formatFCFA(s.vente_totale)).taille().gras(false);
         if (s.offerts?.total) r.duo(`dont Kdo offerts (${s.offerts.nb})`, formatFCFA(s.offerts.total));
+        if (s.paye_points?.total) r.duo(`dont paye en points (${s.paye_points.nb})`, formatFCFA(s.paye_points.total));
         r.duo('Total systeme', formatFCFA(s.total_systeme));
         r.gras(true).duo('DIFFERENCE', formatFCFA(s.diff)).gras(false);
         r.duo('Ecart especes', formatFCFA(s.ecart_especes));

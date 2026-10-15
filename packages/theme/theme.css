@@ -87,6 +87,9 @@
   --pay-moov: #00a94f;
   --pay-carte: #64748b;
   --pay-djamo: #101828;
+  /* Points fidélité : pas un opérateur — un violet qu'aucune marque de
+     paiement n'utilise, pour qu'on ne le confonde jamais avec de l'argent. */
+  --pay-points: #7c3aed;
 
   /* Encre POSÉE SUR l'aplat, quand le mode est sélectionné (§ 4.2, colonne
      « texte sur aplat »). Ce n'est pas toujours du blanc : sur le cyan de Wave
@@ -98,6 +101,7 @@
   --pay-moov-sur: #ffffff;
   --pay-carte-sur: #ffffff;
   --pay-djamo-sur: #ffffff;
+  --pay-points-sur: #ffffff;
 
   /* --- Séries de graphique (console du siège) -------------------------------
      Palette CATÉGORIELLE : une teinte par restaurant sur un même graphe.
@@ -235,10 +239,12 @@
      boueux. Jamais un éclaircissement automatique du jeu clair. */
   --pay-moov: #2fbf6a;
   --pay-djamo: #e6eaf2;
+  --pay-points: #a78bfa;
   /* Les deux aplats ayant changé, leur encre change avec eux : le blanc cassé
      de Djamo réclame une encre sombre, et le vert remonté de Moov aussi. */
   --pay-moov-sur: #05291a;
   --pay-djamo-sur: #101828;
+  --pay-points-sur: #1e1145;
 
   /* Les séries redescendent d'un cran pour le fond sombre : mêmes huit teintes,
      autres marches, validées comme un jeu contre --carte sombre. Jamais un

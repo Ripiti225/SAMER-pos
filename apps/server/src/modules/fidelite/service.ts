@@ -134,6 +134,79 @@ export async function utiliserPoints(
   return { montant: points * bareme.valeur_point_fcfa, points };
 }
 
+/** Points à débiter pour régler `montant` F : le dernier point entamé compte. */
+export function pointsPourMontant(bareme: Bareme, montant: number): number {
+  return Math.ceil(montant / bareme.valeur_point_fcfa);
+}
+
+export interface EligibilitePoints {
+  possible: boolean;
+  points_necessaires: number;
+  /** Pourquoi le bouton « Points » reste grisé, en français pour le caissier. */
+  raison: string | null;
+}
+
+/**
+ * Le client peut-il régler `reste` F avec ses points ? Décision du
+ * 2026-10-15 : TOUT en points ou rien en points. Le solde doit couvrir le
+ * montant entier, et rien ne doit déjà avoir été encaissé sur le ticket (ou
+ * sur la part de la personne, en partage) : jamais d'espèces + points. Le seuil d'utilisation porte sur le SOLDE (avoir assez
+ * cumulé), pas sur le montant du ticket : sinon un jus à 1 500 F ne pourrait
+ * jamais se payer en points.
+ */
+export async function eligibilitePoints(
+  tx: DbOuTx,
+  clientId: string | null,
+  reste: number,
+  dejaPaye: number,
+): Promise<EligibilitePoints> {
+  const bareme = await lireBareme(tx);
+  const necessaires = reste > 0 ? pointsPourMontant(bareme, reste) : 0;
+  const refus = (raison: string) => ({ possible: false, points_necessaires: necessaires, raison });
+  if (!clientId) return refus('Rattachez le numéro du client');
+  if (reste <= 0) return refus('Rien à payer');
+  if (dejaPaye > 0) return refus('Un paiement est déjà commencé : les points ne se mélangent pas avec un autre mode');
+  const solde = await soldePoints(tx, clientId);
+  if (solde < bareme.seuil_utilisation) {
+    return refus(`Il faut au moins ${bareme.seuil_utilisation} points cumulés`);
+  }
+  if (solde < necessaires) return refus(`Solde insuffisant : ${solde} points pour ${necessaires} nécessaires`);
+  if (!(await soldeVerifiable(tx))) return refus('Solde non vérifiable, réessayez plus tard');
+  return { possible: true, points_necessaires: necessaires, raison: null };
+}
+
+/**
+ * Débite les points d'un paiement en mode POINTS (ligne NÉGATIVE + outbox).
+ * Revérifie tout dans la transaction : l'écran a pu montrer un solde périmé.
+ */
+export async function debiterPaiementPoints(
+  tx: DbOuTx,
+  clientId: string | null,
+  commandeId: string,
+  noteId: string | null,
+  reste: number,
+  dejaPaye: number,
+  montant: number,
+): Promise<number> {
+  if (montant !== reste) {
+    throw new ErreurMetier('Les points doivent payer tout le montant', 400);
+  }
+  const eligibilite = await eligibilitePoints(tx, clientId, reste, dejaPaye);
+  if (!eligibilite.possible) throw new ErreurMetier(eligibilite.raison!, 409);
+  const [ligne] = await tx
+    .insert(pointsFidelite)
+    .values({
+      client_id: clientId!,
+      commande_id: commandeId,
+      note_id: noteId,
+      points: -eligibilite.points_necessaires,
+      source: 'POS',
+    })
+    .returning();
+  await ecrireOutbox(tx, 'points_fidelite', 'INSERT', ligne!.id, ligne as unknown as Record<string, unknown>);
+  return eligibilite.points_necessaires;
+}
+
 /** Dernières lignes de points d'un client (info). */
 export async function historique(clientId: string) {
   return db

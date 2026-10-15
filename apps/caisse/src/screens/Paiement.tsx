@@ -9,11 +9,13 @@ import {
   IconCirclePlus,
   IconCreditCard,
   IconDeviceMobile,
+  IconStar,
   IconTruckDelivery,
 } from '@tabler/icons-react';
-import type { CommandeVue, ModePaiement } from '@pos/shared';
+import type { ClientPaiementVue, CommandeVue, ModePaiement } from '@pos/shared';
 import { estLivraisonSansEncaissement, formatFCFA, LIBELLES_MODES, MODES_PAIEMENT } from '@pos/shared';
 import { api } from '../api';
+import { Fidelite } from '../components/Fidelite';
 import { SelectionArticlesPaiement, type NouvelleSousNotePaiement } from '../components/SelectionArticlesPaiement';
 import { useCaisse } from '../stores/session';
 
@@ -39,6 +41,7 @@ const COUPURES = [500, 1000, 2000, 5000, 10000];
 function iconeMode(mode: ModePaiement) {
   if (mode === 'ESPECES') return IconCash;
   if (mode === 'CARTE') return IconCreditCard;
+  if (mode === 'POINTS') return IconStar;
   return IconDeviceMobile; // Wave, Orange Money, MTN MoMo, Moov
 }
 
@@ -57,6 +60,7 @@ const COULEUR_MODE: Record<ModePaiement, string> = {
   MOOV_MONEY: 'var(--pay-moov)',
   CARTE: 'var(--pay-carte)',
   DJAMO: 'var(--pay-djamo)',
+  POINTS: 'var(--pay-points)',
 };
 
 /** Encre posée SUR l'aplat, quand le mode est sélectionné (§ 4.2). */
@@ -68,6 +72,7 @@ const TEXTE_SUR_MODE: Record<ModePaiement, string> = {
   MOOV_MONEY: 'var(--pay-moov-sur)',
   CARTE: 'var(--pay-carte-sur)',
   DJAMO: 'var(--pay-djamo-sur)',
+  POINTS: 'var(--pay-points-sur)',
 };
 
 export function Paiement() {
@@ -83,7 +88,9 @@ export function Paiement() {
    * du poste : tout ce qui se tape doit pouvoir viser l'une ou l'autre case,
    * sans quoi le champ reste inaccessible au doigt.
    */
-  const [cible, setCible] = useState<'montant' | 'recu'>('montant');
+  const [cible, setCible] = useState<'montant' | 'recu' | 'telephone'>('montant');
+  /** Numéro du client en cours de frappe : le pavé peut l'écrire aussi. */
+  const [telephoneClient, setTelephoneClient] = useState('');
 
   const { data: commande } = useQuery({
     queryKey: ['commande', commandeId],
@@ -93,6 +100,28 @@ export function Paiement() {
 
   const rafraichir = (vue: CommandeVue) => queryClient.setQueryData(['commande', commandeId], vue);
 
+  /**
+   * Le client de la cible encaissée (le ticket, ou la note d'une personne) :
+   * solde, points après paiement, et droit au mode « Points ». Re-demandé à
+   * chaque versement — le reste change, donc le droit aussi.
+   */
+  const noteClient = commande?.notes.find((n) => n.id === noteId) ?? null;
+  const clientCible = noteClient ? noteClient.client_fidelite_id : commande?.client_fidelite_id ?? null;
+  const { data: infoClient } = useQuery({
+    queryKey: ['client-paiement', commandeId, noteClient?.id ?? null, clientCible, commande?.paye, commande?.total],
+    queryFn: () =>
+      api<ClientPaiementVue>(
+        `/api/commandes/${commandeId}/client${noteClient ? `?note_id=${encodeURIComponent(noteClient.id)}` : ''}`,
+      ),
+    enabled: !!commandeId && !!clientCible,
+  });
+  // Le droit aux points peut disparaître (autre note choisie, client changé) :
+  // on ne laisse pas le caissier sur un mode qu'il ne peut plus valider.
+  const droitPoints = !!clientCible && !!infoClient?.client && infoClient.paiement_points.possible;
+  useEffect(() => {
+    if (mode === 'POINTS' && infoClient !== undefined && !droitPoints) setMode('ESPECES');
+  }, [mode, infoClient, droitPoints]);
+
   const encaisser = useMutation({
     mutationFn: (corps: { mode: ModePaiement; montant: number; note_id?: string | null; montant_recu?: number }) =>
       api<CommandeVue>(`/api/commandes/${commandeId}/paiements`, { method: 'POST', corps }),
@@ -101,6 +130,8 @@ export function Paiement() {
       setMontant('');
       setEspecesDonnees('');
       setCible('montant');
+      if (mode === 'POINTS') setMode('ESPECES');
+      void queryClient.invalidateQueries({ queryKey: ['client-paiement', commandeId] });
       const noteSoldee = noteId ? vue.notes.find((note) => note.id === noteId)?.statut === 'PAYEE' : false;
       if (vue.statut === 'PAYEE') {
         afficherToast(`Ticket n° ${vue.numero_ticket} encaissé ✔ — reçu imprimé`);
@@ -153,8 +184,11 @@ export function Paiement() {
       const source = e.target as HTMLElement;
       if (source?.tagName === 'INPUT') return;
       // Le pavé (et le clavier de dev) écrivent dans la CASE ACTIVE.
-      const ecrireCible = mode === 'ESPECES' && cible === 'recu' ? setEspecesDonnees : setMontant;
-      if (/^\d$/.test(e.key)) { e.preventDefault(); ecrireCible((v) => (v.length < 9 ? v + e.key : v)); }
+      const ecrireCible = cible === 'telephone'
+        ? setTelephoneClient
+        : mode === 'ESPECES' && cible === 'recu' ? setEspecesDonnees : setMontant;
+      const max = cible === 'telephone' ? 14 : 9;
+      if (/^\d$/.test(e.key)) { e.preventDefault(); ecrireCible((v) => (v.length < max ? v + e.key : v)); }
       else if (e.key === 'Backspace') { e.preventDefault(); ecrireCible((v) => v.slice(0, -1)); }
       else if (e.key === 'Escape') { e.preventDefault(); ecrireCible(''); }
     };
@@ -187,18 +221,22 @@ export function Paiement() {
   // Sans partage, on encaisse la commande entière : c'est le parcours normal,
   // celui de l'immense majorité des tickets.
   const resteCible = noteActive ? noteActive.reste : partageDemande ? 0 : commande.reste;
-  const montantSaisi = montant === '' ? resteCible : Number(montant);
+  // En points, on règle TOUT le reste — jamais une partie (décision du 2026-10-15).
+  const enPoints = mode === 'POINTS';
+  const pointsPossibles = droitPoints;
+  const montantSaisi = montant === '' || enPoints ? resteCible : Number(montant);
   const donnees = Number(especesDonnees || '0');
   const enEspeces = mode === 'ESPECES';
   // Hors espèces il n'y a ni billet ni monnaie : le pavé retombe sur le montant.
-  const cibleActive: 'montant' | 'recu' = enEspeces ? cible : 'montant';
+  // Le numéro du client reste visable quel que soit le mode.
+  const cibleActive: 'montant' | 'recu' | 'telephone' = cible === 'recu' && !enEspeces ? 'montant' : cible;
   const billetSaisi = enEspeces && especesDonnees !== '' && donnees > 0;
   // Affichage seulement : le franc qui fait foi est recalculé par le serveur à
   // partir du billet transmis (aucun calcul monétaire côté caisse).
   const monnaie = billetSaisi ? Math.max(0, donnees - montantSaisi) : 0;
   const billetInsuffisant = billetSaisi && donnees < montantSaisi;
   const peutAjouter =
-    !attenteSelection && montantSaisi > 0 && montantSaisi <= resteCible && !billetInsuffisant && !encaisser.isPending;
+    !attenteSelection && (!enPoints || pointsPossibles) && montantSaisi > 0 && montantSaisi <= resteCible && !billetInsuffisant && !encaisser.isPending;
 
   const ajouter = () => {
     if (!peutAjouter) return;
@@ -212,8 +250,10 @@ export function Paiement() {
     });
   };
   const ecrire = (maj: (v: string) => string) =>
-    cibleActive === 'recu' ? setEspecesDonnees(maj) : setMontant(maj);
-  const taper = (c: string) => ecrire((v) => (v.length < 9 ? v + c : v));
+    cibleActive === 'telephone'
+      ? setTelephoneClient(maj)
+      : cibleActive === 'recu' ? setEspecesDonnees(maj) : setMontant(maj);
+  const taper = (c: string) => ecrire((v) => (v.length < (cibleActive === 'telephone' ? 14 : 9) ? v + c : v));
   const ajouterRaccourci = (n: number) => ecrire((v) => String(Number(v || '0') + n));
 
   const articlesDisponibles = commande.items.some((item) => item.quantite_disponible > 0 && item.statut_cuisine !== 'ANNULE');
@@ -277,6 +317,21 @@ export function Paiement() {
               </div>
             </div>
           </div>
+
+          {/* Un ticket partagé prend le numéro de CHAQUE personne dans
+              « Payer par articles » : ses points vont à celui qui paie. */}
+          {!estPayee && !sansEncaissement && (
+            <Fidelite
+              commande={commande}
+              info={clientCible ? infoClient : undefined}
+              rechercheAutorisee={!partageDemande}
+              onMaj={rafraichir}
+              telephone={telephoneClient}
+              setTelephone={setTelephoneClient}
+              actif={cibleActive === 'telephone'}
+              onActiver={() => setCible('telephone')}
+            />
+          )}
 
           {!estPayee && !sansEncaissement && articlesDisponibles && (
             <div className="rounded-2xl bg-surface-moyenne p-5 shadow-e1">
@@ -352,7 +407,7 @@ export function Paiement() {
               <div className="carte p-5">
                 <h3 className="mb-3 text-base font-bold">Mode de paiement</h3>
                 <div className="grid grid-cols-4 gap-2">
-                  {MODES_PAIEMENT.map((m) => {
+                  {MODES_PAIEMENT.filter((m) => m !== 'POINTS').map((m) => {
                     const Icone = iconeMode(m);
                     const actif = mode === m;
                     const couleur = COULEUR_MODE[m];
@@ -390,9 +445,56 @@ export function Paiement() {
                       </button>
                     );
                   })}
+                  {/* Points fidélité : la 8e case de la grille. Grisée tant que
+                      le client rattaché n'a pas de quoi payer TOUT le reste. */}
+                  <button
+                    type="button"
+                    disabled={!pointsPossibles}
+                    onClick={() => { setMode('POINTS'); setCible('montant'); setMontant(''); }}
+                    className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border-2 p-2 text-center transition disabled:cursor-not-allowed disabled:opacity-35"
+                    style={
+                      enPoints
+                        ? {
+                            borderColor: COULEUR_MODE.POINTS,
+                            background: COULEUR_MODE.POINTS,
+                            color: TEXTE_SUR_MODE.POINTS,
+                            boxShadow: `0 0 0 3px color-mix(in srgb, ${COULEUR_MODE.POINTS} 30%, transparent)`,
+                          }
+                        : {
+                            borderColor: `color-mix(in srgb, ${COULEUR_MODE.POINTS} 42%, var(--filet))`,
+                            background: `color-mix(in srgb, ${COULEUR_MODE.POINTS} 8%, var(--carte))`,
+                            color: COULEUR_MODE.POINTS,
+                          }
+                    }
+                  >
+                    <IconStar size={26} />
+                    <span className="text-[11px] font-semibold leading-tight" style={{ color: enPoints ? TEXTE_SUR_MODE.POINTS : 'var(--txt)' }}>
+                      Points
+                    </span>
+                  </button>
                 </div>
               </div>
 
+              {enPoints && infoClient?.client ? (
+                // En points il n'y a ni montant à composer ni billet : le reste
+                // part en entier. On montre ce que le client dépense et garde.
+                <div className="carte flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full" style={{ background: 'color-mix(in srgb, var(--pay-points) 14%, var(--carte))', color: 'var(--pay-points)' }}>
+                    <IconStar size={36} />
+                  </div>
+                  <div className="text-sm font-bold uppercase tracking-widest text-doux">Payer avec les points</div>
+                  <div className="text-4xl font-extrabold tabular-nums text-fort">{formatFCFA(resteCible)}</div>
+                  <div className="text-lg font-semibold" style={{ color: 'var(--pay-points)' }}>
+                    = {infoClient.paiement_points.points_necessaires} points
+                  </div>
+                  <div className="text-sm text-doux">
+                    Solde {infoClient.solde} pts → il lui restera <b className="text-fort">{infoClient.paiement_points.solde_apres} pts</b>
+                  </div>
+                  <button type="button" onClick={() => setMode('ESPECES')} className="mt-2 text-sm font-semibold text-doux underline">
+                    Changer de mode
+                  </button>
+                </div>
+              ) : (
               <div className="carte flex min-h-0 flex-1 flex-col p-4">
                 {/* Les deux cases que le pavé peut remplir. On tape sur l'une
                     pour la rendre active — c'est ce qui rend « Reçu du client »
@@ -416,6 +518,19 @@ export function Paiement() {
                     />
                   )}
                 </div>
+
+                {/* Paiement mixte, y compris pour UNE personne d'un partage :
+                    une ligne par mode. Rien à deviner, mais il faut le savoir. */}
+                {montant === '' && cibleActive === 'montant' && resteCible > 0 && (
+                  <p className="-mt-1 mb-2 text-xs text-doux">
+                    Mixte : tapez la part de ce mode (ex. 5 000 en espèces), « Ajouter », puis choisissez Wave ou Orange Money pour le reste.
+                  </p>
+                )}
+                {cibleActive === 'telephone' && (
+                  <p className="-mt-1 mb-2 text-xs font-semibold text-marque-fonce">
+                    Le pavé écrit le numéro du client — touchez « À encaisser » pour revenir au montant.
+                  </p>
+                )}
 
                 {/* Monnaie à rendre : le chiffre que le caissier compte dans sa
                     main. Rouge tant que le billet ne couvre pas la note — on ne
@@ -467,7 +582,7 @@ export function Paiement() {
                       Compte juste
                     </button>
                   </div>
-                ) : (
+                ) : cibleActive === 'montant' ? (
                   <div className="mt-2 grid grid-cols-4 gap-2">
                     {RACCOURCIS.map((n) => (
                       <button
@@ -480,11 +595,12 @@ export function Paiement() {
                       </button>
                     ))}
                   </div>
-                )}
+                ) : null}
                 {montantSaisi > resteCible && (
                   <div className="mt-2 text-center text-sm font-medium text-alerte">Le montant dépasse le reste à payer</div>
                 )}
               </div>
+              )}
             </>
           )}
 
@@ -568,7 +684,7 @@ export function Paiement() {
               style={{ background: `color-mix(in srgb, ${COULEUR_MODE[mode]} 16%, var(--carte))`, color: COULEUR_MODE[mode] }}
               className="flex h-14 flex-none items-center justify-center gap-2 rounded-[13px] text-lg font-bold shadow-e1 transition hover:brightness-95 disabled:opacity-40"
             >
-              <IconCirclePlus size={22} /> {encaisser.isPending ? 'Encaissement…' : `Ajouter ${LIBELLES_MODES[mode]}`}
+              <IconCirclePlus size={22} /> {encaisser.isPending ? 'Encaissement…' : enPoints ? 'Payer avec les points' : `Ajouter ${LIBELLES_MODES[mode]}`}
             </button>
           )}
           {/* La clôture d'une livraison externe passe par le bouton dédié (colonne

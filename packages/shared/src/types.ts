@@ -440,6 +440,12 @@ export interface RapportZ {
    */
   offerts: { nb: number; total: number };
   /**
+   * Ventes réglées avec les points fidélité (mode POINTS). Comme les Kdo :
+   * comptées dans `vente_totale`, jamais dans le tiroir ni déclarées par le
+   * caissier. Absent des rapports figés avant le 2026-10-15 : lire `?.`.
+   */
+  paye_points?: { nb: number; total: number };
+  /**
    * Espèces RENDUES au client, et nombre d'encaissements concernés. Ni une
    * vente ni une dépense : le billet entre dans le tiroir à l'instant où la
    * monnaie en sort, l'écart n'en dépend donc pas. C'est le seul chiffre qui
@@ -513,6 +519,8 @@ export interface ReconciliationPreview {
   livraisons: Record<string, number>;
   /** Repas offerts (Kdo) du shift : affichés pour information, non encaissables. */
   offerts: { nb: number; total: number };
+  /** Payé avec les points fidélité : information, rien à déclarer. */
+  paye_points: { nb: number; total: number };
   modes: Record<ModePaiement, number>;
   /**
    * Dépenses du service (DESIGN_V2 § 6.8) : SOMME du registre, en LECTURE
@@ -576,6 +584,8 @@ export interface ShiftSequence {
   livraisons: Record<string, number>;
   /** Kdo du shift. Absent des shifts clôturés avant les Kdo → { nb: 0, total: 0 }. */
   offerts: { nb: number; total: number };
+  /** Payé en points fidélité. Absent avant le 2026-10-15 → { nb: 0, total: 0 }. */
+  paye_points: { nb: number; total: number };
   /**
    * Espèces RENDUES au client, et nombre d'encaissements concernés. Ni une
    * vente ni une dépense : le billet entre dans le tiroir à l'instant où la
@@ -608,6 +618,8 @@ export interface RecapSequence {
   livraisons: Record<string, number>;
   /** Total des repas offerts (Kdo) de la séquence : compté en vente, jamais en espèces. */
   offerts: { nb: number; total: number };
+  /** Total payé en points fidélité : compté en vente, jamais en espèces. */
+  paye_points: { nb: number; total: number };
   /**
    * Espèces RENDUES au client, et nombre d'encaissements concernés. Ni une
    * vente ni une dépense : le billet entre dans le tiroir à l'instant où la
@@ -676,4 +688,56 @@ export interface EtatStockInstant {
   /** Combien de lignes reposent encore sur le théorique, faute de comptage. */
   nb_theoriques: number;
   lignes: EtatStockLigne[];
+}
+
+/**
+ * Le client fidélité vu depuis l'écran Paiement (GET /api/commandes/:id/client).
+ * Tous les chiffres de points sont calculés par le serveur.
+ */
+export type ClientPaiementVue =
+  | { client: null }
+  | {
+      client: { id: string; telephone: string | null; nom: string | null };
+      solde: number;
+      /** Reste à payer de la cible (ticket, ou note encaissée). */
+      reste: number;
+      /** Points gagnés si le reste est réglé en argent. */
+      points_gagnes: number;
+      solde_apres: number;
+      /** Régler TOUT le reste avec les points : possible, combien, solde ensuite. */
+      paiement_points: {
+        possible: boolean;
+        points_necessaires: number;
+        raison: string | null;
+        solde_apres: number;
+      };
+    };
+
+/** Un critère de la note des caissiers, tel que la caisse l'affiche. */
+export interface CritereNoteVue {
+  cle: 'caisse' | 'contacts' | 'inventaire' | 'clients' | 'presence' | 'bonus' | string;
+  points: number;
+  max: number;
+  applicable: boolean;
+  resume: string | null;
+  conseil: string | null;
+}
+
+/**
+ * Note d'un caissier (sur 20, 30 derniers jours), calculée par SamerTrackly
+ * et descendue sur la caisse. `note` est NULL tant qu'il n'a pas `min_shifts`.
+ */
+export interface NoteCaissierVue {
+  utilisateur_id: string;
+  nom?: string;
+  note: number | null;
+  note_precedente: number | null;
+  appreciation: string | null;
+  nb_shifts: number;
+  min_shifts: number;
+  criteres: CritereNoteVue[];
+  bonus: CritereNoteVue | null;
+  periode_debut: string | null;
+  periode_fin: string | null;
+  calcule_le: string;
 }
