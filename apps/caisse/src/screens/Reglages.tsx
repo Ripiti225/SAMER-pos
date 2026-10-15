@@ -2262,7 +2262,7 @@ interface ConfigResto {
 
 function ConfigRestaurant() {
   const qc = useQueryClient();
-  const { poserSession } = useCaisse();
+  const { reprendreSession } = useCaisse();
   const [msg, setMsg] = useState<{ texte: string; ok?: boolean } | null>(null);
   const [choix, setChoix] = useState('');
   const [remplacement, setRemplacement] = useState(false);
@@ -2289,7 +2289,7 @@ function ConfigRestaurant() {
     onSuccess: async (rep) => {
       // Applique la nouvelle identité (nom, marque, couleur) à la session en cours.
       try {
-        poserSession(await api<SessionInfo>('/api/auth/moi'));
+        reprendreSession(await api<SessionInfo>('/api/auth/moi'));
       } catch { /* ignore */ }
       // Synchronise l'équipe du restaurant choisi.
       let equipe = '';

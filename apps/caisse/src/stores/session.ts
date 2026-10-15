@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import type { SessionInfo } from '@pos/shared';
 
+function appliquerMarque(session: SessionInfo): void {
+  document.documentElement.dataset.marque = session.restaurant.marque;
+  document.documentElement.style.setProperty('--marque', session.restaurant.couleur_hex);
+}
+
 export type Ecran =
   | 'supervision'
   | 'accueil'
@@ -33,16 +38,62 @@ export function ecranInitial(session: SessionInfo | null): Ecran {
   return 'accueil';
 }
 
+/**
+ * Où en était CET onglet, pour qu'un rechargement de page (nouvelle version de
+ * la caisse, serveur local redémarré, fenêtre du poste rechargée) ne renvoie
+ * plus un gérant ou un propriétaire de sa commande vers la Supervision.
+ *
+ * sessionStorage, pas localStorage : propre à l'onglet, effacé à sa fermeture.
+ * Aucune donnée sensible — un nom d'écran et un identifiant de commande.
+ */
+const CLE_REPRISE = 'pos-caisse-ecran';
+interface Reprise {
+  utilisateur_id: string;
+  ecran: Ecran;
+  commandeId: string | null;
+  modeCaisse: boolean;
+}
+
+function lireReprise(): Reprise | null {
+  try {
+    const brut = sessionStorage.getItem(CLE_REPRISE);
+    return brut ? (JSON.parse(brut) as Reprise) : null;
+  } catch {
+    return null;
+  }
+}
+
+function ecrireReprise(reprise: Reprise | null): void {
+  try {
+    if (reprise) sessionStorage.setItem(CLE_REPRISE, JSON.stringify(reprise));
+    else sessionStorage.removeItem(CLE_REPRISE);
+  } catch {
+    /* navigation privée, stockage bloqué : on retombe sur l'écran du rôle */
+  }
+}
+
 interface EtatCaisse {
   session: SessionInfo | null;
   verrouille: boolean;
   ecran: Ecran;
   commandeId: string | null;
+  /**
+   * Le gérant ou le propriétaire a choisi de travailler EN CAISSE (il est
+   * passé par l'accueil caissier). « Retour » le ramène alors à l'accueil
+   * caissier, plus à la Supervision. Toujours vrai pour un caissier.
+   */
+  modeCaisse: boolean;
   toast: string | null;
   /** Tables dont la demande d'addition a été OUVERTE par le caissier (bandeau masqué). */
   tablesVues: string[];
 
   poserSession: (s: SessionInfo | null) => void;
+  /**
+   * Session relue sans nouvelle connexion (démarrage de l'onglet, identité du
+   * restaurant changée) : on reste sur l'écran où l'on était, si c'est la même
+   * personne. Seule une vraie connexion part de l'écran du rôle.
+   */
+  reprendreSession: (s: SessionInfo) => void;
   /** Met à jour permissions/utilisateur en direct (WebSocket) sans changer d'écran. */
   majPermissions: (s: SessionInfo) => void;
   poserServiceOuvert: (service: SessionInfo['service_ouvert']) => void;
@@ -61,15 +112,28 @@ export const useCaisse = create<EtatCaisse>((set, get) => ({
   verrouille: false,
   ecran: 'accueil',
   commandeId: null,
+  modeCaisse: false,
   toast: null,
   tablesVues: [],
 
   poserSession: (session) => {
-    if (session) {
-      document.documentElement.dataset.marque = session.restaurant.marque;
-      document.documentElement.style.setProperty('--marque', session.restaurant.couleur_hex);
+    if (session) appliquerMarque(session);
+    const ecran = ecranInitial(session);
+    set({ session, ecran, commandeId: null, verrouille: false, modeCaisse: ecran === 'accueil' });
+  },
+  reprendreSession: (session) => {
+    const reprise = lireReprise();
+    if (!reprise || reprise.utilisateur_id !== session.utilisateur.id) {
+      get().poserSession(session);
+      return;
     }
-    set({ session, ecran: ecranInitial(session), commandeId: null, verrouille: false });
+    appliquerMarque(session);
+    set({
+      session,
+      ecran: reprise.ecran,
+      commandeId: reprise.commandeId,
+      modeCaisse: reprise.modeCaisse,
+    });
   },
   majPermissions: (fraiche) => {
     const s = get().session;
@@ -86,8 +150,17 @@ export const useCaisse = create<EtatCaisse>((set, get) => ({
     if (s) set({ session: { ...s, service_ouvert: service } });
   },
   verrouiller: (verrouille) => set({ verrouille }),
-  aller: (ecran, commandeId = null) => set({ ecran, commandeId }),
-  rentrer: () => set({ ecran: ecranInitial(get().session), commandeId: null }),
+  aller: (ecran, commandeId = null) =>
+    set({
+      ecran,
+      commandeId,
+      // L'accueil caissier fait entrer en mode caisse, la Supervision en fait
+      // sortir. Les autres écrans (Mes ventes, Dépenses…) ne changent rien :
+      // on y vient des deux côtés, « Retour » doit ramener d'où l'on vient.
+      modeCaisse: ecran === 'accueil' ? true : ecran === 'supervision' ? false : get().modeCaisse,
+    }),
+  rentrer: () =>
+    set({ ecran: get().modeCaisse ? 'accueil' : ecranInitial(get().session), commandeId: null }),
   afficherToast: (toast) => {
     set({ toast });
     setTimeout(() => {
@@ -101,3 +174,13 @@ export const useCaisse = create<EtatCaisse>((set, get) => ({
   reconcilierTablesVues: (idsEncoreEnAttente) =>
     set({ tablesVues: get().tablesVues.filter((id) => idsEncoreEnAttente.includes(id)) }),
 }));
+
+// Chaque déplacement est noté pour la reprise après rechargement. Une
+// déconnexion efface la note : le compte suivant part de son propre écran.
+useCaisse.subscribe((etat) => {
+  ecrireReprise(
+    etat.session
+      ? { utilisateur_id: etat.session.utilisateur.id, ecran: etat.ecran, commandeId: etat.commandeId, modeCaisse: etat.modeCaisse }
+      : null,
+  );
+});

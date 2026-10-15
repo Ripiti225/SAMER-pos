@@ -14,7 +14,7 @@ interface MembrePropose {
 
 /** Ouverture de service : fond de caisse, puis équipe du jour (allègement). */
 export function OuvertureService() {
-  const { session, poserServiceOuvert, poserSession, afficherToast, rentrer } = useCaisse();
+  const { session, poserServiceOuvert, poserSession, afficherToast, aller } = useCaisse();
   // Proprio, superviseur ET gérant ont un tableau de bord où revenir : ouvrir un
   // service reste facultatif pour eux (ils ne sont pas venus pour encaisser).
   const estSuperviseur = ecranInitial(session) === 'supervision';
@@ -94,7 +94,7 @@ export function OuvertureService() {
             caissier suivant ».
           </p>
           {estSuperviseur ? (
-            <button type="button" className="btn-blanc w-full" onClick={rentrer}>← Retour à la supervision</button>
+            <button type="button" className="btn-blanc w-full" onClick={() => aller('supervision')}>← Retour à la supervision</button>
           ) : (
             <button type="button" className="btn-blanc w-full" onClick={seDeconnecter}>Se déconnecter</button>
           )}
@@ -125,7 +125,7 @@ export function OuvertureService() {
             validerDesactive={montant === ''}
           />
           {estSuperviseur ? (
-            <button type="button" className="btn-blanc w-full" onClick={rentrer}>← Retour à la supervision</button>
+            <button type="button" className="btn-blanc w-full" onClick={() => aller('supervision')}>← Retour à la supervision</button>
           ) : (
             <button type="button" className="btn-blanc w-full" onClick={seDeconnecter}>Se déconnecter</button>
           )}
