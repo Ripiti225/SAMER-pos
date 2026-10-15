@@ -21,31 +21,31 @@ export function FactureNumerique({
       enfants={
         <div className="mx-auto max-w-2xl">
           <div className="mb-5 text-center">
-            <h2 className="text-2xl font-black text-marque-fonce">{restaurant}</h2>
-            <p className="mt-1 text-doux">Table {commande.table_numero ?? '—'} · Ticket n° {commande.numero_ticket}</p>
+            <h2 className="text-2xl font-black text-txt">{restaurant}</h2>
+            <p className="mt-1 text-txt-doux">Table {commande.table_numero ?? '—'} · Ticket n° {commande.numero_ticket}</p>
           </div>
-          <div className="divide-y divide-bordure rounded-xl border border-bordure bg-surface">
+          <div className="divide-y divide-filet rounded-jeton border border-filet bg-carte">
             {lignes.map((ligne) => (
               <div key={ligne.id} className="p-4">
                 <div className="flex gap-3">
-                  <span className="font-black text-marque-fonce">{ligne.quantite}×</span>
+                  <span className="w-8 flex-none font-black tabular-nums text-txt">{ligne.quantite}×</span>
                   <div className="min-w-0 flex-1">
-                    <div className="font-bold text-fort">{ligne.nom}</div>
+                    <div className="break-words font-bold text-txt">{ligne.nom}</div>
                     {[...ligne.options, ...ligne.supplements].map((detail) => (
-                      <div key={detail} className="text-sm text-doux">{detail}</div>
+                      <div key={detail} className="text-sm text-txt-doux">{detail}</div>
                     ))}
                   </div>
-                  <span className="font-bold tabular-nums text-fort">{formatFCFA(ligne.total)}</span>
+                  <span className="flex-none font-bold tabular-nums text-txt">{formatFCFA(ligne.total)}</span>
                 </div>
               </div>
             ))}
           </div>
-          <div className="mt-5 space-y-2 rounded-xl bg-surface-douce p-4">
-            <div className="flex justify-between text-doux"><span>Sous-total</span><span>{formatFCFA(commande.sous_total)}</span></div>
-            {commande.promo_montant > 0 && <div className="flex justify-between text-ok"><span>Promotion</span><span>− {formatFCFA(commande.promo_montant)}</span></div>}
-            {commande.remise_montant > 0 && <div className="flex justify-between text-ok"><span>Remise</span><span>− {formatFCFA(commande.remise_montant)}</span></div>}
-            {commande.fidelite_montant > 0 && <div className="flex justify-between text-ok"><span>Fidélité</span><span>− {formatFCFA(commande.fidelite_montant)}</span></div>}
-            <div className="flex justify-between border-t border-bordure pt-3 text-2xl font-black text-marque-fonce">
+          <div className="mt-5 space-y-2 rounded-jeton bg-carte-douce p-4">
+            <div className="flex justify-between text-txt-doux"><span>Sous-total</span><span>{formatFCFA(commande.sous_total)}</span></div>
+            {commande.promo_montant > 0 && <div className="flex justify-between text-ok-txt"><span>Promotion</span><span>− {formatFCFA(commande.promo_montant)}</span></div>}
+            {commande.remise_montant > 0 && <div className="flex justify-between text-ok-txt"><span>Remise</span><span>− {formatFCFA(commande.remise_montant)}</span></div>}
+            {commande.fidelite_montant > 0 && <div className="flex justify-between text-ok-txt"><span>Fidélité</span><span>− {formatFCFA(commande.fidelite_montant)}</span></div>}
+            <div className="flex justify-between border-t border-filet pt-3 text-2xl font-black tabular-nums text-txt">
               <span>Total à payer</span><span>{formatFCFA(commande.total)}</span>
             </div>
           </div>

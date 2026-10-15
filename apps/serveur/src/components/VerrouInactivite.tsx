@@ -3,7 +3,7 @@ import type { SessionInfo } from '@pos/shared';
 import { api, Numpad } from '@pos/shared-ui';
 
 /**
- * Verrouillage d'inactivité de la tablette (§B5) : 120 s par défaut,
+ * Verrouillage d'inactivité de la tablette (§B5) : désactivé par défaut (0),
  * plus long que la caisse car les serveurs bougent (paramètre local).
  */
 export function VerrouInactivite({
@@ -19,7 +19,7 @@ export function VerrouInactivite({
   const [enCours, setEnCours] = useState(false);
   const minuteur = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const delaiMs = (session.verrouillage_inactivite_serveur_secondes ?? 120) * 1000;
+  const delaiMs = (session.verrouillage_inactivite_serveur_secondes ?? 0) * 1000;
 
   useEffect(() => {
     // Délai ≤ 0 → verrouillage automatique DÉSACTIVÉ (déconnexion manuelle seule).
@@ -55,15 +55,15 @@ export function VerrouInactivite({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-fond/95">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-vitrine-fond text-vitrine-txt">
       <div className="marge-sure-bas flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-6">
         <div className="text-center">
           <div className="text-2xl font-bold sm:text-3xl">Terminal verrouillé</div>
-          <div className="mt-1 text-doux">{session.utilisateur.nom_complet} — saisissez votre PIN</div>
+          <div className="mt-1 text-vitrine-txt-doux">{session.utilisateur.nom_complet} — saisissez votre PIN</div>
         </div>
         <div className="w-full max-w-xs space-y-3">
           <div className="champ flex items-center justify-center text-3xl tracking-[0.5em]">
-            {'•'.repeat(pin.length) || <span className="text-base tracking-normal text-doux">PIN</span>}
+            {'•'.repeat(pin.length) || <span className="text-base tracking-normal text-txt-doux">PIN</span>}
           </div>
           <Numpad
             valeur={pin}
@@ -74,7 +74,7 @@ export function VerrouInactivite({
             libelleValider={enCours ? 'Vérification…' : 'Déverrouiller'}
             validerDesactive={pin.length < 4 || enCours}
           />
-          {erreur && <div className="text-center text-alerte">{erreur}</div>}
+          {erreur && <div className="rounded-btn bg-alerte-tint px-4 py-2 text-center font-medium text-alerte-txt">{erreur}</div>}
           <button
             type="button"
             className="btn-blanc w-full"

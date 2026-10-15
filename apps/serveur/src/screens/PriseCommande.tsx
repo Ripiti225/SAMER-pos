@@ -1,7 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import {
+  IconArrowLeft,
+  IconCheck,
+  IconChevronUp,
+  IconMinus,
+  IconPlus,
+  IconReceipt,
+  IconSend,
+  IconX,
+} from '@tabler/icons-react';
 import type { ArticleVue, CatalogueVue, CommandeVue, TableVue } from '@pos/shared';
-import { categorieVisiblePour, formatFCFA, uuidLocal } from '@pos/shared';
+import { categorieVisiblePour, couleurCategorie, formatFCFA, uuidLocal } from '@pos/shared';
 import { api, Modale } from '@pos/shared-ui';
 import { fileAttente } from '../file-attente';
 import { FactureNumerique } from '../components/FactureNumerique';
@@ -33,11 +43,14 @@ interface LignePanier {
 export function PriseCommande({
   tableId,
   restaurant,
+  marque,
   onRetour,
   afficherToast,
 }: {
   tableId: string;
   restaurant: string;
+  /** Marque du restaurant : les teintes de catégorie en dépendent (§ 4.1). */
+  marque: string;
   onRetour: () => void;
   afficherToast: (m: string) => void;
 }) {
@@ -76,6 +89,10 @@ export function PriseCommande({
   const categorieActive = categorieId ?? categories[0]?.id ?? null;
   const articlesVisibles = (catalogue?.articles ?? []).filter((a) => a.categorie_id === categorieActive);
   const combosVisibles = categorieActive === categories[0]?.id ? catalogue?.combos ?? [] : [];
+  // Couleur de la catégorie (§ 4.1) : pastille dans la liste, liseré et fond
+  // de la vignette — les mêmes repères qu'à la caisse.
+  const couleurDe = (categorieIdArticle: string | null) =>
+    couleurCategorie(categories.find((c) => c.id === categorieIdArticle)?.nom ?? '', marque);
 
   const totalPanier = panier.reduce(
     (s, l) => s + (l.prix_affiche + l.supplements.reduce((x, y) => x + y.prix, 0)) * l.quantite,
@@ -141,14 +158,21 @@ export function PriseCommande({
     setPanier((p) => p.map((x) => (x.cle === cle ? { ...x, quantite: Math.max(1, x.quantite + delta) } : x)));
   const retirer = (cle: string) => setPanier((p) => p.filter((x) => x.cle !== cle));
 
+  // Le SEUL aplat de marque de l'écran : c'est le geste qui compte.
   const boutonEnvoyer = (
     <button
       type="button"
-      className="flex h-14 w-full items-center justify-center gap-2 rounded-[13px] bg-marque text-lg font-bold text-sur-marque shadow-e2 transition hover:brightness-105 active:translate-y-px disabled:opacity-40 sm:h-16 sm:text-xl"
+      className="flex h-14 w-full items-center justify-center gap-2 rounded-btn bg-marque px-3 text-lg font-bold text-sur-marque transition hover:brightness-105 active:translate-y-px disabled:opacity-40"
       disabled={panier.length === 0}
       onClick={() => void envoyerEnCuisine()}
     >
-      Envoyer en cuisine {panier.length > 0 ? `· ${formatFCFA(totalPanier)}` : ''}
+      <IconSend size={20} className="flex-none" />
+      {/* Le total passe SOUS le libellé : sur la ligne, il coupait « cuisine »
+          dans le panneau de 320 px. */}
+      <span className="flex min-w-0 flex-col items-start leading-tight">
+        <span className="truncate">Envoyer en cuisine</span>
+        {panier.length > 0 && <span className="text-sm font-semibold tabular-nums opacity-80">{formatFCFA(totalPanier)}</span>}
+      </span>
     </button>
   );
 
@@ -157,124 +181,149 @@ export function PriseCommande({
       {factureOuverte && commande && (
         <FactureNumerique commande={commande} restaurant={restaurant} onFermer={() => setFactureOuverte(false)} />
       )}
-      {/* Barre de table — les actions passent à la ligne sur écran étroit. */}
-      <div className="marge-sure-cotes flex flex-none flex-wrap items-center gap-2 border-b border-bordure bg-surface p-2 shadow-e1 sm:p-3">
+      {/* Barre de table, sur le plan clair — les actions passent à la ligne sur écran étroit. */}
+      <div className="marge-sure-cotes flex flex-none flex-wrap items-center gap-2 border-b border-filet bg-carte px-2 py-2 sm:px-3">
         <button
           type="button"
           onClick={onRetour}
           title="Retour à la salle"
-          className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-surface-douce text-doux transition hover:bg-marque-tint hover:text-marque-fonce"
+          aria-label="Retour à la salle"
+          className="flex h-11 w-11 flex-none items-center justify-center rounded-btn text-txt-doux transition hover:bg-carte-douce hover:text-txt"
         >
-          ←
+          <IconArrowLeft size={22} />
         </button>
-        <span className="text-lg font-bold text-marque-fonce sm:text-xl">Table {table?.numero ?? '…'}</span>
-        {commande && (
-          <span className="rounded-full bg-info-tint px-2.5 py-1 text-xs font-medium text-info sm:px-3 sm:text-sm">
-            N° {commande.numero_ticket} · {formatFCFA(commande.total)}
-          </span>
-        )}
+        <div className="min-w-0">
+          <div className="text-lg font-bold leading-tight text-txt sm:text-xl">Table {table?.numero ?? '…'}</div>
+          {commande && (
+            <div className="text-xs font-medium tabular-nums text-txt-doux sm:text-sm">
+              Ticket n° {commande.numero_ticket} · {formatFCFA(commande.total)}
+            </div>
+          )}
+        </div>
         <div className="ml-auto flex flex-none items-center gap-2">
           {commande?.statut === 'PRETE' && (
             <button
               type="button"
-              className="min-h-[44px] rounded-[13px] bg-ok px-3 font-bold text-white shadow-e1 transition hover:brightness-105 active:translate-y-px sm:px-4"
+              className="flex min-h-[44px] items-center gap-1.5 rounded-btn bg-ok px-3 font-bold text-white transition hover:brightness-105 active:translate-y-px sm:px-4"
               onClick={() => void servir()}
             >
-              Servi ✔
+              <IconCheck size={18} stroke={3} /> Servi
             </button>
           )}
           <button
             type="button"
-            className="min-h-[44px] rounded-[13px] border border-bordure-forte px-3 font-semibold text-marque-fonce transition hover:bg-marque/5 disabled:opacity-40 sm:px-4"
+            className="btn-blanc flex min-h-[44px] items-center gap-1.5 px-3 sm:px-4"
             disabled={!table?.commande_id && panier.length === 0}
             onClick={() => void demanderAddition()}
           >
+            <IconReceipt size={18} />
             <span className="hidden sm:inline">Demander l’addition</span>
             <span className="sm:hidden">Addition</span>
           </button>
         </div>
       </div>
 
-      {/* Catégories en bandeau horizontal — téléphone et tablette portrait. */}
-      <nav className="defile-x flex flex-none gap-2 border-b border-bordure bg-surface-douce p-2 lg:hidden">
-        {categories.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            className={`min-h-[44px] flex-none whitespace-nowrap rounded-[13px] px-4 text-sm font-semibold transition ${
-              c.id === categorieActive ? 'bg-marque text-sur-marque shadow-e1' : 'border border-bordure bg-surface text-doux'
-            }`}
-            onClick={() => setCategorieId(c.id)}
-          >
-            {c.nom}
-          </button>
-        ))}
-      </nav>
-
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Colonne catégories : uniquement quand l'écran est assez large. */}
-        <nav className="hidden w-36 shrink-0 space-y-2 overflow-y-auto border-r border-bordure bg-surface-douce p-2 lg:block">
-          {categories.map((c) => (
+      {/* Catégories en bandeau horizontal, sur l'ossature — téléphone et tablette debout. */}
+      <nav className="defile-x flex flex-none gap-1.5 border-b border-ard-700 bg-ard-800 p-2 lg:hidden">
+        {categories.map((c) => {
+          const actif = c.id === categorieActive;
+          return (
             <button
               key={c.id}
               type="button"
-              className={`w-full rounded-[13px] px-3 py-3 text-sm font-semibold transition ${
-                c.id === categorieActive ? 'bg-marque text-sur-marque shadow-e1' : 'border border-bordure bg-surface text-doux hover:bg-marque-tint'
+              className={`flex min-h-[44px] flex-none items-center gap-2 whitespace-nowrap rounded-btn px-3.5 text-sm font-semibold transition ${
+                actif ? 'bg-ard-650 text-ard-txt' : 'text-ard-txt-doux'
               }`}
               onClick={() => setCategorieId(c.id)}
             >
+              <span className="h-2.5 w-2.5 flex-none rounded-full" style={{ background: couleurCategorie(c.nom, marque) }} />
               {c.nom}
             </button>
-          ))}
+          );
+        })}
+      </nav>
+
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* Colonne catégories en ardoise : uniquement quand l'écran est assez large. */}
+        <nav className="hidden w-44 shrink-0 flex-col gap-1.5 overflow-y-auto border-r border-ard-700 bg-ard-800 p-2.5 lg:flex">
+          <p className="px-2 pb-1 pt-1 text-[10.5px] font-bold uppercase tracking-[0.09em] text-ard-txt-faible">Catégories</p>
+          {categories.map((c) => {
+            const actif = c.id === categorieActive;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                className={`flex items-center gap-2.5 rounded-btn px-3 py-3 text-left text-sm font-semibold transition ${
+                  actif ? 'bg-ard-700 text-ard-txt' : 'text-ard-txt-doux hover:bg-ard-750 hover:text-ard-txt'
+                }`}
+                onClick={() => setCategorieId(c.id)}
+              >
+                <span
+                  className={`h-2.5 w-2.5 flex-none rounded-full transition-transform ${actif ? 'scale-150' : ''}`}
+                  style={{ background: couleurCategorie(c.nom, marque) }}
+                />
+                <span className="min-w-0 flex-1 truncate">{c.nom}</span>
+              </button>
+            );
+          })}
         </nav>
 
-        <main className="grid flex-1 auto-rows-min grid-cols-2 gap-2 overflow-y-auto p-2 sm:grid-cols-3 sm:gap-3 sm:p-3 lg:grid-cols-3 xl:grid-cols-4">
+        {/* Grille d'articles sur le plan clair : `auto-fill`, la grille suit la
+            largeur réelle de la colonne (même logique que la caisse). */}
+        <main className="grid min-w-0 flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2 overflow-y-auto bg-plan p-2 sm:gap-3 sm:p-3">
           {combosVisibles.map((combo) => (
             <button
               key={combo.id}
               type="button"
               disabled={!combo.disponible}
-              className="carte flex min-h-[88px] flex-col justify-between p-3 text-left shadow-e1 transition hover:-translate-y-0.5 hover:shadow-e2 disabled:opacity-40"
+              style={{ borderLeft: '4px solid var(--marque)' }}
+              className="carte flex flex-col overflow-hidden p-0 text-left transition active:scale-[0.98] disabled:opacity-45"
               onClick={() =>
                 ajouterAuPanier({ article_id: null, combo_id: combo.id, nom: combo.nom, prix_affiche: combo.prix, quantite: 1, options: [], supplements: [] })
               }
             >
-              <div className="text-sm font-semibold leading-tight sm:text-base">{combo.nom}</div>
-              <div className="font-bold text-marque-fonce">{formatFCFA(combo.prix)}</div>
-            </button>
-          ))}
-          {articlesVisibles.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              disabled={!a.disponible}
-              className="carte group flex flex-col overflow-hidden p-0 text-left shadow-e1 transition hover:-translate-y-0.5 hover:shadow-e2"
-              onClick={() => clicArticle(a)}
-            >
-              <div className="relative aspect-[4/3] w-full overflow-hidden bg-marque-tint">
-                {a.image_url ? (
-                  <img src={a.image_url} alt="" loading="lazy" className="h-full w-full object-contain" />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-xl font-black text-marque-fonce/30">
-                    {a.nom.slice(0, 2).toUpperCase()}
-                  </div>
-                )}
-                {!a.disponible && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-fort/45">
-                    <span className="rounded-full bg-alerte px-2.5 py-0.5 text-xs font-bold text-white">Épuisé</span>
-                  </div>
-                )}
+              <div className="flex h-[84px] w-full items-center justify-center bg-marque p-2 text-center text-sm font-bold leading-tight text-sur-marque">
+                {combo.nom}
               </div>
-              <div className="flex flex-1 flex-col gap-0.5 p-2">
-                <div className="line-clamp-2 text-sm font-semibold leading-tight">{a.nom}</div>
-                <div className="font-bold text-marque-fonce">{formatFCFA(a.prix_base)}</div>
+              <div className="flex items-center justify-between gap-1 p-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-txt-doux">Combo</span>
+                <span className="font-bold tabular-nums text-txt">{formatFCFA(combo.prix)}</span>
               </div>
             </button>
           ))}
+          {articlesVisibles.map((a) => {
+            const couleur = couleurDe(a.categorie_id);
+            return (
+              <button
+                key={a.id}
+                type="button"
+                disabled={!a.disponible}
+                style={{ borderLeft: `4px solid ${couleur}` }}
+                className="carte flex flex-col overflow-hidden p-0 text-left transition active:scale-[0.98]"
+                onClick={() => clicArticle(a)}
+              >
+                <div
+                  className="relative h-[84px] w-full overflow-hidden"
+                  style={{ background: `color-mix(in srgb, ${couleur} 11%, var(--carte))` }}
+                >
+                  {a.image_url && <img src={a.image_url} alt="" loading="lazy" className="h-full w-full object-contain" />}
+                  {!a.disponible && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-carte/70">
+                      <span className="rounded-full bg-alerte px-2.5 py-0.5 text-xs font-bold text-white">Épuisé</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-1 flex-col gap-0.5 p-2">
+                  <div className="line-clamp-2 text-sm font-semibold leading-tight text-txt">{a.nom}</div>
+                  <div className="mt-auto font-bold tabular-nums text-txt">{formatFCFA(a.prix_base)}</div>
+                </div>
+              </button>
+            );
+          })}
         </main>
 
-        {/* Panier en colonne : tablette et plus. */}
-        <aside className="hidden w-80 shrink-0 flex-col border-l border-bordure lg:flex">
+        {/* Panier en panneau ardoise : tablette et plus (comme l'addition de la caisse). */}
+        <aside className="hidden w-80 shrink-0 flex-col border-l border-ard-700 bg-ard-850 text-ard-txt lg:flex">
           <div className="flex-1 overflow-y-auto p-3">
             <ContenuPanier
               commande={commande}
@@ -284,37 +333,44 @@ export function PriseCommande({
             />
           </div>
           {/* Bouton UNIQUE « Envoyer en cuisine » (§B2) — pas d'encaissement ici */}
-          <div className="border-t border-bordure p-3">{boutonEnvoyer}</div>
+          <div className="border-t border-ard-700 bg-ard-900 p-3">{boutonEnvoyer}</div>
         </aside>
       </div>
 
       {/* Barre panier collante — téléphone : le panier reste à un pouce. */}
-      <div className="marge-sure-bas marge-sure-cotes flex flex-none flex-col gap-2 border-t border-bordure bg-surface p-2 pt-2 shadow-e2 lg:hidden">
+      <div className="marge-sure-bas marge-sure-cotes flex flex-none flex-col gap-2 border-t border-ard-700 bg-ard-900 p-2 pt-2 lg:hidden">
         <button
           type="button"
-          className="flex min-h-[44px] items-center justify-between rounded-[13px] bg-surface-douce px-3 text-left transition active:translate-y-px"
+          className="flex min-h-[44px] items-center justify-between gap-2 rounded-btn bg-ard-800 px-3 text-left text-ard-txt transition active:translate-y-px"
           onClick={() => setTiroirPanier(true)}
         >
-          <span className="font-semibold text-doux">
+          <span className="min-w-0 truncate text-sm font-semibold text-ard-txt-doux">
             {nbArticles > 0 ? `Panier · ${nbArticles} article${nbArticles > 1 ? 's' : ''}` : 'Panier vide'}
             {commande && commande.items.length > 0 ? ' · voir la cuisine' : ''}
           </span>
-          <span className="font-bold text-marque-fonce">{formatFCFA(totalPanier)} ▲</span>
+          <span className="flex flex-none items-center gap-1 font-bold tabular-nums">
+            {formatFCFA(totalPanier)} <IconChevronUp size={18} />
+          </span>
         </button>
         {boutonEnvoyer}
       </div>
 
       {/* Tiroir bas : détail du panier + quantités (téléphone). */}
       {tiroirPanier && (
-        <div className="fixed inset-0 z-40 flex flex-col justify-end bg-black/40 lg:hidden" onClick={() => setTiroirPanier(false)}>
+        <div className="fixed inset-0 z-40 flex flex-col justify-end bg-black/50 lg:hidden" onClick={() => setTiroirPanier(false)}>
           <div
-            className="marge-sure-bas flex max-h-[80dvh] flex-col rounded-t-2xl border-t border-bordure bg-surface"
+            className="marge-sure-bas flex max-h-[80dvh] flex-col rounded-t-jeton bg-ard-850 text-ard-txt"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex flex-none items-center justify-between border-b border-bordure p-3">
+            <div className="flex flex-none items-center justify-between border-b border-ard-700 p-3">
               <h2 className="text-lg font-bold">Panier — Table {table?.numero ?? '…'}</h2>
-              <button type="button" className="btn-blanc min-h-[44px] px-4" onClick={() => setTiroirPanier(false)}>
-                ✕
+              <button
+                type="button"
+                aria-label="Fermer le panier"
+                className="flex h-11 w-11 items-center justify-center rounded-btn text-ard-txt-doux transition hover:bg-ard-750 hover:text-ard-txt"
+                onClick={() => setTiroirPanier(false)}
+              >
+                <IconX size={22} />
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -325,7 +381,7 @@ export function PriseCommande({
                 onRetirer={retirer}
               />
             </div>
-            <div className="flex-none border-t border-bordure p-3">{boutonEnvoyer}</div>
+            <div className="flex-none border-t border-ard-700 bg-ard-900 p-3">{boutonEnvoyer}</div>
           </div>
         </div>
       )}
@@ -344,7 +400,7 @@ export function PriseCommande({
   );
 }
 
-/** Détail du panier — partagé par la colonne (tablette) et le tiroir (téléphone). */
+/** Détail du panier, sur ardoise — partagé par la colonne (tablette) et le tiroir (téléphone). */
 function ContenuPanier({
   commande,
   panier,
@@ -359,45 +415,63 @@ function ContenuPanier({
   return (
     <div className="space-y-2">
       {commande && commande.items.length > 0 && (
-        <div className="mb-2">
-          <div className="mb-1 text-xs font-semibold text-doux">Déjà en cuisine</div>
+        <div className="mb-3 rounded-[var(--r-sm)] border border-dashed border-ard-600 p-3">
+          <div className="mb-1.5 text-[10.5px] font-bold uppercase tracking-[0.09em] text-ard-txt-faible">Déjà en cuisine</div>
           {commande.items.map((i) => (
             <div
               key={i.id}
-              className={`text-sm ${i.statut_cuisine === 'ANNULE' ? 'text-alerte line-through' : 'text-doux'}`}
+              className={`flex gap-2 text-sm ${i.statut_cuisine === 'ANNULE' ? 'text-alerte-txt line-through' : 'text-ard-txt-doux'}`}
             >
-              {i.quantite} × {i.nom_snapshot}
+              <span className="w-6 flex-none text-right font-semibold tabular-nums">{i.quantite}×</span>
+              <span className="min-w-0 break-words">{i.nom_snapshot}</span>
             </div>
           ))}
         </div>
       )}
 
-      <div className="text-xs font-semibold text-doux">Nouveaux articles</div>
-      {panier.length === 0 && <div className="pt-2 text-sm text-doux">Touchez un article…</div>}
+      <div className="text-[10.5px] font-bold uppercase tracking-[0.09em] text-ard-txt-faible">Nouveaux articles</div>
+      {panier.length === 0 && <div className="pt-6 text-center text-sm text-ard-txt-faible">Panier vide — touchez un article</div>}
       {panier.map((l) => (
-        <div key={l.cle} className="carte p-3">
+        <div key={l.cle} className="rounded-[var(--r-sm)] bg-ard-800 p-3">
           <div className="flex justify-between gap-2">
-            <div className="min-w-0 font-semibold">{l.nom}</div>
-            <div className="flex-none font-bold">
+            <div className="min-w-0 break-words font-semibold">{l.nom}</div>
+            <div className="flex-none font-bold tabular-nums">
               {formatFCFA((l.prix_affiche + l.supplements.reduce((x, y) => x + y.prix, 0)) * l.quantite)}
             </div>
           </div>
           {l.supplements.map((s) => (
-            <div key={s.id} className="text-xs text-doux">+ {s.nom}</div>
+            <div key={s.id} className="text-xs text-ard-txt-doux">+ {s.nom}</div>
           ))}
           {l.options.filter((o) => o.choix.length > 0).map((o) => (
-            <div key={o.groupe} className="text-xs text-doux">{o.groupe} : {o.choix.join(', ')}</div>
+            <div key={o.groupe} className="text-xs text-ard-txt-doux">{o.groupe} : {o.choix.join(', ')}</div>
           ))}
           <div className="mt-2 flex items-center gap-2">
-            <button type="button" className="btn-blanc h-12 w-12 p-0 text-xl" onClick={() => onQuantite(l.cle, -1)}>
-              −
-            </button>
-            <span className="w-8 text-center font-bold">{l.quantite}</span>
-            <button type="button" className="btn-blanc h-12 w-12 p-0 text-xl" onClick={() => onQuantite(l.cle, 1)}>
-              +
-            </button>
-            <button type="button" className="btn-alerte ml-auto px-3" onClick={() => onRetirer(l.cle)}>
-              ✕
+            <div className="flex h-11 items-center overflow-hidden rounded-btn bg-ard-700">
+              <button
+                type="button"
+                aria-label="Retirer un"
+                className="flex h-full w-11 items-center justify-center text-marque-clair transition hover:bg-ard-650"
+                onClick={() => onQuantite(l.cle, -1)}
+              >
+                <IconMinus size={18} />
+              </button>
+              <span className="w-8 text-center font-bold tabular-nums">{l.quantite}</span>
+              <button
+                type="button"
+                aria-label="Ajouter un"
+                className="flex h-full w-11 items-center justify-center text-marque-clair transition hover:bg-ard-650"
+                onClick={() => onQuantite(l.cle, 1)}
+              >
+                <IconPlus size={18} />
+              </button>
+            </div>
+            <button
+              type="button"
+              aria-label="Retirer l’article"
+              className="ml-auto flex h-11 w-11 items-center justify-center rounded-full text-ard-txt-faible transition hover:bg-alerte/20 hover:text-alerte-txt"
+              onClick={() => onRetirer(l.cle)}
+            >
+              <IconX size={20} />
             </button>
           </div>
         </div>
@@ -425,30 +499,42 @@ function ModaleArticle({
 
   return (
     <Modale titre={article.nom} onFermer={onFermer} enfants={
-      <div className="space-y-4">
+      <div className="space-y-5">
         {article.options_extras.length > 0 && (
           <div>
-            <div className="mb-1 font-semibold">Options</div>
+            <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.09em] text-txt-doux">Options</div>
             <div className="flex flex-wrap gap-2">
-              {article.options_extras.map((o) => (
-                <button
-                  key={o.id}
-                  type="button"
-                  className={`btn ${choisies.includes(o.id) ? 'bg-marque text-white' : 'border border-bordure bg-surface'}`}
-                  onClick={() =>
-                    setChoisies((prev) => (prev.includes(o.id) ? prev.filter((x) => x !== o.id) : [...prev, o.id]))
-                  }
-                >
-                  {o.nom} {o.prix > 0 ? `+${formatFCFA(o.prix)}` : 'offert'}
-                </button>
-              ))}
+              {article.options_extras.map((o) => {
+                const coche = choisies.includes(o.id);
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    aria-pressed={coche}
+                    className={`flex min-h-[48px] items-center gap-2 rounded-btn border-2 px-3 text-sm font-semibold transition ${
+                      coche ? 'border-marque bg-marque-tint text-txt' : 'border-filet bg-carte text-txt'
+                    }`}
+                    onClick={() =>
+                      setChoisies((prev) => (prev.includes(o.id) ? prev.filter((x) => x !== o.id) : [...prev, o.id]))
+                    }
+                  >
+                    {coche && <IconCheck size={16} stroke={3} />}
+                    {o.nom}
+                    <span className="font-normal text-txt-doux">{o.prix > 0 ? `+${formatFCFA(o.prix)}` : 'offert'}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
         <div className="flex items-center gap-3">
-          <button type="button" className="btn-blanc h-12 w-12 p-0 text-xl" onClick={() => setQuantite(Math.max(1, quantite - 1))}>−</button>
-          <span className="w-8 text-center text-xl font-bold">{quantite}</span>
-          <button type="button" className="btn-blanc h-12 w-12 p-0 text-xl" onClick={() => setQuantite(quantite + 1)}>+</button>
+          <button type="button" aria-label="Moins" className="btn-blanc flex h-12 w-12 items-center justify-center p-0" onClick={() => setQuantite(Math.max(1, quantite - 1))}>
+            <IconMinus size={20} />
+          </button>
+          <span className="w-10 text-center text-2xl font-bold tabular-nums">{quantite}</span>
+          <button type="button" aria-label="Plus" className="btn-blanc flex h-12 w-12 items-center justify-center p-0" onClick={() => setQuantite(quantite + 1)}>
+            <IconPlus size={20} />
+          </button>
         </div>
         <button
           type="button"
@@ -465,7 +551,7 @@ function ModaleArticle({
             })
           }
         >
-          Ajouter — {formatFCFA(prixLigne)}
+          Ajouter · {formatFCFA(prixLigne)}
         </button>
       </div>
     } />
