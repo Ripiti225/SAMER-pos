@@ -33,6 +33,7 @@ import { BandeauEquipe, initiales } from '../components/BandeauEquipe';
 import { PiluleSync } from '../components/SanteSync';
 import { useAffichage } from '../stores/affichage';
 import { useCaisse } from '../stores/session';
+import { PastilleNote } from '../components/NoteCaissier';
 
 /** État léger de l'inventaire — sert la pastille, ne crée aucun inventaire. */
 interface EtatInventaire {
@@ -190,6 +191,8 @@ export function Accueil() {
               <span className="hidden xl:inline">Réglages</span>
             </button>
           )}
+          {/* Sa note (SamerTrackly), à côté de son nom : rien s'il n'en a pas encore. */}
+          <PastilleNote />
           <div className="mx-1 hidden text-right sm:block">
             <div className="text-sm font-bold leading-tight text-fort">{session?.utilisateur.nom_complet}</div>
             <div className="text-[10px] uppercase tracking-wider text-doux">{roleLabel}</div>

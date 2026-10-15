@@ -155,6 +155,9 @@ export const FLUX_DESCENTE: Record<string, string[]> = {
   UTILISATEURS: ['utilisateurs'],
   // Sprint 4C : barème fidélité (2.5) — édité au siège, redescend comme le catalogue.
   PARAMETRES: ['parametres_locaux'],
+  // 2026-10-15 — note des caissiers, calculée par SamerTrackly
+  // (publier-notes-pos) : chaque caissier la voit sur l'accueil de sa caisse.
+  NOTES: ['notes_caissiers'],
 };
 
 /**
