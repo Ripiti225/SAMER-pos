@@ -65,8 +65,9 @@ export async function chargerCatalogue(): Promise<CatalogueVue> {
     description: a.description,
     prix_base: a.prix_base,
     image_url: a.image_url,
-    // Source de vérité : disponibilite_locale (TRUE par défaut, 2.3).
-    disponible: (dispo.get(a.id) ?? true) && (disponibiliteCategories.get(a.categorie_id) ?? true),
+    // Le siège peut bloquer globalement la vente ; le poste conserve son
+    // propre état « épuisé ». Les deux doivent autoriser la vente.
+    disponible: a.disponible && (dispo.get(a.id) ?? true) && (disponibiliteCategories.get(a.categorie_id) ?? true),
     prix_canaux: Object.fromEntries(
       canaux.filter((c) => c.article_id === a.id).map((c) => [c.canal, c.prix]),
     ),

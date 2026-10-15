@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { pool } from '../db/client.js';
+import { estALaBraise } from './marque.js';
 
 const ArticleSchema = z.object({
   nom: z.string().min(1),
@@ -51,16 +52,21 @@ export async function importerProfilRestaurant(code: string): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const ventes = await client.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM commande_items');
+    // Empêche une prise de commande pendant le remplacement du profil.
+    await client.query('LOCK TABLE restaurant, commandes, commande_items IN EXCLUSIVE MODE');
+    const ventes = await client.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM commandes');
     if (Number(ventes.rows[0]?.n ?? 0) > 0) {
       throw new Error('La base contient déjà des commandes : import du profil refusé.');
     }
-    const courant = await client.query<{ id: string; code: string }>('SELECT id, code FROM restaurant LIMIT 1');
+    const courant = await client.query<{ id: string; code: string; nom: string }>('SELECT id, code, nom FROM restaurant LIMIT 1');
     const ancien = courant.rows[0];
-    if (ancien && !['A_CONFIGURER', profil.code].includes(ancien.code)) {
+    // Les premières configurations SamerTrackly avaient un code dérivé du nom
+    // et la marque SAMER. Reconnaître ce cas sans réaffecter un autre site.
+    const dejaALaBraise = ancien && (ancien.code === profil.code || estALaBraise(ancien.nom));
+    if (ancien && ancien.code !== 'A_CONFIGURER' && !dejaALaBraise) {
       throw new Error(`Ce poste appartient déjà au restaurant ${ancien.code}.`);
     }
-    const restaurantId = ancien?.code === profil.code ? ancien.id : randomUUID();
+    const restaurantId = dejaALaBraise ? ancien.id : randomUUID();
     if (ancien) {
       await client.query(
         'UPDATE restaurant SET id=$1, code=$2, nom=$3, marque=$4, couleur_hex=$5 WHERE id=$6',
@@ -107,7 +113,8 @@ export async function importerProfilRestaurant(code: string): Promise<void> {
     await client.query('DELETE FROM routage_categorie');
     await client.query('DELETE FROM inventaire_consommations');
     await client.query('DELETE FROM produits_inventaire');
-    await client.query('UPDATE promotions SET article_id=NULL');
+    // Une promotion Samer ne doit pas devenir une remise globale sur ce menu.
+    await client.query('DELETE FROM promotions');
     await client.query('DELETE FROM articles');
     await client.query('DELETE FROM categories');
 

@@ -120,8 +120,10 @@ export function App() {
       <BandeauAdditions />
       {session && <NotificationsCaisse />}
       <VerrouInactivite />
+      {/* Largeur bornée : certains refus expliquent quoi faire (rôle à changer,
+          compte bloqué) et tenaient sur une seule ligne hors écran. */}
       {toast && (
-        <div className="fixed bottom-4 left-1/2 z-[60] -translate-x-1/2 rounded-xl border border-bordure bg-surface px-5 py-3 text-lg shadow-xl">
+        <div className="fixed bottom-4 left-1/2 z-[60] max-w-[min(92vw,40rem)] -translate-x-1/2 rounded-xl border border-bordure bg-surface px-5 py-3 text-center text-lg shadow-xl">
           {toast}
         </div>
       )}

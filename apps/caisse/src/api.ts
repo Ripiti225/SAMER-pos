@@ -32,7 +32,7 @@ export async function api<T>(
   });
 
   if (!rep.ok) {
-    let message = 'Une erreur est survenue, réessayez';
+    let message = 'Le serveur a refusé cette demande sans fournir d’explication. Consultez Santé du système.';
     try {
       const corps = (await rep.json()) as { erreur?: string };
       if (corps.erreur) message = corps.erreur;

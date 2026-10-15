@@ -1,3 +1,4 @@
+import '../env.js';
 import { fermerDb } from '../db/client.js';
 import { importerProfilRestaurant } from '../profils/importer.js';
 

@@ -3,7 +3,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     env: {
-      DATABASE_URL: 'postgres://localhost:5432/pos_samer_test',
+      DATABASE_URL: 'postgres://postgres@localhost:5432/pos_samer_test',
     },
     globalSetup: './test/setup-global.ts',
     fileParallelism: false,

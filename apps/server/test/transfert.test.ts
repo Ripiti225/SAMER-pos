@@ -53,8 +53,12 @@ describe('relève de caisse : transfert des commandes en cours au caissier suiva
       cookies: cookiesA,
       payload: { receveur_id: donnees.caissier2_id, pin_receveur: '9999' },
     });
-    expect(rep.statusCode).toBe(401);
+    // Une erreur de PIN n'est pas une expiration de la session du donneur.
+    expect(rep.statusCode).toBe(403);
     expect(rep.json().erreur).toBe('PIN incorrect');
+    const service = await app.inject({ method: 'GET', url: '/api/services/courant', cookies: cookiesA });
+    expect(service.statusCode).toBe(200);
+    expect(service.json().id).toBe(serviceAId);
   });
 
   // Se transférer à SOI-MÊME est désormais permis (un caissier enchaîne deux

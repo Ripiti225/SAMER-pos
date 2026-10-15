@@ -61,7 +61,7 @@ export interface Donnees {
 /** Vide la base de test et insère le strict nécessaire (sans promotions). */
 export async function resetDonnees(): Promise<Donnees> {
   await db.execute(sql`
-    TRUNCATE TABLE appels_table, actions_recues, points_fidelite, clients_fidelite,
+    TRUNCATE TABLE erreurs_systeme, appels_table, actions_recues, points_fidelite, clients_fidelite,
       notations, sync_etat, sync_outbox, audit_log, paiements, note_split_items, notes_split, equipe_service,
       depenses, entrees_stock, inventaire_lignes, inventaires_service, produits_inventaire,
       commande_items, commandes, visites_qr, services_caisse, tables_salle, zones,

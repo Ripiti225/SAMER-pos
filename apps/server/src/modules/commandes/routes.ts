@@ -1,11 +1,13 @@
 import type { FastifyInstance } from 'fastify';
-import { and, count, desc, eq, isNull, notInArray } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, ne, notInArray } from 'drizzle-orm';
 import type { CommandeEnCoursVue } from '@pos/shared';
 import {
   AjouterItemSchema,
   AnnulerCommandeSchema,
   AnnulerItemSchema,
   CreerCommandeSchema,
+  DeplacerCommandeSchema,
+  DeplacerItemSchema,
   InfosLivraisonSchema,
   ModifierItemSchema,
   RemiseSchema,
@@ -223,6 +225,116 @@ export function routesCommandes(app: FastifyInstance): void {
     return vue;
   });
 
+  /** Déplace une ligne entière vers une autre commande, sans annulation ni retour. */
+  app.post('/api/commandes/:id/items/:itemId/deplacer', { preHandler: app.exigePermission('salle.deplacer_commande') }, async (req) => {
+    const { id, itemId } = req.params as { id: string; itemId: string };
+    const { commande_destination_id: destinationId } = valider(DeplacerItemSchema, req.body);
+    if (id === destinationId) throw new ErreurMetier('Choisissez une autre commande', 400);
+
+    const resultat = await db.transaction(async (tx) => {
+      // Ordre stable : deux déplacements simultanés en sens inverse ne se bloquent pas.
+      const [premier, second] = [id, destinationId].sort();
+      const a = await verrouillerCommande(tx, premier!);
+      const b = await verrouillerCommande(tx, second!);
+      const source = a.id === id ? a : b;
+      const destination = a.id === destinationId ? a : b;
+      exigerModifiable(source);
+      exigerModifiable(destination);
+      await exigerAccesTable(tx, req.session!, source.table_id);
+      await exigerAccesTable(tx, req.session!, destination.table_id);
+      if (await paiementExistePourCommande(tx, id) || await paiementExistePourCommande(tx, destinationId)) {
+        throw new ErreurMetier('Un déplacement est impossible après le début d’un paiement', 409);
+      }
+      if (await sousNoteArticlesActiveExiste(tx, id) || await sousNoteArticlesActiveExiste(tx, destinationId)) {
+        throw new ErreurMetier('Annulez d’abord les paiements par articles en attente', 409);
+      }
+      const [item] = await tx.select().from(commandeItems)
+        .where(and(eq(commandeItems.id, itemId), eq(commandeItems.commande_id, id))).for('update');
+      if (!item || item.statut_cuisine === 'ANNULE') throw introuvable('Produit actif de la commande');
+      const [majItem] = await tx.update(commandeItems).set({ commande_id: destinationId })
+        .where(eq(commandeItems.id, itemId)).returning();
+      await ecrireOutbox(tx, 'commande_items', 'UPDATE', itemId, majItem as unknown as Record<string, unknown>);
+      await recalculerTotaux(tx, id);
+      await recalculerTotaux(tx, destinationId);
+
+      const [reste] = await tx.select({ nb: count() }).from(commandeItems)
+        .where(and(eq(commandeItems.commande_id, id), ne(commandeItems.statut_cuisine, 'ANNULE')));
+      const sourceVide = Number(reste?.nb ?? 0) === 0;
+      if (sourceVide) {
+        const [majSource] = await tx.update(commandes).set({ statut: 'ANNULEE', updated_at: new Date() })
+          .where(eq(commandes.id, id)).returning();
+        await ecrireOutbox(tx, 'commandes', 'UPDATE', id, majSource as unknown as Record<string, unknown>);
+        await majStatutTable(tx, source.table_id, 'LIBRE');
+      }
+      await journaliser(tx, {
+        user_id: req.session!.utilisateur_id, action: 'DEPLACEMENT_PRODUIT', entite: 'commande_items', entite_id: itemId,
+        montant: item.prix_unitaire * item.quantite,
+        meta: { commande_source_id: id, commande_destination_id: destinationId, produit: item.nom_snapshot, source_annulee: sourceVide },
+      });
+      return { commande: await chargerCommandeVue(tx, destinationId), source_annulee: sourceVide };
+    });
+    app.diffuser('commande', id);
+    app.diffuser('commande', destinationId);
+    app.diffuser('table:changee');
+    return resultat;
+  });
+
+  /** Change la destination d'une commande entière en conservant ses lignes et leurs prix. */
+  app.post('/api/commandes/:id/deplacer', { preHandler: app.exigePermission('salle.deplacer_commande') }, async (req) => {
+    const { id } = req.params as { id: string };
+    const corps = valider(DeplacerCommandeSchema, req.body);
+    const vue = await db.transaction(async (tx) => {
+      const c = await verrouillerCommande(tx, id);
+      exigerModifiable(c);
+      await exigerAccesTable(tx, req.session!, c.table_id);
+      if (await paiementExistePourCommande(tx, id)) throw new ErreurMetier('Un déplacement est impossible après le début d’un paiement', 409);
+      if (await sousNoteArticlesActiveExiste(tx, id)) throw new ErreurMetier('Annulez d’abord les paiements par articles en attente', 409);
+
+      let tableId: string | null = null;
+      let partenaire: string | null = null;
+      let offert = false;
+      if (corps.type === 'SUR_PLACE') {
+        const [table] = await tx.select().from(tablesSalle).where(eq(tablesSalle.id, corps.table_id!)).for('update');
+        if (!table || !table.actif || table.partenaire) throw new ErreurMetier('Choisissez une table de salle active', 400);
+        const conflits = await tx.select({ id: commandes.id }).from(commandes).where(and(
+          eq(commandes.table_id, table.id), ne(commandes.id, id), notInArray(commandes.statut, ['PAYEE', 'ANNULEE']),
+        )).limit(1);
+        if (conflits.length) throw new ErreurMetier('Cette table porte déjà une commande. Déplacez les produits vers cette commande ou choisissez une table libre.', 409);
+        tableId = table.id;
+      } else if (corps.type === 'LIVRAISON') {
+        partenaire = corps.partenaire!;
+        if (corps.table_id) {
+          const [table] = await tx.select().from(tablesSalle).where(eq(tablesSalle.id, corps.table_id));
+          if (!table || !table.actif || table.partenaire !== partenaire) throw new ErreurMetier('La table partenaire choisie ne correspond pas à la livraison', 400);
+          tableId = table.id;
+        }
+      }
+
+      if (c.type === 'SUR_PLACE' && c.table_id !== tableId) await majStatutTable(tx, c.table_id, 'LIBRE');
+      if (corps.type === 'SUR_PLACE') await majStatutTable(tx, tableId, 'OCCUPEE');
+      const [maj] = await tx.update(commandes).set({
+        type: corps.type, table_id: tableId, partenaire, offert,
+        ref_partenaire: corps.type === 'LIVRAISON' ? c.ref_partenaire : null,
+        contact_client: corps.type === 'LIVRAISON' ? c.contact_client : null,
+        updated_at: new Date(),
+      }).where(eq(commandes.id, id)).returning();
+      await ecrireOutbox(tx, 'commandes', 'UPDATE', id, maj as unknown as Record<string, unknown>);
+      await journaliser(tx, {
+        user_id: req.session!.utilisateur_id, action: 'DEPLACEMENT_COMMANDE', entite: 'commandes', entite_id: id,
+        montant: c.total,
+        meta: {
+          numero_ticket: Number(c.numero_ticket),
+          avant: { type: c.type, table_id: c.table_id, partenaire: c.partenaire },
+          apres: { type: corps.type, table_id: tableId, partenaire }, prix_conserves: true,
+        },
+      });
+      return chargerCommandeVue(tx, id);
+    });
+    app.diffuser('commande', id);
+    app.diffuser('table:changee');
+    return vue;
+  });
+
   // Changement de quantité (article pas encore envoyé en cuisine)
   app.patch('/api/commandes/:id/items/:itemId', { preHandler: app.exigePermission('salle.commande') }, async (req) => {
     const { id, itemId } = req.params as { id: string; itemId: string };
@@ -284,7 +396,7 @@ export function routesCommandes(app: FastifyInstance): void {
       annulePar = manager.id;
     }
 
-    const vue = await db.transaction(async (tx) => {
+    const resultat = await db.transaction(async (tx) => {
       const c = await verrouillerCommande(tx, id);
       exigerModifiable(c);
       if ((await quantiteAlloueePourItem(tx, id, itemId)) > 0) {
@@ -296,6 +408,28 @@ export function routesCommandes(app: FastifyInstance): void {
         .where(eq(commandeItems.id, itemId))
         .returning();
       await ecrireOutbox(tx, 'commande_items', 'UPDATE', itemId, maj as unknown as Record<string, unknown>);
+
+      // Une table dont le dernier produit vient d'être retiré ne doit pas
+      // rester occupée par une commande à 0 F. On conserve la ligne annulée
+      // pour l'audit (et comme RETOUR si elle avait déjà été produite), puis
+      // on ferme la commande et libère la table dans la même transaction.
+      const [reste] = await tx
+        .select({ nb: count() })
+        .from(commandeItems)
+        .where(and(eq(commandeItems.commande_id, id), ne(commandeItems.statut_cuisine, 'ANNULE')));
+      const fermeTable = c.table_id !== null && Number(reste?.nb ?? 0) === 0;
+      if (fermeTable) {
+        if (await paiementExistePourCommande(tx, id)) {
+          throw new ErreurMetier('Le dernier produit ne peut pas être supprimé après le début d’un paiement', 409);
+        }
+        const [commandeFermee] = await tx
+          .update(commandes)
+          .set({ statut: 'ANNULEE', updated_at: new Date() })
+          .where(eq(commandes.id, id))
+          .returning();
+        await ecrireOutbox(tx, 'commandes', 'UPDATE', id, commandeFermee as unknown as Record<string, unknown>);
+        await majStatutTable(tx, c.table_id, 'LIBRE');
+      }
       await journaliser(tx, {
         user_id: annulePar,
         action: 'ANNULATION_ITEM',
@@ -303,16 +437,22 @@ export function routesCommandes(app: FastifyInstance): void {
         entite_id: itemId,
         montant: itemAvant.prix_unitaire * itemAvant.quantite,
         motif: corps.motif,
-        meta: { commande_id: id, nom: itemAvant.nom_snapshot, statut_cuisine_avant: itemAvant.statut_cuisine },
+        meta: {
+          commande_id: id,
+          nom: itemAvant.nom_snapshot,
+          statut_cuisine_avant: itemAvant.statut_cuisine,
+          commande_fermee: fermeTable,
+        },
       });
       await recalculerTotaux(tx, id);
-      return chargerCommandeVue(tx, id);
+      return { vue: await chargerCommandeVue(tx, id), tableLiberee: fermeTable, tableId: c.table_id };
     });
 
     // Le KDS affiche l'article barré « ANNULÉ » s'il était déjà parti en cuisine
     if (dejaEnvoye) app.diffuser('commande_item:annule', id);
     app.diffuser('commande', id);
-    return vue;
+    if (resultat.tableLiberee) app.diffuser('table:changee', resultat.tableId ?? undefined);
+    return resultat.vue;
   });
 
   /**

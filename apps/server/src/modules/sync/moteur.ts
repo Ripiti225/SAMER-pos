@@ -12,6 +12,13 @@ import { executerOrdre, type EffetsOrdre } from './ordres.js';
 import { hier, reconcilierJour } from './reconcile.js';
 import { etatSync } from './etat.js';
 import { preparerRattrapageCatalogueHistorique } from './catalogue-historique.js';
+import { enregistrerIncident } from '../sante/incidents.js';
+
+function messageIncidentSync(operation: string, erreur: ErreurSync): string {
+  if (erreur.estRevocation) return `La ${operation} a été refusée parce que la clé de ce restaurant a été révoquée. Contactez le siège.`;
+  if (erreur.estReseau) return `La ${operation} n’a pas abouti parce que le cloud ne répond pas. Les ventes locales continuent et seront renvoyées automatiquement.`;
+  return `La ${operation} a échoué parce que le cloud a refusé ou n’a pas compris les données envoyées.`;
+}
 
 export class MoteurSync {
   private client: ClientCloud | null = null;
@@ -47,6 +54,10 @@ export class MoteurSync {
     }
     const rattrapage = await preparerRattrapageCatalogueHistorique().catch((e) => {
       console.error('Préparation du catalogue historique :', e);
+      void enregistrerIncident(
+        'SYNCHRONISATION', e, { operation: 'préparation du catalogue historique' },
+        'La préparation du catalogue pour la synchronisation a échoué. Les ventes restent possibles, mais le catalogue doit être vérifié.',
+      );
       return null;
     });
     if (rattrapage?.prepare) {
@@ -127,6 +138,7 @@ export class MoteurSync {
     } catch (e) {
       const err = e instanceof ErreurSync ? e : new ErreurSync(String(e), 0);
       etatSync.echecMontee(err.message, err.estRevocation);
+      await enregistrerIncident('SYNCHRONISATION', err, { operation: 'envoi manuel des ventes' }, messageIncidentSync('synchronisation manuelle', err));
     }
     return { actif: true, en_attente: etatSync.lignes_en_attente };
   }
@@ -139,6 +151,7 @@ export class MoteurSync {
       } catch (e) {
         const err = e instanceof ErreurSync ? e : new ErreurSync(String(e), 0);
         etatSync.echecMontee(err.message, err.estRevocation);
+        await enregistrerIncident('SYNCHRONISATION', err, { operation: 'envoi automatique des ventes' }, messageIncidentSync('synchronisation automatique', err));
         // Révocation : inutile de marteler, on garde l'intervalle de base.
         delai = err.estRevocation ? base : prochainBackoff(etatSync.echecs_consecutifs);
       }
@@ -150,9 +163,15 @@ export class MoteurSync {
   private boucleDescente(base: number): void {
     const tick = async () => {
       try {
-        await tirerCatalogue(this.client!);
-      } catch {
-        /* la descente n'est pas critique : on réessaie au prochain cycle */
+        const nbLignes = await tirerCatalogue(this.client!);
+        // La descente écrit directement en base : sans événement LAN, les
+        // caisses déjà ouvertes garderaient leur ancien cache du menu.
+        if (nbLignes > 0) this.effetsOrdres?.diffuser('catalogue', '');
+      } catch (e) {
+        await enregistrerIncident(
+          'SYNCHRONISATION', e, { operation: 'réception du catalogue' },
+          'La mise à jour du catalogue depuis le cloud a échoué. Le POS conserve le dernier catalogue reçu et réessaiera automatiquement.',
+        );
       }
       this.planifier(() => void tick(), base);
     };

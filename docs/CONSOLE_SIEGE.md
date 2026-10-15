@@ -95,7 +95,20 @@ maintenant, au design « Duo contrasté » (DESIGN_V2 § 6.12).
 | Tableau de bord | **Refondu le 2026-08-25** — six chiffres d'appel avec variation, CA quotidien empilé par restaurant, heures de pic, comparaisons, top des plats, modes de paiement, tables, canaux, retours, écarts par caissier, **livraisons partenaires par caissier**, dépenses, remises, annulations, inventaire, équipe et heures travaillées | `moi`, `tableau_bord` |
 | Clôtures | fond, compté, théorique, **écart** coloré au-delà de 2 000 F, ticket Z complet à la demande (blocs nommés, tous les champs, JSON brut dépliable) | `restaurants`, `clotures`, `rapport_z` |
 | Inventaire | pour la journée choisie, toutes les entrées POS et SamerTrackly regroupées par restaurant puis fournisseur, avant les explications d'écart ; un ADMIN peut prendre la même décision que dans SamerTrackly, LECTURE consulte seulement | `inventaire_explications`, `decider_explication_inventaire` |
+| Recettes d’inventaire | catalogue de comptage d’un restaurant ; un ADMIN crée un produit et associe les articles vendus avec leur quantité consommée. Le cloud diffuse ensuite les deux tables vers le POS. La création de produits À la Braise est bloquée. | `inventaire_catalogue`, `inventaire_produit_creer`, `inventaire_recette_enregistrer` |
 | Équipe | les travailleurs du groupe, filtrables par restaurant, **en lecture seule** | `equipe` |
+
+Pour faire apparaître les produits déjà présents dans une caisse, ouvrir sur le
+POS du restaurant **Administration → Recettes d’inventaire → Envoyer les produits
+existants au siège**. Cette publication initiale ne transmet que les lignes
+absentes du cloud. Si un code, un nom ou une recette correspond déjà à un autre
+identifiant, elle s'arrête et signale le conflit au lieu de créer un doublon.
+La publication est rejouable après une coupure réseau. À la Braise est exclu de
+ce transfert sans validation particulière.
+Le POS doit être enrôlé et sa synchronisation active. Les articles de vente
+utilisés par les recettes doivent déjà être arrivés au cloud ; sinon, attendre
+leur synchronisation puis relancer le transfert. Répéter l'opération sur le POS
+de chaque restaurant concerné, puis actualiser la console siège.
 
 ### Le tableau de bord
 
@@ -190,12 +203,27 @@ L'écran Équipe, lui, fonctionne immédiatement — il lit SamerTrackly.
 Rien n'est perdu pendant ce temps : chaque caisse empile ses ventes dans
 `sync_outbox` et remonte tout au premier enrôlement.
 
-## Reste à faire
+## Gérer le menu des restaurants
 
-- Écran **Catalogue** : créer/modifier un plat, cocher les restaurants
-  destinataires, ajuster le prix par restaurant. La voie existe déjà côté cloud
-  (`admin-catalogue` + descente en moins de 5 min) ; il manque la boucle
-  multi-restaurants et l'interface.
+Dans **Menu → Articles déjà présents**, choisir un restaurant, rechercher un
+article puis modifier sa catégorie, son nom, son prix de base, sa description,
+sa photo ou sa disponibilité. « Afficher cet article au menu » permet de le
+masquer sans effacer les ventes passées. L'édition ne touche qu'au restaurant
+choisi ; elle ne crée aucun article. La création collective reste séparée et
+exclut À la Braise.
+
+L'enregistrement écrit dans le cloud POS. La caisse reçoit la modification à
+sa prochaine descente (intervalle habituel : 5 minutes) puis rafraîchit les
+écrans ouverts. Une caisse hors ligne garde son menu actuel jusqu'au retour de
+la connexion. La disponibilité définie au siège et l'état « épuisé » local
+doivent tous deux autoriser la vente. Les prix de canaux spécifiques ne sont pas
+modifiés par le champ « prix de base ».
+
+La nouvelle interface exige le déploiement de la console, de l'Edge Function
+`siege` et du serveur local mis à jour sur chaque site. Aucun changement de
+schéma cloud n'est nécessaire.
+
+## Reste à faire
 - Écran **Dépenses** et vue complète des inventaires : le nouvel onglet Inventaire
   couvre les entrées quotidiennes et les explications d'écart. Le stock à
   l'instant T sera ajouté plus tard comme vue interne du même onglet, pas comme

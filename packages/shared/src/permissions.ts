@@ -36,6 +36,7 @@ export const SECTIONS_PERMISSIONS: SectionPermissions[] = [
     permissions: [
       { cle: 'salle.commande', libelle: 'Prendre une commande' },
       { cle: 'salle.envoyer_cuisine', libelle: 'Envoyer en cuisine' },
+      { cle: 'salle.deplacer_commande', libelle: 'Déplacer un produit ou une commande' },
       { cle: 'salle.transferer_table', libelle: 'Transférer une table' },
       { cle: 'salle.voir_toutes_tables', libelle: 'Voir toutes les tables' },
     ],
@@ -142,7 +143,7 @@ export const PERMISSIONS_DEFAUT: Record<RoleSysteme, string[]> = {
     'caisse.service.ouvrir', 'caisse.encaisser', 'caisse.remise', 'caisse.annuler_envoye',
     'caisse.rouvrir', 'caisse.cloturer', 'caisse.fermer_sequence', 'caisse.imprimer_note',
     // Salle
-    'salle.commande', 'salle.envoyer_cuisine', 'salle.transferer_table', 'salle.voir_toutes_tables',
+    'salle.commande', 'salle.envoyer_cuisine', 'salle.deplacer_commande', 'salle.transferer_table', 'salle.voir_toutes_tables',
     // Dépenses & inventaire
     'depenses.saisir', 'depenses.supprimer', 'depenses.paie',
     'inventaire.saisir', 'inventaire.valider', 'inventaire.debloquer', 'pointage.gerer',
@@ -156,7 +157,7 @@ export const PERMISSIONS_DEFAUT: Record<RoleSysteme, string[]> = {
   CAISSIER: [
     'caisse.service.ouvrir', 'caisse.encaisser', 'caisse.remise', 'caisse.annuler_envoye',
     'caisse.rouvrir', 'caisse.cloturer', 'caisse.imprimer_note',
-    'salle.commande', 'salle.envoyer_cuisine', 'salle.transferer_table', 'salle.voir_toutes_tables',
+    'salle.commande', 'salle.envoyer_cuisine', 'salle.deplacer_commande', 'salle.transferer_table', 'salle.voir_toutes_tables',
     /**
      * Dépenses & inventaire : le caissier les avait TOUTES avant le
      * 2026-08-17, puisque le seul garde était `caisse.service.ouvrir`. On les

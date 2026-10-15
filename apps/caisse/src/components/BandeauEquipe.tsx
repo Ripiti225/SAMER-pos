@@ -30,6 +30,8 @@ export interface MembrePointage {
   attendu: boolean;
   fin_prevue: string | null;
   minutes_faites: number;
+  minutes_reportees: number;
+  minutes_cumulees: number;
   heures_faites: boolean;
   reste: boolean | null;
   salaire_paye: boolean;
@@ -219,7 +221,7 @@ function FlecheDefilement({ direction, onClick }: { direction: 'gauche' | 'droit
  */
 function FicheAgent({ membre, duree }: { membre: MembrePointage; duree: number }) {
   const couleur = couleurDe(membre.utilisateur_id);
-  const pct = Math.min(100, (membre.minutes_faites / (duree * 60)) * 100);
+  const pct = Math.min(100, (membre.minutes_cumulees / (duree * 60)) * 100);
   const fait = membre.heures_faites;
 
   return (
@@ -257,8 +259,13 @@ function FicheAgent({ membre, duree }: { membre: MembrePointage; duree: number }
               />
             </span>
             <span className={`mt-1.5 inline-block text-[11.5px] font-bold ${fait ? 'text-ok' : 'text-alerte'}`}>
-              {fait ? `${enHeures(membre.minutes_faites)} faites` : `${enHeures(membre.minutes_faites)} / ${duree} h`}
+              {fait ? `${enHeures(membre.minutes_cumulees)} faites` : `${enHeures(membre.minutes_cumulees)} / ${duree} h`}
             </span>
+            {membre.minutes_reportees > 0 && (
+              <span className="mt-0.5 block text-[10.5px] text-vitrine-txt-doux">
+                Ce shift : {enHeures(membre.minutes_faites)} · total continu : {enHeures(membre.minutes_cumulees)}
+              </span>
+            )}
           </>
         )}
 

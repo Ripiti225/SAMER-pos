@@ -7,6 +7,8 @@
  * pour éviter les soucis de page de code des imprimantes génériques.
  */
 import { spawn } from 'node:child_process';
+import { cleSonnerie, modeSonnerieEnregistre, POSTES_IMPRESSION, type ModeSonnerie } from '@pos/shared';
+import { commandeSonnerie } from './sonnerie.js';
 import { randomBytes } from 'node:crypto';
 import { unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -15,6 +17,7 @@ import { eq } from 'drizzle-orm';
 import type { CommandeItemVue, CommandeVue, EtatStockInstant, NoteSplitVue, PaiementVue, PosteImpression, RapportSequence, RapportZ } from '@pos/shared';
 import { clePosteImprimante, estLivraisonSansEncaissement, formatFCFA, libelleCategorieInventaire, libellePartenaire, LIBELLES_MODES, LIBELLES_POSTE_IMPRESSION, LIBELLES_TYPES_COMMANDE, titreRecuSousNote, vueSousNote } from '@pos/shared';
 import { db } from '../db/client.js';
+import { enregistrerIncident } from '../modules/sante/incidents.js';
 import { parametresLocaux, restaurant } from '../db/schema/index.js';
 import type { PrinterService } from './PrinterService.js';
 import { ConsolePrinter } from './ConsolePrinter.js';
@@ -166,6 +169,7 @@ class Ruban {
   }
   tiret(): this { return this.ligne('-'.repeat(this.colonnes)); }
   couper(): this { this.push(0x0a, 0x0a, 0x0a, 0x0a, 0x1d, 0x56, 0x00); return this; }
+  sonner(mode: ModeSonnerie): this { return this.brut(commandeSonnerie(mode)); }
   buffer(): Buffer { return Buffer.from(this.o); }
 }
 
@@ -457,11 +461,17 @@ export class EscposPrinter implements PrinterService {
       await envoyerRaw(q, construire());
     } catch (e) {
       console.error(`Impression ${poste} échouée, repli console :`, (e as Error).message);
+      await enregistrerIncident(
+        'IMPRESSION',
+        e,
+        { poste, imprimante: q },
+        `L’impression sur le poste ${poste} a échoué. Le document a été envoyé vers la sortie de secours, mais l’imprimante doit être vérifiée.`,
+      );
       await replConsole();
     }
   }
 
-  private async infosResto(): Promise<{ nom: string; entete: string; pied: string; marque: Marque; logo: ModeLogo; colonnes: number }> {
+  private async infosResto(): Promise<{ nom: string; entete: string; pied: string; marque: Marque; logo: ModeLogo; colonnes: number; sonneries: Record<PosteImpression, ModeSonnerie> }> {
     const params = await db.select().from(parametresLocaux);
     const val = (cle: string): string => {
       const p = params.find((x) => x.cle === cle);
@@ -470,7 +480,13 @@ export class EscposPrinter implements PrinterService {
     const brut = params.find((x) => x.cle === CLE_COLONNES)?.valeur;
     const [resto] = await db.select().from(restaurant).limit(1);
     const logo = val(CLE_LOGO);
+    const sonneries = {} as Record<PosteImpression, ModeSonnerie>;
+    for (const poste of POSTES_IMPRESSION) {
+      const queue = (val(clePosteImprimante(poste)) || (poste === 'CAISSE' ? val('imprimante_thermique_queue') : '')).trim();
+      sonneries[poste] = modeSonnerieEnregistre(params.find((p) => p.cle === cleSonnerie(poste))?.valeur, queue, poste);
+    }
     return {
+      sonneries,
       nom: resto?.nom ?? 'Chez Samer',
       entete: val('ticket_entete'),
       pied: val('ticket_pied'),
@@ -582,6 +598,9 @@ export class EscposPrinter implements PrinterService {
           r.taille();
         }
         r.couper();
+        // Avertir la cuisine une fois le bon sorti. La commande sonore reste
+        // dans le même travail RAW que le ticket, après la coupe.
+        r.sonner(info.sonneries[poste]);
         return r.buffer();
       },
       () => this.console.imprimerBon(c, poste, items),

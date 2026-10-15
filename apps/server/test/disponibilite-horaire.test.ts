@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { dansPlageHoraire, jourAbidjan } from '../src/modules/catalogue/horaires.js';
+import { categorieDisponibleMaintenant, dansPlageHoraire, jourAbidjan } from '../src/modules/catalogue/horaires.js';
+import { DerogationDisponibiliteSchema } from '@pos/shared';
 
 describe('disponibilité horaire', () => {
   it.each([
@@ -23,5 +24,19 @@ describe('disponibilité horaire', () => {
   it('calcule le jour dans le fuseau d’Abidjan', () => {
     expect(jourAbidjan(new Date('2026-09-07T12:00:00Z'))).toBe(1);
     expect(jourAbidjan(new Date('2026-09-13T12:00:00Z'))).toBe(7);
+  });
+
+  it('la réactivation exceptionnelle rouvre une catégorie après son heure de fin', () => {
+    const categorie = { heure_debut: '10:00', heure_fin: '16:00', disponibilite_forcee: false };
+    const apresFermeture = new Date('2026-09-19T18:00:00Z');
+    expect(categorieDisponibleMaintenant(categorie, apresFermeture)).toBe(false);
+    expect(categorieDisponibleMaintenant({ ...categorie, disponibilite_forcee: true }, apresFermeture)).toBe(true);
+  });
+
+  it('le motif trop court renvoie une erreur lisible en français', () => {
+    const resultat = DerogationDisponibiliteSchema.safeParse({ active: true, motif: 'ok' });
+    expect(resultat.success).toBe(false);
+    if (!resultat.success) expect(resultat.error.issues[0]?.message).toBe('Indiquez un motif d’au moins 3 caractères');
+    expect(DerogationDisponibiliteSchema.safeParse({ active: true, motif: 'Stock encore disponible' }).success).toBe(true);
   });
 });

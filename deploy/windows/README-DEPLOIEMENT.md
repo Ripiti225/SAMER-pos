@@ -97,6 +97,11 @@ Sur chaque PC (aucune installation, aucun internet requis) :
    Si un jour on **réaffecte un poste** à un autre restaurant, refaire cette
    étape : le poste reçoit un identifiant neuf et il faut **ré-enrôler** le site
    côté cloud (l'ancienne clé est effacée exprès).
+   **À la Braise uniquement** : charger aussi le profil propre à ce site avant
+   toute commande. Le choix du restaurant ne remplace pas le catalogue commun.
+   Suivre `docs/INSTALLATION_A_LA_BRAISE.md` ; pour un poste déjà configuré sans
+   commandes, utiliser `corriger-a-la-braise.bat` et son `.ps1` à la racine du
+   dossier portable, avec le code à jour.
 6. **Régénérer les QR avant de les imprimer** (sécurité) : Réglages → **Salle & QR**
    → **« Régénérer tous les QR »**. On obtient des jetons **frais et aléatoires**
    (non devinables), puis on **imprime** les QR à poser sur les tables. À refaire
@@ -165,4 +170,3 @@ Sans imprimante configurée, tout marche à l'écran (le ticket retombe en conso
 
 > Ces scripts sont à **roder sur une vraie machine Windows** : au premier essai,
 > garde les fenêtres ouvertes pour lire les messages, et on ajuste ensemble.
-

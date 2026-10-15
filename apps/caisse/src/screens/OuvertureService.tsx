@@ -26,7 +26,13 @@ export function OuvertureService() {
   // Map utilisateur_id → poste du jour (présent = présent dans la map).
   const [equipe, setEquipe] = useState<Record<string, string>>({});
 
-  const { data: proposes } = useQuery({
+  const {
+    data: proposes,
+    isSuccess: propositionsChargees,
+    isError: erreurPropositions,
+    isFetchedAfterMount: propositionsActualisees,
+    refetch: rechargerPropositions,
+  } = useQuery({
     queryKey: ['equipe-proposee'],
     queryFn: () => api<MembrePropose[]>('/api/services/equipe-proposee'),
     enabled: etape === 'equipe',
@@ -56,7 +62,7 @@ export function OuvertureService() {
    */
   const preRempli = useRef(false);
   useEffect(() => {
-    if (preRempli.current || !proposes) return;
+    if (preRempli.current || !propositionsChargees || !propositionsActualisees || !proposes) return;
     preRempli.current = true;
     const restants = proposes.filter((m) => m.reste_precedent);
     if (restants.length === 0) return;
@@ -65,7 +71,7 @@ export function OuvertureService() {
       for (const m of restants) copie[m.utilisateur_id] ??= m.poste_defaut;
       return copie;
     });
-  }, [proposes]);
+  }, [proposes, propositionsChargees, propositionsActualisees]);
 
   const basculer = (m: MembrePropose) => {
     setEquipe((e) => {
@@ -77,6 +83,7 @@ export function OuvertureService() {
   };
 
   const ouvrir = async () => {
+    if (!propositionsChargees || !propositionsActualisees) return;
     setEnCours(true);
     try {
       const service = await api<ServiceOuvertVue>('/api/services/ouvrir', {
@@ -169,7 +176,13 @@ export function OuvertureService() {
         <p className="mt-1 text-sm text-doux">Cochez les personnes présentes et ajustez leur poste</p>
       </div>
       <div className="mx-auto grid w-full max-w-2xl gap-2">
-        {(proposes ?? []).map((m) => {
+        {erreurPropositions && (
+          <button type="button" className="btn-blanc" onClick={() => void rechargerPropositions()}>
+            Impossible de charger l’équipe. Réessayer
+          </button>
+        )}
+        {!erreurPropositions && !propositionsActualisees && <p className="text-center text-doux">Chargement de l’équipe…</p>}
+        {(propositionsChargees && propositionsActualisees ? proposes ?? [] : []).map((m) => {
           const present = m.utilisateur_id in equipe;
           return (
             <div key={m.utilisateur_id} className={`flex items-center gap-3 rounded-[13px] border-2 px-4 py-3 transition ${present ? 'border-marque bg-marque-tint shadow-e1' : 'border-bordure bg-surface'}`}>
@@ -192,7 +205,7 @@ export function OuvertureService() {
       </div>
       <div className="mx-auto mt-6 flex w-full max-w-2xl gap-3">
         <button type="button" className="btn-blanc" onClick={() => setEtape('fond')}>Retour</button>
-        <button type="button" className="btn-accent flex-1" onClick={ouvrir} disabled={enCours}>
+        <button type="button" className="btn-accent flex-1" onClick={ouvrir} disabled={enCours || !propositionsChargees || !propositionsActualisees}>
           {enCours ? 'Ouverture…' : `Ouvrir le service (${Object.keys(equipe).length} présent(s))`}
         </button>
       </div>

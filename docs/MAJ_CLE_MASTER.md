@@ -5,17 +5,69 @@
 La clé a été copiée le **2026-08-17 à 05h01:32**, avec l'identité neutre `A_CONFIGURER`
 et les deux seuls comptes propriétaire. Tout ce qui est écrit ici est **postérieur**.
 
-> **Report effectué le 2026-09-09** (`data\` exclu, la base neutre de la clé est intacte
-> — inchangée depuis le 18/07 14h24) : **le code d'abord**, puis **ce journal et ses cinq
-> nouvelles entrées dans une seconde passe**. La clé reçoit aussi, pour la première fois,
-> les **lanceurs `.bat`** de `deploy/windows/` à sa racine — sans eux, les scripts
-> d'installation ne partaient sur aucun poste (voir l'entrée du 09/09).
-> **Tout ce qui est écrit ci-dessous est donc sur la clé**, migrations jusqu'à la **0032**
-> et `apps/caisse/dist` du 09/09 00h06 compris. Les entrées ajoutées après cette date ne
-> le seront pas : recommencer le report avant tout nouveau déploiement.
+> **Report du 2026-09-25** : correctifs « À la Braise sans horaires » et « PIN manager
+> refusé aux caissiers promus » (voir l'entrée du 25/09). **14 fichiers** absents ou
+> différents copiés vers `D:\POS-Samer\app`, **14/14 vérifiés par SHA-256** ; aucun autre
+> écart n'existait entre le dossier de travail et la clé. La caisse a été recompilée
+> avant la copie (`apps/caisse/dist`, nouveaux `index-BlZ8ZHt0.js` / `index-rCDOOw6p.css`).
+> Les anciens fichiers remplacés sont dans `C:\Users\HP\Documents\POS-Samer\usb-backup-20260925-132737`,
+> le manifeste dans `usb-copy-20260925-132737.csv`. `data`, `.env`, `runtime`,
+> `node_modules` et `PosSamer.exe` de la clé préservés. La copie est **additive** : les
+> assets caisse de la génération précédente (`index-BnJR1T-Z.js`, `index-CQXDIfLw.css`)
+> restent sur la clé sans être servis, `index.html` pointant sur les nouveaux.
 >
-> *(Reports précédents : 2026-09-04 à 21h52, la clé s'arrêtait alors au commit `116309a` ;
-> 2026-08-21 à 15h48, à la migration 0025.)*
+> **Base neutre migrée le 25/09** : sauvegarde préalable sur la clé dans
+> `data\pgdata.backup-20260925` (1499 fichiers, 66,3 Mo, contrôlée identique), puis
+> `drizzle.__drizzle_migrations` comptée à **39 lignes sur 39**. Avant et après :
+> `A_CONFIGURER`, 0 commande, 0 service, 0 `cle_site`, 2 propriétaires, 16 catégories,
+> 131 articles actifs, 0 catégorie avec horaire. La `0038` y est un no-op (catalogue
+> Samer, pas braise) : elle n'est appliquée que pour tenir le niveau base = niveau code.
+> PostgreSQL arrêté proprement après vérification.
+>
+> **Report du 2026-09-24** : le dernier commit de `origin/main`, `7690aee`
+> (`feat(sync): préserver l’identité lors du remplacement`), a été fusionné dans
+> `siege-8-sites-et-releve` en conservant les évolutions locales. Les cinq interfaces
+> et le serveur ont été recompilés. **23 fichiers** absents ou différents ont été
+> sauvegardés puis copiés vers `D:\POS-Samer\app`, avec contrôle SHA-256 après copie.
+> `data`, les `.env`, `runtime`, les `node_modules` portables et `PosSamer.exe` ont été
+> préservés. Aucune migration n’a été ajoutée après `0037` : la base neutre reste donc
+> au même niveau que le code, sans modification de ses données.
+
+> **Report du 2026-09-22** : 37 fichiers absents ou différents ont été copiés depuis
+> le dossier de travail vers `D:\POS-Samer` et vérifiés par empreinte, notamment les
+> sources et builds caisse/siège du 21/09 et la migration `0037_heures_releve.sql`.
+> Les anciens fichiers remplacés sont sauvegardés dans
+> `C:\Users\HP\Documents\POS-Samer\usb-backup-20260922`. Le profil À la Braise était
+> déjà identique ; le `PosSamer.exe` et les scripts de la racine de la clé, plus
+> récents que ceux du dossier de travail, ont été conservés.
+>
+> **Base neutre migrée le 22/09** : sauvegarde préalable sur la clé dans
+> `data\pgdata.backup-20260922`, puis `drizzle.__drizzle_migrations` contrôlée à
+> **38 lignes sur 38**. Avant et après : `A_CONFIGURER`, 0 commande, 0 service,
+> 0 `cle_site`. PostgreSQL a été arrêté proprement après vérification. Le code
+> de l'Edge Function `siege` est sur la clé, mais son déploiement cloud n'a pas
+> été vérifié lors de ce report.
+>
+> **Report effectué le 2026-09-20 à 17h59** : code, builds des cinq interfaces,
+> scripts Windows à la racine et `PosSamer.exe` ont été mis à jour. La copie a été
+> **additive** (158 fichiers ajoutés ou remplacés, aucun fichier supprimé) ; `data\`,
+> tous les `node_modules` utiles et `apps/server/.env` ont été préservés. Les vieux
+> fichiers de build nommés par hash peuvent donc encore être présents, mais les nouveaux
+> `index.html` et service workers ne les référencent plus.
+>
+> La base neutre a été copiée sur le disque local, migrée de **33 à 37 migrations**,
+> contrôlée puis remise sur la clé après arrêt propre. L'ancienne base reste disponible
+> dans `data\pgdata.backup-20260920-1755`. Contrôles après migration : `A_CONFIGURER`,
+> 0 commande, 0 service, 0 `cle_site`, 2 propriétaires, 15 catégories et 131 articles
+> actifs.
+>
+> Le report du 20/09 correspond au commit `5b9c21d` plus les correctifs locaux du 20/09.
+> Les métadonnées `.git` de la clé n'ont volontairement pas été réécrites pendant
+> cette copie additive : son `HEAD` reste ancien et son arbre apparaît modifié, tandis que
+> les fichiers exécutés sont bien ceux du report.
+>
+> *(Reports précédents : 2026-09-09 à 15h18, 2026-09-04 à 21h52 et
+> 2026-08-21 à 15h48.)*
 >
 > **La clé est désormais sur la branche `siege-8-sites-et-releve`, pas sur `main`.** Elle
 > porte du code que `main` n'a pas encore : À la Braise côté cloud, le report de la
@@ -35,7 +87,7 @@ avant que les 7 autres restaurants ne reçoivent quoi que ce soit.
 - « Relancer l'exe » = quitter `PosSamer.exe` (`Ctrl+Alt+Q`) et le relancer. Suffit
   pour toute modif SERVEUR (tsx lit les sources, sans watch).
 - « Repackager » = `pnpm --filter @pos/desktop build` — seulement si `apps/desktop`
-  change. **Aucune entrée de ce journal ne l'exige à ce jour.**
+  change. **Fait le 20/09 après modification de `apps/desktop/main.js`.**
 - « Migrer » = `pnpm db:migrate`.
   > ⚠️ **Une migration, c'est DEUX choses : le fichier `.sql` et son application à la
   > base.** Le report du code met les fichiers sur la clé ; il n'applique rien. Jusqu'au
@@ -44,8 +96,9 @@ avant que les 7 autres restaurants ne reçoivent quoi que ce soit.
   > l'incident du 10/09 (catalogue vide sur tous les postes neufs). **Ne jamais écrire
   > qu'une migration est « sur la clé » sans avoir compté les lignes de
   > `drizzle.__drizzle_migrations` dans la base de la clé.**
-  - **Rien n'applique les migrations au démarrage** : ni `apps/server/src/index.ts`, ni
-    le lanceur Electron. C'est l'opérateur qui doit les passer, ou personne.
+  - Le lanceur Electron actuellement sur la clé applique les migrations avant
+    de démarrer le serveur ; pour un poste déjà installé, vérifier quand même
+    le résultat et garder une sauvegarde de sa base avant la mise à jour.
   - Sur un poste, `pnpm` n'existe pas. La commande est, depuis la racine du dossier
     portable :
     ```powershell
@@ -56,19 +109,19 @@ avant que les 7 autres restaurants ne reçoivent quoi que ce soit.
 
 | | |
 |---|---|
-| Dernière migration | **0032** (`0032_disponibilite_horaire.sql`) |
-| Base de la clé | **migrée le 10/09** : `drizzle.__drizzle_migrations` compte **33 lignes sur 33**. Elle en comptait 31 — il lui manquait `0031_a_la_braise` et `0032_disponibilite_horaire`, jamais appliquées. Vérifié après coup : `chargerCatalogue()` renvoie 15 catégories et 131 articles sur cette base |
-| 🔴 Postes déjà installés depuis une clé antérieure au 10/09 | **doivent passer les migrations**, sinon catalogue vide (voir l'entrée du 10/09). Commande dans « Comment lire ce fichier » ci-dessus |
-| Rebuild caisse | **à jour** — `dist` du 09/09 00h06, postérieur aux sources d'`apps/caisse` |
-| Report du code sur la clé master | **fait le 09/09 à 15h18** — 483 fichiers copiés, 66 obsolètes retirés (vieux `dist`), **0 échec**. `data\` et `node_modules\` exclus : la base neutre de la clé est intacte, et `pnpm-lock.yaml` est inchangé depuis le 04/09 donc ses `node_modules` restent valables. La clé passe du commit `116309a` (branche `main`) à `387bb69` sur **`siege-8-sites-et-releve`**, arbre de travail propre |
-| Scripts à la racine du dossier portable | ⚠️ **nouveaux `.bat`** : `preparer-app.bat` et `installer-demarrage-auto.bat` accompagnent désormais les `.ps1`. Sur un poste déjà installé, les recopier à la main depuis `app\deploy\windows\` |
-| Repackaging `PosSamer.exe` nécessaire | non — `apps/desktop` inchangé depuis la clé |
+| Dernière migration | **0038** (`0038_a_la_braise_sans_horaire.sql`) — retire les plages horaires des catégories À la Braise, no-op ailleurs |
+| Base de la clé | **migrée le 25/09** : `drizzle.__drizzle_migrations` compte **39 lignes sur 39**. Neutralité contrôlée : `A_CONFIGURER`, 0 commande, 0 service, 0 `cle_site`, 2 propriétaires, 16 catégories, 131 articles actifs. Sauvegarde préalable : `data\pgdata.backup-20260925` |
+| 🔴 Postes déjà installés depuis une clé antérieure au 25/09 | **doivent appliquer les migrations manquantes jusqu'à 0038** avant de servir la caisse. Le lanceur Electron actuel le fait au démarrage ; contrôler le résultat sur chaque poste |
+| Rebuild des interfaces | **caisse recompilée le 25/09** (toast borné en largeur). Les quatre autres datent du **24/09** et restent valables : le correctif du 25/09 ne touche que `apps/caisse` et le serveur |
+| Report du code sur la clé master | **fait le 25/09** — 14 fichiers ajoutés ou remplacés, **14/14 vérifiés par SHA-256** ; `.env`, base, runtime, dépendances portables et exécutable de la clé préservés. Migration `0038` reportée ET appliquée à la base de la clé |
+| Scripts à la racine du dossier portable | **à jour le 20/09** — tous les `.bat` et `.ps1` de `deploy/windows/` ont été recopiés |
+| Repackaging `PosSamer.exe` | **fait le 20/09 à 17h44** après la modification de `apps/desktop/main.js` ; nouvel exécutable de 74 330 255 octets copié à la racine |
 | Redéploiement Edge Function | `siege` : **donnée pour faite le 09/09** en même temps que la migration `marque_a_la_braise`, non revérifiée depuis ce poste — et `functions list` a déjà menti une fois (voir l'entrée du 17/08). **`samtrackly-points` : OUI** (pagination de la sélection + services clôturés sans `remis_le`). `sync-push` : redéployée le 04/09 |
 | Migrations CLOUD à appliquer | **1** — `20260901110000_explication_ecart_samtrackly`. `20260908000000_marque_a_la_braise` est **appliquée** (confirmé le 09/09) : l'enrôlement d'À la Braise ne bute plus sur le `CHECK`. Les 3 listées le 21/08 (`20260817140000_pont_samtrackly`, `20260821150000_inventaire_snapshot_produit`, `20260825030000_livraisons_partenaires`) **restent à confirmer appliquées** |
 | SQL cloud ponctuel | `sql/cloud/ajouts_samerdelly_20260908.sql` — 4 produits SamerDelly, **publication non confirmée** (voir l'entrée du 08/09) |
 | Rattrapage à lancer par site | `pnpm services:republier` — republie les explications d'écart que le cloud jetait entre le 28/08 et le 04/09. **Fait sur le 7E le 04/09** |
 | 🔴 À vérifier sur les 7 autres sites | `SELECT count(*) FROM sync_outbox WHERE synced_at IS NULL;` — la FK `notes_split_payee_par_fk` a gelé 12 h de ventes sur le 7E, elle a pu geler les leurs |
-| Tests | **verts au 09/09** — POS : **50 fichiers / 319 tests** (`apps/server` 49/317, `packages/theme` 1/2) ; pont : **121 tests, 23 suites** (`pnpm test:functions`). ⚠️ voir le point ouvert ci-dessous : `pnpm test` n'exécute réellement que ces deux paquets. ⚠️ sur ce poste, les tests exigent `PGUSER=postgres` : `vitest.config.ts` pose une URL sans utilisateur, et libpq retombe alors sur le compte Windows (`role "HP" does not exist`) |
+| Tests | **verts au 25/09** — serveur : **64 fichiers / 380 tests**, PostgreSQL démarré depuis `runtime\pgsql` sur le dossier de travail. Typecheck serveur et caisse OK. Les tests Edge Functions n’ont pas été rejoués |
 
 > **Trou de journal à combler.** Le journal reprend au 25/08, mais les commits du
 > **22 au 24/08** (séquences, ordres du siège, console du siège, republication des
@@ -1007,7 +1060,7 @@ ne s'importe **que** sur le mini-PC destiné à À la Braise : le seed commun re
 `heure_debut`, `heure_fin`, `jour_semaine` (1–7) et `disponibilite_forcee`, avec un
 `CHECK` qui interdit une plage à moitié remplie (`(heure_debut IS NULL) = (heure_fin IS
 NULL)`). Une catégorie hors de sa plage n'est plus proposée à la vente. Chez À la
-Braise : Placali 04h–10h, Sauces 10h–16h, Barbecues 16h–00h.
+Braise : Placali 00h–16h, Sauces 10h–00h, Barbecues 16h–00h.
 
 `apps/server/src/modules/catalogue/horaires.ts` porte le calcul : **début inclus, fin
 exclue**, une fin à `00:00` couvrant jusqu'à minuit, et les plages qui franchissent
@@ -1384,3 +1437,81 @@ décision humaine à `en_attente`.
 
 Ce changement ne nécessite ni migration locale, ni rebuild de la caisse, ni
 redémarrage des mini-PC.
+
+---
+
+## 2026-09-25 — À la Braise sans horaires, et le PIN manager refusé aux caissiers promus
+
+Deux plaintes du terrain, deux causes indépendantes.
+
+### 1. « On ne peut pas activer un produit hors horaire » (À la Braise)
+
+Une catégorie hors de sa plage refusait la vente (`La catégorie « … » n'est pas
+disponible à cette heure`, posée côté serveur dans `commandes/service.ts`), et remettre
+le plat « disponible » dans Réglages → Plats du jour n'y changeait rien : seule la
+**dérogation** `disponibilite_forcee` rouvrait la catégorie, et personne ne la trouvait
+au comptoir. Décision du restaurant : **supprimer les horaires, garder les jours.**
+
+- `config/restaurants/a-la-braise/profil.json` : les 10 blocs `horaire` sont retirés.
+  Les 7 catégories « Sauces — Lundi/…/Dimanche » **gardent leur `jour`**, donc la sauce
+  du jour continue de remonter en tête de carte (`catalogue/service.ts` trie sur
+  `jour_semaine`). Sans ce retrait, un réimport du profil remettrait les horaires.
+- **`0038_a_la_braise_sans_horaire.sql`** : sur une base déjà en service, met
+  `heure_debut`/`heure_fin` à NULL et `disponibilite_forcee` à FALSE. **Gardée par la
+  marque** (`A_LA_BRAISE` / code / nom contenant « braise ») : Samer et Al Kayan gardent
+  leurs horaires, la migration y est un no-op. Le mécanisme d'horaires lui-même n'est pas
+  retiré du code — il reste disponible pour les autres marques.
+
+La bannière « Hors horaire » et le bouton « Réactiver exceptionnellement » disparaissent
+d'eux-mêmes de Réglages → Plats du jour : ils sont conditionnés à la présence d'une
+heure de début.
+
+### 2. « Le manager ne peut pas supprimer une table, son code ne passe pas »
+
+Vider une table qui porte des produits est une **annulation de commande** : PIN manager
++ motif (`POST /api/caisse/tables/:id/liberer`). Le PIN était refusé à des managers qui
+**étaient caissiers avant**, avec le code qui les connecte pourtant sans problème.
+
+Cause : `mapPosteRole` dans `equipe/sync-samtrackly.ts`. La règle `/caiss/` passait
+**avant** `/gérant|manager/`. Un caissier promu dont l'intitulé RH garde le mot
+« caisse » — « Gérante caisse », « Manager caissière », « Caissière responsable » —
+repartait donc en **CAISSIER à chaque synchro SamerTrackly, toutes les 5 minutes**. Il
+encaissait normalement (le caissier a `caisse.annuler_envoye`, donc le bouton corbeille
+s'affichait), mais `verifierPinManager` ne le voyait pas manager. C'est le **troisième**
+piège d'ordre dans cette fonction, après « plongeuse » et « comptoiriste » du 17/08.
+
+- La gérance passe maintenant **en premier**. `/responsable/` reste en dernier :
+  « responsable cuisine » ne doit pas hériter des droits d'un manager.
+- `auth/pin.ts` : en cas de refus, le message **dit pourquoi**. PIN bon mais compte sans
+  autorité → « Ce PIN est bien celui de X, mais son compte est encore « CAISSIER » …
+  Passez son rôle à Manager dans Réglages › Équipe ». Compte manager bloqué par des
+  essais ratés → on le dit, au lieu de « PIN manager incorrect ». La cause part aussi
+  dans `audit_log` (`cause: SANS_AUTORITE | COMPTE_BLOQUE | PIN_INCONNU`). Le diagnostic
+  ne coûte rien au chemin normal : il ne tourne qu'après l'échec.
+- Au passage : un `pin_hash` illisible ne fait plus échouer la vérification de tous les
+  autres comptes (`argon2.verify` lève au lieu de renvoyer `false`).
+- `apps/caisse/src/App.tsx` : le toast est borné en largeur (`max-w-[min(92vw,40rem)]`,
+  centré) — ces messages tenaient sur une seule ligne hors écran.
+
+**Ce que le correctif ne peut pas faire.** Si l'intitulé RH d'un manager dit encore
+simplement « Caissière », aucune synchro ne le corrigera : il faut soit corriger le poste
+dans SamerTrackly, soit passer son rôle à Manager dans **Réglages → Équipe** — ce qui
+verrouille le rôle (`champs_manuels`) et le protège des synchros suivantes. Le nouveau
+message d'erreur nomme la personne et son rôle, ce qui rend le cas lisible au comptoir.
+
+### Tests
+
+Serveur **vert : 64 fichiers / 380 tests**, PostgreSQL démarré depuis `runtime\pgsql`.
+Ajoutés : les cas de `mapPosteRole` pour les intitulés promus (et les garde-fous
+« ménagère »/« plongeuse »/« responsable cuisine » qui tiennent toujours), et les deux
+messages de refus du PIN manager (PIN d'un caissier vs PIN inconnu).
+`profil-a-la-braise.test.ts` vérifie maintenant qu'**aucune** catégorie ne porte
+d'horaire et que les 7 jours sont couverts.
+
+**Déploiement** : migrer (0038) + **rebuild caisse** + relancer l'exe. Le lanceur
+Electron applique les migrations au démarrage. Pas de redéploiement cloud, pas de
+repackaging `PosSamer.exe`.
+
+> ⚠️ Le paquet `correctif-a-la-braise/` à la racine du dossier de travail porte une
+> copie figée de l'ancien `profil.json`, **avec** les horaires. Ne pas le rejouer tel
+> quel sur un poste À la Braise : il les remettrait.

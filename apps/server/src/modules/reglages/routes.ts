@@ -5,13 +5,18 @@
  * - Journal d'audit : lecture seule avec filtres. Guard `reglages.audit`.
  */
 import type { FastifyInstance } from 'fastify';
+import { cleSonnerie, modeSonnerieEnregistre, MODES_SONNERIE } from '@pos/shared';
+import { commandeSonnerie } from '../../printer/sonnerie.js';
+import { envoyerRaw } from '../../printer/escpos.js';
 import { randomUUID } from 'node:crypto';
 import { and, asc, count, desc, eq, gte, lte } from 'drizzle-orm';
 import { z } from 'zod';
 import { clePosteImprimante, CLES_PARAMETRES_EDITABLES, ConfigRestaurantSchema, ModifierParametreSchema, PARAMETRES_EDITABLES, POSTE_IMPRESSION_DEFAUT, POSTES_IMPRESSION, type PosteImpression } from '@pos/shared';
 import { db } from '../../db/client.js';
-import { articles, auditLog, categories, commandes, inventaireConsommations, parametresLocaux, produitsInventaire, restaurant, routageArticle, routageCategorie, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
+import { articles, auditLog, categories, commandes, inventaireConsommations, inventaireLignes, inventairesService, parametresLocaux, produitsInventaire, restaurant, routageArticle, routageCategorie, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
+import { ecrireOutbox } from '../../db/outbox.js';
 import { appliquerRecettesDefaut } from '../inventaire/recettes-defaut.js';
+import { publierInventaireHistorique } from '../inventaire/publication-cloud.js';
 import { ErreurMetier } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
@@ -20,6 +25,7 @@ import { moteurSync } from '../sync/moteur.js';
 import { CLE_COLONNES, CLE_LOGO, colonnesValides, COLONNES_POSSIBLES, imprimerTest, listerImprimantes, queuePoste } from '../../printer/escpos.js';
 import { estModeLogo, type Marque } from '../../printer/logo.js';
 import { importerProfilRestaurant, lireProfilRestaurant } from '../../profils/importer.js';
+import { marqueRestaurant } from '../../profils/marque.js';
 
 /**
  * Recette d'un produit d'inventaire : la quantité n'est PAS un entier (0,5
@@ -37,6 +43,13 @@ const RecettesSchema = z.object({
       }),
     )
     .max(500, 'Recette trop longue'),
+});
+
+const NouveauProduitInventaireSchema = z.object({
+  nom: z.string().trim().min(1, 'Nom du produit obligatoire').max(120),
+  categorie: z.enum(['PAIN', 'POUL', 'APER', 'PLAT', 'FROM', 'BOIS', 'GLAC', 'FRIT']),
+  unite: z.string().trim().min(1, 'Unité obligatoire').max(16),
+  prix: z.number().int('Le prix doit être entier').min(0, 'Le prix ne peut pas être négatif').max(100_000_000),
 });
 
 const estHex = (c: string | null): c is string => !!c && /^#[0-9a-fA-F]{6}$/.test(c);
@@ -114,6 +127,9 @@ export function routesReglages(app: FastifyInstance): void {
     return {
       disponibles,
       postes,
+      sonneries: Object.fromEntries(POSTES_IMPRESSION.map((poste) => [poste,
+        modeSonnerieEnregistre(lignes.find((p) => p.cle === cleSonnerie(poste))?.valeur, postes[poste]!, poste),
+      ])),
       logo: estModeLogo(logo) ? logo : 'aucun',
       colonnes: colonnesValides(brutCol),
       colonnes_possibles: COLONNES_POSSIBLES,
@@ -199,6 +215,38 @@ export function routesReglages(app: FastifyInstance): void {
       });
     });
     return { poste, queue };
+  });
+
+  const SonnerieSchema = z.object({
+    poste: z.enum(POSTES_IMPRESSION), mode: z.enum(MODES_SONNERIE),
+    queue: z.string().trim().min(1).max(500),
+  });
+  app.post('/api/admin/imprimante/sonnerie/test', { preHandler: gardeParam }, async (req) => {
+    const { poste, mode, queue } = valider(SonnerieSchema, req.body);
+    if (mode === 'aucun') throw new ErreurMetier('Choisissez un mode sonore à tester', 400);
+    if (await queuePoste(poste) !== queue) throw new ErreurMetier('Enregistrez d’abord cette imprimante, puis relancez le test', 409);
+    try {
+      await envoyerRaw(queue, commandeSonnerie(mode));
+    } catch (e) {
+      throw new ErreurMetier(`Test sonore échoué : ${(e as Error).message}`, 502);
+    }
+    return { ok: true };
+  });
+  app.post('/api/admin/imprimante/sonnerie', { preHandler: gardeParam }, async (req) => {
+    const { poste, mode, queue } = valider(SonnerieSchema, req.body);
+    if (await queuePoste(poste) !== queue) throw new ErreurMetier('L’imprimante a changé. Actualisez les réglages avant de recommencer', 409);
+    const cle = cleSonnerie(poste);
+    const valeur = { queue, mode };
+    await db.transaction(async (tx) => {
+      const [avant] = await tx.select().from(parametresLocaux).where(eq(parametresLocaux.cle, cle));
+      await tx.insert(parametresLocaux).values({ cle, valeur })
+        .onConflictDoUpdate({ target: parametresLocaux.cle, set: { valeur } });
+      await journaliser(tx, {
+        user_id: req.session!.utilisateur_id, action: 'MODIF_PARAMETRE', entite: 'parametres_locaux',
+        meta: { cle, avant: avant?.valeur ?? null, apres: valeur },
+      });
+    });
+    return { poste, mode };
   });
 
   app.post('/api/admin/imprimante/test', { preHandler: gardeParam }, async (req) => {
@@ -334,6 +382,64 @@ export function routesReglages(app: FastifyInstance): void {
     };
   });
 
+  /** Crée un produit de comptage simple, prêt à recevoir ses liaisons de recette. */
+  app.post('/api/admin/recettes-inventaire/produits', { preHandler: gardeParam }, async (req) => {
+    const corps = valider(NouveauProduitInventaireSchema, req.body);
+    return db.transaction(async (tx) => {
+      const produits = await tx.select({ nom: produitsInventaire.nom, categorie: produitsInventaire.categorie, ordre: produitsInventaire.ordre })
+        .from(produitsInventaire);
+      if (produits.some((p) => p.categorie === corps.categorie && p.nom.toLocaleLowerCase('fr') === corps.nom.toLocaleLowerCase('fr'))) {
+        throw new ErreurMetier('Ce produit existe déjà dans cette catégorie', 409);
+      }
+
+      const inventairesOuverts = await tx.select({ id: inventairesService.id, valide: inventairesService.valide })
+        .from(inventairesService)
+        .innerJoin(servicesCaisse, eq(servicesCaisse.id, inventairesService.service_id))
+        .where(eq(servicesCaisse.statut, 'OUVERT'));
+      if (inventairesOuverts.some((inv) => inv.valide)) {
+        throw new ErreurMetier('Un inventaire du service en cours est déjà validé. Créez ce produit après la clôture.', 409);
+      }
+
+      const [produit] = await tx.insert(produitsInventaire).values({
+        code: `POS_${randomUUID()}`,
+        nom: corps.nom,
+        categorie: corps.categorie,
+        unite: corps.unite,
+        prix: corps.prix,
+        role: 'COMPTE',
+        ordre: Math.max(0, ...produits.filter((p) => p.categorie === corps.categorie).map((p) => p.ordre)) + 1,
+      }).returning();
+
+      // L'inventaire peut avoir été ouvert avant la création du produit.
+      for (const inv of inventairesOuverts) {
+        const [ligne] = await tx.insert(inventaireLignes).values({ inventaire_id: inv.id, produit_id: produit!.id }).returning();
+        await ecrireOutbox(tx, 'inventaire_lignes', 'INSERT', ligne!.id, ligne as unknown as Record<string, unknown>);
+      }
+      await journaliser(tx, {
+        user_id: req.session!.utilisateur_id,
+        action: 'MODIF_PARAMETRE',
+        entite: 'produits_inventaire',
+        entite_id: produit!.id,
+        meta: { nom: corps.nom, categorie: corps.categorie, unite: corps.unite, prix: corps.prix },
+      });
+      return { id: produit!.id, nom: produit!.nom };
+    });
+  });
+
+  /** Premier transfert des produits et recettes déjà présents sur cette caisse. */
+  app.post('/api/admin/recettes-inventaire/publier', { preHandler: gardeParam }, async (req) => {
+    const resultat = await publierInventaireHistorique();
+    if (resultat.produits > 0 || resultat.recettes > 0) {
+      await journaliser(db, {
+        user_id: req.session!.utilisateur_id,
+        action: 'MODIF_PARAMETRE',
+        entite: 'produits_inventaire',
+        meta: { publication_siege: resultat },
+      });
+    }
+    return resultat;
+  });
+
   /**
    * Remplace EN BLOC la recette d'un produit : c'est un écran de liste, on
    * enregistre ce qui est à l'écran. Une liste vide efface la recette — et ce
@@ -446,9 +552,9 @@ export function routesReglages(app: FastifyInstance): void {
     const choisi = (await restaurantsSamtrackly()).find((r) => r.id === samtrackly_restaurant_id);
     if (!choisi) throw new ErreurMetier('Restaurant SamerTrackly introuvable (clé/connexion ?)', 404);
 
-    const marque = /al\s*kayan/i.test(choisi.nom) ? 'AL_KAYAN' : 'SAMER';
-    const couleur = estHex(choisi.couleur) ? choisi.couleur : marque === 'AL_KAYAN' ? '#2D7D46' : '#EF9F27';
-    const code = slug(choisi.nom);
+    const marque = marqueRestaurant(choisi.nom);
+    const couleur = estHex(choisi.couleur) ? choisi.couleur : marque === 'AL_KAYAN' ? '#2D7D46' : marque === 'A_LA_BRAISE' ? '#D99A2B' : '#EF9F27';
+    const code = marque === 'A_LA_BRAISE' ? 'ALA_BRAISE' : slug(choisi.nom);
 
     const [dejaPose] = await db
       .select()
