@@ -34,8 +34,33 @@ function debutIlYaJours(jours: number): Date {
   return d;
 }
 
+/**
+ * Ventes d'un shift EN COURS : invisibles pour tout autre que le propriétaire
+ * (décision du 2026-10-15). Un gérant qui lirait la vente d'un caissier en
+ * temps réel pourrait la lui souffler, et le comptage à l'aveugle de la
+ * clôture ne vaudrait plus rien. Les chiffres d'un shift n'apparaissent donc
+ * qu'une fois ce shift clôturé — et c'est le serveur qui filtre, jamais
+ * l'écran.
+ */
+const serviceClos = (colonneService: unknown) =>
+  sql`EXISTS (SELECT 1 FROM services_caisse sc WHERE sc.id = ${colonneService} AND sc.statut = 'CLOTURE')`;
+
+/** Le propriétaire voit tout en direct ; les autres, les shifts clôturés seulement. */
+function voitEnDirect(session: { est_proprietaire: boolean }): boolean {
+  return session.est_proprietaire;
+}
+
+/** Shifts encore ouverts : l'écran dit combien de ventes restent à venir. */
+async function shiftsEnCours(): Promise<number> {
+  const [r] = await db
+    .select({ n: sql<string>`COUNT(*)` })
+    .from(servicesCaisse)
+    .where(eq(servicesCaisse.statut, 'OUVERT'));
+  return Number(r?.n ?? 0);
+}
+
 /** Ventes reconnues une seule fois : commande historique, ou sous-note ARTICLES soldée. */
-async function ventesAnalytiquesDepuis(depuis: Date) {
+async function ventesAnalytiquesDepuis(depuis: Date, closSeulement = false) {
   const commandesArticles = await db
     .select({ commande_id: notesSplit.commande_id })
     .from(notesSplit)
@@ -55,6 +80,7 @@ async function ventesAnalytiquesDepuis(depuis: Date) {
       gte(commandes.created_at, depuis),
       eq(commandes.statut, 'PAYEE'),
       ...(ids.length ? [notInArray(commandes.id, ids)] : []),
+      ...(closSeulement ? [serviceClos(commandes.service_id)] : []),
     ));
   const parArticles = await db
     .select({
@@ -67,7 +93,12 @@ async function ventesAnalytiquesDepuis(depuis: Date) {
     })
     .from(notesSplit)
     .innerJoin(commandes, eq(commandes.id, notesSplit.commande_id))
-    .where(and(eq(notesSplit.type, 'ARTICLES'), eq(notesSplit.statut, 'PAYEE'), gte(notesSplit.payee_le, depuis)));
+    .where(and(
+      eq(notesSplit.type, 'ARTICLES'),
+      eq(notesSplit.statut, 'PAYEE'),
+      gte(notesSplit.payee_le, depuis),
+      ...(closSeulement ? [serviceClos(notesSplit.service_id)] : []),
+    ));
   return [...historiques, ...parArticles].map((vente) => ({ ...vente, reconnue_le: vente.reconnue_le! }));
 }
 
@@ -75,21 +106,32 @@ function compterTickets(ventes: { commande_id: string }[]): number {
   return new Set(ventes.map((vente) => vente.commande_id)).size;
 }
 
-async function topAnalytiqueDepuis(depuis: Date) {
+async function topAnalytiqueDepuis(depuis: Date, closSeulement = false) {
   const commandesArticles = await db.select({ commande_id: notesSplit.commande_id }).from(notesSplit).where(eq(notesSplit.type, 'ARTICLES'));
   const ids = [...new Set(commandesArticles.map((note) => note.commande_id))];
   const historiques = await db
     .select({ nom: commandeItems.nom_snapshot, quantite: sql<string>`SUM(${commandeItems.quantite})`, total: sql<string>`SUM(${commandeItems.prix_unitaire} * ${commandeItems.quantite})` })
     .from(commandeItems)
     .innerJoin(commandes, eq(commandes.id, commandeItems.commande_id))
-    .where(and(gte(commandes.created_at, depuis), eq(commandes.statut, 'PAYEE'), ne(commandeItems.statut_cuisine, 'ANNULE'), ...(ids.length ? [notInArray(commandes.id, ids)] : [])))
+    .where(and(
+      gte(commandes.created_at, depuis),
+      eq(commandes.statut, 'PAYEE'),
+      ne(commandeItems.statut_cuisine, 'ANNULE'),
+      ...(ids.length ? [notInArray(commandes.id, ids)] : []),
+      ...(closSeulement ? [serviceClos(commandes.service_id)] : []),
+    ))
     .groupBy(commandeItems.nom_snapshot);
   const articles = await db
     .select({ nom: commandeItems.nom_snapshot, quantite: sql<string>`SUM(${noteSplitItems.quantite})`, total: sql<string>`SUM(${noteSplitItems.montant_brut})` })
     .from(noteSplitItems)
     .innerJoin(notesSplit, eq(notesSplit.id, noteSplitItems.note_id))
     .innerJoin(commandeItems, eq(commandeItems.id, noteSplitItems.commande_item_id))
-    .where(and(eq(notesSplit.type, 'ARTICLES'), eq(notesSplit.statut, 'PAYEE'), gte(notesSplit.payee_le, depuis)))
+    .where(and(
+      eq(notesSplit.type, 'ARTICLES'),
+      eq(notesSplit.statut, 'PAYEE'),
+      gte(notesSplit.payee_le, depuis),
+      ...(closSeulement ? [serviceClos(notesSplit.service_id)] : []),
+    ))
     .groupBy(commandeItems.nom_snapshot);
   const parNom = new Map<string, { nom: string; quantite: number; total: number }>();
   for (const ligne of [...historiques, ...articles]) {
@@ -106,14 +148,15 @@ export function routesRapports(app: FastifyInstance): void {
   const gardeProprio = app.exigePermission('rapports.tableau_bord');
 
   // Ventes du jour (tous services confondus) — manager / propriétaire
-  app.get('/api/rapports/jour', { preHandler: gardeManager }, async () => {
+  app.get('/api/rapports/jour', { preHandler: gardeManager }, async (req) => {
     const depuis = debutDuJour();
-    const lignes = await ventesAnalytiquesDepuis(depuis);
+    const enDirect = voitEnDirect(req.session!);
+    const lignes = await ventesAnalytiquesDepuis(depuis, !enDirect);
 
     const parModeLignes = await db
       .select({ mode: paiements.mode, total: sql<string>`SUM(${paiements.montant})` })
       .from(paiements)
-      .where(gte(paiements.created_at, depuis))
+      .where(and(gte(paiements.created_at, depuis), ...(enDirect ? [] : [serviceClos(paiements.service_id)])))
       .groupBy(paiements.mode);
     const parMode = Object.fromEntries(MODES_PAIEMENT.map((m) => [m, 0])) as Record<ModePaiement, number>;
     for (const l of parModeLignes) parMode[l.mode] = Number(l.total);
@@ -138,6 +181,9 @@ export function routesRapports(app: FastifyInstance): void {
       total_promos: lignes.reduce((s, c) => s + c.promo, 0),
       par_mode: parMode,
       par_type: parType,
+      // Faux pour un gérant : les shifts encore ouverts ne sont pas comptés.
+      en_direct: enDirect,
+      shifts_en_cours: await shiftsEnCours(),
     };
   });
 
@@ -204,9 +250,9 @@ export function routesRapports(app: FastifyInstance): void {
   });
 
   // Top plats du jour — manager / propriétaire
-  app.get('/api/rapports/top-plats', { preHandler: gardeManager }, async () => {
+  app.get('/api/rapports/top-plats', { preHandler: gardeManager }, async (req) => {
     const depuis = debutDuJour();
-    return topAnalytiqueDepuis(depuis);
+    return topAnalytiqueDepuis(depuis, !voitEnDirect(req.session!));
   });
 
   /**
@@ -221,9 +267,9 @@ export function routesRapports(app: FastifyInstance): void {
   });
 
   // Ventes par heure du jour — manager / propriétaire
-  app.get('/api/rapports/par-heure', { preHandler: gardeManager }, async () => {
+  app.get('/api/rapports/par-heure', { preHandler: gardeManager }, async (req) => {
     const depuis = debutDuJour();
-    const ventes = await ventesAnalytiquesDepuis(depuis);
+    const ventes = await ventesAnalytiquesDepuis(depuis, !voitEnDirect(req.session!));
     const parHeure = new Map<number, { heure: number; nb: number; total: number; commandes: Set<string> }>();
     for (const vente of ventes) {
       const heure = vente.reconnue_le.getHours();
@@ -316,12 +362,16 @@ export function routesRapports(app: FastifyInstance): void {
   app.get('/api/rapports/tableau-bord', { preHandler: gardeProprio }, async (req) => {
     const q = (req.query as { periode?: string }).periode ?? 'jour';
     const depuis = q === '7' ? debutIlYaJours(7) : q === '30' ? debutIlYaJours(30) : debutDuJour();
+    // La permission du tableau de bord peut être donnée à un gérant : la règle
+    // des shifts en cours le suit ici aussi.
+    const closSeulement = !voitEnDirect(req.session!);
 
     const [payees, top, parModeLignes, ecarts] = await Promise.all([
-      ventesAnalytiquesDepuis(depuis),
-      topAnalytiqueDepuis(depuis),
+      ventesAnalytiquesDepuis(depuis, closSeulement),
+      topAnalytiqueDepuis(depuis, closSeulement),
       db.select({ mode: paiements.mode, total: sql<string>`SUM(${paiements.montant})` }).from(paiements)
-        .where(gte(paiements.created_at, depuis)).groupBy(paiements.mode),
+        .where(and(gte(paiements.created_at, depuis), ...(closSeulement ? [serviceClos(paiements.service_id)] : [])))
+        .groupBy(paiements.mode),
       db.select({
         nom: utilisateurs.nom_complet,
         ecart: sql<string>`SUM(COALESCE(${servicesCaisse.vente_totale} - ${servicesCaisse.total_systeme}, ${servicesCaisse.ecart}, 0))`,

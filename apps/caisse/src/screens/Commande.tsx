@@ -3,6 +3,7 @@ import { useState } from 'react';
 import {
   IconArrowLeft,
   IconArrowsMove,
+  IconBell,
   IconMinus,
   IconPlus,
   IconPhone,
@@ -177,9 +178,16 @@ export function Commande() {
     },
     onError: surErreur,
   });
-  // La caisse peut aussi marquer une commande SERVIE (pas seulement la cuisine).
+  // La caisse marque elle-même « Prêt » (le serveur est sonné, comme depuis
+  // l'écran cuisine) et « Servi » — directement depuis « en cuisine » si le
+  // plat est sorti sans passer par « Prêt ».
+  const marquerPret = useMutation({
+    mutationFn: () => api<CommandeVue>(`/api/caisse/commandes/${commandeId}/pret`, { method: 'POST', corps: {} }),
+    onSuccess: (vue) => { rafraichir(vue); afficherToast('Commande prête ✔ — le serveur est prévenu'); },
+    onError: surErreur,
+  });
   const servir = useMutation({
-    mutationFn: () => api<CommandeVue>(`/api/commandes/${commandeId}/servir`, { method: 'POST', corps: {} }),
+    mutationFn: () => api<CommandeVue>(`/api/caisse/commandes/${commandeId}/servir`, { method: 'POST', corps: {} }),
     onSuccess: (vue) => { rafraichir(vue); afficherToast('Commande servie ✔'); },
     onError: surErreur,
   });
@@ -686,15 +694,27 @@ export function Commande() {
             >
               <IconSend size={20} /> Envoyer en cuisine
             </button>
-            {commande.statut === 'PRETE' && (
-              <button
-                type="button"
-                onClick={() => servir.mutate()}
-                disabled={saisie.enAttente}
-                className="flex h-14 w-full items-center justify-center gap-2 rounded-[13px] bg-ok text-lg font-bold text-white shadow-e1 transition hover:brightness-105 active:translate-y-px disabled:opacity-40"
-              >
-                Servi ✔
-              </button>
+            {(commande.statut === 'ENVOYEE_CUISINE' || commande.statut === 'PRETE') && (
+              <div className={`grid gap-2 ${commande.statut === 'ENVOYEE_CUISINE' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                {commande.statut === 'ENVOYEE_CUISINE' && (
+                  <button
+                    type="button"
+                    onClick={() => marquerPret.mutate()}
+                    disabled={saisie.enAttente || marquerPret.isPending}
+                    className="flex h-14 items-center justify-center gap-2 rounded-[13px] bg-info-tint text-lg font-bold text-info shadow-e1 transition hover:brightness-95 active:translate-y-px disabled:opacity-40"
+                  >
+                    <IconBell size={20} /> Prêt
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => servir.mutate()}
+                  disabled={saisie.enAttente || servir.isPending}
+                  className="flex h-14 items-center justify-center gap-2 rounded-[13px] bg-ok text-lg font-bold text-white shadow-e1 transition hover:brightness-105 active:translate-y-px disabled:opacity-40"
+                >
+                  Servi ✔
+                </button>
+              </div>
             )}
             {/* Un Kdo ne passe JAMAIS par l'écran de paiement : il n'y a rien à
                 encaisser. Il se clôture ici, contre un motif obligatoire. */}

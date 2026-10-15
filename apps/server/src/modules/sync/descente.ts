@@ -18,7 +18,8 @@ import type { ClientCloud, LigneDescente } from './cloud-client.js';
  * et n'envoie que le jeu de permissions de l'id local (même idiome que la
  * catégorie d'un article diffusé).
  */
-const FLUX = ['CATALOGUE', 'PROMOTIONS', 'UTILISATEURS', 'PARAMETRES', 'ROLES'] as const;
+// NOTES (2026-10-15) : note des caissiers calculée par SamerTrackly, lecture seule ici.
+const FLUX = ['CATALOGUE', 'PROMOTIONS', 'UTILISATEURS', 'PARAMETRES', 'ROLES', 'NOTES'] as const;
 
 /** Cible de conflit par table (id sauf combo_articles et parametres_locaux). */
 const CONFLIT: Record<string, string[]> = {
@@ -47,6 +48,8 @@ const CONFLIT: Record<string, string[]> = {
   // jusqu'aux 7 caisses.
   produits_inventaire: ['id'],
   inventaire_consommations: ['id'],
+  // Note des caissiers : une ligne par utilisateur du site (clé = son id).
+  notes_caissiers: ['id'],
   // `role_permissions` n'est PAS dans cette table : elle ne s'applique pas par
   // UPSERT mais par REMPLACEMENT — voir `appliquerPermissionsRole`.
 };
@@ -54,12 +57,22 @@ const CONFLIT: Record<string, string[]> = {
 // Colonnes propres au cloud, à retirer avant l'écriture locale.
 const CLOUD_ONLY = new Set(['restaurant_id', 'version']);
 
+/**
+ * Colonnes JSONB qui peuvent porter un TABLEAU. Le pilote pg envoie un tableau
+ * JavaScript comme un tableau Postgres (`{…}`), que JSONB refuse : l'erreur
+ * annulerait toute la transaction de descente, catalogue compris. On les
+ * sérialise donc nous-mêmes.
+ */
+const COLONNES_JSON: Record<string, string[]> = {
+  notes_caissiers: ['criteres', 'bonus'],
+};
+
 function nettoyer(table: string, row: Record<string, unknown>): Record<string, unknown> {
   const propre: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(row)) {
     if (CLOUD_ONLY.has(k)) continue;
     if (table === 'combo_articles' && k === 'id') continue; // PK composite en local
-    propre[k] = v;
+    propre[k] = COLONNES_JSON[table]?.includes(k) && v !== null && v !== undefined ? JSON.stringify(v) : v;
   }
   return propre;
 }

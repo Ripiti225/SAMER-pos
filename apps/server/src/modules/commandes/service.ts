@@ -27,6 +27,7 @@ import {
 } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
+import { journaliser } from '../audit/audit.js';
 import { promotionActive, type PromotionDb } from '../catalogue/promos.js';
 import { optionsAutoriseesPourArticle } from '../catalogue/options.js';
 import { articleDisponible } from '../catalogue/disponibilite.js';
@@ -68,6 +69,46 @@ export async function genererCodeCommande(
   }
   // Repli théoriquement inatteignable : préfixe + horodatage court.
   return `${prefixe}${Date.now().toString().slice(-5)}`;
+}
+
+/**
+ * Code court que doit porter une commande EXISTANTE qu'on rattache à
+ * `serviceId` (ouverture après relève, transfert, reprise de table, paiement
+ * d'une commande tablette…).
+ *
+ * Le code n'est unique que DANS un service : deux commandes nées dans deux
+ * shifts différents peuvent porter le même. Les réunir dans un service
+ * violerait `uniq_code_commande_service` et ferait échouer toute l'opération
+ * (une ouverture de service bloquée le 2026-10-07). On garde donc le code tant
+ * qu'il est libre — c'est celui que la cuisine connaît — et sinon on en tire
+ * un neuf, tracé au journal : le bon cuisine imprimé porte encore l'ancien.
+ *
+ * À appeler dans la transaction, juste avant l'UPDATE, et à écrire dans le
+ * même `.set({ code_commande })`.
+ */
+export async function codeLibreDansService(
+  tx: DbOuTx,
+  c: Pick<CommandeDb, 'id' | 'type' | 'code_commande' | 'service_id' | 'numero_ticket'>,
+  serviceId: string,
+  userId: string | null,
+): Promise<string | null> {
+  if (!c.code_commande || c.service_id === serviceId) return c.code_commande;
+  const [pris] = await tx
+    .select({ id: commandes.id })
+    .from(commandes)
+    .where(and(eq(commandes.service_id, serviceId), eq(commandes.code_commande, c.code_commande)))
+    .limit(1);
+  if (!pris || pris.id === c.id) return c.code_commande;
+
+  const nouveau = await genererCodeCommande(tx, c.type, serviceId);
+  await journaliser(tx, {
+    user_id: userId,
+    action: 'CHANGEMENT_CODE_COMMANDE',
+    entite: 'commandes',
+    entite_id: c.id,
+    meta: { ancien: c.code_commande, nouveau, numero_ticket: Number(c.numero_ticket), service_id: serviceId },
+  });
+  return nouveau;
 }
 
 export function totalLigne(item: Pick<ItemDb, 'prix_unitaire' | 'quantite' | 'supplements'>): number {

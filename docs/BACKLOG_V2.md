@@ -88,3 +88,11 @@ supprimerait la classe de problèmes entière et rouvrirait ces API. Chantier
 d'infrastructure : génération et renouvellement du certificat, distribution de
 l'autorité sur chaque terminal, adaptation du reverse-proxy local. À arbitrer
 avec le déploiement de tous les sites.
+
+Cas concret ajouté le 2026-10-15 : la sonnerie « commande prête » du serveur.
+Depuis cette date, la page joue sa propre mélodie de 15 s (+ vibration
+Android) jusqu'à « Servie » ou « Arrêter », mais elle ne peut ni utiliser la
+SONNERIE du téléphone, ni réveiller un téléphone écran éteint ou une app en
+arrière-plan : il faudrait les notifications système (service worker + Push),
+fermées en http. Le passage en HTTPS local, ou une petite app native, est le
+seul chemin vers une vraie sonnerie de téléphone.

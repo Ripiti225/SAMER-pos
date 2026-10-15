@@ -14,6 +14,7 @@ export type ActionAudit =
   | 'CLOTURE_SERVICE'
   | 'CLOTURE_SEQUENCE'
   | 'TRANSFERT_COMMANDES'
+  | 'CHANGEMENT_CODE_COMMANDE'
   | 'ECART_CAISSE'
   | 'EXPLICATION_ECART_CAISSE'
   | 'REMISE'
@@ -37,6 +38,7 @@ export type ActionAudit =
   | 'ECART_RECONCILIATION'
   | 'CORRECTION_POINTAGE'
   | 'UTILISATION_POINTS'
+  | 'PAIEMENT_POINTS'
   // Sprint 4B/4C — administration (Réglages)
   | 'CREATION_ROLE'
   | 'MODIF_ROLE'

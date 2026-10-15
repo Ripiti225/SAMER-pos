@@ -24,7 +24,7 @@ import { useCaisse, type Ecran } from './stores/session';
 import { connecterTempsReel } from './temps-reel';
 
 export function App() {
-  const { session, ecran, toast, poserSession } = useCaisse();
+  const { session, ecran, toast, reprendreSession } = useCaisse();
   const [chargement, setChargement] = useState(true);
   const queryClient = useQueryClient();
   const chargerAffichage = useAffichage((e) => e.charger);
@@ -39,14 +39,15 @@ export function App() {
   // Reprise de session au démarrage (cookie httpOnly côté serveur)
   useEffect(() => {
     api<SessionInfo>('/api/auth/moi')
-      .then(poserSession)
+      // Rechargement de page : on reprend l'écran quitté, pas celui du rôle.
+      .then(reprendreSession)
       .catch((e: unknown) => {
         if (!(e instanceof ErreurApi) || e.statusCode !== 401) {
           console.warn('Session non reprise :', e);
         }
       })
       .finally(() => setChargement(false));
-  }, [poserSession]);
+  }, [reprendreSession]);
 
   useEffect(() => connecterTempsReel(queryClient), [queryClient]);
 

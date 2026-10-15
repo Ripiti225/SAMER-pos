@@ -69,8 +69,11 @@ async function construireSessionInfo(session: SessionUtilisateur): Promise<Sessi
       entete: lireTexte('ticket_entete'),
       pied: lireTexte('ticket_pied'),
     },
-    verrouillage_inactivite_secondes: lireParam('verrou_inactivite_caisse_secondes', 600),
-    verrouillage_inactivite_serveur_secondes: lireParam('verrouillage_inactivite_serveur_secondes', 120),
+    // 0 = pas de verrouillage automatique (décision du 2026-07-12) : un compte
+    // ne se ferme que par « Se déconnecter ». Réactivable dans Réglages →
+    // Paramètres. Un paramètre ABSENT vaut donc 0, pas un délai caché.
+    verrouillage_inactivite_secondes: lireParam('verrou_inactivite_caisse_secondes', 0),
+    verrouillage_inactivite_serveur_secondes: lireParam('verrouillage_inactivite_serveur_secondes', 0),
     service_ouvert: service
       ? {
           id: service.id,

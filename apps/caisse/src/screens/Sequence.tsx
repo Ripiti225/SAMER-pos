@@ -37,6 +37,7 @@ const RECAP_VIDE: RecapSequence = {
   ecart_especes: 0,
   livraisons: {},
   offerts: { nb: 0, total: 0 },
+  paye_points: { nb: 0, total: 0 },
   monnaie_rendue: 0,
   nb_rendus: 0,
   modes: {},
@@ -236,6 +237,9 @@ export function Sequence() {
               ...Object.entries(totauxRetenus.livraisons).filter(([, v]) => v > 0).map(([p, v]) => [libellePartenaire(p), v] as [string, number]),
               ...(totauxRetenus.offerts.total > 0
                 ? [[`Kdo offerts (${totauxRetenus.offerts.nb})`, totauxRetenus.offerts.total] as [string, number]]
+                : []),
+              ...((totauxRetenus.paye_points?.total ?? 0) > 0
+                ? [[`Payé en points (${totauxRetenus.paye_points.nb})`, totauxRetenus.paye_points.total] as [string, number]]
                 : []),
               ['Dépenses', totauxRetenus.depenses] as [string, number],
               ...(totauxRetenus.monnaie_rendue > 0

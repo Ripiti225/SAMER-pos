@@ -28,11 +28,12 @@ afterAll(async () => {
   await fermerDb();
 });
 
-describe('correction 1 — délai de verrouillage caisse configurable (10 min par défaut)', () => {
-  it('renvoie 600 s par défaut quand le paramètre est absent', async () => {
+describe('correction 1 — délai de verrouillage caisse configurable (désactivé par défaut)', () => {
+  it('renvoie 0 (pas de verrouillage) quand le paramètre est absent', async () => {
     const rep = await app.inject({ method: 'GET', url: '/api/auth/moi', cookies });
     expect(rep.statusCode).toBe(200);
-    expect(rep.json().verrouillage_inactivite_secondes).toBe(600);
+    expect(rep.json().verrouillage_inactivite_secondes).toBe(0);
+    expect(rep.json().verrouillage_inactivite_serveur_secondes).toBe(0);
   });
 
   it('lit la valeur définie par le manager dans parametres_locaux', async () => {

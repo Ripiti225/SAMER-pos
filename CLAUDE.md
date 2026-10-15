@@ -133,7 +133,8 @@ entière au lieu de l'article.
 - PIN 4–6 chiffres, hash argon2id. PIN interdits : 1234, 0000, 1111…9999, 123456.
 - 5 échecs → verrou 30 s, puis 60 s, puis 300 s (colonne `verrou_jusqua`). Chaque échec → audit `ECHEC_PIN`.
 - Verrouillage automatique de session après 60 s d'inactivité (config), déverrouillage par PIN.
-- Rapport X (ventes en cours de service) : route accessible MANAGER/PROPRIETAIRE uniquement.
+- Rapport X (ventes en cours de service) : route accessible MANAGER/PROPRIETAIRE uniquement — et, tant que le shift est OUVERT, PROPRIETAIRE seul.
+- Ventes d'un shift en cours (rapport du jour, par heure, top plats, tableau de bord) : invisibles pour tout autre que le propriétaire jusqu'à la clôture du caissier — un gérant pourrait sinon lui souffler sa vente avant le comptage à l'aveugle. Filtré côté serveur.
 - Aucune donnée sensible dans le localStorage de la PWA autre que l'id de session.
 
 ## UX (§15 du cahier des charges)

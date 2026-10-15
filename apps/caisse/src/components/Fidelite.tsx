@@ -1,87 +1,124 @@
 import { useState } from 'react';
-import type { CommandeVue } from '@pos/shared';
+import { IconStar, IconUser, IconX } from '@tabler/icons-react';
+import type { ClientPaiementVue, CommandeVue } from '@pos/shared';
 import { formatFCFA } from '@pos/shared';
 import { api } from '../api';
 import { useCaisse } from '../stores/session';
-
-interface SoldeRep {
-  existe: boolean;
-  solde: number;
-  bareme: { valeur_point_fcfa: number; seuil_utilisation: number };
-}
+import { SuggestionsClients, type ClientTrouve } from './RechercheClient';
 
 /**
- * Fidélité au paiement (§9) : saisie du téléphone, affichage du solde,
- * utilisation des points en remise (droit du client, sans PIN manager).
+ * Client au paiement (§9) : le caissier tape le numéro (au pavé ou au
+ * clavier), les numéros correspondants s'affichent en direct, un appui
+ * rattache le client. Une fois rattaché : son solde, ce que ce paiement lui
+ * rapporte, et s'il peut tout régler avec ses points (mode « Points »).
+ *
+ * Le numéro tapé appartient à l'écran Paiement : c'est lui qui le fait
+ * remplir par le pavé numérique quand la case est active. Les chiffres de
+ * points viennent tous du serveur (`info`).
  */
-export function Fidelite({ commande, onMaj }: { commande: CommandeVue; onMaj: (vue: CommandeVue) => void }) {
+export function Fidelite({
+  commande,
+  info,
+  onMaj,
+  telephone,
+  setTelephone,
+  actif,
+  onActiver,
+  rechercheAutorisee,
+}: {
+  commande: CommandeVue;
+  info: ClientPaiementVue | undefined;
+  onMaj: (vue: CommandeVue) => void;
+  telephone: string;
+  setTelephone: (v: string) => void;
+  actif: boolean;
+  onActiver: () => void;
+  /** Faux pendant un partage : chaque personne donne son numéro dans « Payer par articles ». */
+  rechercheAutorisee: boolean;
+}) {
   const { afficherToast } = useCaisse();
-  const [ouvert, setOuvert] = useState(false);
-  const [telephone, setTelephone] = useState('');
-  const [solde, setSolde] = useState<SoldeRep | null>(null);
+  const [enCours, setEnCours] = useState(false);
 
-  const chercher = async () => {
+  const choisir = async (c: ClientTrouve) => {
+    setEnCours(true);
     try {
-      const r = await api<SoldeRep>(`/api/fidelite/${encodeURIComponent(telephone)}`);
-      setSolde(r);
-    } catch (e) {
-      afficherToast((e as Error).message);
-    }
-  };
-
-  const rattacher = async (utiliser?: number) => {
-    try {
-      const r = await api<{ commande: CommandeVue; solde: number }>(`/api/commandes/${commande.id}/fidelite`, {
+      const r = await api<{ commande: CommandeVue }>(`/api/commandes/${commande.id}/fidelite`, {
         method: 'POST',
-        corps: { telephone, utiliser_points: utiliser },
+        corps: { telephone: c.telephone },
       });
       onMaj(r.commande);
-      setSolde((s) => (s ? { ...s, existe: true, solde: r.solde } : s));
-      afficherToast(utiliser ? 'Points utilisés' : 'Client fidélité rattaché');
+      setTelephone('');
+      afficherToast('Client rattaché');
     } catch (e) {
       afficherToast((e as Error).message);
+    } finally {
+      setEnCours(false);
     }
   };
 
-  if (!ouvert) {
+  if (info?.client) {
+    const { client, solde, points_gagnes, solde_apres, paiement_points } = info;
     return (
-      <button type="button" className="btn-blanc mb-4 w-full" onClick={() => setOuvert(true)}>
-        {commande.client_fidelite_id ? 'Client fidélité rattaché ✓' : 'Client fidélité'}
-      </button>
+      <div className="rounded-2xl bg-surface-moyenne p-4 shadow-e1">
+        <div className="flex items-center gap-2 font-bold text-fort">
+          <IconUser size={20} className="flex-none text-marque-fonce" />
+          <span className="truncate">{client.nom ?? 'Client'} · {client.telephone ?? '—'}</span>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 text-center">
+          <div className="rounded-xl bg-surface p-2">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-doux">Solde actuel</div>
+            <div className="text-2xl font-extrabold tabular-nums text-fort">{solde} pts</div>
+          </div>
+          <div className="rounded-xl bg-ok-tint p-2 text-ok">
+            <div className="text-[11px] font-bold uppercase tracking-wider">Après ce paiement</div>
+            <div className="text-2xl font-extrabold tabular-nums">{solde_apres} pts</div>
+            <div className="text-xs font-semibold">+{points_gagnes} pts gagnés</div>
+          </div>
+        </div>
+        {paiement_points.possible ? (
+          <p className="mt-2 flex items-start gap-1.5 rounded-xl px-2 py-1.5 text-sm font-semibold" style={{ background: 'color-mix(in srgb, var(--pay-points) 12%, var(--carte))', color: 'var(--pay-points)' }}>
+            <IconStar size={18} className="mt-0.5 flex-none" />
+            Peut tout payer avec ses points : {paiement_points.points_necessaires} pts, il lui en restera {paiement_points.solde_apres}.
+          </p>
+        ) : (
+          info.reste > 0 && <p className="mt-2 text-xs text-doux">Paiement en points : {paiement_points.raison}.</p>
+        )}
+      </div>
     );
   }
 
-  const points = solde?.solde ?? 0;
-  const seuil = solde?.bareme.seuil_utilisation ?? 50;
-  const valeurUtilisation = points * (solde?.bareme.valeur_point_fcfa ?? 10);
+  if (!rechercheAutorisee) return null;
 
   return (
-    <div className="carte mb-4 p-4">
-      <div className="flex gap-2">
-        <input className="champ flex-1" inputMode="tel" placeholder="Téléphone du client" value={telephone} onChange={(e) => setTelephone(e.target.value)} />
-        <button type="button" className="btn-blanc px-4" onClick={chercher} disabled={telephone.length < 6}>Chercher</button>
+    <div className="rounded-2xl bg-surface-moyenne p-4 shadow-e1">
+      <label className="mb-2 flex items-center gap-2 text-sm font-bold text-fort">
+        <IconUser size={18} className="text-marque-fonce" /> Numéro du client (facultatif)
+      </label>
+      <div className="relative">
+        <input
+          className={`champ w-full pr-10 tabular-nums ${actif ? 'border-marque ring-2 ring-marque/30' : ''}`}
+          inputMode="tel"
+          placeholder="Ex. 0769…"
+          value={telephone}
+          onFocus={onActiver}
+          onClick={onActiver}
+          onChange={(e) => setTelephone(e.target.value)}
+        />
+        {telephone && (
+          <button
+            type="button"
+            aria-label="Effacer le numéro"
+            onClick={() => setTelephone('')}
+            className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center text-doux"
+          >
+            <IconX size={18} />
+          </button>
+        )}
       </div>
-      {solde && (
-        <div className="mt-3 space-y-2 text-sm">
-          <div>
-            {solde.existe ? (
-              <>Solde : <span className="font-bold">{points} points</span> ({formatFCFA(valeurUtilisation)})</>
-            ) : (
-              'Nouveau client — sera créé au rattachement'
-            )}
-          </div>
-          <div className="flex gap-2">
-            <button type="button" className="btn-ok flex-1" onClick={() => rattacher()}>Rattacher (crédit)</button>
-            {solde.existe && points >= seuil && (
-              <button type="button" className="btn-accent flex-1" onClick={() => rattacher(points)}>
-                Utiliser {points} pts = {formatFCFA(valeurUtilisation)}
-              </button>
-            )}
-          </div>
-          {commande.fidelite_montant > 0 && (
-            <div className="text-ok">Remise fidélité appliquée : −{formatFCFA(commande.fidelite_montant)}</div>
-          )}
-        </div>
+      {!enCours && <SuggestionsClients saisie={telephone} onChoisir={choisir} />}
+      {enCours && <p className="mt-2 text-sm text-doux">Rattachement…</p>}
+      {commande.fidelite_montant > 0 && (
+        <p className="mt-2 text-sm text-ok">Remise fidélité : −{formatFCFA(commande.fidelite_montant)}</p>
       )}
     </div>
   );

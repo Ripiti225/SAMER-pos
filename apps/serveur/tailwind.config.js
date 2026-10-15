@@ -15,6 +15,8 @@ export default {
         filet: 'var(--filet)',
         'filet-fort': 'var(--filet-fort)',
         txt: 'var(--txt)',
+        'txt-doux': 'var(--txt-doux)',
+        'txt-faible': 'var(--txt-faible)',
 
         // --- Ossature ardoise (barres, colonnes, panneaux) : sombre dans les deux modes
         ard: {

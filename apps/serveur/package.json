@@ -13,6 +13,7 @@
     "@pos/shared": "workspace:*",
     "@pos/shared-ui": "workspace:*",
     "@pos/theme": "workspace:*",
+    "@tabler/icons-react": "^3.44.0",
     "@tanstack/react-query": "^5.80.7",
     "idb": "^8.0.3",
     "react": "^18.3.1",

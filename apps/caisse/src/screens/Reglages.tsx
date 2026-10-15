@@ -2064,8 +2064,15 @@ function RecettesInventaire() {
   });
 
   // Les lignes qui ne prennent pas de recette : leurs sorties sont dérivées.
+  //
+  // `AUTO_ENT` n'en fait PAS partie, malgré son nom : seules ses ENTRÉES sont
+  // dérivées (la Pâte de poulet reçoit un sachet par tranche de 10 poulets
+  // frais reçus). Ses SORTIES passent par la recette, comme tout produit
+  // vendu — `sortiesDe()` la traite d'ailleurs dans son `default`. La ranger
+  // ici fermait le panneau du seul produit qui en avait besoin : le sachet se
+  // vendait sans jamais sortir du stock, et son théorique ne faisait que monter.
   const derive = (role: string) =>
-    role === 'ENTREE' || role === 'AUTO_ENT' || role === 'DARINA' || role.startsWith('TOTAL');
+    role === 'ENTREE' || role === 'DARINA' || role.startsWith('TOTAL');
 
   const parCategorie = new Map<string, ProduitRecetteVue[]>();
   for (const p of data?.produits ?? []) {
@@ -2522,7 +2529,7 @@ interface ConfigResto {
 
 function ConfigRestaurant() {
   const qc = useQueryClient();
-  const { poserSession } = useCaisse();
+  const { reprendreSession } = useCaisse();
   const [msg, setMsg] = useState<{ texte: string; ok?: boolean } | null>(null);
   const [choix, setChoix] = useState('');
   const [remplacement, setRemplacement] = useState(false);
@@ -2549,7 +2556,7 @@ function ConfigRestaurant() {
     onSuccess: async (rep) => {
       // Applique la nouvelle identité (nom, marque, couleur) à la session en cours.
       try {
-        poserSession(await api<SessionInfo>('/api/auth/moi'));
+        reprendreSession(await api<SessionInfo>('/api/auth/moi'));
       } catch { /* ignore */ }
       // Synchronise l'équipe du restaurant choisi.
       let equipe = '';

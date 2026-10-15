@@ -57,10 +57,15 @@ export function BarresEmpilees({
   points,
   series,
   hauteur = 210,
+  max: maxImpose,
 }: {
   points: PointEmpile[];
   series: Serie[];
   hauteur?: number;
+  /** Maximum imposé — obligatoire quand deux graphes sont comparés côte à
+   *  côte, sinon chacun se met à sa propre échelle et l'œil conclut
+   *  l'égalité entre deux totaux qui n'ont rien à voir. */
+  max?: number;
 }) {
   const [survol, setSurvol] = useState<string | null>(null);
   if (points.length === 0) return <p className="py-6 text-center text-faible">Aucune vente sur cette période.</p>;
@@ -70,7 +75,7 @@ export function BarresEmpilees({
   const margeHaut = 12;
   const utile = hauteur - margeBas - margeHaut;
   const totaux = points.map((p) => series.reduce((s, se) => s + (p.valeurs[se.cle] ?? 0), 0));
-  const max = Math.max(...totaux, 1);
+  const max = maxImpose ?? Math.max(...totaux, 1);
   const pas = L / points.length;
   const largeur = Math.max(3, Math.min(pas - 3, 54));
   const pointSurvole = points.find((p) => p.cle === survol);
@@ -151,7 +156,14 @@ export function BarresEmpilees({
  * restaurants sur 24 heures donnerait une bouillie. L'heure de pointe est en
  * aplat plein et porte son étiquette ; les autres sont en retrait.
  */
-export function BarresHeures({ heures }: { heures: { heure: number; ca: number; nb: number }[] }) {
+export function BarresHeures({
+  heures,
+  max: maxImpose,
+}: {
+  heures: { heure: number; ca: number; nb: number }[];
+  /** Voir `BarresEmpilees` : imposé dès qu'on compare deux colonnes. */
+  max?: number;
+}) {
   if (heures.length === 0) return <p className="py-6 text-center text-faible">Aucune vente sur cette période.</p>;
 
   const L = 900;
@@ -164,7 +176,7 @@ export function BarresHeures({ heures }: { heures: { heure: number; ca: number; 
   const max = Math.max(...heures.map((h) => h.heure));
   const plage = Array.from({ length: max - min + 1 }, (_, i) => min + i);
   const parHeure = new Map(heures.map((h) => [h.heure, h]));
-  const caMax = Math.max(...heures.map((h) => h.ca), 1);
+  const caMax = maxImpose ?? Math.max(...heures.map((h) => h.ca), 1);
   const pointe = heures.reduce((a, b) => (b.ca > a.ca ? b : a));
   const pas = L / plage.length;
   const largeur = Math.max(4, Math.min(pas - 4, 44));
@@ -234,7 +246,7 @@ export function BarresHorizontales({
           <div className="flex items-baseline justify-between gap-3 text-sm">
             <span className="min-w-0 truncate">
               {l.libelle}
-              {l.detail && <span className="ml-1.5 text-xs text-faible">{l.detail}</span>}
+              {l.detail && <span className="block truncate text-xs text-faible sm:ml-1.5 sm:inline">{l.detail}</span>}
             </span>
             <span className="chiffres flex-none font-semibold">{format(l.valeur)}</span>
           </div>
@@ -255,9 +267,16 @@ export function BarresHorizontales({
  * est l'information. Vert d'un côté, rouge de l'autre : jetons sémantiques
  * existants, pas la palette catégorielle (un écart n'est pas une catégorie).
  */
-export function BarresEcarts({ lignes }: { lignes: { cle: string; libelle: string; valeur: number; detail?: string }[] }) {
+export function BarresEcarts({
+  lignes,
+  max: maxImpose,
+}: {
+  lignes: { cle: string; libelle: string; valeur: number; detail?: string }[];
+  /** Voir `BarresEmpilees` : imposé dès qu'on compare deux colonnes. */
+  max?: number;
+}) {
   if (lignes.length === 0) return <p className="py-4 text-center text-faible">Aucune clôture sur cette période.</p>;
-  const max = Math.max(...lignes.map((l) => Math.abs(l.valeur)), 1);
+  const max = maxImpose ?? Math.max(...lignes.map((l) => Math.abs(l.valeur)), 1);
 
   return (
     <div className="space-y-2">
@@ -269,7 +288,7 @@ export function BarresEcarts({ lignes }: { lignes: { cle: string; libelle: strin
             <div className="flex items-baseline justify-between gap-3 text-sm">
               <span className="min-w-0 truncate">
                 {l.libelle}
-                {l.detail && <span className="ml-1.5 text-xs text-faible">{l.detail}</span>}
+                {l.detail && <span className="block truncate text-xs text-faible sm:ml-1.5 sm:inline">{l.detail}</span>}
               </span>
               <span className={`chiffres flex-none font-semibold ${negatif ? 'text-alerte-txt' : 'text-ok-txt'}`}>
                 {l.valeur > 0 ? '+' : ''}

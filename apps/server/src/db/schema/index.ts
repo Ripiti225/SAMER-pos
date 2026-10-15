@@ -10,6 +10,7 @@ import {
   bigserial,
   boolean,
   check,
+  date,
   index,
   integer,
   jsonb,
@@ -64,6 +65,7 @@ export const modePaiement = pgEnum('mode_paiement', [
   'MOOV_MONEY',
   'CARTE',
   'DJAMO',
+  'POINTS',
 ]);
 
 // Numérotation séquentielle CONTINUE des tickets (§14.2)
@@ -837,4 +839,21 @@ export const pointsFidelite = pgTable('points_fidelite', {
   points: integer('points').notNull(),
   source: text('source').notNull().default('POS'),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Note des caissiers (2026-10-15) — lecture seule, descendue du cloud (flux NOTES).
+// Pas de clé étrangère : une note arrivée avant le compte ne doit pas faire
+// échouer la descente.
+export const notesCaissiers = pgTable('notes_caissiers', {
+  id: uuid('id').primaryKey(),
+  note: numeric('note', { precision: 4, scale: 1 }),
+  note_precedente: numeric('note_precedente', { precision: 4, scale: 1 }),
+  appreciation: text('appreciation'),
+  nb_shifts: integer('nb_shifts').notNull().default(0),
+  min_shifts: integer('min_shifts').notNull().default(8),
+  criteres: jsonb('criteres').notNull().default(sql`'[]'::jsonb`),
+  bonus: jsonb('bonus'),
+  periode_debut: date('periode_debut'),
+  periode_fin: date('periode_fin'),
+  calcule_le: timestamp('calcule_le', { withTimezone: true }).notNull().defaultNow(),
 });

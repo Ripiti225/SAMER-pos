@@ -15,8 +15,9 @@
 > c'est ce document qui est mis à jour, le jour même.
 >
 > **Portage** : fait pour la caisse (connexion, accueil, tables, commande,
-> paiement, clôture, dépenses, inventaire, administration). Le KDS, la tablette serveur et l'app
-> client tournent encore sur les anciens jetons (alias de compatibilité dans
+> paiement, clôture, dépenses, inventaire, administration) et pour l'écran cuisine
+> (KDS, § 6.13) et le terminal du serveur de salle (§ 6.14), le 2026-10-15.
+> L'app client tourne encore sur les anciens jetons (alias de compatibilité dans
 > `packages/theme/theme.css`).
 
 ---
@@ -726,6 +727,64 @@ laisserait croire que le groupe fait deux restaurants au lieu de sept.
 
 ---
 
+### 6.13 Écran cuisine (KDS)
+
+Porté sur le duo le 2026-10-15. Barre `ard-900` avec la toque sur aplat de
+marque, l'heure murale et le son ; plan de travail clair dessous. Trois
+colonnes : **En attente** (`--attente`), **En cours** (`--info`), **Prêtes**
+(`--ok`) — la même couleur sur le point de l'en-tête, le compteur, l'onglet
+et le **filet gauche** de chaque carte : on sait où est une carte sans lire
+le titre de sa colonne.
+
+**Il prend la forme de l'appareil** (c'était le défaut signalé : trois
+colonnes forcées partout, des cartes de 200 px où rien ne tenait) :
+
+| Largeur | Disposition |
+|---|---|
+| ≥ 1024 px (écran couché, grande tablette) | les trois colonnes côte à côte |
+| < 1024 px (tablette debout, téléphone) | onglets dans une bande `ard-850`, une colonne à la fois, compteur sur chaque onglet ; sur téléphone le compteur passe au-dessus d'un libellé court (« Attente ») |
+
+Dans une colonne, les cartes se rangent sur `auto-fill` à 17 rem minimum :
+une file sur téléphone, deux sur tablette debout, davantage sur un grand écran.
+
+**Rien ne sort d'une case** : colonnes et cartes en `min-w-0`, noms de plats
+en retour à la ligne, quantité dans une case fixe à gauche, numéro de
+commande dimensionné sur la largeur de SA carte (`cqi`, de 2 à 3,25 rem),
+boutons qui passent l'un sous l'autre quand la carte est trop étroite
+(`flex-wrap`). Sur une carte prête, « Servi » prend deux parts de la ligne et
+« Reprendre » une.
+
+Le chronomètre reste le seul élément vraiment coloré de la carte en cuisine
+(vert, orange `--attente`, rouge). Une carte en retard prend une bordure rouge
+de 2 px — pas d'animation : la pulsation reste réservée à la table prête (§ 5).
+Chargement en squelettes, encoche et barre d'accueil respectées
+(`safe-area-inset`), manifeste `orientation: any`.
+
+### 6.14 Terminal du serveur de salle
+
+Porté sur le duo le 2026-10-15 — l'ancien écran était « trop fardé » : orange
+sur le nom du restaurant, le nom du serveur, le numéro de table, les prix, les
+catégories et le fond des vignettes, pastilles teintées partout, cartes qui
+sautaient au survol, déconnexion en rouge, notifications en grands aplats.
+
+- **Barre** `ard-900` : point de marque, restaurant, nom du serveur en
+  `ard-txt-doux`, déconnexion neutre (icône). File d'attente hors ligne en
+  pastille `--attente` seulement quand elle existe.
+- **Connexion** et **verrou** : écrans vitrine, tuiles blanches, initiales sur
+  `vitrine-surface-2` — plus aucun aplat de couleur sur les profils.
+- **Prise de commande** : le miroir de la caisse (§ 6.4). Barre de table sur
+  le plan clair (« Table T4 », ticket et total en `txt-doux`) ; catégories en
+  colonne ardoise sur tablette, en bandeau ardoise défilant sur téléphone, avec
+  la pastille de catégorie (§ 4.1) ; vignettes `auto-fill` 140 px, liseré et
+  fond à la teinte de la catégorie, prix en `txt` ; panier en panneau ardoise
+  (`ard-850`, lignes `ard-800`, quantités `ard-700` en `marque-clair`).
+- **Un seul aplat de marque** : « Envoyer en cuisine », le total en seconde
+  ligne pour ne jamais couper le libellé.
+- **Notifications** : carte blanche, liseré et icône de leur sens (prête
+  `--ok`, à valider `--info`, appel `--marque`) ; l'action unique sur la même
+  ligne que la table. Sur tablette, la pile se range à gauche du panier au lieu
+  de couvrir « Envoyer en cuisine ».
+
 ---
 
 ## 7. Visuels des plats
@@ -858,3 +917,6 @@ Une ligne par modification de la maquette. **À tenir à jour à chaque changeme
 | 2026-08-25 | **Tableau de bord du siège refondu** : six chiffres d'appel avec variation contre la période précédente, CA quotidien empilé par restaurant, heures de pic, comparaisons entre restaurants, puis ce que seul le POS voit — top des plats, modes de paiement, tables, canaux, retours, écarts par caissier, remises, annulations, inventaire, équipe et heures travaillées. Palette catégorielle définie et validée (§ 4.4) : la règle « une seule série » du § 6.12 est levée. |
 | 2026-08-25 | **Stock à l'instant T** (§ 6.9) : bouton d'en-tête de l'écran Inventaire qui tire une photo du stock, présentée comme une facture (nom, points de conduite, stock en face, détail dessous) à l'écran et sur le papier de la caisse. Lecture pure — ne valide rien, ne fige rien. Le compté prime sur le théorique, et les lignes théoriques sont annoncées. |
 | 2026-08-25 | **Contact client des livraisons partenaires** (§ 6.4 bis) : modale ouverte APRÈS le lancement en cuisine, n° de commande partenaire + téléphone du client, fermable. Le ticket Z compte les commandes ET les contacts par partenaire (« Yango 5 · contacts 4/5 ») ; la console du siège les montre **par caissier**, trié par courses non rattachées. Tracé au journal (`INFOS_LIVRAISON`). |
+| 2026-10-15 | **Écran cuisine porté sur le duo** (§ 6.13) : il prend la forme de l'appareil — trois colonnes sur grand écran, onglets sur tablette debout et téléphone ; cartes en grille `auto-fill` 17 rem, numéro dimensionné sur la carte (`cqi`), boutons qui se replient : plus rien ne déborde des cases, y compris après « Prêt ». |
+| 2026-10-15 | **Terminal du serveur porté sur le duo** (§ 6.14) : fin du « tout orange » — barre ardoise, connexion vitrine, prise de commande en miroir de la caisse (catégories ardoise à pastille, vignettes à liseré, panier ardoise), un seul aplat de marque sur « Envoyer en cuisine » ; notifications compactes à liseré, qui ne couvrent plus le panier sur tablette. |
+| 2026-10-15 | **Note du caissier sur la caisse** : pastille « ⭐ 15,5/20 ↗ +1 » dans l'en-tête de l'accueil, teinte selon l'échelle de SamerTrackly (vert ≥ 14, bleu ≥ 12, orange ≥ 10, rouge dessous, gris tant que pas noté) ; un appui ouvre le détail — une barre par critère, le constat et le conseil. Supervision : bande « Notes de l'équipe » sous « Monnaie à prévoir ». |

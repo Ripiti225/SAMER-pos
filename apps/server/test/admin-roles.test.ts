@@ -79,8 +79,11 @@ describe('accès à l’écran Rôles & accès (permission protégée)', () => {
 });
 
 describe('temps réel : retirer Rapport X au MANAGER (DdT 6)', () => {
-  it('avant : le manager accède au rapport X', async () => {
-    const rep = await app.inject({ method: 'GET', url: `/api/services/${serviceId}/rapport-x`, cookies: cookiesManager });
+  // Le Rapport X d'un shift OUVERT est fermé au manager quoi qu'il arrive
+  // (décision du 2026-10-15) : on observe donc le retrait en direct sur le
+  // rapport du jour, qui dépend de rapports.z retiré dans le même geste.
+  it('avant : le manager accède au rapport du jour', async () => {
+    const rep = await app.inject({ method: 'GET', url: '/api/rapports/jour', cookies: cookiesManager });
     expect(rep.statusCode).toBe(200);
   });
 
@@ -98,7 +101,9 @@ describe('temps réel : retirer Rapport X au MANAGER (DdT 6)', () => {
     expect(rep.statusCode).toBe(200);
   });
 
-  it('après (sans reconnexion) : le manager reçoit 403 sur le rapport X', async () => {
+  it('après (sans reconnexion) : le manager reçoit 403 sur le rapport du jour et le rapport X', async () => {
+    const jour = await app.inject({ method: 'GET', url: '/api/rapports/jour', cookies: cookiesManager });
+    expect(jour.statusCode).toBe(403);
     const rep = await app.inject({ method: 'GET', url: `/api/services/${serviceId}/rapport-x`, cookies: cookiesManager });
     expect(rep.statusCode).toBe(403);
   });

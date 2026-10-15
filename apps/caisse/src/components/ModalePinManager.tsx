@@ -58,6 +58,7 @@ export function ModalePinManager({ titre, demanderMotif = true, demanderMontant 
             valeur={pin}
             onChange={setPin}
             longueurMax={6}
+            code
             onValider={() => onConfirmer({ pin, motif: motif.trim(), montant: Number(montant) })}
             libelleValider={enCours ? 'Vérification…' : 'Confirmer'}
             validerDesactive={!pret || enCours}

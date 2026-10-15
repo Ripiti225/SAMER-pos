@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { IconCloudUpload, IconLogout } from '@tabler/icons-react';
 import type { SessionInfo } from '@pos/shared';
 import { api, ErreurApi } from '@pos/shared-ui';
 import { fileAttente } from './file-attente';
@@ -53,7 +54,7 @@ export function App() {
   }, [queryClient]);
 
   if (chargement) {
-    return <div className="flex h-full items-center justify-center text-doux">Démarrage…</div>;
+    return <div className="flex h-full items-center justify-center bg-plan text-txt-doux">Démarrage…</div>;
   }
   if (!session) {
     return <LoginServeur onConnecte={setSession} />;
@@ -62,42 +63,46 @@ export function App() {
   return (
     // Colonne pleine hauteur : l'écran actif prend la place restante, sans
     // hauteur codée en dur — indispensable sur téléphone (barres variables).
-    <div className="flex h-full flex-col overflow-hidden" data-barre-basse={tableId ? '1' : '0'}>
-      {/* Le nom du serveur connecté est affiché en permanence (§B5) */}
-      <header className="marge-sure-cotes flex h-14 flex-none items-center gap-2 border-b border-bordure bg-surface px-2 shadow-e1 sm:h-14 sm:gap-3 sm:px-4">
-        <span className="min-w-0 truncate font-bold text-marque-fonce">{session.restaurant.nom}</span>
-        <span className="hidden min-w-0 truncate rounded-full bg-marque-tint px-3 py-1 text-sm font-semibold text-marque-fonce sm:inline">
-          {session.utilisateur.nom_complet}
-        </span>
-        {/* Sur téléphone : prénom seul, la place manque pour le nom complet. */}
-        <span className="min-w-0 truncate rounded-full bg-marque-tint px-2 py-1 text-sm font-semibold text-marque-fonce sm:hidden">
-          {session.utilisateur.nom_complet.split(/\s+/)[0]}
-        </span>
+    <div className="flex h-full flex-col overflow-hidden bg-plan" data-barre-basse={tableId ? '1' : '0'}>
+      {/* Ossature ardoise (DESIGN_V2 § 2) : le nom du serveur connecté reste
+          affiché en permanence (§B5), sans aplat de couleur — la marque ne
+          tient qu'au point devant le restaurant. */}
+      <header className="marge-sure-cotes flex h-14 flex-none items-center gap-3 border-b border-ard-700 bg-ard-900 px-3 text-ard-txt sm:px-4">
+        <span className="h-2.5 w-2.5 flex-none rounded-full bg-marque" />
+        <div className="min-w-0 leading-tight">
+          <div className="truncate text-[15px] font-bold">{session.restaurant.nom}</div>
+          <div className="truncate text-xs font-medium text-ard-txt-doux">
+            <span className="sm:hidden">{session.utilisateur.nom_complet.split(/\s+/)[0]}</span>
+            <span className="hidden sm:inline">{session.utilisateur.nom_complet}</span>
+          </div>
+        </div>
         {enAttente > 0 && (
-          <span className="flex-none animate-pulse rounded-full bg-alerte-tint px-2 py-1 text-xs font-medium text-alerte sm:px-3 sm:text-sm">
-            <span className="hidden sm:inline">En attente de connexion ({enAttente})</span>
-            <span className="sm:hidden">⏳ {enAttente}</span>
+          <span
+            className="flex flex-none items-center gap-1.5 rounded-full bg-attente px-2.5 py-1 text-xs font-bold text-white sm:text-sm"
+            title="Actions en attente de connexion — elles partiront dès le retour du réseau"
+          >
+            <IconCloudUpload size={16} />
+            <span className="hidden sm:inline">En attente de connexion</span> {enAttente}
           </span>
         )}
         <button
           type="button"
           title="Déconnexion"
-          className="ml-auto flex h-11 w-11 flex-none items-center justify-center gap-2 rounded-[13px] bg-alerte/10 font-semibold text-alerte transition hover:bg-alerte/20 sm:h-auto sm:w-auto sm:px-4 sm:py-2"
+          className="ml-auto flex h-11 flex-none items-center justify-center gap-2 rounded-btn px-3 font-semibold text-ard-txt-doux transition hover:bg-ard-750 hover:text-ard-txt"
           onClick={async () => {
             try { await api('/api/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
             setSession(null);
             setTableId(null);
           }}
         >
+          <IconLogout size={20} />
           <span className="hidden sm:inline">Déconnexion</span>
-          <span className="text-lg sm:hidden" aria-hidden>⏻</span>
-          <span className="sr-only sm:hidden">Déconnexion</span>
         </button>
       </header>
 
       <main className="min-h-0 flex-1">
         {tableId ? (
-          <PriseCommande tableId={tableId} restaurant={session.restaurant.nom} onRetour={() => setTableId(null)} afficherToast={afficherToast} />
+          <PriseCommande tableId={tableId} restaurant={session.restaurant.nom} marque={session.restaurant.marque} onRetour={() => setTableId(null)} afficherToast={afficherToast} />
         ) : (
           <Salle onTable={setTableId} moiServeurId={session.utilisateur.id} afficherToast={afficherToast} />
         )}
@@ -108,7 +113,7 @@ export function App() {
       <VerrouInactivite session={session} onDeconnexion={() => { setSession(null); setTableId(null); }} />
 
       {toast && (
-        <div className="au-dessus-barre fixed left-1/2 z-[60] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-xl border border-bordure bg-surface px-5 py-3 text-center text-base shadow-xl sm:text-lg">
+        <div className="au-dessus-barre fixed left-1/2 z-[60] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-jeton bg-ard-800 px-5 py-3 text-center text-[15px] font-medium text-ard-txt shadow-ard">
           {toast}
         </div>
       )}

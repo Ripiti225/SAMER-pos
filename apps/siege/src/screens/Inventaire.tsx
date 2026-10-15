@@ -289,7 +289,7 @@ export function Inventaire({
                   </span>
                 </div>
 
-                <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
                   {[
                     ['Stock théorique', quantite(ligne.stock_theorique)],
                     ['Stock compté', quantite(ligne.stock_compte)],

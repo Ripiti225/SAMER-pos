@@ -62,8 +62,13 @@ describe('C1 — Rapport X (manager uniquement)', () => {
     expect(rep.statusCode).toBe(403);
   });
 
-  it('le manager voit le X enrichi (par type, remises détaillées, top plats)', async () => {
+  it('shift ouvert : le manager reçoit 403 (il pourrait souffler la vente au caissier)', async () => {
     const rep = await app.inject({ method: 'GET', url: `/api/services/${serviceId}/rapport-x`, cookies: cookiesManager });
+    expect(rep.statusCode).toBe(403);
+  });
+
+  it('le propriétaire voit le X enrichi en direct (par type, remises détaillées, top plats)', async () => {
+    const rep = await app.inject({ method: 'GET', url: `/api/services/${serviceId}/rapport-x`, cookies: cookiesProprio });
     expect(rep.statusCode).toBe(200);
     const x = rep.json();
     expect(x.nb_commandes_payees).toBe(3);

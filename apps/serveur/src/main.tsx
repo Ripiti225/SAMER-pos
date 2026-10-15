@@ -3,8 +3,12 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { GardeErreur } from './components/GardeErreur';
+import { deverrouillerSon } from './sonnerie';
 import '@pos/theme/theme.css';
 import './index.css';
+
+// Le son « commande prête » doit être débloqué par un premier toucher.
+deverrouillerSon();
 
 const queryClient = new QueryClient({
   defaultOptions: {

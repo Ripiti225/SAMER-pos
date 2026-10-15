@@ -31,6 +31,7 @@ import {
 } from '../paiements/sous-notes.js';
 import {
   chargerCommandeVue,
+  codeLibreDansService,
   construireFactureDisponible,
   exigerModifiable,
   figerNouvelItem,
@@ -68,7 +69,13 @@ export function routesCommandes(app: FastifyInstance): void {
       // rien — elles ne feraient qu'encombrer la clôture.
       if (corps.type === 'SUR_PLACE' && corps.table_id) {
         const ouvertes = await tx
-          .select({ id: commandes.id })
+          .select({
+            id: commandes.id,
+            type: commandes.type,
+            code_commande: commandes.code_commande,
+            service_id: commandes.service_id,
+            numero_ticket: commandes.numero_ticket,
+          })
           .from(commandes)
           .where(
             and(
@@ -88,7 +95,12 @@ export function routesCommandes(app: FastifyInstance): void {
             // Elle est vide : elle appartient désormais à celui qui la remplit.
             const [repris] = await tx
               .update(commandes)
-              .set({ caissier_id: req.session!.utilisateur_id, service_id: service.id, updated_at: new Date() })
+              .set({
+                caissier_id: req.session!.utilisateur_id,
+                service_id: service.id,
+                code_commande: await codeLibreDansService(tx, o, service.id, req.session!.utilisateur_id),
+                updated_at: new Date(),
+              })
               .where(eq(commandes.id, o.id))
               .returning();
             await ecrireOutbox(tx, 'commandes', 'UPDATE', o.id, repris as unknown as Record<string, unknown>);

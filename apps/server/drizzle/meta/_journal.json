@@ -274,6 +274,27 @@
       "when": 1790427000000,
       "tag": "0038_a_la_braise_sans_horaire",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790428000000,
+      "tag": "0039_paiement_points",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790429000000,
+      "tag": "0040_verrouillage_desactive",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1790430000000,
+      "tag": "0041_notes_caissiers",
+      "breakpoints": true
     }
   ]
 }

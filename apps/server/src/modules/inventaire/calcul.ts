@@ -109,8 +109,14 @@ function sortiesDe(ctx: Contexte, p: Produit): number {
         }, 0),
       );
     case 'DARINA': {
+      // La Darina arrive en SACHETS et se consomme au Pot Fresco : un sachet
+      // couvre `ratio` pots (9 sur le terrain). Sans la division, un site qui
+      // vend 90 pots se voyait retirer 90 sachets au lieu de 10 — le compte de
+      // fin de service partait en manquant tous les soirs.
       const source = ctx.produits.find((x) => x.code === CODE_POT_FRESCO);
-      return source ? venduDe(ctx, source) : 0;
+      if (!source) return 0;
+      const parSachet = ratioDe(p) || 1;
+      return arrondi(venduDe(ctx, source) / parSachet);
     }
     case 'ENTREE':
       // Le poulet frais ne « sort » pas : il alimente Total poulet et Pâte de
@@ -162,8 +168,11 @@ function calculDe(ctx: Contexte, p: Produit, sorties: number, entrees: number): 
         .join(' + ');
       return `${detail} = ${fr(sorties)} sachets`;
     }
-    case 'DARINA':
-      return `Une Darina part avec chaque Pot Fresco vendu (${fr(sorties)})`;
+    case 'DARINA': {
+      const source = ctx.produits.find((x) => x.code === CODE_POT_FRESCO);
+      const vendus = source ? venduDe(ctx, source) : 0;
+      return `${fr(vendus)} Pot Fresco ÷ ${ratioDe(p) || 1} = ${fr(sorties)} sachet(s)`;
+    }
     case 'ENTREE':
       return `Reçu ${fr(entrees)} — alimente Total poulet et Pâte de poulet`;
     case 'CONSO_FROMAGE':

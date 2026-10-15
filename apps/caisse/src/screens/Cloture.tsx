@@ -106,6 +106,7 @@ export function Cloture() {
   const fond = preview?.fond_de_caisse ?? 0;
   const livraisons = preview?.livraisons ?? {};
   const offerts = preview?.offerts ?? { nb: 0, total: 0 };
+  const payePoints = preview?.paye_points ?? { nb: 0, total: 0 };
   const depenses = preview?.depenses ?? { total: 0, nb_lignes: 0 };
   const retours = preview?.retours ?? { nb: 0, montant: 0, par_produit: [], detail: [] };
   const totalLivraisons = PARTENAIRES_ORDRE.reduce((s, p) => s + (livraisons[p] ?? 0), 0);
@@ -114,7 +115,7 @@ export function Cloture() {
   // offrir 5 000 affiche bien 30 000. Le même calcul est refait côté serveur à
   // la clôture — les deux doivent donner le même chiffre, sinon le caissier
   // verrait un total différent de celui figé sur son ticket.
-  const venteTotale = depenses.total + totalLivraisons + totalModes + offerts.total + nombre(espece) - fond;
+  const venteTotale = depenses.total + totalLivraisons + totalModes + offerts.total + payePoints.total + nombre(espece) - fond;
   const especeValide = espece !== '' && nombre(espece) >= 0;
   const ecartReconciliation = rapport ? ecartReconciliationRapport(rapport) : 0;
 
@@ -293,10 +294,16 @@ export function Cloture() {
                   <span className="font-semibold tabular-nums">{formatFCFA(offerts.total)}</span>
                 </div>
               )}
+              {payePoints.total > 0 && (
+                <div className="flex items-center justify-between rounded-lg border border-bordure bg-surface px-4 py-2 text-sm">
+                  <span>Payé en points ({payePoints.nb})</span>
+                  <span className="font-semibold tabular-nums">{formatFCFA(payePoints.total)}</span>
+                </div>
+              )}
             </div>
-            {offerts.total > 0 && (
+            {(offerts.total > 0 || payePoints.total > 0) && (
               <p className="text-xs text-doux">
-                Les Kdo comptent dans la vente mais pas dans le tiroir : ne les cherchez pas dans vos espèces.
+                Les Kdo et les achats payés en points comptent dans la vente mais pas dans le tiroir : ne les cherchez pas dans vos espèces.
               </p>
             )}
 
@@ -399,6 +406,9 @@ export function Cloture() {
               ))}
               {(rapport.offerts?.total ?? 0) > 0 && (
                 <Ligne libelle={`Kdo offerts (${rapport.offerts.nb})`} valeur={formatFCFA(rapport.offerts.total)} />
+              )}
+              {(rapport.paye_points?.total ?? 0) > 0 && (
+                <Ligne libelle={`Payé en points (${rapport.paye_points!.nb})`} valeur={formatFCFA(rapport.paye_points!.total)} />
               )}
               <div className="border-t border-bordure pt-1" />
               <Ligne libelle="Vente totale (réconciliée)" valeur={formatFCFA(rapport.vente_totale)} fort />
@@ -620,7 +630,7 @@ function ModaleTransfert({
           <div className="champ flex items-center justify-center text-2xl tracking-[0.5em]">
             {'•'.repeat(pin.length) || <span className="text-base tracking-normal text-doux">PIN du receveur…</span>}
           </div>
-          <Numpad valeur={pin} onChange={setPin} longueurMax={6} onValider={transferer} libelleValider={enCours ? 'Transfert…' : 'Accepter le transfert'} validerDesactive={pin.length < 4 || enCours} />
+          <Numpad valeur={pin} onChange={setPin} longueurMax={6} code onValider={transferer} libelleValider={enCours ? 'Transfert…' : 'Accepter le transfert'} validerDesactive={pin.length < 4 || enCours} />
           <button type="button" className="btn-blanc w-full" onClick={() => { setReceveur(null); setPin(''); }}>← Changer de caissier</button>
         </div>
       )

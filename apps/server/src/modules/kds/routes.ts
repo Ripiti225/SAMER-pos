@@ -23,7 +23,7 @@ import {
 import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier } from '../../lib/erreurs.js';
 import { verrouillerCommande } from '../commandes/service.js';
-import { attribuerPlats } from './attribution.js';
+import { marquerPrete, marquerServie } from './service-statut.js';
 
 /** Garde d'appareil KDS : jeton d'installation, pas d'identité humaine. */
 async function exigerJetonKds(req: FastifyRequest): Promise<void> {
@@ -158,57 +158,7 @@ export function routesKds(app: FastifyInstance): void {
   // « Prêt » : la carte quitte la grille → colonne « Prêtes »
   app.post('/api/kds/commandes/:id/pret', { preHandler: gardeKds }, async (req) => {
     const { id } = req.params as { id: string };
-    await db.transaction(async (tx) => {
-      const c = await verrouillerCommande(tx, id);
-      if (c.statut !== 'ENVOYEE_CUISINE') {
-        throw new ErreurMetier('Cette commande n’est pas en cuisine', 409);
-      }
-      const items = await tx
-        .select()
-        .from(commandeItems)
-        .where(and(eq(commandeItems.commande_id, id), isNotNull(commandeItems.envoye_le)));
-      for (const item of items) {
-        if (item.statut_cuisine === 'ANNULE' || item.statut_cuisine === 'PRET') continue;
-        const [maj] = await tx
-          .update(commandeItems)
-          .set({ statut_cuisine: 'PRET' })
-          .where(eq(commandeItems.id, item.id))
-          .returning();
-        await ecrireOutbox(tx, 'commande_items', 'UPDATE', item.id, maj as unknown as Record<string, unknown>);
-      }
-      const [maj] = await tx
-        .update(commandes)
-        .set({ statut: 'PRETE', updated_at: new Date() })
-        .where(eq(commandes.id, id))
-        .returning();
-      await ecrireOutbox(tx, 'commandes', 'UPDATE', id, maj as unknown as Record<string, unknown>);
-
-      // Correction 4 : attribution automatique des plats aux employés en
-      // poste, par mapping catégorie → poste_cuisine. Invisible pour le KDS.
-      await attribuerPlats(tx, id);
-    });
-
-    // CORRECTIONS3 point 2 : sonner le serveur rattaché (serveur_id) ; s'il est
-    // déconnecté (ou commande prise à la caisse), notifier la caisse.
-    const [c] = await db
-      .select({
-        serveur_id: commandes.serveur_id,
-        table_id: commandes.table_id,
-        table_numero: tablesSalle.numero,
-      })
-      .from(commandes)
-      .leftJoin(tablesSalle, eq(tablesSalle.id, commandes.table_id))
-      .where(eq(commandes.id, id));
-    const versServeur = !!c?.serveur_id && app.presence.estPresent(c.serveur_id);
-    app.diffuserPayload('commande:prete', {
-      commande_id: id,
-      table_id: c?.table_id ?? null,
-      table_numero: c?.table_numero ?? null,
-      serveur_id: c?.serveur_id ?? null,
-      cible: versServeur ? 'SERVEUR' : 'CAISSE',
-    });
-    app.diffuser('commande:modifiee', id);
-    if (c?.table_id) app.diffuser('table:changee', c.table_id);
+    await marquerPrete(app, id);
     return { ok: true };
   });
 
@@ -216,20 +166,7 @@ export function routesKds(app: FastifyInstance): void {
   // n'est pas fait, la commande reste visible dans la colonne « Prêtes ».
   app.post('/api/kds/commandes/:id/servir', { preHandler: gardeKds }, async (req) => {
     const { id } = req.params as { id: string };
-    const tableId = await db.transaction(async (tx) => {
-      const c = await verrouillerCommande(tx, id);
-      if (c.statut !== 'PRETE') throw new ErreurMetier('Cette commande n’est pas prête à être servie', 409);
-      const [maj] = await tx
-        .update(commandes)
-        .set({ statut: 'SERVIE', updated_at: new Date() })
-        .where(eq(commandes.id, id))
-        .returning();
-      await ecrireOutbox(tx, 'commandes', 'UPDATE', id, maj as unknown as Record<string, unknown>);
-      return maj!.table_id;
-    });
-    app.diffuser('commande:servie', id);
-    app.diffuser('commande:modifiee', id);
-    if (tableId) app.diffuser('table:changee', tableId);
+    await marquerServie(app, id);
     return { ok: true };
   });
 

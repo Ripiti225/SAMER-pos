@@ -55,3 +55,11 @@ body {
     bottom: calc(9.5rem + env(safe-area-inset-bottom));
   }
 }
+
+/* Tablette, prise de commande : la pile de notifications se range à gauche du
+   panier (320 px) — posée dessus, elle cachait « Envoyer en cuisine ». */
+@media (min-width: 1024px) {
+  [data-barre-basse='1'] .au-dessus-barre {
+    right: calc(20rem + 1rem);
+  }
+}

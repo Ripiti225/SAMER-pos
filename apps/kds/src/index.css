@@ -2,8 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Le thème clair partagé (@pos/theme/theme.css) est importé dans main.tsx.
-   Ici : contraste et tailles renforcés pour lecture à 2 m (§ KDS). */
+/* Le thème partagé (@pos/theme/theme.css) est importé dans main.tsx.
+   Ici : ce qui fait prendre à l'écran cuisine la forme de l'appareil
+   (DESIGN_V2 § 6.13) — lecture à 2 m, doigts mouillés. */
 
 html,
 body,
@@ -14,6 +15,8 @@ body,
 body {
   @apply antialiased select-none;
   touch-action: manipulation;
+  background: var(--plan);
+  overscroll-behavior: none;
 }
 
 /* Boutons plus grands que le reste du POS : doigts mouillés/gras */
@@ -24,4 +27,49 @@ body {
 .btn-alerte {
   min-height: 64px;
   font-size: 19px;
+}
+
+/* Encoche et barre d'accueil des téléphones : le contenu n'y passe jamais. */
+.kds-entete {
+  padding-top: max(0.625rem, env(safe-area-inset-top));
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+/* Les cartes se rangent sur autant de files que la colonne en accueille, sans
+   jamais descendre sous 17 rem (ni dépasser la largeur d'un téléphone). */
+.kds-defile {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  overscroll-behavior: contain;
+}
+
+/* Le numéro de commande suit la largeur de SA carte, pas de l'écran : très
+   grand sur une carte large, toujours dans la case sur une carte étroite. */
+.kds .carte {
+  container-type: inline-size;
+}
+.kds-numero {
+  font-size: 2.5rem;
+}
+@supports (font-size: 1cqi) {
+  .kds-numero {
+    font-size: clamp(2rem, 15cqi, 3.25rem);
+  }
+}
+
+/* Squelette de chargement (DESIGN_V2 § 5 : jamais un écran vide). */
+.kds-squelette {
+  border-radius: var(--r);
+  background: linear-gradient(90deg, var(--carte-douce) 0%, var(--carte) 50%, var(--carte-douce) 100%);
+  background-size: 200% 100%;
+  animation: kds-squelette 1.4s var(--ease) infinite;
+}
+@keyframes kds-squelette {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kds-squelette { animation: none; }
 }

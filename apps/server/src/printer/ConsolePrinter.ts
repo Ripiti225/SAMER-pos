@@ -179,6 +179,7 @@ export class ConsolePrinter implements PrinterService {
         `      commandes/contacts ${s.nb}/${s.contacts ?? 0} · n° partenaire ${s.refs ?? 0}/${s.nb}`,
       ]),
       ...(z.offerts?.total ? [ligne(`  Kdo offerts (${z.offerts.nb})`, formatFCFA(z.offerts.total))] : []),
+      ...(z.paye_points?.total ? [ligne(`  Payé en points (${z.paye_points.nb})`, formatFCFA(z.paye_points.total))] : []),
       ...(z.depenses ? [ligne('Dépenses (registre)', formatFCFA(z.depenses))] : []),
       // Inventaire (§ 6.10) : information manager, hors vente et hors écart.
       ...(z.inventaire
@@ -257,11 +258,13 @@ export class ConsolePrinter implements PrinterService {
       lignes.push(ligne('  Espèces comptées', formatFCFA(sh.especes_comptees ?? 0)));
       lignes.push(ligne('  Écart espèces', formatFCFA(sh.ecart ?? 0)));
       if (sh.offerts?.total) lignes.push(ligne(`  Kdo offerts (${sh.offerts.nb})`, formatFCFA(sh.offerts.total)));
+      if (sh.paye_points?.total) lignes.push(ligne(`  Payé en points (${sh.paye_points.nb})`, formatFCFA(sh.paye_points.total)));
     }
     lignes.push(
       '-'.repeat(LARGEUR),
       ligne('TOTAL VENTES', formatFCFA(s.vente_totale)),
       ...(s.offerts?.total ? [ligne(`dont Kdo offerts (${s.offerts.nb})`, formatFCFA(s.offerts.total))] : []),
+      ...(s.paye_points?.total ? [ligne(`dont payé en points (${s.paye_points.nb})`, formatFCFA(s.paye_points.total))] : []),
       ligne('Total système', formatFCFA(s.total_systeme)),
       ligne('Différence', formatFCFA(s.diff)),
       ligne('Espèces comptées', formatFCFA(s.especes_comptees)),

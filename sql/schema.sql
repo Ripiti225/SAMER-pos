@@ -465,7 +465,10 @@ CREATE TABLE commande_items (
 -- ============================================================================
 
 CREATE TYPE mode_paiement AS ENUM
-  ('ESPECES','WAVE','ORANGE_MONEY','MTN_MOMO','MOOV_MONEY','CARTE');
+  ('ESPECES','WAVE','ORANGE_MONEY','MTN_MOMO','MOOV_MONEY','CARTE','DJAMO','POINTS');
+-- POINTS : paiement avec les points fidélité du client rattaché. Aucun argent
+-- reçu — compté à part dans la vente (comme les Kdo), jamais déclaré par le
+-- caissier ni compté dans le tiroir.
 
 -- Split de note : une commande est divisée en 1..n notes ; chaque note est
 -- payée par 1..n paiements (paiement mixte). Cas simple = 1 note implicite.
@@ -650,6 +653,25 @@ CREATE TABLE points_fidelite (
 ALTER TABLE notes_split
   ADD CONSTRAINT notes_split_client_fidelite_fk
   FOREIGN KEY (client_fidelite_id) REFERENCES clients_fidelite(id);
+
+-- Note des caissiers (2026-10-15) — LECTURE SEULE, descendue du cloud (flux
+-- NOTES). Calculée par SamerTrackly (« Note des caissiers », sur 20, 30 derniers
+-- jours) ; chaque caissier voit la sienne sur l'accueil de sa caisse.
+-- Pas de clé étrangère vers utilisateurs : une note arrivée avant le compte ne
+-- doit pas faire échouer la descente (elle annulerait aussi le catalogue).
+CREATE TABLE notes_caissiers (
+  id              UUID PRIMARY KEY,           -- = utilisateurs.id
+  note            NUMERIC(4,1),               -- NULL : pas encore assez de shifts
+  note_precedente NUMERIC(4,1),
+  appreciation    TEXT,
+  nb_shifts       INTEGER NOT NULL DEFAULT 0,
+  min_shifts      INTEGER NOT NULL DEFAULT 8,
+  criteres        JSONB NOT NULL DEFAULT '[]'::jsonb,
+  bonus           JSONB,
+  periode_debut   DATE,
+  periode_fin     DATE,
+  calcule_le      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 -- ============================================================================
 -- 12. INVENTAIRE DE SERVICE (DESIGN_V2 §6.9) — LOCAL UNIQUEMENT

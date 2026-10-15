@@ -22,6 +22,12 @@ export const MODES_PAIEMENT = [
   'MOOV_MONEY',
   'CARTE',
   'DJAMO',
+  /**
+   * Points fidélité du client rattaché. Ce n'est pas de l'argent reçu : le
+   * caissier ne le déclare jamais à la clôture, le serveur l'ajoute à la vente
+   * du shift comme les Kdo. Accepté seulement si le solde paie TOUT le reste.
+   */
+  'POINTS',
 ] as const;
 export type ModePaiement = (typeof MODES_PAIEMENT)[number];
 
@@ -39,6 +45,7 @@ export const LIBELLES_MODES: Record<ModePaiement, string> = {
   MOOV_MONEY: 'Moov Money',
   CARTE: 'Carte',
   DJAMO: 'Djamo',
+  POINTS: 'Points fidélité',
 };
 
 export const TYPES_COMMANDE = ['SUR_PLACE', 'EMPORTER', 'LIVRAISON'] as const;

@@ -158,7 +158,7 @@ export function Menu({ filtre }: { filtre: FiltreResto; onFiltre: (v: FiltreRest
                     Tout décocher
                   </button>
                 </div>
-                <div className="grid gap-1.5 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                   {enroles.map((r) => {
                     const coche = cochees.includes(r.samtrackly_id);
                     const aLaCategorie = !categorie || !!parResto.get(r.restaurant_id!)?.get(categorie);
@@ -223,7 +223,7 @@ export function Menu({ filtre }: { filtre: FiltreResto; onFiltre: (v: FiltreRest
           {/* 3. L'article */}
           <div className="rounded-jeton border border-filet bg-carte p-4">
             <h2 className="mb-2 text-[12px] font-bold uppercase tracking-wide text-faible">3. L’article</h2>
-            <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_180px]">
               <label className="block text-sm text-doux">
                 Nom
                 <input className="champ mt-1" value={nom} onChange={(e) => setNom(e.target.value)} placeholder="Chawarma Poulet" />

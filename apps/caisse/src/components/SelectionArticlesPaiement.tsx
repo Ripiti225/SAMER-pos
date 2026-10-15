@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { CommandeVue } from '@pos/shared';
 import { formatFCFA } from '@pos/shared';
 import { Modale } from './Modale';
+import { SuggestionsClients } from './RechercheClient';
 import { api } from '../api';
 import { useCaisse } from '../stores/session';
 
@@ -33,7 +34,6 @@ export function SelectionArticlesPaiement({
   const [quantites, setQuantites] = useState<Record<string, number>>({});
   const [telephone, setTelephone] = useState('');
   const [client, setClient] = useState<{ existe: boolean; client_id?: string; solde: number; bareme: { seuil_utilisation: number; valeur_point_fcfa: number } } | null>(null);
-  const [utiliserPoints, setUtiliserPoints] = useState(false);
   const selection = disponibles
     .map((item) => ({ commande_item_id: item.id, quantite: quantites[item.id] ?? 0 }))
     .filter((item) => item.quantite > 0);
@@ -50,8 +50,7 @@ export function SelectionArticlesPaiement({
   const promoSelection = part(commande.promo_montant, notesActives.reduce((s, note) => s + note.promo_montant, 0));
   const remiseSelection = part(commande.remise_montant, notesActives.reduce((s, note) => s + note.remise_montant, 0));
   const fideliteGlobaleSelection = part(commande.fidelite_montant, notesActives.reduce((s, note) => s + note.fidelite_montant, 0));
-  const fidelitePersonne = utiliserPoints && client ? client.solde * client.bareme.valeur_point_fcfa : 0;
-  const totalSelection = Math.max(0, totalBrut - promoSelection - remiseSelection - fideliteGlobaleSelection - fidelitePersonne);
+  const totalSelection = Math.max(0, totalBrut - promoSelection - remiseSelection - fideliteGlobaleSelection);
   const toutSelectionne = disponibles.every((item) => (quantites[item.id] ?? 0) === item.quantite_disponible);
 
   const changer = (id: string, maximum: number, delta: number) => {
@@ -61,9 +60,10 @@ export function SelectionArticlesPaiement({
     }));
   };
 
-  const chercherClient = async () => {
+  const chercherClient = async (tel: string) => {
+    setTelephone(tel);
     try {
-      setClient(await api(`/api/fidelite/${encodeURIComponent(telephone)}`));
+      setClient(await api(`/api/fidelite/${encodeURIComponent(tel)}`));
     } catch (e) {
       afficherToast((e as Error).message);
     }
@@ -113,30 +113,25 @@ export function SelectionArticlesPaiement({
         </div>
         {promoSelection > 0 && <div className="flex justify-between text-sm text-ok"><span>Part de promotion</span><span>−{formatFCFA(promoSelection)}</span></div>}
         {remiseSelection > 0 && <div className="flex justify-between text-sm text-ok"><span>Part de remise</span><span>−{formatFCFA(remiseSelection)}</span></div>}
-        {(fideliteGlobaleSelection + fidelitePersonne) > 0 && <div className="flex justify-between text-sm text-ok"><span>Fidélité</span><span>−{formatFCFA(fideliteGlobaleSelection + fidelitePersonne)}</span></div>}
+        {fideliteGlobaleSelection > 0 && <div className="flex justify-between text-sm text-ok"><span>Fidélité</span><span>−{formatFCFA(fideliteGlobaleSelection)}</span></div>}
         <div className="flex items-baseline justify-between"><span className="font-bold">Total à payer</span><span className="text-2xl font-black tabular-nums">{formatFCFA(totalSelection)}</span></div>
         <p className="text-xs text-doux">Les promotions et remises sont réparties automatiquement lors de la confirmation.</p>
 
         <div className="rounded-xl bg-surface-moyenne p-3">
           <label className="mb-2 block text-sm font-semibold">Fidélité de cette personne (facultatif)</label>
-          <div className="flex gap-2">
-            <input
-              className="champ min-w-0 flex-1"
-              inputMode="tel"
-              placeholder="Téléphone"
-              value={telephone}
-              onChange={(e) => { setTelephone(e.target.value); setClient(null); setUtiliserPoints(false); }}
-            />
-            <button type="button" className="btn-blanc min-h-12 px-4" disabled={telephone.trim().length < 6} onClick={chercherClient}>Chercher</button>
-          </div>
+          <input
+            className="champ w-full tabular-nums"
+            inputMode="tel"
+            placeholder="Ex. 0769…"
+            value={telephone}
+            onChange={(e) => { setTelephone(e.target.value); setClient(null); }}
+          />
+          {!client && <SuggestionsClients saisie={telephone} onChoisir={(c) => chercherClient(c.telephone)} />}
           {client && (
             <div className="mt-2 text-sm text-doux">
               {client.existe ? `Solde : ${client.solde} points` : 'Nouveau client — il sera créé avec ce téléphone.'}
-              {client.existe && client.solde >= client.bareme.seuil_utilisation && (
-                <label className="mt-2 flex min-h-12 items-center gap-2 rounded-lg bg-surface px-3">
-                  <input type="checkbox" checked={utiliserPoints} onChange={(e) => setUtiliserPoints(e.target.checked)} />
-                  Utiliser {client.solde} points (−{formatFCFA(client.solde * client.bareme.valeur_point_fcfa)})
-                </label>
+              {client.existe && (
+                <span className="block text-xs">Pour payer avec ses points, choisissez « Points » comme mode de paiement.</span>
               )}
             </div>
           )}
@@ -149,7 +144,6 @@ export function SelectionArticlesPaiement({
             items: selection,
             ...(client?.client_id ? { client_fidelite_id: client.client_id } : {}),
             ...(client && !client.existe ? { telephone_fidelite: telephone.trim() } : {}),
-            ...(utiliserPoints && client ? { fidelite_points: client.solde } : {}),
           })}
         >
           {enCours ? 'Préparation…' : 'Confirmer cette sélection'}

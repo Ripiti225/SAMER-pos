@@ -20,6 +20,7 @@ import { PiluleSync } from '../components/SanteSync';
 import { api } from '../api';
 import { useAffichage } from '../stores/affichage';
 import { useCaisse } from '../stores/session';
+import { BandeNotesEquipe } from '../components/NoteCaissier';
 
 function initiales(nom: string): string {
   return nom.split(/\s+/).filter(Boolean).slice(0, 2).map((m) => m[0]!.toUpperCase()).join('');
@@ -188,6 +189,10 @@ export function Supervision() {
               )}
             </div>
           )}
+
+          {/* Note de chaque caissier (SamerTrackly) : le gérant voit qui
+              accompagner, chacun ne voit sur son accueil que la sienne. */}
+          {peutRapports && <BandeNotesEquipe />}
 
           {/* Trois colonnes comme l'accueil caissier : mêmes tuiles, mêmes
               teintes par fonction — « Mes ventes » est violet des deux côtés. */}

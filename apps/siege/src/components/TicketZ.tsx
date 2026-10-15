@@ -34,7 +34,8 @@ const CONNUS = new Set([
   'total_promos', 'total_fidelite', 'panier_moyen',
   'par_mode', 'par_type', 'partenaires', 'top_articles',
   'remises_detail', 'annulations_detail',
-  'depenses', 'livraisons', 'offerts', 'modes_declares',
+  'depenses', 'depenses_detail', 'livraisons', 'offerts', 'paye_points', 'modes_declares',
+  'monnaie_rendue', 'nb_rendus', 'sous_notes_incompletes',
   'vente_totale', 'total_systeme', 'diff',
   'inventaire', 'equipe', 'retours',
 ]);
@@ -102,7 +103,10 @@ export function TicketZ({
   const inventaire = rapport.inventaire;
   const equipe = rapport.equipe;
   const offerts = rapport.offerts;
+  const payePoints = rapport.paye_points;
   const depensesDetail = rapport.depenses_detail ?? [];
+  const sousNotes = (rapport.sous_notes_incompletes ?? []) as
+    { numero_ticket: number; numero_paiement: number; montant_recu: number; reste: number }[];
 
   const autres = Object.entries(rapport).filter(([k]) => !CONNUS.has(k));
 
@@ -131,7 +135,7 @@ export function TicketZ({
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Mêmes lignes, même ordre que le ticket imprimé sur le site : un
             manager doit retrouver son papier, pas déchiffrer une autre mise en page. */}
         <Bloc titre="Réconciliation de fermeture">
@@ -151,6 +155,9 @@ export function TicketZ({
             <LigneF key={m} libelle={`${LIBELLES_MODES[m as ModePaiement] ?? m} (déclaré)`} montant={nb(v)} />
           ))}
           <LigneF libelle={`Kdo offerts (${nb(offerts?.nb)})`} montant={nb(offerts?.total)} />
+          {nb(payePoints?.total) > 0 && (
+            <LigneF libelle={`Payé en points (${nb(payePoints?.nb)})`} montant={nb(payePoints?.total)} />
+          )}
           <div className="my-1 border-t border-filet" />
           <LigneF libelle="Vente totale (réconciliée)" montant={nb(rapport.vente_totale)} fort />
           <LigneF libelle="Total système" montant={nb(rapport.total_systeme)} />
@@ -161,6 +168,13 @@ export function TicketZ({
               {formatFCFA(nb(rapport.diff))}
             </span>
           </div>
+          {/* Monnaie rendue : ni vente ni dépense — le billet entre dans le
+              tiroir à l'instant où la monnaie en sort, l'écart n'en dépend pas.
+              Elle est là pour une seule raison : dimensionner le fond de
+              monnaie du site, comme sur le ticket imprimé. */}
+          <div className="my-1 border-t border-filet" />
+          <LigneF libelle={`Monnaie rendue (${nb(rapport.nb_rendus)})`} montant={nb(rapport.monnaie_rendue)} />
+          <p className="mt-1 text-xs text-faible">Besoin en petites coupures — hors vente et hors écart.</p>
         </Bloc>
 
         <Bloc titre="Ventes du service">
@@ -262,7 +276,7 @@ export function TicketZ({
 
         {top.length > 0 && (
           <Bloc titre={`Top articles (${top.length})`} large>
-            <div className="grid gap-x-8 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
               {top.map((a) => (
                 <div key={a.nom} className="flex items-baseline justify-between gap-3 border-b border-filet py-1.5 last:border-0">
                   <span className="truncate">
@@ -380,6 +394,33 @@ export function TicketZ({
           )}
         </Bloc>
 
+        {/* Acomptes du shift : de l'argent bien dans le tiroir, sur une note
+            pas encore soldée. Il entre dans la réconciliation sans gonfler la
+            vente — c'est ce qui explique un tiroir plus garni que « Total
+            système ». Même bloc que « PAIEMENTS INCOMPLETS » sur le papier. */}
+        <Bloc titre={`Paiements incomplets (${sousNotes.length})`}>
+          {sousNotes.length === 0 ? (
+            <p className="text-faible">Aucune note laissée en acompte sur ce service.</p>
+          ) : (
+            <div className="space-y-1">
+              {sousNotes.map((n, i) => (
+                <div
+                  key={`${n.numero_ticket}-${n.numero_paiement}-${i}`}
+                  className="flex items-baseline justify-between gap-3 border-b border-filet py-1.5 last:border-0"
+                >
+                  <span className="min-w-0 truncate">
+                    <span className="chiffres font-semibold">#{nb(n.numero_ticket)}</span>{' '}
+                    <span className="text-doux">paiement {nb(n.numero_paiement)}</span>
+                  </span>
+                  <span className="chiffres whitespace-nowrap">
+                    reçu {formatFCFA(nb(n.montant_recu))} · reste {formatFCFA(nb(n.reste))}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Bloc>
+
         {/* Les trois compteurs du ticket figé, PUIS la liste nominative lue
             dans `equipe_service`. On garde les compteurs : ils sont ce que le
             ticket du site portait, et un écart avec la liste se verrait. */}
@@ -403,11 +444,20 @@ export function TicketZ({
         {autres.length > 0 && (
           <Bloc titre="Autres valeurs du ticket" large>
             {autres.map(([k, v]) => (
-              <div key={k} className="flex items-baseline justify-between gap-4 border-b border-filet py-1.5 last:border-0">
-                <span className="text-doux">{k}</span>
-                <span className="chiffres max-w-[60%] break-all text-right">
-                  {typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v)}
-                </span>
+              <div key={k} className="border-b border-filet py-1.5 last:border-0">
+                {typeof v === 'object' && v !== null ? (
+                  <>
+                    <div className="text-doux">{k}</div>
+                    <pre className="chiffres mt-1 overflow-x-auto text-[12px] leading-relaxed text-txt">
+                      {JSON.stringify(v, null, 2)}
+                    </pre>
+                  </>
+                ) : (
+                  <div className="flex items-baseline justify-between gap-4">
+                    <span className="text-doux">{k}</span>
+                    <span className="chiffres max-w-[60%] break-all text-right">{String(v)}</span>
+                  </div>
+                )}
               </div>
             ))}
           </Bloc>
