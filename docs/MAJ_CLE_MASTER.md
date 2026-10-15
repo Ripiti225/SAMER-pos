@@ -5,6 +5,34 @@
 La clé a été copiée le **2026-08-17 à 05h01:32**, avec l'identité neutre `A_CONFIGURER`
 et les deux seuls comptes propriétaire. Tout ce qui est écrit ici est **postérieur**.
 
+> **Report du 2026-10-15** : `origin/main` du 15/10 (34 commits : paiement en points
+> fidélité, note du caissier SamerTrackly, sonnerie « commande prête » du serveur, KDS
+> adapté à l'appareil, PIN commençant par 0, verrouillage par inactivité désactivé,
+> comparaison A/B du siège…) fusionné dans `siege-8-sites-et-releve` (commit `c6e8cf0`).
+> **121 fichiers** (31 ajoutés, 90 remplacés) copiés vers `D:\POS-Samer\app`, **121/121
+> vérifiés par SHA-256**. Caisse recompilée avant copie (`index-XvKnXegX.js` /
+> `index-D7E_U2_2.css`). Anciens fichiers dans
+> `C:\Users\HP\Documents\POS-Samer\usb-backup-20261015-211953`, manifeste
+> `usb-copy-20261015-211953.csv`. `apps/desktop/main.js` inchangé : **pas de
+> repackaging**, `PosSamer.exe` de la clé conservé. Dépendances : `@tabler/icons-react`
+> (kds, serveur) et `vitest` (siège) déjà présents à la racine `node_modules` de la clé,
+> mêmes versions — rien à installer.
+>
+> ⚠️ **Renumérotation** : les migrations de `main` `0034_paiement_points`,
+> `0035_verrouillage_desactive`, `0036_notes_caissiers` sont devenues **0039, 0040,
+> 0041** (dates `when` après la 0038). La clé et le poste avaient déjà appliqué nos 0034
+> à 0038 ; drizzle saute toute migration plus ancienne que la dernière appliquée, elles
+> n'auraient jamais tourné. Les trois sont idempotentes. **Un poste mis à jour
+> directement depuis `main` (avec l'ancienne numérotation) puis depuis cette clé sauterait
+> notre `0034_permission_deplacer_commande`** : la rejouer à la main sur un tel poste.
+>
+> **Base neutre migrée le 15/10** : sauvegarde préalable `data\pgdata.backup-20261015`
+> (1499 fichiers, contrôlée identique), base démarrée sur le port **5433** (le 5432 était
+> pris par le POS du poste), `drizzle.__drizzle_migrations` à **42 lignes sur 42**. Avant
+> et après : `A_CONFIGURER`, 0 commande, 0 service, 0 `cle_site`, 2 utilisateurs,
+> 16 catégories, 131 articles actifs. Table `notes_caissiers` et mode `POINTS` présents.
+> PostgreSQL arrêté proprement.
+>
 > **Report du 2026-09-25** : correctifs « À la Braise sans horaires » et « PIN manager
 > refusé aux caissiers promus » (voir l'entrée du 25/09). **14 fichiers** absents ou
 > différents copiés vers `D:\POS-Samer\app`, **14/14 vérifiés par SHA-256** ; aucun autre
@@ -109,11 +137,11 @@ avant que les 7 autres restaurants ne reçoivent quoi que ce soit.
 
 | | |
 |---|---|
-| Dernière migration | **0038** (`0038_a_la_braise_sans_horaire.sql`) — retire les plages horaires des catégories À la Braise, no-op ailleurs |
-| Base de la clé | **migrée le 25/09** : `drizzle.__drizzle_migrations` compte **39 lignes sur 39**. Neutralité contrôlée : `A_CONFIGURER`, 0 commande, 0 service, 0 `cle_site`, 2 propriétaires, 16 catégories, 131 articles actifs. Sauvegarde préalable : `data\pgdata.backup-20260925` |
-| 🔴 Postes déjà installés depuis une clé antérieure au 25/09 | **doivent appliquer les migrations manquantes jusqu'à 0038** avant de servir la caisse. Le lanceur Electron actuel le fait au démarrage ; contrôler le résultat sur chaque poste |
-| Rebuild des interfaces | **caisse recompilée le 25/09** (toast borné en largeur). Les quatre autres datent du **24/09** et restent valables : le correctif du 25/09 ne touche que `apps/caisse` et le serveur |
-| Report du code sur la clé master | **fait le 25/09** — 14 fichiers ajoutés ou remplacés, **14/14 vérifiés par SHA-256** ; `.env`, base, runtime, dépendances portables et exécutable de la clé préservés. Migration `0038` reportée ET appliquée à la base de la clé |
+| Dernière migration | **0041** (`0041_notes_caissiers.sql`) — 0039 à 0041 viennent de `main`, renumérotées (voir le report du 15/10) |
+| Base de la clé | **migrée le 15/10** : `drizzle.__drizzle_migrations` compte **42 lignes sur 42**. Neutralité contrôlée : `A_CONFIGURER`, 0 commande, 0 service, 0 `cle_site`, 2 propriétaires, 16 catégories, 131 articles actifs. Sauvegarde préalable : `data\pgdata.backup-20261015` |
+| 🔴 Postes déjà installés depuis une clé antérieure au 15/10 | **doivent appliquer les migrations manquantes jusqu'à 0041** avant de servir la caisse. Le lanceur Electron actuel le fait au démarrage ; contrôler le résultat sur chaque poste |
+| Rebuild des interfaces | **caisse recompilée le 15/10**. KDS, serveur et client tournent en Vite dev depuis leurs sources (pas de `dist` servi) ; siège non recompilé |
+| Report du code sur la clé master | **fait le 15/10** — 121 fichiers ajoutés ou remplacés, **121/121 vérifiés par SHA-256** ; `.env`, base, runtime, dépendances portables et exécutable de la clé préservés. Migrations `0039` à `0041` reportées ET appliquées à la base de la clé |
 | Scripts à la racine du dossier portable | **à jour le 20/09** — tous les `.bat` et `.ps1` de `deploy/windows/` ont été recopiés |
 | Repackaging `PosSamer.exe` | **fait le 20/09 à 17h44** après la modification de `apps/desktop/main.js` ; nouvel exécutable de 74 330 255 octets copié à la racine |
 | Redéploiement Edge Function | `siege` : **donnée pour faite le 09/09** en même temps que la migration `marque_a_la_braise`, non revérifiée depuis ce poste — et `functions list` a déjà menti une fois (voir l'entrée du 17/08). **`samtrackly-points` : OUI** (pagination de la sélection + services clôturés sans `remis_le`). `sync-push` : redéployée le 04/09 |
@@ -121,7 +149,7 @@ avant que les 7 autres restaurants ne reçoivent quoi que ce soit.
 | SQL cloud ponctuel | `sql/cloud/ajouts_samerdelly_20260908.sql` — 4 produits SamerDelly, **publication non confirmée** (voir l'entrée du 08/09) |
 | Rattrapage à lancer par site | `pnpm services:republier` — republie les explications d'écart que le cloud jetait entre le 28/08 et le 04/09. **Fait sur le 7E le 04/09** |
 | 🔴 À vérifier sur les 7 autres sites | `SELECT count(*) FROM sync_outbox WHERE synced_at IS NULL;` — la FK `notes_split_payee_par_fk` a gelé 12 h de ventes sur le 7E, elle a pu geler les leurs |
-| Tests | **verts au 25/09** — serveur : **64 fichiers / 380 tests**, PostgreSQL démarré depuis `runtime\pgsql` sur le dossier de travail. Typecheck serveur et caisse OK. Les tests Edge Functions n’ont pas été rejoués |
+| Tests | **verts au 15/10** — serveur : **70 fichiers / 413 tests** ; siège : **37 tests** ; fonctions Supabase partagées : **146 tests**. Typecheck serveur, caisse, siège, kds, serveur (tablette) et shared OK |
 
 > **Trou de journal à combler.** Le journal reprend au 25/08, mais les commits du
 > **22 au 24/08** (séquences, ordres du siège, console du siège, republication des
