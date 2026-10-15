@@ -204,6 +204,7 @@ export function routesServices(app: FastifyInstance): void {
     const auto = await reconciliationAuto(db, service.id);
     const modes = { ...auto.modes };
     delete (modes as Record<string, number>).ESPECES; // jamais révélé avant comptage
+    delete (modes as Record<string, number>).POINTS; // montré à part, rien à déclarer
     const inventaire = await db.transaction(async (tx) => etatInventaire(tx, service.id));
     const [compteDepenses] = await db
       .select({ n: sql<string>`COUNT(*)` })
@@ -216,6 +217,7 @@ export function routesServices(app: FastifyInstance): void {
       fond_de_caisse: service.fond_de_caisse,
       livraisons: auto.livraisons,
       offerts: auto.offerts,
+      paye_points: auto.paye_points,
       modes,
       depenses: {
         total: await totalDepenses(db, service.id),
@@ -500,7 +502,10 @@ export function routesServices(app: FastifyInstance): void {
        * direct à l'API la contourner.
        */
       const livraisons = auto.livraisons;
-      const modesDeclares = corps.modes ?? {};
+      // Les points ne se déclarent pas : une valeur envoyée par la caisse pour
+      // POINTS serait comptée deux fois avec `payePoints` ci-dessous.
+      const { POINTS: _ignore, ...modesDeclares } = corps.modes ?? {};
+      const payePoints = auto.paye_points;
       const somme = (o: Record<string, number>) => Object.values(o).reduce((s, v) => s + (Number(v) || 0), 0);
       // Les Kdo entrent dans la vente du shift au même titre qu'une livraison
       // Yango — vendre 25 000 et offrir 5 000 fait 30 000 de vente — mais ils
@@ -514,6 +519,7 @@ export function routesServices(app: FastifyInstance): void {
         somme(livraisons) +
         somme(modesDeclares) +
         offerts.total +
+        payePoints.total +
         corps.especes_comptees -
         service.fond_de_caisse;
       // Un acompte est bien dans le tiroir / l'opérateur du shift, même si la
@@ -537,6 +543,7 @@ export function routesServices(app: FastifyInstance): void {
         depenses_detail: depensesDetail,
         livraisons,
         offerts,
+        paye_points: payePoints,
         modes_declares: modesDeclares,
         vente_totale: venteTotale,
         total_systeme: totalSysteme,
@@ -564,7 +571,7 @@ export function routesServices(app: FastifyInstance): void {
           especes_theorique: especesTheorique,
           ecart,
           depenses: montantDepenses,
-          reconciliation: { livraisons, offerts, modes: modesDeclares },
+          reconciliation: { livraisons, offerts, paye_points: payePoints, modes: modesDeclares },
           vente_totale: venteTotale,
           total_systeme: totalSysteme,
           rapport_z: rapportZ,
@@ -631,7 +638,10 @@ export function routesServices(app: FastifyInstance): void {
     return service.rapport_z;
   });
 
-  // Rapport X (ventes en cours de service) : MANAGER / PROPRIETAIRE uniquement (§14)
+  // Rapport X (ventes en cours de service) : MANAGER / PROPRIETAIRE (§14).
+  // Pendant que le shift est OUVERT, seul le propriétaire le lit : un gérant
+  // pourrait sinon souffler au caissier sa vente et ses espèces théoriques
+  // avant le comptage à l'aveugle (décision du 2026-10-15).
   app.get(
     '/api/services/:id/rapport-x',
     { preHandler: app.exigePermission('rapports.x') },
@@ -639,6 +649,9 @@ export function routesServices(app: FastifyInstance): void {
       const { id } = req.params as { id: string };
       const [service] = await db.select().from(servicesCaisse).where(eq(servicesCaisse.id, id));
       if (!service) throw introuvable('Service');
+      if (service.statut === 'OUVERT' && !req.session!.est_proprietaire) {
+        throw new ErreurMetier('Les ventes d’un shift en cours ne sont visibles qu’après sa clôture', 403);
+      }
       const stats = await calculerStatsService(db, id);
       return {
         service_id: service.id,

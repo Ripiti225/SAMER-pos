@@ -37,7 +37,8 @@ export function MesVentes() {
   });
   const { data: jour } = useQuery({
     queryKey: ['rapport-jour'],
-    queryFn: () => api<{ nb_commandes: number; total_ventes: number; par_mode: Record<string, number> }>('/api/rapports/jour'),
+    queryFn: () =>
+      api<{ nb_commandes: number; total_ventes: number; par_mode: Record<string, number>; en_direct: boolean; shifts_en_cours: number }>('/api/rapports/jour'),
     enabled: estManager,
   });
   const { data: topPlats } = useQuery({
@@ -149,10 +150,18 @@ export function MesVentes() {
         </section>
       )}
 
+      {/* Le serveur ne compte que les shifts CLÔTURÉS pour tout autre que le
+          propriétaire : on le dit, sinon un total bas passerait pour une
+          mauvaise journée. */}
+      {estManager && jour && !jour.en_direct && jour.shifts_en_cours > 0 && (
+        <p className="mt-8 rounded-xl bg-attente-tint px-4 py-3 text-sm font-semibold text-attente-txt">
+          {jour.shifts_en_cours} shift{jour.shifts_en_cours > 1 ? 's' : ''} en cours : {jour.shifts_en_cours > 1 ? 'leurs ventes apparaîtront' : 'ses ventes apparaîtront'} ici à la clôture du caissier.
+        </p>
+      )}
       {estManager && (
         <section className="mt-8 grid gap-4 lg:grid-cols-3">
           <div className="carte p-4">
-            <h2 className="mb-2 font-bold">Ventes du jour</h2>
+            <h2 className="mb-2 font-bold">{jour && !jour.en_direct ? 'Ventes des shifts clôturés' : 'Ventes du jour'}</h2>
             {jour ? (
               <>
                 <div className="text-3xl font-black text-marque-fonce">{formatFCFA(jour.total_ventes)}</div>
