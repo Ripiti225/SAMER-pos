@@ -43,12 +43,26 @@ describe('remise : PIN manager + motif obligatoires', () => {
     expect(rep.json().erreur).toContain('motif');
   });
 
-  it('rejette une remise avec un PIN non-manager (celui du caissier)', async () => {
+  // Le message NOMME le compte et son rôle : « PIN manager incorrect » envoyait
+  // retaper un code pourtant bon, alors que le vrai problème était le rôle.
+  it('rejette une remise avec un PIN non-manager (celui du caissier) en disant pourquoi', async () => {
     const rep = await app.inject({
       method: 'POST',
       url: `/api/commandes/${commandeId}/remise`,
       cookies,
       payload: { montant: 1000, motif: 'Client fidèle', pin_manager: PIN_CAISSIER },
+    });
+    expect(rep.statusCode).toBe(403);
+    expect(rep.json().erreur).toContain('CAISSIER');
+    expect(rep.json().erreur).toContain('Réglages › Équipe');
+  });
+
+  it('rejette une remise avec un PIN qui n’est celui de personne', async () => {
+    const rep = await app.inject({
+      method: 'POST',
+      url: `/api/commandes/${commandeId}/remise`,
+      cookies,
+      payload: { montant: 1000, motif: 'Client fidèle', pin_manager: '159357' },
     });
     expect(rep.statusCode).toBe(403);
     expect(rep.json().erreur).toBe('PIN manager incorrect');

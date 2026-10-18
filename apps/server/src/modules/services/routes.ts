@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { and, eq, isNull, notInArray, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, notInArray, sql } from 'drizzle-orm';
 import { CloturerServiceSchema, OuvrirServiceSchema, RemettreClotureSchema, TransfererServiceSchema } from '@pos/shared';
 import type { RapportZ } from '@pos/shared';
 import { db } from '../../db/client.js';
@@ -13,6 +13,7 @@ import { abandonnerCommandesVidesDuService, codeLibreDansService } from '../comm
 import { calculerStatsService, reconciliationAuto, retoursDuService } from './rapport.js';
 import { sequenceOuverte } from './sequences.js';
 import { totalDepenses } from '../depenses/service.js';
+import { DUREE_SERVICE_HEURES } from '../pointage/routes.js';
 import { etatInventaire } from '../inventaire/service.js';
 import { aPermission } from '../../plugins/sessions.js';
 import { permissionsDuRole } from '../roles/service.js';
@@ -73,8 +74,51 @@ export function routesServices(app: FastifyInstance): void {
       : { occupee: false, caissier: null, ouvert_le: null };
   });
 
+  /**
+   * Qui, au dernier shift clôturé, était marqué « Reste » (§ 6.8) — avec le
+   * poste qu'il tenait. L'écran d'ouverture s'en sert pour les pré-cocher au
+   * lieu d'obliger à les ressaisir un par un.
+   *
+   * BORNE DE FRAÎCHEUR, et c'est le point délicat : « Reste » veut dire
+   * « j'enchaîne sur le shift suivant », pas « je suis là indéfiniment ». Sans
+   * borne, rouvrir la caisse trois jours plus tard pré-cocherait des gens
+   * absents — et comme l'heure d'arrivée d'un pré-coché est datée de
+   * l'ouverture et COMPTE POUR LA PAIE, on leur créditerait des heures qu'ils
+   * n'ont pas faites. Au-delà d'une durée de service (DUREE_SERVICE_HEURES,
+   * 8 h), la relève n'en est plus une : on ne propose plus personne.
+   */
+  async function restantsDuDernierService(): Promise<Map<string, { poste_jour: string; secondes_reportees: number }>> {
+    const [dernier] = await db
+      .select({ id: servicesCaisse.id, cloture_le: servicesCaisse.cloture_le })
+      .from(servicesCaisse)
+      .where(eq(servicesCaisse.statut, 'CLOTURE'))
+      .orderBy(desc(servicesCaisse.cloture_le))
+      .limit(1);
+    if (!dernier?.cloture_le) return new Map();
+
+    const ecoule = Date.now() - dernier.cloture_le.getTime();
+    if (ecoule > DUREE_SERVICE_HEURES * 3600_000) return new Map();
+
+    const restants = await db
+      .select({
+        utilisateur_id: equipeService.utilisateur_id,
+        poste_jour: equipeService.poste_jour,
+        pointe_le: equipeService.pointe_le,
+        secondes_reportees: equipeService.secondes_reportees,
+      })
+      .from(equipeService)
+      .where(and(eq(equipeService.service_id, dernier.id), eq(equipeService.reste, true)));
+    return new Map(restants.map((r) => [r.utilisateur_id, {
+      poste_jour: r.poste_jour,
+      secondes_reportees: r.secondes_reportees + (r.pointe_le
+        ? Math.max(0, Math.floor((dernier.cloture_le!.getTime() - r.pointe_le.getTime()) / 1000))
+        : 0),
+    }]));
+  }
+
   // Employés actifs proposés pour l'équipe du jour, avec un poste par défaut.
   app.get('/api/services/equipe-proposee', { preHandler: gardeCaisse }, async () => {
+    const restants = await restantsDuDernierService();
     const lignes = await db
       .select({
         utilisateur_id: utilisateurs.id,
@@ -90,7 +134,11 @@ export function routesServices(app: FastifyInstance): void {
     return lignes.map((l) => ({
       utilisateur_id: l.utilisateur_id,
       nom_complet: l.nom_complet,
-      poste_defaut: l.poste_cuisine ?? parRole[l.role_nom ?? ''] ?? 'CAISSIER',
+      // Le poste tenu au shift précédent prime sur le poste théorique : c'est
+      // celui que la personne est en train de tenir, elle ne change pas de
+      // casquette en passant la relève.
+      poste_defaut: restants.get(l.utilisateur_id)?.poste_jour ?? l.poste_cuisine ?? parRole[l.role_nom ?? ''] ?? 'CAISSIER',
+      reste_precedent: restants.has(l.utilisateur_id),
     }));
   });
 
@@ -114,6 +162,7 @@ export function routesServices(app: FastifyInstance): void {
       );
     }
 
+    const restants = await restantsDuDernierService();
     const service = await db.transaction(async (tx) => {
       // Rattache le shift à la séquence ouverte (créée à la volée si aucune).
       const sequenceId = await sequenceOuverte(tx);
@@ -143,6 +192,7 @@ export function routesServices(app: FastifyInstance): void {
             utilisateur_id: m.utilisateur_id,
             poste_jour: m.poste_jour,
             pointe_le: ouvertureLe,
+            secondes_reportees: restants.get(m.utilisateur_id)?.secondes_reportees ?? 0,
           })
           .onConflictDoNothing()
           .returning();
@@ -307,8 +357,17 @@ export function routesServices(app: FastifyInstance): void {
       throw new ErreurMetier('Ce collègue ne peut pas tenir la caisse', 400);
     }
 
-    // Acceptation par le receveur : c'est SON PIN qui valide le transfert
-    await verifierPinUtilisateur(receveur.id, corps.pin_receveur);
+    // Acceptation par le receveur : c'est SON PIN qui valide le transfert.
+    // Un PIN erroné refuse cette action (403), sans invalider la session du
+    // donneur : la caisse réserve le 401 à une session réellement expirée.
+    try {
+      await verifierPinUtilisateur(receveur.id, corps.pin_receveur);
+    } catch (erreur) {
+      if (erreur instanceof ErreurMetier && erreur.statusCode === 401) {
+        throw new ErreurMetier(erreur.message, 403);
+      }
+      throw erreur;
+    }
 
     const resultat = await db.transaction(async (tx) => {
       const lignes = await tx

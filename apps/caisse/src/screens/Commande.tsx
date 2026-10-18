@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import {
   IconArrowLeft,
+  IconArrowsMove,
   IconBell,
   IconMinus,
   IconPlus,
@@ -14,7 +15,7 @@ import {
   IconX,
 } from '@tabler/icons-react';
 import { CLASSES_CATEGORIES } from '../mise-en-page-categories';
-import type { ArticleVue, CommandeItemVue, CommandeVue } from '@pos/shared';
+import type { ArticleVue, CommandeEnCoursVue, CommandeItemVue, CommandeVue, TableVue, TypeCommande } from '@pos/shared';
 import {
   categorieVisiblePour,
   couleurCategorie,
@@ -22,6 +23,7 @@ import {
   formatFCFA,
   libellePartenaire,
   LIBELLES_TYPES_COMMANDE,
+  PARTENAIRES,
 } from '@pos/shared';
 import { api } from '../api';
 import { optionsCatalogue } from '../catalogue-cache';
@@ -42,6 +44,7 @@ export function Commande() {
   const [offrirOuvert, setOffrirOuvert] = useState(false);
   const [annulationOuverte, setAnnulationOuverte] = useState(false);
   const [infosLivraisonOuverte, setInfosLivraisonOuverte] = useState(false);
+  const [deplacement, setDeplacement] = useState<{ item: CommandeItemVue } | { commande: true } | null>(null);
 
   const { data: catalogue } = useQuery(optionsCatalogue);
   const { data: commande } = useQuery({
@@ -52,6 +55,7 @@ export function Commande() {
 
   const rafraichir = (vue: CommandeVue) => queryClient.setQueryData(['commande', commandeId], vue);
   const surErreur = (e: Error) => afficherToast(e.message);
+  const peutDeplacer = session?.permissions.includes('salle.deplacer_commande') ?? false;
 
   // Ajout d'article et changement de quantité : saisie OPTIMISTE — l'écran suit
   // le doigt sans attendre le serveur, mais aucun montant n'est jamais calculé
@@ -64,7 +68,43 @@ export function Commande() {
         method: 'POST',
         corps: { motif, pin_manager: pin ?? null },
       }),
-    onSuccess: (vue) => { rafraichir(vue); setItemAAnnuler(null); },
+    onSuccess: (vue) => {
+      rafraichir(vue);
+      setItemAAnnuler(null);
+      void queryClient.invalidateQueries({ queryKey: ['commandes-ouvertes'] });
+      void queryClient.invalidateQueries({ queryKey: ['tables'] });
+      if (vue.statut === 'ANNULEE') {
+        afficherToast('Dernier produit supprimé — table libérée');
+        aller('tables');
+      }
+    },
+    onError: surErreur,
+  });
+  const deplacerItem = useMutation({
+    mutationFn: ({ itemId, destinationId }: { itemId: string; destinationId: string }) =>
+      api<{ commande: CommandeVue; source_annulee: boolean }>(`/api/commandes/${commandeId}/items/${itemId}/deplacer`, {
+        method: 'POST', corps: { commande_destination_id: destinationId },
+      }),
+    onSuccess: (r) => {
+      setDeplacement(null);
+      void queryClient.invalidateQueries({ queryKey: ['commande', commandeId] });
+      void queryClient.invalidateQueries({ queryKey: ['commandes-ouvertes'] });
+      void queryClient.invalidateQueries({ queryKey: ['tables'] });
+      afficherToast('Produit déplacé sans annulation ni retour');
+      if (r.source_annulee) aller('commande', r.commande.id);
+    },
+    onError: surErreur,
+  });
+  const deplacerCommande = useMutation({
+    mutationFn: (destination: { type: TypeCommande; table_id?: string | null; partenaire?: string | null }) =>
+      api<CommandeVue>(`/api/commandes/${commandeId}/deplacer`, { method: 'POST', corps: destination }),
+    onSuccess: (vue) => {
+      rafraichir(vue);
+      setDeplacement(null);
+      void queryClient.invalidateQueries({ queryKey: ['commandes-ouvertes'] });
+      void queryClient.invalidateQueries({ queryKey: ['tables'] });
+      afficherToast('Commande déplacée — prix et préparation conservés');
+    },
     onError: surErreur,
   });
   const envoyerCuisine = useMutation({
@@ -504,15 +544,25 @@ export function Commande() {
                         </button>
                       </div>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => setItemAAnnuler(item)}
-                      disabled={item.quantite_reservee + item.quantite_payee > 0}
-                      className="flex h-9 w-9 items-center justify-center rounded-full text-ard-txt-faible transition hover:bg-alerte/20 hover:text-alerte"
-                      title={item.quantite_reservee + item.quantite_payee > 0 ? 'Article réservé ou payé' : 'Annuler l’article'}
-                    >
-                      <IconX size={18} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {peutDeplacer && (
+                        <button type="button" onClick={() => setDeplacement({ item })}
+                          disabled={saisie.enAttente || item.quantite_reservee + item.quantite_payee > 0}
+                          className="flex h-9 w-9 items-center justify-center rounded-full text-ard-txt-faible transition hover:bg-marque/20 hover:text-marque-clair"
+                          title="Déplacer ce produit vers une autre commande">
+                          <IconArrowsMove size={18} />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setItemAAnnuler(item)}
+                        disabled={item.quantite_reservee + item.quantite_payee > 0}
+                        className="flex h-9 w-9 items-center justify-center rounded-full text-ard-txt-faible transition hover:bg-alerte/20 hover:text-alerte"
+                        title={item.quantite_reservee + item.quantite_payee > 0 ? 'Article réservé ou payé' : 'Annuler l’article'}
+                      >
+                        <IconX size={18} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -594,6 +644,13 @@ export function Commande() {
                 visant l'encaissement. Il ouvre de toute façon une confirmation
                 (PIN manager + motif dès qu'un produit a été tapé). */}
             <div className={`grid ${livraisonExterne ? 'grid-cols-2' : 'grid-cols-3'} gap-2`}>
+              {peutDeplacer && (
+                <button type="button" onClick={() => setDeplacement({ commande: true })}
+                  disabled={saisie.enAttente || deplacerCommande.isPending}
+                  className="flex h-12 items-center justify-center gap-1.5 rounded-[13px] bg-ard-750 text-[13.5px] font-semibold text-ard-txt transition hover:bg-ard-700 disabled:opacity-40">
+                  <IconArrowsMove size={18} /> Déplacer
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setRemiseOuverte(true)}
@@ -705,6 +762,13 @@ export function Commande() {
           onFermer={() => setItemAAnnuler(null)}
           enCours={annulerItem.isPending}
         />
+      )}
+      {deplacement && (
+        <ModaleDeplacement commande={commande} item={'item' in deplacement ? deplacement.item : null}
+          onFermer={() => setDeplacement(null)}
+          enCours={deplacerItem.isPending || deplacerCommande.isPending}
+          onDeplacerItem={(destinationId) => 'item' in deplacement && deplacerItem.mutate({ itemId: deplacement.item.id, destinationId })}
+          onDeplacerCommande={(destination) => deplacerCommande.mutate(destination)} />
       )}
       {remiseOuverte && (
         <ModalePinManager
@@ -907,6 +971,74 @@ function Ligne({ libelle, valeur, vert }: { libelle: string; valeur: string; ver
       <span className="tabular-nums">{valeur}</span>
     </div>
   );
+}
+
+function ModaleDeplacement({ commande, item, onFermer, onDeplacerItem, onDeplacerCommande, enCours }: {
+  commande: CommandeVue;
+  item: CommandeItemVue | null;
+  onFermer: () => void;
+  onDeplacerItem: (destinationId: string) => void;
+  onDeplacerCommande: (destination: { type: TypeCommande; table_id?: string | null; partenaire?: string | null }) => void;
+  enCours: boolean;
+}) {
+  const [destinationId, setDestinationId] = useState('');
+  const [type, setType] = useState<TypeCommande>(commande.type);
+  const [tableId, setTableId] = useState(commande.type === 'SUR_PLACE' ? (commande.table_id ?? '') : '');
+  const [partenaire, setPartenaire] = useState(commande.type === 'LIVRAISON' ? (commande.partenaire ?? PARTENAIRES[0]) : PARTENAIRES[0]);
+  const { data: ouvertes = [] } = useQuery({
+    queryKey: ['commandes-ouvertes'], queryFn: () => api<CommandeEnCoursVue[]>('/api/commandes/ouvertes'), enabled: !!item,
+  });
+  const { data: tables = [] } = useQuery({
+    queryKey: ['tables'], queryFn: () => api<TableVue[]>('/api/caisse/tables'), enabled: !item,
+  });
+  const destinations = ouvertes.filter((c) => c.id !== commande.id);
+  const tablesSalle = tables.filter((t) => !t.partenaire && (t.etat === 'LIBRE' || t.id === commande.table_id));
+  const tablePartenaire = tables.find((t) => t.partenaire === partenaire)?.id ?? null;
+  const confirmer = () => {
+    if (item) return destinationId && onDeplacerItem(destinationId);
+    if (type === 'SUR_PLACE') return tableId && onDeplacerCommande({ type, table_id: tableId });
+    if (type === 'LIVRAISON') return onDeplacerCommande({ type, partenaire, table_id: tablePartenaire });
+    return onDeplacerCommande({ type: 'EMPORTER' });
+  };
+
+  return <Modale titre={item ? `Déplacer « ${item.nom_snapshot} »` : 'Déplacer la commande entière'} onFermer={onFermer} enfants={
+    <div className="space-y-4">
+      <p className="text-sm text-doux">
+        Le déplacement conserve les prix déjà saisis et l’état de préparation. Il ne crée ni annulation ni retour.
+      </p>
+      {item ? <>
+        <label className="block text-sm font-semibold" htmlFor="commande-destination">Commande de destination</label>
+        <select id="commande-destination" className="champ w-full" value={destinationId} onChange={(e) => setDestinationId(e.target.value)}>
+          <option value="">Choisir…</option>
+          {destinations.map((c) => <option key={c.id} value={c.id}>
+            {c.code_commande ?? `Ticket ${c.numero_ticket}`} · {c.table_numero ? `Table ${c.table_numero}` : c.partenaire ? libellePartenaire(c.partenaire) : LIBELLES_TYPES_COMMANDE[c.type]}
+          </option>)}
+        </select>
+        {destinations.length === 0 && <p className="text-sm text-attente-txt">Ouvrez d’abord la commande de destination, puis revenez déplacer le produit.</p>}
+      </> : <>
+        <label className="block text-sm font-semibold" htmlFor="type-destination">Nouvelle destination</label>
+        <select id="type-destination" className="champ w-full" value={type} onChange={(e) => setType(e.target.value as TypeCommande)}>
+          <option value="SUR_PLACE">Sur place</option>
+          <option value="EMPORTER">À emporter</option>
+          <option value="LIVRAISON">Livraison partenaire</option>
+        </select>
+        {type === 'SUR_PLACE' && <select className="champ w-full" value={tableId} onChange={(e) => setTableId(e.target.value)}>
+          <option value="">Choisir une table libre…</option>
+          {tablesSalle.map((t) => <option key={t.id} value={t.id}>{t.zone_nom} · Table {t.numero}</option>)}
+        </select>}
+        {type === 'LIVRAISON' && <select className="champ w-full" value={partenaire} onChange={(e) => setPartenaire(e.target.value)}>
+          {PARTENAIRES.map((p) => <option key={p} value={p}>{libellePartenaire(p)}</option>)}
+        </select>}
+      </>}
+      <div className="flex justify-end gap-2">
+        <button type="button" className="btn-blanc" onClick={onFermer} disabled={enCours}>Annuler</button>
+        <button type="button" className="btn-accent" onClick={confirmer}
+          disabled={enCours || (item ? !destinationId : type === 'SUR_PLACE' && !tableId)}>
+          {enCours ? 'Déplacement…' : 'Déplacer sans retour'}
+        </button>
+      </div>
+    </div>
+  } />;
 }
 
 function ModaleArticle({

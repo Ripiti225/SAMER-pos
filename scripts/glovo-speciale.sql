@@ -2,7 +2,7 @@
 --  Catégorie « Glovo spéciale » + 3 produits à 3 000 F — master, 2026-08-17
 --
 --  Demandé par le boss avant la fabrication de la clé : ces trois plats
---  partiront donc sur les 7 restaurants avec l'image.
+--  partiront donc sur tous les restaurants avec l'image.
 --
 --  Liaisons d'inventaire : Burger spécial → Pain burger, Pizza spéciale →
 --  Pizza spéciale (130g). Le Poulet spécial Glovo reste SANS liaison (choix

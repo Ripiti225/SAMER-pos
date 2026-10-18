@@ -94,6 +94,20 @@ export const CreerCommandeSchema = z
     message: 'Choisissez une table pour une commande sur place',
   });
 
+/** Déplacement sans annulation : les prix déjà figés et l'état cuisine suivent. */
+export const DeplacerCommandeSchema = z.object({
+  type: z.enum(TYPES_COMMANDE, { errorMap: () => ({ message: 'Type de destination invalide' }) }),
+  table_id: z.string().uuid('Table de destination invalide').nullish(),
+  partenaire: z.string().trim().min(1).max(50).nullish(),
+}).superRefine((v, ctx) => {
+  if (v.type === 'SUR_PLACE' && !v.table_id) ctx.addIssue({ code: 'custom', path: ['table_id'], message: 'Choisissez une table de destination' });
+  if (v.type === 'LIVRAISON' && !v.partenaire) ctx.addIssue({ code: 'custom', path: ['partenaire'], message: 'Choisissez un partenaire de livraison' });
+});
+
+export const DeplacerItemSchema = z.object({
+  commande_destination_id: z.string().uuid('Commande de destination invalide'),
+});
+
 /**
  * Infos d'une commande partenaire, saisies dans la modale qui s'ouvre au
  * lancement en cuisine (n° de commande chez Yango/Glovo, téléphone du client).
@@ -516,7 +530,7 @@ export const ModifierTableSchema = z.object({
 export const DisponibiliteSchema = z.object({ disponible: z.boolean() });
 export const DerogationDisponibiliteSchema = z.object({
   active: z.boolean(),
-  motif: z.string().trim().min(3).max(200),
+  motif: z.string().trim().min(3, 'Indiquez un motif d’au moins 3 caractères').max(200, 'Le motif ne doit pas dépasser 200 caractères'),
 });
 
 /** Modification d'un paramètre local (2.6). */

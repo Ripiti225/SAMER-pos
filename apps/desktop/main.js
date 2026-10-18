@@ -49,6 +49,7 @@ let arretDejaLance = false;
 let dernierEchec = null;
 // Évite de recharger l'écran d'erreur en boucle s'il échoue à son tour.
 let pageErreurAffichee = false;
+let migrationsTerminees = false;
 
 // Résolution des CLI embarqués (tsx, vite). Depuis le passage de pnpm en
 // `nodeLinker: hoisted` (pnpm-workspace.yaml — pour que la copie sur clé USB
@@ -117,6 +118,39 @@ async function demarrerPostgres() {
 
 function arreterPostgres() {
   spawn(path.join(PGBIN, 'pg_ctl.exe'), ['-D', PGDATA, 'stop'], { env: envPortable(), windowsHide: true });
+}
+
+/**
+ * Le code et la base doivent avancer ensemble. Une mise à jour copiée sur un
+ * poste sans `db:migrate` lançait bien l'interface, puis cassait plus tard sur
+ * une action métier avec le message vague « erreur interne ».
+ */
+function migrerBase() {
+  if (migrationsTerminees) return Promise.resolve();
+  journal('migrerBase() debut');
+  const nodeExe = path.join(NODE_BIN, 'node.exe');
+  const tsxCli = resoudreCli(SERVER_DIR, 'tsx', 'dist', 'cli.mjs');
+  return new Promise((resolve, reject) => {
+    let erreur = '';
+    const proc = spawn(nodeExe, [tsxCli, 'src/db/migrate.ts'], {
+      cwd: SERVER_DIR,
+      env: envPortable(),
+      windowsHide: true,
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+    proc.stderr.on('data', (b) => { erreur += b.toString(); });
+    proc.on('error', reject);
+    proc.on('exit', (code) => {
+      if (code === 0) {
+        migrationsTerminees = true;
+        journal('migrerBase() OK');
+        resolve();
+      } else {
+        const detail = erreur.trim().split('\n').slice(-1)[0] || `code ${code}`;
+        reject(new Error(`Mise à jour de la base impossible : ${detail}`));
+      }
+    });
+  });
 }
 
 function demarrerServeur() {
@@ -282,6 +316,14 @@ function chargerErreur() {
 async function demarrerEtAfficher() {
   dernierEchec = null;
   await demarrerPostgres();
+  try {
+    await migrerBase();
+  } catch (e) {
+    journal(`migrerBase() ECHEC : ${e}`);
+    dernierEchec = e.message || String(e);
+    chargerErreur();
+    return false;
+  }
   if (!serverProcess || serverProcess.exitCode !== null) demarrerServeur();
   try {
     await attendreServeurPret();

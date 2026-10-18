@@ -1,7 +1,7 @@
 /**
  * Met une base EXISTANTE en conformité avec les deux comptes propriétaire de
  * l'image de déploiement : `SAMER Zreik` (PIN 852741) et `Admin Willy`
- * (PIN 2212, l'administrateur qui installe et dépanne les 7 sites).
+ * (PIN 2212, l'administrateur qui installe et dépanne tous les sites).
  *
  * Le seed (`db/seed.ts`) crée déjà ces deux comptes sur une base NEUVE. Ce
  * script existe pour les postes déjà déployés, dont la base porte encore

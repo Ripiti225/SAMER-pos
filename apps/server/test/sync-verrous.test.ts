@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { champsSynchro } from '../src/modules/equipe/sync-samtrackly.js';
+import { champsSynchro, mapPosteRole } from '../src/modules/equipe/sync-samtrackly.js';
 
 const depuisSamtrackly = {
   nom: 'KONE DJENEBA',
@@ -48,5 +48,41 @@ describe('champsSynchro — verrouillage des champs modifiés dans le POS', () =
     // actif et externe_id sont toujours synchronisés (départs, rapprochement)
     expect(set.actif).toBe(true);
     expect(set.externe_id).toBe('ext-1');
+  });
+});
+
+/**
+ * 2026-09-25 — un caissier promu gérant restait CAISSIER dans le POS : son
+ * intitulé RH gardait « caisse », et la règle `/caiss/` passait AVANT la règle
+ * gérance. Il encaissait normalement mais son PIN était refusé dès qu'il
+ * fallait approuver une remise, une annulation ou vider une table.
+ */
+describe('mapPosteRole — la gérance passe avant la caisse', () => {
+  it.each([
+    'Gérant',
+    'Gérante',
+    'Gérante caisse',
+    'Manager',
+    'Manager caissière',
+    'Caissière / Gérante',
+    'Caissier manager',
+  ])('« %s » devient MANAGER', (poste) => {
+    expect(mapPosteRole(poste).role).toBe('MANAGER');
+  });
+
+  it('un vrai caissier reste CAISSIER', () => {
+    expect(mapPosteRole('Caissière').role).toBe('CAISSIER');
+    expect(mapPosteRole('Caissier').role).toBe('CAISSIER');
+  });
+
+  it('les gardes précédents tiennent toujours', () => {
+    // « ménagère » ne doit pas être lue comme « manager »
+    expect(mapPosteRole('Ménagère').role).toBe('ENTRETIEN');
+    expect(mapPosteRole('Plongeuse').role).toBe('ENTRETIEN');
+    expect(mapPosteRole('Comptoiriste').role).toBe('COMPTOIRISTE');
+    expect(mapPosteRole('Aide cuisinier').role).toBe('CUISINE');
+    expect(mapPosteRole('Serveur/se').role).toBe('SERVEUR');
+    // « responsable » reste en dernier : la cuisine garde ses droits de cuisine
+    expect(mapPosteRole('Responsable cuisine').role).toBe('CUISINE');
   });
 });

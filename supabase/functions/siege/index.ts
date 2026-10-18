@@ -4,7 +4,7 @@
 //   * La RLS est forcée sans politique sur toutes les tables. Une console qui
 //     lirait la base directement aurait besoin de la clé service_role — donc
 //     d'embarquer, dans du JavaScript téléchargé par un navigateur, la clé qui
-//     ouvre les ventes des 7 restaurants. C'est exactement l'erreur qu'on est
+//     ouvre les ventes de tous les restaurants. C'est exactement l'erreur qu'on est
 //     en train de corriger côté SamerTrackly.
 //   * La console n'embarque donc que la clé anonyme (publique par nature) et le
 //     jeton de session de la personne connectée. Tout privilège reste ici.
@@ -28,6 +28,8 @@ import {
   type EntreeShiftBrute,
   type StatutDecisionInventaire,
 } from '../_shared/siege-inventaire.ts';
+import { lireModificationArticle } from '../_shared/siege-menu.ts';
+import { lireLiaisonRecette, lireProduitInventaire, uuidValide } from '../_shared/siege-recettes.ts';
 
 // ---------------------------------------------------------------------------
 // SamerTrackly — source de vérité des restaurants et des employés.
@@ -75,6 +77,8 @@ interface RestoST {
   id: string;
   nom: string | null;
   couleur: string | null;
+  /** Intitulé RH de la marque. NULL sur les sites d'origine, d'où le repli couleur. */
+  marque: string | null;
 }
 
 interface RestoPOS {
@@ -87,31 +91,65 @@ interface RestoPOS {
   actif: boolean;
 }
 
+/**
+ * Les marques du groupe. Même triplet que `packages/shared/src/types.ts` et que
+ * le CHECK de `restaurants` : les trois doivent bouger ensemble.
+ */
+type Marque = 'SAMER' | 'AL_KAYAN' | 'A_LA_BRAISE';
+
 /** Vue unifiée d'un restaurant du groupe, quel que soit son état d'enrôlement. */
 interface RestoGroupe {
   /** UUID POS — présent SEULEMENT si le site est enrôlé. C'est la clé des ventes. */
   restaurant_id: string | null;
   samtrackly_id: string;
   nom: string;
-  marque: 'SAMER' | 'AL_KAYAN';
+  marque: Marque;
   /** false = le POS de ce site ne synchronise pas encore : aucune vente ici. */
   enrole: boolean;
+}
+
+/**
+ * La marque d'un restaurant : le POS d'abord, SamerTrackly en repli.
+ *
+ * Un site ENRÔLÉ porte sa marque en dur dans le cloud POS — c'est la seule
+ * valeur sûre, et elle fait foi. Un site PAS ENCORE enrôlé n'existe que côté RH,
+ * il faut donc la deviner, et SamerTrackly offre deux prises de qualité inégale :
+ *
+ *  * `marque`, l'intitulé explicite — mais il n'est renseigné que depuis
+ *    l'arrivée d'À la Braise, les sites d'origine l'ont à NULL ;
+ *  * `couleur`, le vieux marqueur (« vert » = Al Kayan) — présent partout, mais
+ *    dépassé : À la Braise porte un hexadécimal or, que ce test ne sait pas lire.
+ *
+ * D'où l'ordre : l'intitulé quand il existe, la couleur sinon. Se contenter de
+ * la couleur, comme avant, affichait À la Braise en Chez Samer — une pastille
+ * orange et un mauvais nom de marque sur un site qui a les siens.
+ */
+function marqueDe(pos: RestoPOS | undefined, st: RestoST): Marque {
+  if (pos) {
+    return pos.marque === 'AL_KAYAN' || pos.marque === 'A_LA_BRAISE' ? pos.marque : 'SAMER';
+  }
+  const intitule = (st.marque ?? '').toLowerCase();
+  if (intitule.includes('braise')) return 'A_LA_BRAISE';
+  if (intitule.includes('kayan')) return 'AL_KAYAN';
+  if (intitule.includes('samer')) return 'SAMER';
+  return (st.couleur ?? '').toLowerCase().includes('vert') ? 'AL_KAYAN' : 'SAMER';
 }
 
 /**
  * Liste des restaurants du groupe.
  *
  * SamerTrackly fait foi pour la LISTE et les NOMS : c'est là qu'un restaurant
- * est créé, et il y en a 7 aujourd'hui. Le cloud POS n'apporte qu'une chose,
- * mais essentielle : l'UUID sous lequel les ventes de ce site remontent.
+ * est créé, et la console n'en fige jamais le nombre — il change (« À la Braise »
+ * est arrivée le 2026-09-05). Le cloud POS n'apporte qu'une chose, mais
+ * essentielle : l'UUID sous lequel les ventes de ce site remontent.
  *
  * Un restaurant non enrôlé apparaît quand même, marqué comme tel. C'est
  * volontaire : une console qui masquerait les sites muets laisserait croire que
- * le groupe fait 2 restaurants au lieu de 7.
+ * le groupe fait 2 restaurants alors qu'il en compte huit.
  */
 async function restaurantsGroupe(admin: SupabaseClient): Promise<RestoGroupe[]> {
   const [stRows, { data: posRows, error }] = await Promise.all([
-    samtrackly('restaurants?select=id,nom,couleur&order=nom') as Promise<RestoST[]>,
+    samtrackly('restaurants?select=id,nom,couleur,marque&order=nom') as Promise<RestoST[]>,
     admin.from('restaurants').select('restaurant_id, code, nom, marque, couleur_hex, samtrackly_id, actif'),
   ]);
   if (error) throw new Error('Lecture des restaurants impossible');
@@ -125,12 +163,7 @@ async function restaurantsGroupe(admin: SupabaseClient): Promise<RestoGroupe[]> 
     .filter((r) => (r.nom ?? '').trim())
     .map((r) => {
       const pos = parST.get(r.id);
-      // La marque vient de la couleur RH (« vert » = Al Kayan) tant que le site
-      // n'est pas enrôlé ; ensuite c'est le POS qui fait foi, il la porte en dur.
-      const marque: 'SAMER' | 'AL_KAYAN' =
-        pos?.marque === 'AL_KAYAN' || (!pos && (r.couleur ?? '').toLowerCase().includes('vert'))
-          ? 'AL_KAYAN'
-          : 'SAMER';
+      const marque = marqueDe(pos, r);
       return {
         restaurant_id: pos?.restaurant_id ?? null,
         samtrackly_id: r.id,
@@ -207,7 +240,7 @@ Deno.serve(async (req) => {
        * Tableau de bord — TOUT en une requête.
        *
        * Chaque bloc est une fonction SQL `siege_*` : l'agrégation se fait dans
-       * PostgreSQL, jamais ici. Un mois de ventes sur 7 restaurants fait
+       * PostgreSQL, jamais ici. Un mois de ventes sur tout le groupe fait plus de
        * ~10 000 lignes de `commandes` ; les remonter dans Deno pour les
        * additionner en JavaScript serait lent et exposé à la troncature de
        * PostgREST. Agrégées, elles tiennent en quelques dizaines de lignes.
@@ -699,7 +732,7 @@ Deno.serve(async (req) => {
       // --
       // -- Le nom et non l'id : chaque site a importé son catalogue localement,
       // -- ses `categories.id` lui sont propres. « Pizzas » existe partout, sous
-      // -- sept identifiants différents. Diffuser un article suppose donc de
+      // -- autant d’identifiants différents. Diffuser un article suppose donc de
       // -- retrouver, restaurant par restaurant, l'id de SA catégorie — c'est ce
       // -- que cet écran prépare, et c'est déjà l'idiome du POS (la couleur de
       // -- catégorie et le routage d'impression se déduisent eux aussi du nom).
@@ -711,6 +744,187 @@ Deno.serve(async (req) => {
           .order('nom');
         if (error) throw new Error('Lecture des catégories impossible');
         return jsonCors({ categories: data ?? [] });
+      }
+
+      // Consultation d'un seul restaurant. Pagination pour ne pas tronquer un
+      // catalogue dépassant la limite de lignes PostgREST du projet.
+      case 'catalogue_articles': {
+        const restaurantId = typeof corps.restaurant_id === 'string' ? corps.restaurant_id : '';
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(restaurantId)) {
+          return jsonCors({ erreur: 'Restaurant invalide' }, 400);
+        }
+        const { data: restaurant, error: erreurRestaurant } = await admin.from('restaurants')
+          .select('restaurant_id').eq('restaurant_id', restaurantId).eq('actif', true).maybeSingle();
+        if (erreurRestaurant) throw new Error('Vérification du restaurant impossible');
+        if (!restaurant) return jsonCors({ erreur: 'Restaurant introuvable ou inactif' }, 404);
+
+        const articles: unknown[] = [];
+        const taille = 500;
+        for (let debut = 0; ; debut += taille) {
+          const { data, error } = await admin.from('articles')
+            .select('id, restaurant_id, categorie_id, nom, description, prix_base, image_url, disponible, actif, updated_at, version')
+            .eq('restaurant_id', restaurantId).order('id').range(debut, debut + taille - 1);
+          if (error) throw new Error('Lecture des articles impossible');
+          articles.push(...(data ?? []));
+          if ((data ?? []).length < taille) break;
+        }
+        return jsonCors({ articles });
+      }
+
+      // Catalogue de comptage et recettes du restaurant choisi. Ces deux tables
+      // descendent ensuite ensemble vers son POS par le flux CATALOGUE.
+      case 'inventaire_catalogue': {
+        const restaurantId = corps.restaurant_id;
+        if (!uuidValide(restaurantId)) return jsonCors({ erreur: 'Restaurant invalide' }, 400);
+        const { data: restaurant, error: erreurRestaurant } = await admin.from('restaurants')
+          .select('restaurant_id').eq('restaurant_id', restaurantId).eq('actif', true).maybeSingle();
+        if (erreurRestaurant) throw new Error('Vérification du restaurant impossible');
+        if (!restaurant) return jsonCors({ erreur: 'Restaurant introuvable ou inactif' }, 404);
+
+        const lire = async (table: string, colonnes: string): Promise<Record<string, unknown>[]> => {
+          const lignes: Record<string, unknown>[] = [];
+          for (let debut = 0; ; debut += 500) {
+            const { data, error } = await admin.from(table).select(colonnes)
+              .eq('restaurant_id', restaurantId).order('id').range(debut, debut + 499);
+            if (error) throw new Error(`Lecture de ${table} impossible`);
+            lignes.push(...((data ?? []) as Record<string, unknown>[]));
+            if ((data ?? []).length < 500) break;
+          }
+          return lignes;
+        };
+        const [produits, recettes, articles] = await Promise.all([
+          lire('produits_inventaire', 'id,code,categorie,nom,prix,unite,role,ratio,ordre,actif'),
+          lire('inventaire_consommations', 'id,produit_id,article_id,quantite'),
+          lire('articles', 'id,nom,actif'),
+        ]);
+        return jsonCors({ produits: produits.filter((p) => p.actif), recettes, articles });
+      }
+
+      case 'inventaire_produit_creer': {
+        exigeAdmin(siege);
+        const resultat = lireProduitInventaire(corps);
+        if (!resultat.valeur) return jsonCors({ erreur: resultat.erreur }, 400);
+        const produit = resultat.valeur;
+        const { data: restaurant, error: erreurRestaurant } = await admin.from('restaurants')
+          .select('restaurant_id,marque,code').eq('restaurant_id', produit.restaurant_id).eq('actif', true).maybeSingle();
+        if (erreurRestaurant) throw new Error('Vérification du restaurant impossible');
+        if (!restaurant) return jsonCors({ erreur: 'Restaurant introuvable ou inactif' }, 404);
+        if (restaurant.marque === 'A_LA_BRAISE' || restaurant.code === 'ALA_BRAISE') {
+          return jsonCors({ erreur: 'La création de produits pour À la Braise nécessite une validation particulière' }, 403);
+        }
+
+        const { data: existants, error: erreurExistants } = await admin.from('produits_inventaire')
+          .select('nom,ordre').eq('restaurant_id', produit.restaurant_id).eq('categorie', produit.categorie).eq('actif', true);
+        if (erreurExistants) throw new Error('Lecture des produits impossible');
+        if ((existants ?? []).some((p) => p.nom?.trim().toLocaleLowerCase('fr') === produit.nom.toLocaleLowerCase('fr'))) {
+          return jsonCors({ erreur: 'Ce produit existe déjà dans cette catégorie' }, 409);
+        }
+
+        const id = crypto.randomUUID();
+        const { error } = await admin.from('produits_inventaire').insert({
+          id,
+          restaurant_id: produit.restaurant_id,
+          code: `POS_${id}`,
+          categorie: produit.categorie,
+          nom: produit.nom,
+          prix: produit.prix,
+          unite: produit.unite,
+          role: 'COMPTE',
+          ratio: null,
+          ordre: Math.max(0, ...(existants ?? []).map((p) => Number(p.ordre) || 0)) + 1,
+          actif: true,
+        });
+        if (error) throw new Error(`Création du produit impossible : ${error.message}`);
+        await tracer(admin, siege, 'INVENTAIRE_PRODUIT_CREER', {
+          entite: 'produits_inventaire', entiteId: id, portee: [produit.restaurant_id], meta: produit,
+        });
+        return jsonCors({ id, nom: produit.nom });
+      }
+
+      case 'inventaire_recette_enregistrer': {
+        exigeAdmin(siege);
+        const resultat = lireLiaisonRecette(corps);
+        if (!resultat.valeur) return jsonCors({ erreur: resultat.erreur }, 400);
+        const liaison = resultat.valeur;
+        const [restaurantRep, produitRep, articleRep] = await Promise.all([
+          admin.from('restaurants').select('restaurant_id')
+            .eq('restaurant_id', liaison.restaurant_id).eq('actif', true).maybeSingle(),
+          admin.from('produits_inventaire').select('id,nom,role,actif')
+            .eq('restaurant_id', liaison.restaurant_id).eq('id', liaison.produit_id).maybeSingle(),
+          admin.from('articles').select('id,nom,actif')
+            .eq('restaurant_id', liaison.restaurant_id).eq('id', liaison.article_id).maybeSingle(),
+        ]);
+        if (restaurantRep.error || produitRep.error || articleRep.error) throw new Error('Vérification de la recette impossible');
+        if (!restaurantRep.data) return jsonCors({ erreur: 'Restaurant introuvable ou inactif' }, 404);
+        if (!produitRep.data?.actif) return jsonCors({ erreur: 'Produit d’inventaire introuvable ou inactif' }, 404);
+        if (!articleRep.data?.actif) return jsonCors({ erreur: 'Article vendu introuvable ou inactif' }, 404);
+        const role = String(produitRep.data.role ?? '');
+        if (role === 'ENTREE' || role === 'AUTO_ENT' || role === 'DARINA' || role.startsWith('TOTAL')) {
+          return jsonCors({ erreur: 'Cette ligne a des sorties calculées et ne prend pas de recette' }, 400);
+        }
+
+        const { data: existante, error: erreurExistante } = await admin.from('inventaire_consommations')
+          .select('id').eq('restaurant_id', liaison.restaurant_id)
+          .eq('produit_id', liaison.produit_id).eq('article_id', liaison.article_id).maybeSingle();
+        if (erreurExistante) throw new Error('Lecture de la recette impossible');
+        const id = existante?.id ?? crypto.randomUUID();
+        const { error } = await admin.from('inventaire_consommations').upsert({
+          id, ...liaison,
+        }, { onConflict: 'restaurant_id,id' });
+        if (error) throw new Error(`Enregistrement de la recette impossible : ${error.message}`);
+        await tracer(admin, siege, 'INVENTAIRE_RECETTE_ENREGISTRER', {
+          entite: 'inventaire_consommations', entiteId: id, portee: [liaison.restaurant_id],
+          meta: { produit: produitRep.data.nom, article: articleRep.data.nom, quantite: liaison.quantite },
+        });
+        return jsonCors({ id });
+      }
+
+      // Modification EXCLUSIVEMENT d'une ligne existante d'un seul restaurant.
+      // Pas d'upsert : une erreur d'ID ne doit jamais créer un plat ailleurs.
+      case 'catalogue_article_modifier': {
+        exigeAdmin(siege);
+        const resultat = lireModificationArticle(corps);
+        if (!resultat.valeur) return jsonCors({ erreur: resultat.erreur }, 400);
+        const article = resultat.valeur;
+
+        const { data: restaurant, error: erreurRestaurant } = await admin.from('restaurants')
+          .select('restaurant_id').eq('restaurant_id', article.restaurant_id).eq('actif', true).maybeSingle();
+        if (erreurRestaurant) throw new Error('Vérification du restaurant impossible');
+        if (!restaurant) return jsonCors({ erreur: 'Restaurant introuvable ou inactif' }, 404);
+
+        const { data: avant, error: erreurAvant } = await admin.from('articles')
+          .select('id, categorie_id, nom, description, prix_base, image_url, disponible, actif, updated_at, version')
+          .eq('restaurant_id', article.restaurant_id).eq('id', article.article_id).maybeSingle();
+        if (erreurAvant) throw new Error('Lecture de l’article impossible');
+        if (!avant) return jsonCors({ erreur: 'Article introuvable dans ce restaurant' }, 404);
+
+        const { data: categorie, error: erreurCategorie } = await admin.from('categories')
+          .select('id').eq('restaurant_id', article.restaurant_id)
+          .eq('id', article.categorie_id).eq('actif', true).maybeSingle();
+        if (erreurCategorie) throw new Error('Vérification de la catégorie impossible');
+        if (!categorie) return jsonCors({ erreur: 'Cette catégorie n’existe pas dans ce restaurant ou est inactive' }, 400);
+
+        const changements = {
+          categorie_id: article.categorie_id,
+          nom: article.nom,
+          description: article.description,
+          prix_base: article.prix_base,
+          image_url: article.image_url,
+          disponible: article.disponible,
+          actif: article.actif,
+          updated_at: new Date().toISOString(),
+        };
+        const { data: apres, error: erreurMaj } = await admin.from('articles').update(changements)
+          .eq('restaurant_id', article.restaurant_id).eq('id', article.article_id)
+          .eq('version', article.version_attendue).select('id, updated_at, version').maybeSingle();
+        if (erreurMaj) throw new Error(`Modification impossible : ${erreurMaj.message}`);
+        if (!apres) return jsonCors({ erreur: 'L’article a changé entre-temps. Rechargez le menu avant de réessayer.' }, 409);
+
+        await tracer(admin, siege, 'CATALOGUE_ARTICLE_MODIFIER', {
+          entite: 'articles', entiteId: article.article_id, portee: [article.restaurant_id],
+          meta: { avant, apres: changements },
+        });
+        return jsonCors({ article_id: article.article_id, updated_at: apres.updated_at });
       }
 
       // -- Diffuser un article vers UN ou PLUSIEURS restaurants.
@@ -742,6 +956,28 @@ Deno.serve(async (req) => {
           if (!c?.restaurant_id || !c?.categorie_id) {
             return jsonCors({ erreur: 'Un des restaurants n’a pas de catégorie correspondante' }, 400);
           }
+        }
+
+        // Protection serveur, indépendamment des cases cochées dans le
+        // navigateur : aucun ajout de produit à À la Braise via une diffusion.
+        const idsCibles = [...new Set(cibles.map((c) => c.restaurant_id))];
+        const { data: restaurantsCibles, error: erreurCibles } = await admin.from('restaurants')
+          .select('restaurant_id, marque, code, actif').in('restaurant_id', idsCibles);
+        if (erreurCibles) throw new Error('Vérification des restaurants impossible');
+        if ((restaurantsCibles ?? []).length !== idsCibles.length || restaurantsCibles?.some((r) => !r.actif)) {
+          return jsonCors({ erreur: 'Un des restaurants est introuvable ou inactif' }, 400);
+        }
+        if (restaurantsCibles?.some((r) => r.marque === 'A_LA_BRAISE' || r.code === 'ALA_BRAISE')) {
+          return jsonCors({ erreur: 'La création de produits à À la Braise nécessite une validation particulière' }, 403);
+        }
+        const { data: categoriesCibles, error: erreurCategoriesCibles } = await admin.from('categories')
+          .select('restaurant_id, id, actif')
+          .in('restaurant_id', idsCibles).in('id', cibles.map((c) => c.categorie_id));
+        if (erreurCategoriesCibles) throw new Error('Vérification des catégories impossible');
+        const pairesValides = new Set((categoriesCibles ?? []).filter((c) => c.actif)
+          .map((c) => `${c.restaurant_id}:${c.id}`));
+        if (cibles.some((c) => !pairesValides.has(`${c.restaurant_id}:${c.categorie_id}`))) {
+          return jsonCors({ erreur: 'Une catégorie ne correspond pas au restaurant choisi' }, 400);
         }
 
         // Un seul uuid pour tout le lot.
@@ -810,7 +1046,7 @@ Deno.serve(async (req) => {
       // -- en local, y pousser un uuid étranger casserait toute la descente.
       // --
       // -- Les gardes du POS sont reprises telles quelles. Elles ne sont pas
-      // -- décoratives : diffuser un mauvais jeu sur 7 restaurants d'un clic est
+      // -- décoratives : diffuser un mauvais jeu sur tous les restaurants d'un clic est
       // -- exactement le geste qui enferme tout le monde dehors.
       case 'roles_diffuser': {
         exigeAdmin(siege);

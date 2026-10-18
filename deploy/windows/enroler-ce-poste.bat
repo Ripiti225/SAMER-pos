@@ -46,7 +46,7 @@ REM Windows (souvent "POS") comme role PostgreSQL et echoue avec le code 28000.
 set "DATABASE_URL=postgres://postgres@localhost:5432/pos_samer"
 set "ADMIN_DATABASE_URL=postgres://postgres@localhost:5432/postgres"
 
-REM Adresse du cloud, commune aux sept sites. La cle de site, elle, est propre
+REM Adresse du cloud, commune a tous les sites. La cle de site, elle, est propre
 REM a ce poste et reste en local (parametres_locaux.cle_site).
 set "SUPABASE_SYNC_URL=https://vbsmxwlxlcgkodwkbhfa.supabase.co/functions/v1"
 

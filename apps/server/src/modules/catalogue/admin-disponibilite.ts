@@ -12,6 +12,7 @@ import { introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
 import { articleDisponible, lireDisponibilites, poserDisponibilite } from './disponibilite.js';
+import { categorieDisponibleMaintenant } from './horaires.js';
 
 export function routesDisponibilite(app: FastifyInstance): void {
   const garde = app.exigePermission('reglages.disponibilite');
@@ -35,7 +36,16 @@ export function routesDisponibilite(app: FastifyInstance): void {
       .where(eq(articles.actif, true))
       .orderBy(asc(categories.ordre), asc(articles.nom));
     const dispo = await lireDisponibilites(db);
-    return arts.map((a) => ({ ...a, disponible: dispo.get(a.id) ?? true }));
+    const maintenant = new Date();
+    return arts.map((a) => ({
+      ...a,
+      disponible: dispo.get(a.id) ?? true,
+      categorie_disponible_maintenant: categorieDisponibleMaintenant({
+        heure_debut: a.categorie_heure_debut,
+        heure_fin: a.categorie_heure_fin,
+        disponibilite_forcee: a.categorie_disponibilite_forcee ?? false,
+      }, maintenant),
+    }));
   });
 
   // Basculer Disponible/Épuisé pour un article

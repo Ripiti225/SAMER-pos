@@ -5,6 +5,7 @@ import { appelSiege, ErreurSiege, type Siege } from '../api';
 import { ChampPhoto } from '../components/ChampPhoto';
 import { Erreur, Info, PastilleMarque, Squelette } from '../components/Etat';
 import { useRestaurants, type FiltreResto } from '../restaurants';
+import { GestionArticles } from './GestionArticles';
 
 interface CategorieCloud {
   restaurant_id: string;
@@ -24,8 +25,8 @@ const cle = (nom: string) => nom.trim().toLowerCase();
  * voie qui existe déjà, celle par laquelle le catalogue descend depuis toujours.
  *
  * **La catégorie se choisit par son NOM, pas par son id.** Chaque site a importé
- * son catalogue localement : « Pizzas » existe sur les 7 restaurants sous 7
- * identifiants différents. L'écran résout donc, restaurant par restaurant, l'id
+ * son catalogue localement : « Pizzas » existe sur chaque restaurant sous un
+ * identifiant différent. L'écran résout donc, restaurant par restaurant, l'id
  * de SA catégorie — et refuse d'envoyer vers un site où ce nom n'existe pas,
  * plutôt que d'y créer un article orphelin.
  */
@@ -41,7 +42,9 @@ export function Menu({ filtre }: { filtre: FiltreResto; onFiltre: (v: FiltreRest
 
   /** Seuls les sites enrôlés peuvent recevoir : un site muet ne tire rien. */
   const enroles = useMemo(
-    () => (restos?.restaurants ?? []).filter((r) => r.enrole && r.restaurant_id),
+    // La création collective ne vise jamais À la Braise. L'édition d'articles
+    // qui y existent déjà reste disponible dans le bloc précédent.
+    () => (restos?.restaurants ?? []).filter((r) => r.enrole && r.restaurant_id && r.marque !== 'A_LA_BRAISE'),
     [restos],
   );
 
@@ -122,10 +125,16 @@ export function Menu({ filtre }: { filtre: FiltreResto; onFiltre: (v: FiltreRest
   return (
     <section className="max-w-3xl">
       <h1 className="mb-1 text-2xl font-bold">Menu</h1>
-      <p className="mb-4 text-doux">Créer un article et le diffuser vers les restaurants de votre choix.</p>
+      <p className="mb-4 text-doux">Consulter et modifier le menu de chaque restaurant, ou créer un nouvel article.</p>
 
       {lectureSeule && <Info>Votre compte est en <b>lecture seule</b> : vous pouvez préparer un article, pas le diffuser.</Info>}
       {msg && (msg.ok ? <Info>{msg.texte}</Info> : <Erreur texte={msg.texte} />)}
+
+      <GestionArticles filtre={filtre} restaurants={restos?.restaurants ?? []}
+        categories={cats?.categories ?? []} lectureSeule={lectureSeule} />
+
+      <h2 className="mb-2 text-lg font-bold">Créer un nouvel article</h2>
+      <p className="mb-4 text-sm text-doux">La création collective exclut À la Braise ; ses articles existants restent modifiables ci-dessus.</p>
 
       {isPending ? (
         <Squelette lignes={3} />

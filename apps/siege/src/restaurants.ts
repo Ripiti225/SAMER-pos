@@ -20,7 +20,7 @@ export function useRestaurants() {
  * Filtre restaurant, tel que les écrans le manipulent.
  *
  * On transporte le `samtrackly_id` et NON le `restaurant_id` du POS : c'est le
- * seul identifiant que possèdent les 7 restaurants, enrôlés ou pas. Un site non
+ * seul identifiant que possèdent tous les restaurants, enrôlés ou pas. Un site non
  * enrôlé n'a pas d'UUID POS, et il doit rester sélectionnable — sinon il
  * disparaîtrait du filtre alors qu'il existe bel et bien.
  */

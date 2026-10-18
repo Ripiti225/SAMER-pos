@@ -78,7 +78,36 @@ export async function assurerInventaire(dbx: DbOuTx, serviceId: string): Promise
     .select()
     .from(inventairesService)
     .where(eq(inventairesService.service_id, serviceId));
-  if (existant) return existant;
+  if (existant) {
+    if (!existant.valide) {
+      // Un produit créé au siège peut descendre après l'ouverture de
+      // l'inventaire. Lui donner une vraie ligne de comptage avant validation.
+      const [produits, lignes] = await Promise.all([
+        dbx.select().from(produitsInventaire).where(eq(produitsInventaire.actif, true)),
+        dbx.select({ produit_id: inventaireLignes.produit_id }).from(inventaireLignes)
+          .where(eq(inventaireLignes.inventaire_id, existant.id)),
+      ]);
+      const dejaPresents = new Set(lignes.map((l) => l.produit_id));
+      const nouveaux = produits.filter((p) => seCompte(p) && !dejaPresents.has(p.id));
+      if (nouveaux.length > 0) {
+        const [precedent] = await dbx.select().from(inventairesService)
+          .where(and(eq(inventairesService.valide, true), ne(inventairesService.service_id, serviceId)))
+          .orderBy(desc(inventairesService.valide_le)).limit(1);
+        const finales = precedent ? await dbx.select({ produit_id: inventaireLignes.produit_id, stock: inventaireLignes.stock_compte })
+          .from(inventaireLignes).where(eq(inventaireLignes.inventaire_id, precedent.id)) : [];
+        const report = new Map(finales.map((f) => [f.produit_id, f.stock ?? '0']));
+        const creees = await dbx.insert(inventaireLignes).values(nouveaux.map((p) => ({
+          inventaire_id: existant.id,
+          produit_id: p.id,
+          stock_initial: report.get(p.id) ?? '0',
+        }))).onConflictDoNothing().returning();
+        for (const ligne of creees) {
+          await ecrireOutbox(dbx, 'inventaire_lignes', 'INSERT', ligne.id, ligne as unknown as Record<string, unknown>);
+        }
+      }
+    }
+    return existant;
+  }
 
   const [cree] = await dbx.insert(inventairesService).values({ service_id: serviceId }).returning();
   await ecrireOutbox(dbx, 'inventaires_service', 'INSERT', cree!.id, cree as unknown as Record<string, unknown>);
@@ -140,8 +169,14 @@ export async function etatInventaire(dbx: DbOuTx, serviceId: string): Promise<Et
     .from(inventaireLignes)
     .where(eq(inventaireLignes.inventaire_id, inventaire.id));
 
+  // Une validation fige la liste comptée. Un produit reçu du siège plus tard
+  // n'apparaît pas rétroactivement comme « non compté » dans ce service.
+  const produitsDuService = inventaire.valide
+    ? produits.filter((p) => !seCompte(p) || lignesDb.some((l) => l.produit_id === p.id))
+    : produits;
+
   const lignes = calculerLignes(
-    produits,
+    produitsDuService,
     lignesDb,
     await entreesParProduit(dbx, inventaire.id),
     await ventesParProduit(dbx, serviceId),

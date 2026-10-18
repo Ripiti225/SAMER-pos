@@ -574,8 +574,9 @@ function ModaleTransfert({
   // tranches (16h-00h puis 00h-08h) et doit pouvoir garder ses tables d'un
   // shift à l'autre. Il est mis en tête — c'est le geste le plus courant en
   // fin de nuit — et ses commandes se rattacheront au shift qu'il rouvrira.
+  const roleCaisse = (u: UtilisateurPublic) => u.role_nom ?? u.role;
   const tenirCaisse = (u: UtilisateurPublic) =>
-    u.role === 'CAISSIER' || u.role === 'MANAGER' || u.role === 'PROPRIETAIRE';
+    roleCaisse(u) === 'CAISSIER' || roleCaisse(u) === 'MANAGER' || roleCaisse(u) === 'PROPRIETAIRE';
   const moi = (utilisateurs ?? []).find((u) => u.id === moiId && tenirCaisse(u));
   const candidats = [
     ...(moi ? [moi] : []),
@@ -610,7 +611,7 @@ function ModaleTransfert({
               <div className="text-sm text-doux">
                 {u.id === moiId
                   ? 'J’enchaîne — je garde mes tables pour mon prochain shift'
-                  : u.role === 'CAISSIER' ? 'Caissier' : u.role === 'MANAGER' ? 'Manager' : 'Propriétaire'}
+                  : roleCaisse(u) === 'CAISSIER' ? 'Caissier' : roleCaisse(u) === 'MANAGER' ? 'Manager' : 'Propriétaire'}
               </div>
             </button>
           ))}

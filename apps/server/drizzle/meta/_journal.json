@@ -243,22 +243,57 @@
     {
       "idx": 34,
       "version": "7",
-      "when": 1790000000000,
-      "tag": "0034_paiement_points",
+      "when": 1789873200000,
+      "tag": "0034_permission_deplacer_commande",
       "breakpoints": true
     },
     {
       "idx": 35,
       "version": "7",
-      "when": 1790000100000,
-      "tag": "0035_verrouillage_desactive",
+      "when": 1790424000000,
+      "tag": "0035_erreurs_systeme",
       "breakpoints": true
     },
     {
       "idx": 36,
       "version": "7",
-      "when": 1790000200000,
-      "tag": "0036_notes_caissiers",
+      "when": 1790425000000,
+      "tag": "0036_a_la_braise_menu_kdo",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1790426000000,
+      "tag": "0037_heures_releve",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790427000000,
+      "tag": "0038_a_la_braise_sans_horaire",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790428000000,
+      "tag": "0039_paiement_points",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790429000000,
+      "tag": "0040_verrouillage_desactive",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1790430000000,
+      "tag": "0041_notes_caissiers",
       "breakpoints": true
     }
   ]

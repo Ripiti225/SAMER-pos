@@ -2,6 +2,7 @@ import './env.js'; // charge apps/server/.env AVANT tout (imports hoistés)
 import { construireApp } from './app.js';
 import { moteurSync } from './modules/sync/moteur.js';
 import { samtracklyConfigure, synchroniserEquipe } from './modules/equipe/sync-samtrackly.js';
+import { enregistrerIncident } from './modules/sante/incidents.js';
 
 const PORT = Number(process.env.PORT ?? 3001);
 
@@ -35,7 +36,13 @@ if (samtracklyConfigure()) {
           app.log.info({ r }, 'Synchro équipe SamerTrackly');
         }
       })
-      .catch((e) => app.log.warn({ e: String(e) }, 'Synchro équipe SamerTrackly échouée (réessai plus tard)'));
+      .catch((e) => {
+        app.log.warn({ e: String(e) }, 'Synchro équipe SamerTrackly échouée (réessai plus tard)');
+        void enregistrerIncident(
+          'SAMERTRACKLY', e, { operation: 'synchronisation de l’équipe' },
+          'La mise à jour automatique de l’équipe depuis SamerTrackly a échoué. Les employés déjà présents dans le POS restent utilisables.',
+        );
+      });
   void lancer();
   if (intervalleS > 0) setInterval(lancer, intervalleS * 1000);
 }

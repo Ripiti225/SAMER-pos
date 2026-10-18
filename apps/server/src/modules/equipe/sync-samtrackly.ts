@@ -44,20 +44,31 @@ function mapTypeConge(type: string | null): Disponibilite {
 /**
  * Déduit le rôle POS + poste cuisine à partir de l'intitulé RH SamerTrackly.
  *
- * L'ORDRE DES RÈGLES EST SIGNIFIANT : la première qui correspond gagne. Deux
- * pièges corrigés le 2026-08-17, tous deux causés par un ordre trop permissif —
- * ils sont la raison pour laquelle entretien et comptoir passent EN PREMIER :
+ * L'ORDRE DES RÈGLES EST SIGNIFIANT : la première qui correspond gagne. Trois
+ * pièges corrigés, tous causés par un ordre trop permissif — ils sont la raison
+ * pour laquelle gérance, entretien et comptoir passent EN PREMIER :
  *
- *  * « Plongeuse » tombait dans `/plong/` de la règle cuisine ;
- *  * « Comptoiriste » tombait dans `/comptoir/` de la règle caisse, ce qui
- *    donnait à 18 personnes le droit d'encaisser, de faire une remise et de
- *    rouvrir une commande payée.
+ *  * « Plongeuse » tombait dans `/plong/` de la règle cuisine (2026-08-17) ;
+ *  * « Comptoiriste » tombait dans `/comptoir/` de la règle caisse (2026-08-17),
+ *    ce qui donnait à 18 personnes le droit d'encaisser, de faire une remise et
+ *    de rouvrir une commande payée ;
+ *  * « Gérante caisse », « Manager caissière », « Caissière responsable » —
+ *    l'intitulé d'un caissier promu — tombaient dans `/caiss/` (2026-09-25) et
+ *    restaient donc CAISSIER. La personne encaissait normalement, mais son PIN
+ *    était refusé (« PIN manager incorrect ») dès qu'il fallait approuver une
+ *    remise, une annulation ou vider une table : le POS ne la voyait pas
+ *    manager. La gérance passe maintenant avant tout le reste.
  *
  * Attention en modifiant : `/m[ée]nag/` vise « ménagère » et ne doit PAS
  * attraper « manager » (m-a-n-a-g) — d'où la classe [ée] en deuxième lettre.
+ * `/responsable/` reste en dernier : « responsable cuisine » doit continuer de
+ * partir en CUISINE, pas de recevoir les droits d'un manager.
  */
 export function mapPosteRole(poste: string | null): { role: RolePos; posteCuisine: PosteCuisine } {
   const p = (poste ?? '').toLowerCase();
+  // Gérance : AVANT tout le reste. Un caissier promu garde « caisse » dans son
+  // intitulé RH, et la règle `/caiss/` lui reprenait son autorité de manager.
+  if (/g[ée]ran|manager/.test(p)) return { role: 'MANAGER', posteCuisine: null };
   // Entretien et plonge : aucun accès applicatif. AVANT la règle cuisine, qui
   // capturerait « plongeuse » et ferait créditer des plats à ces employés.
   if (/surface|m[ée]nag|plong/.test(p)) return { role: 'ENTRETIEN', posteCuisine: null };
@@ -68,7 +79,7 @@ export function mapPosteRole(poste: string | null): { role: RolePos; posteCuisin
   if (/cuisin|aide|chef.?cuis/.test(p)) return { role: 'CUISINE', posteCuisine: 'CUISINIER' };
   if (/serveu/.test(p)) return { role: 'SERVEUR', posteCuisine: null };
   if (/caiss/.test(p)) return { role: 'CAISSIER', posteCuisine: null };
-  if (/g[ée]rant|manager|responsable/.test(p)) return { role: 'MANAGER', posteCuisine: null };
+  if (/responsable/.test(p)) return { role: 'MANAGER', posteCuisine: null };
   // Intitulé inconnu (ex. « Barman ») : cuisine, comme avant. Volontairement
   // inchangé — basculer le défaut vers ENTRETIEN priverait d'un coup d'accès
   // des postes légitimes que personne n'aurait vus passer.

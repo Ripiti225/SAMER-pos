@@ -47,6 +47,7 @@ export function routesPointage(app: FastifyInstance): void {
         photo_url: utilisateurs.photo_url,
         poste_jour: equipeService.poste_jour,
         pointe_le: equipeService.pointe_le,
+        secondes_reportees: equipeService.secondes_reportees,
         reste: equipeService.reste,
       })
       .from(equipeService)
@@ -65,6 +66,8 @@ export function routesPointage(app: FastifyInstance): void {
     const lignes = membres.map((m) => {
       const arrivee = m.pointe_le?.getTime() ?? null;
       const minutesFaites = arrivee === null ? 0 : Math.max(0, Math.floor((maintenant - arrivee) / 60000));
+      const minutesCumulees = arrivee === null ? 0 : Math.max(0,
+        Math.floor((m.secondes_reportees * 1000 + maintenant - arrivee) / 60000));
       return {
         id: m.id,
         utilisateur_id: m.utilisateur_id,
@@ -74,12 +77,12 @@ export function routesPointage(app: FastifyInstance): void {
         pointe_le: m.pointe_le?.toISOString() ?? null,
         // Attendu = inscrit à l'équipe du jour mais pas encore pointé.
         attendu: arrivee === null,
-        fin_prevue: arrivee === null ? null : new Date(arrivee + dureeMs).toISOString(),
+        fin_prevue: arrivee === null ? null : new Date(arrivee + Math.max(0, dureeMs - m.secondes_reportees * 1000)).toISOString(),
         minutes_faites: minutesFaites,
-        // Vert dès les 8 h faites, rouge avant. Par construction, chacun est
-        // rouge la majeure partie de son service — la couleur devient
-        // informative en fin de service (§ 6.7).
-        heures_faites: minutesFaites >= DUREE_SERVICE_HEURES * 60,
+        minutes_reportees: Math.floor(m.secondes_reportees / 60),
+        minutes_cumulees: minutesCumulees,
+        // Le seuil de 8 h suit une présence continue, même entre deux shifts.
+        heures_faites: minutesCumulees >= DUREE_SERVICE_HEURES * 60,
         reste: m.reste,
         salaire_paye: estPaye.has(m.utilisateur_id),
       };

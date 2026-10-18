@@ -127,7 +127,7 @@ Connexion caisse : **SAMER Zreik PIN 852741** ou **Admin Willy PIN 2212** (les
 deux sont propriétaires ; ce sont les seuls comptes de l'image).
 
 > Le seed est **volontairement neutre** : restaurant `A_CONFIGURER`, aucune équipe
-> réelle, aucun `samtrackly_restaurant_id`. La même image part sur les 7 sites et
+> réelle, aucun `samtrackly_restaurant_id`. La même image part sur tous les sites et
 > chaque poste prend son identité via Réglages → Restaurant. Pour retrouver
 > l'équipe du 7E en dev : `SEED_EQUIPE_7E=1 pnpm db:seed`.
 

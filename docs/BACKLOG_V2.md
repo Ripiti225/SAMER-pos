@@ -87,7 +87,7 @@ Servir les PWA en HTTPS (certificat local, nom de domaine interne du site)
 supprimerait la classe de problèmes entière et rouvrirait ces API. Chantier
 d'infrastructure : génération et renouvellement du certificat, distribution de
 l'autorité sur chaque terminal, adaptation du reverse-proxy local. À arbitrer
-avec le déploiement des 7 sites.
+avec le déploiement de tous les sites.
 
 Cas concret ajouté le 2026-10-15 : la sonnerie « commande prête » du serveur.
 Depuis cette date, la page joue sa propre mélodie de 15 s (+ vibration

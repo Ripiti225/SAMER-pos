@@ -14,7 +14,7 @@
  * Modifier ou supprimer une option ici est donc sans effet sur l'historique.
  */
 import type { FastifyInstance } from 'fastify';
-import { asc, eq } from 'drizzle-orm';
+import { asc, DrizzleQueryError, eq } from 'drizzle-orm';
 import { CreerOptionSchema, LierOptionSchema, ModifierOptionSchema } from '@pos/shared';
 import { db } from '../../db/client.js';
 import { articles, categories, optionsCatalogue, optionsLiaisons } from '../../db/schema/index.js';
@@ -25,7 +25,9 @@ import { journaliser } from '../audit/audit.js';
 
 /** Doublon d'option : contrainte d'unicité (nom, prix) côté base. */
 function estDoublon(e: unknown): boolean {
-  return typeof e === 'object' && e !== null && (e as { code?: string }).code === '23505';
+  // Drizzle encapsule l'erreur PostgreSQL : le code 23505 est dans cause.
+  const cause = e instanceof DrizzleQueryError ? e.cause : e;
+  return typeof cause === 'object' && cause !== null && (cause as { code?: string }).code === '23505';
 }
 
 export function routesOptionsAdmin(app: FastifyInstance): void {

@@ -7,9 +7,14 @@
 
 # AGENTS.md — POS Offline-First Chez Samer / Al Kayan
 
+## Protection du catalogue À la Braise — instruction utilisateur du 08/09/2026
+
+- Exclure **À la Braise** (marque `A_LA_BRAISE`, code `ALA_BRAISE`) de tout ajout collectif de produits, notamment des imports SamerDelly.
+- Ne jamais y ajouter un produit sans avoir demandé à l'utilisateur **au moins trois confirmations distinctes** et obtenu son accord explicite pour cet ajout. Ne pas interpréter une demande concernant « tous les restaurants » comme une exception à cette règle.
+
 ## Contexte
 
-POS offline-first pour un groupe de 7 restaurants à Abidjan (marques **Chez Samer** orange `#EF9F27` et **Al Kayan** vert `#2D7D46`). Un serveur local par restaurant (mini-PC fanless), terminaux en PWA sur le réseau local, synchronisation vers un cloud dédié quand internet est disponible. Le POS est la **source officielle des ventes** et alimente SamerTrackly (back-office existant, hors périmètre ici).
+POS offline-first pour un groupe de restaurants à Abidjan — 8 sites au 2026-09-08, et le nombre bouge (marques **Chez Samer** orange `#EF9F27`, **Al Kayan** vert `#2D7D46` et **À la Braise** or `#D99A2B`, arrivée le 2026-09-05). Un serveur local par restaurant (mini-PC fanless), terminaux en PWA sur le réseau local, synchronisation vers un cloud dédié quand internet est disponible. Le POS est la **source officielle des ventes** et alimente SamerTrackly (back-office existant, hors périmètre ici).
 
 Référence fonctionnelle : `docs/Cahier_des_charges_POS_Samer_AlKayan_v1.1.docx`. En cas de doute, le cahier des charges fait foi.
 
@@ -154,8 +159,8 @@ entière au lieu de l'article.
 
 ## Seed de démonstration (`db/seed.ts`)
 
-- Restaurant : `A_CONFIGURER`, « Restaurant à configurer », marque SAMER. **Identité neutre volontaire** : la même image de déploiement part sur les 7 sites, chaque poste prend son identité (et un `restaurant.id` neuf) via Réglages → Restaurant. Ne jamais seeder ici un restaurant réel, son `samtrackly_restaurant_id` ni son équipe — ils se retrouveraient sur tous les autres sites. L'équipe réelle du 7E reste disponible en dev via `SEED_EQUIPE_7E=1 pnpm db:seed`.
-- Utilisateurs : **exactement deux comptes PROPRIETAIRE** — `SAMER Zreik` (PIN 852741) et `Admin Willy` (PIN 2212, l'administrateur qui installe et dépanne les 7 sites). Aucun autre employé : le reste de l'équipe arrive par Réglages → Équipe ou la descente SamerTrackly, sinon les comptes du premier restaurant partiraient sur tous les autres. L'équipe réelle du 7E reste disponible en dev via `SEED_EQUIPE_7E=1 pnpm db:seed`.
+- Restaurant : `A_CONFIGURER`, « Restaurant à configurer », marque SAMER. **Identité neutre volontaire** : la même image de déploiement part sur tous les sites, chaque poste prend son identité (et un `restaurant.id` neuf) via Réglages → Restaurant. Ne jamais seeder ici un restaurant réel, son `samtrackly_restaurant_id` ni son équipe — ils se retrouveraient sur tous les autres sites. L'équipe réelle du 7E reste disponible en dev via `SEED_EQUIPE_7E=1 pnpm db:seed`.
+- Utilisateurs : **exactement deux comptes PROPRIETAIRE** — `SAMER Zreik` (PIN 852741) et `Admin Willy` (PIN 2212, l'administrateur qui installe et dépanne tous les sites). Aucun autre employé : le reste de l'équipe arrive par Réglages → Équipe ou la descente SamerTrackly, sinon les comptes du premier restaurant partiraient sur tous les autres. L'équipe réelle du 7E reste disponible en dev via `SEED_EQUIPE_7E=1 pnpm db:seed`.
 - Catalogue : 4 catégories (Chawarmas, Pizzas, Grillades, Boissons), ~15 articles avec prix FCFA réalistes (chawarma 3000, pizza 6500, jus 1500…), 1 groupe d'options (Sauce), 2 suppléments (Fromage +500, Frites +1000), 1 combo (Chawarma + Boisson 4000), surcharges `prix_canaux` Yango/Glovo, 1 promotion happy hour −20 % 17h–19h.
 - Zones : RC (6 tables), Terrasse (4), VIP (2), Livraison (3 tables virtuelles YANGO/GLOVO/SAMER_DELIV).
 

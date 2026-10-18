@@ -357,6 +357,9 @@ export const equipeService = pgTable('equipe_service', {
   // Heure d'ARRIVÉE = heure du clic sur « Pointer » (§ 6.7). Une heure saisie à
   // la main est une heure négociable ; le clic est daté par le système.
   pointe_le: timestamp('pointe_le', { withTimezone: true }),
+  // Temps déjà effectué sur les shifts précédents d'une même présence continue.
+  // Le temps entre deux shifts n'est jamais ajouté à ce cumul.
+  secondes_reportees: integer('secondes_reportees').notNull().default(0),
   // Départ (§ 6.8) : NULL = pas encore tranché, true = reste, false = parti.
   // À la clôture, tout ce qui n'est pas `true` est enregistré comme PARTI —
   // le caissier ne marque donc que les exceptions.
@@ -713,6 +716,29 @@ export const auditLog = pgTable('audit_log', {
   meta: jsonb('meta').notNull().default(sql`'{}'`),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Incidents techniques locaux. Contrairement au journal d'audit métier, cette
+ * table peut regrouper plusieurs occurrences identiques et marquer un incident
+ * comme résolu. Les corps de requête n'y sont jamais stockés (PIN, contacts…).
+ */
+export const erreursSysteme = pgTable('erreurs_systeme', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  niveau: text('niveau').notNull().default('ERREUR'),
+  origine: text('origine').notNull(),
+  code: text('code'),
+  message_fr: text('message_fr').notNull(),
+  detail_technique: text('detail_technique'),
+  contexte: jsonb('contexte').notNull().default(sql`'{}'::jsonb`),
+  occurrences: integer('occurrences').notNull().default(1),
+  premiere_occurrence: timestamp('premiere_occurrence', { withTimezone: true }).notNull().defaultNow(),
+  derniere_occurrence: timestamp('derniere_occurrence', { withTimezone: true }).notNull().defaultNow(),
+  resolue_le: timestamp('resolue_le', { withTimezone: true }),
+  resolue_par: uuid('resolue_par').references(() => utilisateurs.id),
+}, (t) => [
+  index('idx_erreurs_systeme_derniere').on(t.derniere_occurrence),
+  index('idx_erreurs_systeme_non_resolues').on(t.resolue_le),
+]);
 
 // ---------------------------------------------------------------------------
 // 8. Synchronisation — outbox (local uniquement)

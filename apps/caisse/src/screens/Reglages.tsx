@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import { MODES_SONNERIE, LIBELLES_SONNERIE, type ModeSonnerie } from '@pos/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconArrowLeft, IconLock } from '@tabler/icons-react';
 import { DISPONIBILITES, type Disponibilite, formatFCFA, LIBELLES_DISPONIBILITE, LIBELLES_POSTE_IMPRESSION, POSTES_IMPRESSION, type PosteImpression, SECTIONS_PERMISSIONS, PERMISSION_PROTEGEE, type SessionInfo } from '@pos/shared';
 import { api } from '../api';
 import { Modale } from '../components/Modale';
-import { PiluleSync } from '../components/SanteSync';
+import { CarteSante, PiluleSync } from '../components/SanteSync';
 import { useCaisse } from '../stores/session';
 
 /**
@@ -15,10 +16,10 @@ import { useCaisse } from '../stores/session';
  * sombres dans les deux modes comme sur l'écran de commande et le plan de
  * salle, et le centre devient le plan de travail clair.
  *
- * Les quatorze sections sont REGROUPÉES par famille : à plat, la colonne est
- * un mur de quatorze libellés de même poids où l'on cherche « Rôles & accès »
+ * Les quinze sections sont REGROUPÉES par famille : à plat, la colonne est
+ * un mur de quinze libellés de même poids où l'on cherche « Rôles & accès »
  * à la lecture. Sur le kiosque 1024 × 768 il reste 706 px sous la barre, et
- * quatorze entrées en font ~735 : le propriétaire, seul à toutes les voir,
+ * quinze entrées dépassent la hauteur disponible : le propriétaire, seul à toutes les voir,
  * fait défiler d'un cran — d'où l'`overflow-y-auto`. Un groupe dont les
  * permissions écartent toutes les sections ne s'affiche pas.
  */
@@ -44,6 +45,7 @@ export function Reglages() {
         { cle: 'reglages.parametres', groupe: 'Établissement', libelle: 'Paramètres', rendu: () => <Parametres /> },
         { cle: 'recettes', perm: 'reglages.parametres', groupe: 'Établissement', libelle: 'Recettes d’inventaire', rendu: () => <RecettesInventaire /> },
         { cle: 'reglages.audit', groupe: 'Établissement', libelle: "Journal d'audit", rendu: () => <Audit /> },
+        { cle: 'reglages.sante', groupe: 'Établissement', libelle: 'Santé du système', rendu: () => <SanteSysteme /> },
       ].filter((s) => a(s.perm ?? s.cle)),
     [perms.join(',')],
   );
@@ -127,6 +129,124 @@ function Message({ texte, ok }: { texte: string | null; ok?: boolean }) {
     <div className={`mb-4 rounded-jeton px-4 py-3 ${ok ? 'bg-ok-tint text-ok-txt' : 'bg-alerte-tint text-alerte-txt'}`}>
       {texte}
     </div>
+  );
+}
+
+function SanteSysteme() {
+  const queryClient = useQueryClient();
+  const { afficherToast } = useCaisse();
+  const [inclureResolues, setInclureResolues] = useState(false);
+  const { data: incidents = [], isLoading, error } = useQuery({
+    queryKey: ['sante', 'erreurs', inclureResolues],
+    queryFn: () => api<IncidentSysteme[]>(`/api/sante/erreurs?resolues=${inclureResolues}`),
+    refetchInterval: 30_000,
+  });
+  const resoudre = useMutation({
+    mutationFn: (id: string) => api(`/api/sante/erreurs/${id}/resoudre`, { method: 'POST', corps: {} }),
+    onSuccess: () => {
+      afficherToast('Incident marqué comme résolu');
+      void queryClient.invalidateQueries({ queryKey: ['sante', 'erreurs'] });
+    },
+    onError: (e: Error) => afficherToast(e.message),
+  });
+
+  return (
+    <section>
+      <h2 className="mb-4 text-xl font-bold">Santé du système</h2>
+      <div className="max-w-4xl">
+        <CarteSante />
+
+        <div className="mb-3 mt-5 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-bold">Incidents enregistrés</h3>
+            <p className="text-sm text-doux">Les pannes techniques sont conservées ici avec leur cause et leur contexte.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="button" className="btn-blanc" onClick={() => void queryClient.invalidateQueries({ queryKey: ['sante'] })}>
+              Actualiser
+            </button>
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input type="checkbox" className="h-5 w-5 accent-marque" checked={inclureResolues}
+                onChange={(e) => setInclureResolues(e.target.checked)} />
+              Afficher les incidents résolus
+            </label>
+          </div>
+        </div>
+
+        {isLoading && <div className="carte p-4 text-sm text-doux">Chargement du journal…</div>}
+        {error && <Message texte={(error as Error).message} />}
+        {!isLoading && !error && incidents.length === 0 && (
+          <div className="rounded-jeton border border-ok/30 bg-ok-tint p-4 text-sm text-ok-txt">
+            Aucun incident technique {inclureResolues ? 'enregistré' : 'non résolu'}.
+          </div>
+        )}
+        <div className="grid gap-3">
+          {incidents.map((incident) => (
+            <Incident key={incident.id} incident={incident}
+              enCours={resoudre.isPending && resoudre.variables === incident.id}
+              onResoudre={() => resoudre.mutate(incident.id)} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+interface IncidentSysteme {
+  id: string;
+  niveau: string;
+  origine: string;
+  code: string | null;
+  message_fr: string;
+  detail_technique: string | null;
+  contexte: { methode?: string; chemin?: string; request_id?: string; [cle: string]: unknown };
+  occurrences: number;
+  premiere_occurrence: string;
+  derniere_occurrence: string;
+  resolue_le: string | null;
+  resolue_par_nom: string | null;
+}
+
+function Incident({ incident, enCours, onResoudre }: {
+  incident: IncidentSysteme;
+  enCours: boolean;
+  onResoudre: () => void;
+}) {
+  const date = new Date(incident.derniere_occurrence).toLocaleString('fr-FR');
+  return (
+    <article className={`rounded-jeton border p-4 shadow-e1 ${incident.resolue_le ? 'border-bordure bg-surface-douce opacity-75' : 'border-alerte/30 bg-surface'}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex flex-wrap items-center gap-2 text-xs font-semibold">
+            <span className={incident.resolue_le ? 'text-ok' : 'text-alerte'}>{incident.resolue_le ? 'RÉSOLU' : 'À VÉRIFIER'}</span>
+            <span className="text-doux">Incident {incident.id.slice(0, 8)}</span>
+            <span className="text-doux">{date}</span>
+            {incident.occurrences > 1 && <span className="rounded-full bg-alerte-tint px-2 py-0.5 text-alerte">{incident.occurrences} occurrences</span>}
+          </div>
+          <p className="font-semibold text-fort">{incident.message_fr}</p>
+          <p className="mt-1 text-sm text-doux">
+            Origine : {incident.origine}
+            {incident.contexte?.methode && incident.contexte?.chemin ? ` · ${incident.contexte.methode} ${incident.contexte.chemin}` : ''}
+            {incident.code ? ` · code ${incident.code}` : ''}
+          </p>
+        </div>
+        {!incident.resolue_le && (
+          <button type="button" className="btn-blanc flex-none" disabled={enCours} onClick={onResoudre}>
+            {enCours ? 'Enregistrement…' : 'Marquer résolu'}
+          </button>
+        )}
+      </div>
+      {incident.resolue_le && (
+        <p className="mt-2 text-xs text-ok">Résolu le {new Date(incident.resolue_le).toLocaleString('fr-FR')}{incident.resolue_par_nom ? ` par ${incident.resolue_par_nom}` : ''}</p>
+      )}
+      {incident.detail_technique && (
+        <details className="mt-3 rounded-btn bg-surface-douce p-3">
+          <summary className="cursor-pointer text-sm font-semibold">Détails techniques pour le débogage</summary>
+          <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs text-doux">{incident.detail_technique}</pre>
+          {incident.contexte?.request_id && <p className="mt-2 text-xs text-doux">Requête : {incident.contexte.request_id}</p>}
+        </details>
+      )}
+    </article>
   );
 }
 
@@ -675,17 +795,25 @@ function AjoutTable({ onAjouter }: { onAjouter: (numero: string) => void }) {
 interface ArticleDispo {
   id: string; nom: string; categorie_id: string; categorie: string | null; image_url: string | null; disponible: boolean;
   categorie_heure_debut: string | null; categorie_heure_fin: string | null; categorie_disponibilite_forcee: boolean;
+  categorie_disponible_maintenant: boolean;
 }
 
 function Disponibilite() {
   const qc = useQueryClient();
+  const [msg, setMsg] = useState<{ texte: string; ok?: boolean } | null>(null);
   const { data: arts } = useQuery({
     queryKey: ['admin', 'disponibilite'],
     queryFn: () => api<ArticleDispo[]>('/api/admin/disponibilite'),
+    refetchInterval: 30_000,
   });
   const basculer = useMutation({
     mutationFn: (v: { id: string; disponible: boolean }) => api(`/api/admin/disponibilite/${v.id}`, { method: 'PATCH', corps: { disponible: v.disponible } }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin', 'disponibilite'] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'disponibilite'] });
+      void qc.invalidateQueries({ queryKey: ['catalogue'] });
+      setMsg(null);
+    },
+    onError: (e: Error) => setMsg({ texte: e.message }),
   });
   const deroger = useMutation({
     mutationFn: (v: { categorieId: string; active: boolean; motif: string }) => api(
@@ -695,7 +823,9 @@ function Disponibilite() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin', 'disponibilite'] });
       void qc.invalidateQueries({ queryKey: ['catalogue'] });
+      setMsg({ texte: 'Réglage horaire enregistré. Les plats marqués épuisés restent indisponibles.', ok: true });
     },
+    onError: (e: Error) => setMsg({ texte: e.message }),
   });
 
   // Regroupé par catégorie (ordre serveur conservé), comme le menu.
@@ -711,6 +841,7 @@ function Disponibilite() {
     <section>
       <h2 className="mb-1 text-xl font-bold">Plats du jour</h2>
       <p className="mb-4 text-sm text-doux">Touchez un plat pour le marquer épuisé ou de nouveau disponible.</p>
+      <Message texte={msg?.texte ?? null} ok={msg?.ok} />
       <div className="space-y-6">
         {parCategorie.map((g) => (
           <div key={g.categorie}>
@@ -720,22 +851,35 @@ function Disponibilite() {
                 <button
                   type="button"
                   className={g.articles[0].categorie_disponibilite_forcee ? 'btn-accent' : 'btn-blanc'}
+                  disabled={deroger.isPending}
                   onClick={() => {
                     const active = !g.articles[0]!.categorie_disponibilite_forcee;
                     const motif = window.prompt(active ? 'Motif de la réactivation exceptionnelle :' : 'Motif de la fin de réactivation :');
-                    if (motif?.trim()) deroger.mutate({ categorieId: g.articles[0]!.categorie_id, active, motif });
+                    if (motif === null) return;
+                    if (motif.trim().length < 3 || motif.trim().length > 200) {
+                      setMsg({ texte: 'Indiquez un motif de 3 à 200 caractères.' });
+                      return;
+                    }
+                    deroger.mutate({ categorieId: g.articles[0]!.categorie_id, active, motif });
                   }}
                 >
                   {g.articles[0].categorie_disponibilite_forcee ? 'Désactiver la réactivation' : 'Réactiver exceptionnellement'}
                 </button>
               )}
             </div>
+            {g.articles[0]?.categorie_disponible_maintenant === false && (
+              <p className="mb-2 text-sm text-attente-txt">
+                Hors horaire ({g.articles[0].categorie_heure_debut?.slice(0, 5)}–{g.articles[0].categorie_heure_fin?.slice(0, 5)}).
+                Remettre un plat disponible ne prolonge pas cet horaire. Utilisez « Réactiver exceptionnellement » pour rouvrir cette catégorie.
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
               {g.articles.map((a) => (
                 <button
                   key={a.id}
                   type="button"
                   className={`carte relative flex flex-col overflow-hidden p-0 text-left transition ${a.disponible ? '' : 'opacity-60'}`}
+                  disabled={basculer.isPending || deroger.isPending}
                   onClick={() => basculer.mutate({ id: a.id, disponible: !a.disponible })}
                 >
                   <div className="relative aspect-[4/3] w-full overflow-hidden bg-marque-tint">
@@ -754,8 +898,8 @@ function Disponibilite() {
                   </div>
                   <div className="flex flex-1 flex-col gap-0.5 p-2">
                     <div className="line-clamp-2 text-sm font-semibold leading-tight">{a.nom}</div>
-                    <div className={`text-xs font-bold ${a.disponible ? 'text-ok-txt' : 'text-alerte-txt'}`}>
-                      {a.disponible ? 'Disponible' : 'Épuisé'}
+                    <div className={`text-xs font-bold ${a.disponible && a.categorie_disponible_maintenant ? 'text-ok-txt' : 'text-alerte-txt'}`}>
+                      {!a.disponible ? 'Épuisé' : a.categorie_disponible_maintenant === false ? 'Hors horaire' : 'Disponible'}
                     </div>
                   </div>
                 </button>
@@ -1212,7 +1356,7 @@ function Options() {
   const [prix, setPrix] = useState('0');
   const [ouverte, setOuverte] = useState<string | null>(null);
 
-  const { data } = useQuery({
+  const { data, error, isPending, isFetching, refetch } = useQuery({
     queryKey: ['admin', 'options'],
     queryFn: () => api<OptionsAdminVue>('/api/admin/options'),
   });
@@ -1267,6 +1411,14 @@ function Options() {
         précis. Un prix de <strong>0</strong> = option offerte. Les commandes déjà passées ne changent jamais.
       </div>
       <Message texte={msg?.texte ?? null} ok={msg?.ok} />
+      {error && (
+        <div className="mb-4" role="alert">
+          <Message texte={`Impossible de charger les options : ${error.message}`} />
+          <button type="button" className="btn-blanc" disabled={isFetching} onClick={() => void refetch()}>
+            {isFetching ? 'Chargement…' : 'Réessayer'}
+          </button>
+        </div>
+      )}
 
       {/* Création */}
       <div className="mb-6 flex flex-wrap items-end gap-3 rounded-jeton border border-bordure p-4">
@@ -1290,6 +1442,7 @@ function Options() {
 
       {/* Liste */}
       <div className="space-y-3">
+        {isPending && <p className="text-doux">Chargement des options…</p>}
         {(data?.options ?? []).map((o) => (
           <div key={o.id} className={`rounded-jeton border border-bordure p-4 ${o.actif ? '' : 'opacity-60'}`}>
             <div className="flex flex-wrap items-center gap-3">
@@ -1357,7 +1510,7 @@ function Options() {
             )}
           </div>
         ))}
-        {(data?.options ?? []).length === 0 && (
+        {data && !error && data.options.length === 0 && (
           <p className="text-doux">Aucune option pour l’instant — créez la première ci-dessus.</p>
         )}
       </div>
@@ -1409,6 +1562,7 @@ type ModeLogo = 'aucun' | 'raster' | 'bandes';
 interface ImprimantesVue {
   disponibles: ImprimanteSysteme[];
   postes: Record<PosteImpression, string>;
+  sonneries: Record<PosteImpression, ModeSonnerie>;
   logo: ModeLogo;
   colonnes: number;
   colonnes_possibles: number[];
@@ -1453,6 +1607,7 @@ function Imprimante() {
               key={poste}
               poste={poste}
               valeur={data?.postes[poste] ?? ''}
+              sonnerie={data?.sonneries[poste] ?? 'aucun'}
               disponibles={data?.disponibles ?? []}
               onMessage={setMsg}
               onEnregistre={() => void qc.invalidateQueries({ queryKey: ['admin', 'imprimantes'] })}
@@ -1591,12 +1746,14 @@ function LogoTicket({
 function LignePosteImprimante({
   poste,
   valeur,
+  sonnerie,
   disponibles,
   onMessage,
   onEnregistre,
 }: {
   poste: PosteImpression;
   valeur: string;
+  sonnerie: ModeSonnerie;
   disponibles: ImprimanteSysteme[];
   onMessage: (m: { texte: string; ok?: boolean }) => void;
   onEnregistre: () => void;
@@ -1653,6 +1810,9 @@ function LignePosteImprimante({
           {enregistrer.isPending ? '…' : 'Enregistrer'}
         </button>
       </div>
+      <SonnerieImprimante key={`${poste}:${valeur}`} poste={poste} queue={valeur}
+        valeur={sonnerie} bloque={choix !== valeur || enregistrer.isPending}
+        onMessage={onMessage} onEnregistre={onEnregistre} />
     </div>
   );
 }
@@ -1660,6 +1820,44 @@ function LignePosteImprimante({
 // ---------------------------------------------------------------------------
 // Routage impression (catégories + exceptions par article)
 // ---------------------------------------------------------------------------
+function SonnerieImprimante({ poste, queue, valeur, bloque, onMessage, onEnregistre }: {
+  poste: PosteImpression; queue: string; valeur: ModeSonnerie; bloque: boolean;
+  onMessage: (m: { texte: string; ok?: boolean }) => void; onEnregistre: () => void;
+}) {
+  const [mode, setMode] = useState<ModeSonnerie>(valeur);
+  const [teste, setTeste] = useState<ModeSonnerie | null>(null);
+  useEffect(() => { setMode(valeur); setTeste(null); }, [valeur]);
+  const tester = useMutation({
+    mutationFn: (choix: ModeSonnerie) => api('/api/admin/imprimante/sonnerie/test', {
+      method: 'POST', corps: { poste, queue, mode: choix },
+    }),
+    onSuccess: (_r, choix) => { setTeste(choix); onMessage({ texte: 'Test envoyé. Si vous avez entendu la sonnerie, confirmez ci-dessous. Sinon, essayez le mode suivant.', ok: true }); },
+    onError: (e: Error) => { setTeste(null); onMessage({ texte: e.message }); },
+  });
+  const enregistrer = useMutation({
+    mutationFn: () => api('/api/admin/imprimante/sonnerie', { method: 'POST', corps: { poste, queue, mode } }),
+    onSuccess: () => { onMessage({ texte: 'Sonnerie enregistrée pour les prochains bons de préparation.', ok: true }); onEnregistre(); },
+    onError: (e: Error) => onMessage({ texte: e.message }),
+  });
+  const indisponible = bloque || !queue || tester.isPending || enregistrer.isPending;
+  return <div className="mt-4 border-t border-bordure pt-3">
+    <label className="text-sm font-semibold" htmlFor={`sonnerie-${poste}`}>Sonnerie des bons de préparation</label>
+    <p className="my-2 text-sm text-doux">Essayez les modes dans l’ordre, puis gardez celui que vous entendez. Ce choix s’applique aux bons de ce poste.</p>
+    {bloque && <p className="mb-2 text-sm text-doux">Enregistrez d’abord le choix de l’imprimante.</p>}
+    <div className="flex flex-wrap gap-2">
+      <select id={`sonnerie-${poste}`} className="champ w-auto min-h-[48px]" value={mode} disabled={indisponible}
+        onChange={(e) => { setMode(e.target.value as ModeSonnerie); setTeste(null); }}>
+        {MODES_SONNERIE.map((m) => <option key={m} value={m}>{LIBELLES_SONNERIE[m]}</option>)}
+      </select>
+      <button type="button" className="btn-blanc min-h-[48px]" disabled={indisponible || mode === 'aucun'}
+        onClick={() => { setTeste(null); tester.mutate(mode); }}>{tester.isPending ? 'Test…' : 'Tester la sonnerie'}</button>
+      <button type="button" className="btn-accent min-h-[48px]" disabled={indisponible || (mode === 'aucun' ? valeur === 'aucun' : teste !== mode)}
+        onClick={() => enregistrer.mutate()}>{enregistrer.isPending ? 'Enregistrement…' : mode === 'aucun' ? 'Désactiver la sonnerie' : 'J’ai entendu : enregistrer'}</button>
+    </div>
+    <p className="mt-2 text-xs text-doux">Mode enregistré : {LIBELLES_SONNERIE[valeur]}. Si aucun mode ne sonne, vérifiez le réglage sonore de l’imprimante ou faites vérifier sa compatibilité.</p>
+  </div>;
+}
+
 interface RoutageCatVue { id: string; nom: string; poste: PosteImpression | null }
 interface RoutageArtVue { id: string; nom: string; categorie_id: string; poste: PosteImpression | null }
 interface RoutageVue { defaut: PosteImpression; categories: RoutageCatVue[]; articles: RoutageArtVue[] }
@@ -1802,6 +2000,11 @@ function RecettesInventaire() {
   const qc = useQueryClient();
   const [msg, setMsg] = useState<{ texte: string; ok?: boolean } | null>(null);
   const [ouvert, setOuvert] = useState<string | null>(null);
+  const [creationOuverte, setCreationOuverte] = useState(false);
+  const [nouveauNom, setNouveauNom] = useState('');
+  const [nouvelleCategorie, setNouvelleCategorie] = useState('PLAT');
+  const [nouvelleUnite, setNouvelleUnite] = useState('u');
+  const [nouveauPrix, setNouveauPrix] = useState('0');
   const { data } = useQuery({
     queryKey: ['admin', 'recettes-inventaire'],
     queryFn: () => api<RecettesVue>('/api/admin/recettes-inventaire'),
@@ -1824,6 +2027,38 @@ function RecettesInventaire() {
         ok: true,
       });
       invalider();
+    },
+    onError: (e: Error) => setMsg({ texte: e.message }),
+  });
+  const publierSiege = useMutation({
+    mutationFn: () => api<{ produits: number; recettes: number }>('/api/admin/recettes-inventaire/publier', { method: 'POST', corps: {} }),
+    onSuccess: (r) => setMsg({
+      texte: r.produits + r.recettes > 0
+        ? `${r.produits} produit(s) et ${r.recettes} liaison(s) de recette envoyé(s) au siège. Actualisez la console pour les voir.`
+        : 'Tous les produits et recettes de ce POS sont déjà présents au siège.',
+      ok: true,
+    }),
+    onError: (e: Error) => setMsg({ texte: e.message }),
+  });
+  const creerProduit = useMutation({
+    mutationFn: () => api<{ id: string; nom: string }>('/api/admin/recettes-inventaire/produits', {
+      method: 'POST',
+      corps: {
+        nom: nouveauNom.trim(),
+        categorie: nouvelleCategorie,
+        unite: nouvelleUnite.trim(),
+        prix: Number(nouveauPrix),
+      },
+    }),
+    onSuccess: (produit) => {
+      setMsg({ texte: `« ${produit.nom} » a été créé. Ajoutez maintenant les articles qu’il consomme.`, ok: true });
+      setCreationOuverte(false);
+      setNouveauNom('');
+      setNouvelleUnite('u');
+      setNouveauPrix('0');
+      setOuvert(produit.id);
+      invalider();
+      void qc.invalidateQueries({ queryKey: ['inventaire'] });
     },
     onError: (e: Error) => setMsg({ texte: e.message }),
   });
@@ -1855,6 +2090,9 @@ function RecettesInventaire() {
         d’unités consommées par article vendu — 1 pain par chawarma, <b>0,5</b> poulet par demi-poulet.
       </p>
       <div className="mb-4 flex flex-wrap items-center gap-3">
+        <button type="button" className="btn-accent" onClick={() => setCreationOuverte((v) => !v)}>
+          {creationOuverte ? 'Fermer' : 'Ajouter un produit d’inventaire'}
+        </button>
         <button
           type="button"
           className="btn-blanc"
@@ -1863,12 +2101,41 @@ function RecettesInventaire() {
         >
           {poserDefaut.isPending ? 'Application…' : 'Proposer les recettes par défaut'}
         </button>
+        <button type="button" className="btn-blanc" disabled={publierSiege.isPending}
+          onClick={() => publierSiege.mutate()}>
+          {publierSiege.isPending ? 'Envoi au siège…' : 'Envoyer les produits existants au siège'}
+        </button>
         {sansRecette > 0 && (
           <span className="text-sm font-semibold text-attente-txt">
             {sansRecette} produit(s) sans recette — leurs sorties restent à 0.
           </span>
         )}
       </div>
+      {creationOuverte && (
+        <form className="mb-4 grid gap-3 rounded-jeton border border-bordure p-4" onSubmit={(e) => { e.preventDefault(); creerProduit.mutate(); }}>
+          <h3 className="font-bold">Nouveau produit à compter</h3>
+          <p className="text-sm text-doux">Ce produit sera ajouté à l’inventaire de ce restaurant. Après sa création, associez les articles vendus à sa recette.</p>
+          <label className="text-sm font-semibold">Nom du produit
+            <input className="champ mt-1" value={nouveauNom} onChange={(e) => setNouveauNom(e.target.value)} maxLength={120} required placeholder="Ex. Pain burger" />
+          </label>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="text-sm font-semibold">Catégorie
+              <select className="champ mt-1" value={nouvelleCategorie} onChange={(e) => setNouvelleCategorie(e.target.value)}>
+                {Object.entries(LIBELLES_CATEGORIE_INVENTAIRE).map(([code, libelle]) => <option key={code} value={code}>{libelle}</option>)}
+              </select>
+            </label>
+            <label className="text-sm font-semibold">Unité de comptage
+              <input className="champ mt-1" value={nouvelleUnite} onChange={(e) => setNouvelleUnite(e.target.value)} maxLength={16} required placeholder="u, kg, L…" />
+            </label>
+            <label className="text-sm font-semibold">Prix unitaire (FCFA)
+              <input className="champ mt-1" type="number" min="0" step="1" value={nouveauPrix} onChange={(e) => setNouveauPrix(e.target.value)} required />
+            </label>
+          </div>
+          <div><button type="submit" className="btn-accent" disabled={creerProduit.isPending || !nouveauNom.trim() || !nouvelleUnite.trim() || nouveauPrix === ''}>
+            {creerProduit.isPending ? 'Création…' : 'Créer le produit'}
+          </button></div>
+        </form>
+      )}
       <Message texte={msg?.texte ?? null} ok={msg?.ok} />
 
       <div className="grid gap-4">

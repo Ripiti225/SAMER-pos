@@ -3,7 +3,7 @@ packages:
   - "apps/*"
 
 # node_modules SANS liens symboliques (structure classique, comme npm).
-# Ce dossier est copié sur clé USB puis sur les 7 restaurants : or les outils de
+# Ce dossier est copié sur clé USB puis sur tous les restaurants : or les outils de
 # copie Windows ne recréent les liens qu'avec des droits administrateur
 # (robocopy /SL, que robocopy ignore dès que /MT est actif), et une copie ratée
 # produit des paquets simplement absents — l'app ne démarre plus, sans message

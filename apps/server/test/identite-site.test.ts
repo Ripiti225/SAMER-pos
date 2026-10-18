@@ -1,6 +1,6 @@
 /**
  * Cloisonnement des restaurants : l'image de déploiement est copiée telle
- * quelle sur les 7 sites, donc TOUS les postes démarrent avec le même
+ * quelle sur tous les sites, donc TOUS les postes démarrent avec le même
  * `restaurant.id`. C'est la configuration du site (Réglages → Restaurant) qui
  * doit lui donner une identité propre — sinon les ventes de Palmeraie et
  * celles du 7E remonteraient sous le même restaurant_id côté cloud.

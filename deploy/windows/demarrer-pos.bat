@@ -14,17 +14,26 @@ set "ROOT=%~dp0"
 set "PATH=%ROOT%runtime\node;%ROOT%runtime\pgsql\bin;%PATH%"
 set "PGDATA=%ROOT%data\pgdata"
 
-echo [1/3] Demarrage de la base de donnees...
+echo [1/4] Demarrage de la base de donnees...
 pg_ctl -D "%PGDATA%" -l "%ROOT%data\pg.log" -w start
 if errorlevel 1 (
   echo    (la base est peut-etre deja demarree, on continue)
 )
 
-echo [2/3] Ouverture de la caisse dans le navigateur...
+echo [2/4] Mise a jour de la base de donnees...
+cd /d "%ROOT%app"
+call pnpm db:migrate
+if errorlevel 1 (
+  echo ERREUR : la mise a jour de la base a echoue. Le serveur ne sera pas lance.
+  pause
+  pg_ctl -D "%PGDATA%" stop
+  exit /b 1
+)
+
+echo [3/4] Ouverture de la caisse dans le navigateur...
 start "" http://localhost:5173
 
-echo [3/3] Demarrage du serveur POS + apps (ne fermez pas cette fenetre)...
-cd /d "%ROOT%app"
+echo [4/4] Demarrage du serveur POS + apps (ne fermez pas cette fenetre)...
 call pnpm dev
 
 rem Si pnpm dev s'arrete, on stoppe proprement la base.

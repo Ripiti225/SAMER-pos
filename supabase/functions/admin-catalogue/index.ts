@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
     if (col in valeurs) ligne[col] = valeurs[col];
   }
   // Clé de conflit TOUJOURS préfixée par restaurant_id : les UUID du catalogue
-  // sont communs aux 7 sites (même export seedé), donc un upsert sur `id` seul
+  // sont communs à tous les sites (même export seedé), donc un upsert sur `id` seul
   // réécrirait la ligne — et le restaurant_id — d'un autre restaurant.
   const cleConflit = def.table === 'parametres_locaux' ? 'restaurant_id,cle' : 'restaurant_id,id';
   if (def.table === 'parametres_locaux' && !ligne.cle) {

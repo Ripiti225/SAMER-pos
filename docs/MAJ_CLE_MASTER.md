@@ -5,18 +5,106 @@
 La clé a été copiée le **2026-08-17 à 05h01:32**, avec l'identité neutre `A_CONFIGURER`
 et les deux seuls comptes propriétaire. Tout ce qui est écrit ici est **postérieur**.
 
-> **Report effectué le 2026-09-04 au soir** via `mettre-a-jour-cle.ps1` (`data\` exclu,
-> la base neutre de la clé est intacte — inchangée depuis le 18/07 14h24) : **le code à
-> 21h52**, puis **ce journal et ses six nouvelles entrées dans une seconde passe**.
-> **Tout ce qui est écrit ci-dessous est donc sur la clé**, migrations jusqu'à la **0032**
-> et `apps/caisse/dist` du 04/09 21h40 compris. Les entrées ajoutées après cette date ne
-> le seront pas : recommencer le report avant tout nouveau déploiement.
+> **Report du 2026-10-15** : `origin/main` du 15/10 (34 commits : paiement en points
+> fidélité, note du caissier SamerTrackly, sonnerie « commande prête » du serveur, KDS
+> adapté à l'appareil, PIN commençant par 0, verrouillage par inactivité désactivé,
+> comparaison A/B du siège…) fusionné dans `siege-8-sites-et-releve` (commit `c6e8cf0`).
+> **121 fichiers** (31 ajoutés, 90 remplacés) copiés vers `D:\POS-Samer\app`, **121/121
+> vérifiés par SHA-256**. Caisse recompilée avant copie (`index-XvKnXegX.js` /
+> `index-D7E_U2_2.css`). Anciens fichiers dans
+> `C:\Users\HP\Documents\POS-Samer\usb-backup-20261015-211953`, manifeste
+> `usb-copy-20261015-211953.csv`. `apps/desktop/main.js` inchangé : **pas de
+> repackaging**, `PosSamer.exe` de la clé conservé. Dépendances : `@tabler/icons-react`
+> (kds, serveur) et `vitest` (siège) déjà présents à la racine `node_modules` de la clé,
+> mêmes versions — rien à installer.
 >
-> *(Report précédent : 2026-08-21 à 15h48, la clé s'arrêtait alors à la migration 0025.)*
+> ⚠️ **Renumérotation** : les migrations de `main` `0034_paiement_points`,
+> `0035_verrouillage_desactive`, `0036_notes_caissiers` sont devenues **0039, 0040,
+> 0041** (dates `when` après la 0038). La clé et le poste avaient déjà appliqué nos 0034
+> à 0038 ; drizzle saute toute migration plus ancienne que la dernière appliquée, elles
+> n'auraient jamais tourné. Les trois sont idempotentes. **Un poste mis à jour
+> directement depuis `main` (avec l'ancienne numérotation) puis depuis cette clé sauterait
+> notre `0034_permission_deplacer_commande`** : la rejouer à la main sur un tel poste.
+>
+> **Base neutre migrée le 15/10** : sauvegarde préalable `data\pgdata.backup-20261015`
+> (1499 fichiers, contrôlée identique), base démarrée sur le port **5433** (le 5432 était
+> pris par le POS du poste), `drizzle.__drizzle_migrations` à **42 lignes sur 42**. Avant
+> et après : `A_CONFIGURER`, 0 commande, 0 service, 0 `cle_site`, 2 utilisateurs,
+> 16 catégories, 131 articles actifs. Table `notes_caissiers` et mode `POINTS` présents.
+> PostgreSQL arrêté proprement.
+>
+> **Report du 2026-09-25** : correctifs « À la Braise sans horaires » et « PIN manager
+> refusé aux caissiers promus » (voir l'entrée du 25/09). **14 fichiers** absents ou
+> différents copiés vers `D:\POS-Samer\app`, **14/14 vérifiés par SHA-256** ; aucun autre
+> écart n'existait entre le dossier de travail et la clé. La caisse a été recompilée
+> avant la copie (`apps/caisse/dist`, nouveaux `index-BlZ8ZHt0.js` / `index-rCDOOw6p.css`).
+> Les anciens fichiers remplacés sont dans `C:\Users\HP\Documents\POS-Samer\usb-backup-20260925-132737`,
+> le manifeste dans `usb-copy-20260925-132737.csv`. `data`, `.env`, `runtime`,
+> `node_modules` et `PosSamer.exe` de la clé préservés. La copie est **additive** : les
+> assets caisse de la génération précédente (`index-BnJR1T-Z.js`, `index-CQXDIfLw.css`)
+> restent sur la clé sans être servis, `index.html` pointant sur les nouveaux.
+>
+> **Base neutre migrée le 25/09** : sauvegarde préalable sur la clé dans
+> `data\pgdata.backup-20260925` (1499 fichiers, 66,3 Mo, contrôlée identique), puis
+> `drizzle.__drizzle_migrations` comptée à **39 lignes sur 39**. Avant et après :
+> `A_CONFIGURER`, 0 commande, 0 service, 0 `cle_site`, 2 propriétaires, 16 catégories,
+> 131 articles actifs, 0 catégorie avec horaire. La `0038` y est un no-op (catalogue
+> Samer, pas braise) : elle n'est appliquée que pour tenir le niveau base = niveau code.
+> PostgreSQL arrêté proprement après vérification.
+>
+> **Report du 2026-09-24** : le dernier commit de `origin/main`, `7690aee`
+> (`feat(sync): préserver l’identité lors du remplacement`), a été fusionné dans
+> `siege-8-sites-et-releve` en conservant les évolutions locales. Les cinq interfaces
+> et le serveur ont été recompilés. **23 fichiers** absents ou différents ont été
+> sauvegardés puis copiés vers `D:\POS-Samer\app`, avec contrôle SHA-256 après copie.
+> `data`, les `.env`, `runtime`, les `node_modules` portables et `PosSamer.exe` ont été
+> préservés. Aucune migration n’a été ajoutée après `0037` : la base neutre reste donc
+> au même niveau que le code, sans modification de ses données.
+
+> **Report du 2026-09-22** : 37 fichiers absents ou différents ont été copiés depuis
+> le dossier de travail vers `D:\POS-Samer` et vérifiés par empreinte, notamment les
+> sources et builds caisse/siège du 21/09 et la migration `0037_heures_releve.sql`.
+> Les anciens fichiers remplacés sont sauvegardés dans
+> `C:\Users\HP\Documents\POS-Samer\usb-backup-20260922`. Le profil À la Braise était
+> déjà identique ; le `PosSamer.exe` et les scripts de la racine de la clé, plus
+> récents que ceux du dossier de travail, ont été conservés.
+>
+> **Base neutre migrée le 22/09** : sauvegarde préalable sur la clé dans
+> `data\pgdata.backup-20260922`, puis `drizzle.__drizzle_migrations` contrôlée à
+> **38 lignes sur 38**. Avant et après : `A_CONFIGURER`, 0 commande, 0 service,
+> 0 `cle_site`. PostgreSQL a été arrêté proprement après vérification. Le code
+> de l'Edge Function `siege` est sur la clé, mais son déploiement cloud n'a pas
+> été vérifié lors de ce report.
+>
+> **Report effectué le 2026-09-20 à 17h59** : code, builds des cinq interfaces,
+> scripts Windows à la racine et `PosSamer.exe` ont été mis à jour. La copie a été
+> **additive** (158 fichiers ajoutés ou remplacés, aucun fichier supprimé) ; `data\`,
+> tous les `node_modules` utiles et `apps/server/.env` ont été préservés. Les vieux
+> fichiers de build nommés par hash peuvent donc encore être présents, mais les nouveaux
+> `index.html` et service workers ne les référencent plus.
+>
+> La base neutre a été copiée sur le disque local, migrée de **33 à 37 migrations**,
+> contrôlée puis remise sur la clé après arrêt propre. L'ancienne base reste disponible
+> dans `data\pgdata.backup-20260920-1755`. Contrôles après migration : `A_CONFIGURER`,
+> 0 commande, 0 service, 0 `cle_site`, 2 propriétaires, 15 catégories et 131 articles
+> actifs.
+>
+> Le report du 20/09 correspond au commit `5b9c21d` plus les correctifs locaux du 20/09.
+> Les métadonnées `.git` de la clé n'ont volontairement pas été réécrites pendant
+> cette copie additive : son `HEAD` reste ancien et son arbre apparaît modifié, tandis que
+> les fichiers exécutés sont bien ceux du report.
+>
+> *(Reports précédents : 2026-09-09 à 15h18, 2026-09-04 à 21h52 et
+> 2026-08-21 à 15h48.)*
+>
+> **La clé est désormais sur la branche `siege-8-sites-et-releve`, pas sur `main`.** Elle
+> porte du code que `main` n'a pas encore : À la Braise côté cloud, le report de la
+> relève, les lanceurs `.bat`. C'est voulu — c'est l'état déployé — mais il faut le savoir
+> avant de comparer un poste à `origin/main`.
 
 Le poste **Samer Angré 7E** (`C:\Users\PC\Documents\POS-Samer-deploiement`) est le
 **site de test** du groupe : c'est ici qu'on essaie, qu'on casse et qu'on corrige
-avant que les 6 autres restaurants ne reçoivent quoi que ce soit.
+avant que les 7 autres restaurants ne reçoivent quoi que ce soit.
 
 ## Comment lire ce fichier
 
@@ -27,27 +115,41 @@ avant que les 6 autres restaurants ne reçoivent quoi que ce soit.
 - « Relancer l'exe » = quitter `PosSamer.exe` (`Ctrl+Alt+Q`) et le relancer. Suffit
   pour toute modif SERVEUR (tsx lit les sources, sans watch).
 - « Repackager » = `pnpm --filter @pos/desktop build` — seulement si `apps/desktop`
-  change. **Aucune entrée de ce journal ne l'exige à ce jour.**
-- « Migrer » = `pnpm db:migrate`. La clé porte les migrations jusqu'à la **0032**.
-  **Tout poste installé depuis une clé antérieure au 04/09 doit passer `pnpm db:migrate`**
-  après avoir reçu cette mise à jour : **sept migrations** séparent la clé du 17/08
-  (arrêtée à la 0025) de l'état actuel — 0026 à 0032 — et le serveur ne démarre pas sans
-  elles.
+  change. **Fait le 20/09 après modification de `apps/desktop/main.js`.**
+- « Migrer » = `pnpm db:migrate`.
+  > ⚠️ **Une migration, c'est DEUX choses : le fichier `.sql` et son application à la
+  > base.** Le report du code met les fichiers sur la clé ; il n'applique rien. Jusqu'au
+  > 10/09 ce journal écrivait « migration 0032 **sur la clé** ✔ » en ne parlant que des
+  > fichiers, et la base neutre de la clé, elle, s'était arrêtée à la **0030** — d'où
+  > l'incident du 10/09 (catalogue vide sur tous les postes neufs). **Ne jamais écrire
+  > qu'une migration est « sur la clé » sans avoir compté les lignes de
+  > `drizzle.__drizzle_migrations` dans la base de la clé.**
+  - Le lanceur Electron actuellement sur la clé applique les migrations avant
+    de démarrer le serveur ; pour un poste déjà installé, vérifier quand même
+    le résultat et garder une sauvegarde de sa base avant la mise à jour.
+  - Sur un poste, `pnpm` n'existe pas. La commande est, depuis la racine du dossier
+    portable :
+    ```powershell
+    $env:Path = "$PWD\runtime\node;$env:Path"; cd app\apps\server; node "..\..\node_modules\tsx\dist\cli.mjs" "src\db\migrate.ts"
+    ```
 
 ## État de synthèse
 
 | | |
 |---|---|
-| Dernière migration | **0032** (`0032_disponibilite_horaire.sql`) — **sur la clé** ✔ |
-| Migrations ajoutées depuis la clé | **aucune** : la clé du 04/09 les porte toutes. Un poste installé depuis une clé plus ancienne doit passer `pnpm db:migrate` (0026 → 0032) |
-| Rebuild caisse | **à jour** — `dist` du 04/09 21h40, postérieur aux sources d'`apps/caisse` |
-| Report du code sur la clé master | **fait le 04/09 21h52** (`data\` exclu, 406 fichiers, 0 échec) |
-| Repackaging `PosSamer.exe` nécessaire | non — `apps/desktop` inchangé depuis la clé |
-| Redéploiement Edge Function | **`samtrackly-points` : OUI** (pagination de la sélection + services clôturés sans `remis_le`). `sync-push` : redéployée le 04/09. `siege` : statut du 21/08 inchangé, **à confirmer déployée** |
-| Migrations CLOUD à appliquer | **1 nouvelle** — `20260901110000_explication_ecart_samtrackly`. Les 3 listées le 21/08 (`20260817140000_pont_samtrackly`, `20260821150000_inventaire_snapshot_produit`, `20260825030000_livraisons_partenaires`) **restent à confirmer appliquées** |
+| Dernière migration | **0041** (`0041_notes_caissiers.sql`) — 0039 à 0041 viennent de `main`, renumérotées (voir le report du 15/10) |
+| Base de la clé | **migrée le 15/10** : `drizzle.__drizzle_migrations` compte **42 lignes sur 42**. Neutralité contrôlée : `A_CONFIGURER`, 0 commande, 0 service, 0 `cle_site`, 2 propriétaires, 16 catégories, 131 articles actifs. Sauvegarde préalable : `data\pgdata.backup-20261015` |
+| 🔴 Postes déjà installés depuis une clé antérieure au 15/10 | **doivent appliquer les migrations manquantes jusqu'à 0041** avant de servir la caisse. Le lanceur Electron actuel le fait au démarrage ; contrôler le résultat sur chaque poste |
+| Rebuild des interfaces | **caisse recompilée le 15/10**. KDS, serveur et client tournent en Vite dev depuis leurs sources (pas de `dist` servi) ; siège non recompilé |
+| Report du code sur la clé master | **fait le 15/10** — 121 fichiers ajoutés ou remplacés, **121/121 vérifiés par SHA-256** ; `.env`, base, runtime, dépendances portables et exécutable de la clé préservés. Migrations `0039` à `0041` reportées ET appliquées à la base de la clé |
+| Scripts à la racine du dossier portable | **à jour le 20/09** — tous les `.bat` et `.ps1` de `deploy/windows/` ont été recopiés |
+| Repackaging `PosSamer.exe` | **fait le 20/09 à 17h44** après la modification de `apps/desktop/main.js` ; nouvel exécutable de 74 330 255 octets copié à la racine |
+| Redéploiement Edge Function | `siege` : **donnée pour faite le 09/09** en même temps que la migration `marque_a_la_braise`, non revérifiée depuis ce poste — et `functions list` a déjà menti une fois (voir l'entrée du 17/08). **`samtrackly-points` : OUI** (pagination de la sélection + services clôturés sans `remis_le`). `sync-push` : redéployée le 04/09 |
+| Migrations CLOUD à appliquer | **1** — `20260901110000_explication_ecart_samtrackly`. `20260908000000_marque_a_la_braise` est **appliquée** (confirmé le 09/09) : l'enrôlement d'À la Braise ne bute plus sur le `CHECK`. Les 3 listées le 21/08 (`20260817140000_pont_samtrackly`, `20260821150000_inventaire_snapshot_produit`, `20260825030000_livraisons_partenaires`) **restent à confirmer appliquées** |
+| SQL cloud ponctuel | `sql/cloud/ajouts_samerdelly_20260908.sql` — 4 produits SamerDelly, **publication non confirmée** (voir l'entrée du 08/09) |
 | Rattrapage à lancer par site | `pnpm services:republier` — republie les explications d'écart que le cloud jetait entre le 28/08 et le 04/09. **Fait sur le 7E le 04/09** |
-| 🔴 À vérifier sur les 6 autres sites | `SELECT count(*) FROM sync_outbox WHERE synced_at IS NULL;` — la FK `notes_split_payee_par_fk` a gelé 12 h de ventes sur le 7E, elle a pu geler les leurs |
-| Tests | **verts au 04/09** — POS : **48 fichiers / 303 tests** (`apps/server` 47/301, `packages/theme` 1/2) ; pont : **121 tests, 23 suites** (`pnpm test:functions`). ⚠️ voir le point ouvert ci-dessous : `pnpm test` n'exécute réellement que ces deux paquets |
+| 🔴 À vérifier sur les 7 autres sites | `SELECT count(*) FROM sync_outbox WHERE synced_at IS NULL;` — la FK `notes_split_payee_par_fk` a gelé 12 h de ventes sur le 7E, elle a pu geler les leurs |
+| Tests | **verts au 15/10** — serveur : **70 fichiers / 413 tests** ; siège : **37 tests** ; fonctions Supabase partagées : **146 tests**. Typecheck serveur, caisse, siège, kds, serveur (tablette) et shared OK |
 
 > **Trou de journal à combler.** Le journal reprend au 25/08, mais les commits du
 > **22 au 24/08** (séquences, ordres du siège, console du siège, republication des
@@ -986,7 +1088,7 @@ ne s'importe **que** sur le mini-PC destiné à À la Braise : le seed commun re
 `heure_debut`, `heure_fin`, `jour_semaine` (1–7) et `disponibilite_forcee`, avec un
 `CHECK` qui interdit une plage à moitié remplie (`(heure_debut IS NULL) = (heure_fin IS
 NULL)`). Une catégorie hors de sa plage n'est plus proposée à la vente. Chez À la
-Braise : Placali 04h–10h, Sauces 10h–16h, Barbecues 16h–00h.
+Braise : Placali 00h–16h, Sauces 10h–00h, Barbecues 16h–00h.
 
 `apps/server/src/modules/catalogue/horaires.ts` porte le calcul : **début inclus, fin
 exclue**, une fin à `00:00` couvrant jusqu'à minuit, et les plages qui franchissent
@@ -1087,6 +1189,260 @@ SELECT count(*) FROM sync_outbox WHERE synced_at IS NULL;
 
 ---
 
+## 2026-09-05 — L'addition sur la tablette du serveur
+
+**Fichiers** : `apps/serveur/src/{facture-tablette.ts,components/FactureNumerique.tsx,screens/PriseCommande.tsx,App.tsx}`,
+`apps/caisse/src/{navigation-addition.ts,components/BandeauAdditions.tsx,screens/Tables.tsx}`.
+
+Le serveur en salle devait revenir au comptoir pour savoir ce que la table devait.
+La facture s'affiche maintenant sur sa tablette, depuis la prise de commande, et le
+bandeau des additions de la caisse renvoie vers la table concernée au lieu de laisser
+chercher.
+
+**Déploiement** : **rebuild caisse** (`apps/caisse` a changé). `apps/serveur` n'a pas de
+`dist` — `PosSamer.exe` le lance par vite depuis les sources — donc rien à builder de ce
+côté, il suffit de relancer l'exe. Rien côté base.
+
+---
+
+## 2026-09-09 — À la Braise côté cloud : la 3e marque, et la relève qui se reporte
+
+**Migration CLOUD** : `20260908000000_marque_a_la_braise.sql` — **à appliquer**.
+
+Le groupe est passé à **8 restaurants** le 05/09. Le POS local gérait déjà À la Braise
+(migration 0031, thème, logos, profil d'installation) ; le **cloud**, lui, était resté à
+deux marques. Le `CHECK` de `restaurants` refusait `'A_LA_BRAISE'` : l'`INSERT`
+d'enrôlement du nouveau site serait tombé dessus avec un message Postgres illisible pour
+la personne qui installe le mini-PC.
+
+Côté console du siège, `marqueDe()` remplace le test `couleur.includes('vert')`, qui
+classait tout le reste en SAMER — À la Braise, avec son hexadécimal or, s'affichait en
+Chez Samer. L'ordre est désormais : le POS (seule valeur sûre pour un site enrôlé), puis
+l'intitulé `marque` de SamerTrackly, la couleur ne servant plus que de repli pour les
+sites d'origine qui l'ont à NULL. Le sous-titre du tableau de bord **compte** la liste au
+lieu d'écrire « 7 » en dur, et la pastille de marque repasse au `#d99a2b` du thème (elle
+portait `#d89a2b`, un chiffre de travers).
+
+**Relève** : l'employé marqué « Reste » passe au shift suivant. Le drapeau était écrit,
+compté à la clôture et affiché, mais **rien ne le relisait à l'ouverture suivante** — il
+fallait recocher tout le monde à la main. `equipe-proposee` renvoie maintenant
+`reste_precedent` et le poste réellement tenu ; l'écran d'ouverture les **pré-coche**.
+
+Pré-cochés et **non imposés** : l'heure d'arrivée d'un membre coché est datée de
+l'ouverture et **compte pour la paie**, la caissière doit pouvoir décocher un absent.
+Même raison pour la borne de fraîcheur : au-delà d'une durée de service (8 h), plus rien
+n'est reporté — sinon rouvrir la caisse le lendemain créditerait des heures à des gens
+partis depuis longtemps.
+
+**47 mentions périmées** de « les 7 restaurants » ont été remplacées dans le dépôt. Les
+migrations déjà appliquées et les journaux datés (celui-ci, `ETAT_PROJET`) sont laissés
+intacts : ce sont des archives.
+
+**Déploiement** : appliquer la migration cloud, **redéployer la fonction `siege`**, puis
+**rebuild caisse** (`apps/caisse/src/screens/OuvertureService.tsx` a changé) et relancer
+l'exe sur chaque poste (routes serveur `services`).
+
+---
+
+## 2026-09-09 — Les scripts d'installation ne partaient jamais, en silence
+
+**Fichiers** : `deploy/windows/{preparer-app.bat,installer-demarrage-auto.bat}` (nouveaux),
+`deploy/windows/{preparer-app.ps1,installer-demarrage-auto.ps1,README-DEPLOIEMENT.md}`.
+
+Sur ce poste, **ni le démarrage automatique ni la fabrication de `PosSamer.exe` ne se
+sont jamais installés — et sans aucun message d'erreur.** Trois obstacles se cumulaient,
+aucun visible :
+
+1. L'entrée **« Exécuter avec PowerShell » du clic droit n'existe pas sur toutes les
+   machines**. Ici la clé `Microsoft.PowerShellScript.1\Shell\0` est absente et le seul
+   verbe déclaré est `Open → notepad.exe` : le `.ps1` s'ouvre dans le Bloc-notes. C'est
+   le blocage principal, et il est **silencieux** — rien n'échoue, rien ne s'installe.
+2. La stratégie d'exécution est **`Restricted`** (toutes les portées à `Undefined`), donc
+   tout `.ps1` est refusé, même lancé à la main.
+3. `Register-ScheduledTask -RunLevel Highest` exige l'élévation, que ce menu ne demande
+   pas.
+
+Chaque `.ps1` reçoit donc un **lanceur `.bat`**, qui se double-clique toujours. Et dans
+la foulée, le même symptôme côté UAC : `Start-Process -Verb RunAs` lève une erreur quand
+l'UAC est refusé ou ne s'affiche pas, mais le script enchaînait sur `exit /b 0` sans la
+lire — une fenêtre qui clignote, se ferme, et rien n'est dit. L'échec d'élévation est
+maintenant capturé et affiché, un marqueur « déjà-tenté » évite de redemander l'UAC en
+boucle, le code de sortie du `.ps1` est lu et affiché, et **chaque sortie passe par
+`pause`**, y compris les cas d'erreur.
+
+**Déploiement** : recopier **tous** les scripts de `deploy/windows/` à la racine du
+dossier portable — les `.bat` **et** les `.ps1`, chaque `.bat` appelant son `.ps1`
+voisin. La consigne du `README-DEPLOIEMENT.md` change en conséquence : on
+**double-clique `preparer-app.bat`**, on ne fait plus « clic droit → Exécuter avec
+PowerShell ».
+
+---
+
+## 2026-09-08 — Ajouts SamerDelly : 4 produits, et ce qu'on refuse de deviner
+
+**Fichiers** : `sql/cloud/ajouts_samerdelly_20260908.sql`,
+`docs/{AJOUTS_SAMERDELLY_20260908.md,ajouts_samerdelly_20260908.json}`.
+
+Quatre nouveautés (Falafel x6, Mini pizza x3, Tacos burger, Gâteau au chocolat) tirées
+d'un export SamerDelly de 100 lignes. **État : script écrit et vérifié, publication non
+confirmée** — la première tentative a été annulée parce que les catégories Apéritifs,
+Tacos et Desserts n'étaient pas résolues pour le 7E et la Palmeraie, et que la CLI
+Supabase de ce poste n'a pas de session authentifiée.
+
+Ce que le script **ne fait pas**, volontairement : il ne supprime rien (l'export est
+partiel — 4 identifiants n'existent pas dans `catalogue_samer.json`, la suite reste à
+confirmer), ne modifie aucun prix ni aucune disponibilité existants, n'invente aucun
+tarif partenaire, et **s'arrête net** sur une catégorie ambiguë ou désactivée plutôt que
+de choisir à notre place. À la Braise est exclue **par marque, par nom et par code**,
+sans dérogation possible.
+
+Vérifié sur une base PostgreSQL 16 isolée avec huit restaurants fictifs : ajout dans les
+deux sites autorisés, conservation d'un prix déjà défini, exclusion d'À la Braise et des
+sites inactifs ou non enrôlés, publication des six catégories manquantes avec les UUID
+d'origine, et **seconde exécution sans aucun doublon**.
+
+**Déploiement** : exécuter le `.sql` dans l'éditeur SQL de **`pos-samer-cloud`**
+(`vbsmxwlxlcgkodwkbhfa`). Rien sur les postes — mais **une publication cloud ne prouve
+pas que les postes ont reçu les produits** : vérifier `/api/catalogue` après leur
+synchronisation descendante. Les postes non enrôlés restent à traiter une fois raccordés.
+
+---
+
+## 2026-09-09 — Les options du catalogue : un écran vide qui mentait
+
+**Fichiers** : `apps/server/src/modules/catalogue/admin-options.ts`,
+`apps/caisse/src/screens/Reglages.tsx`, `apps/server/test/admin-options.test.ts` (nouveau).
+
+Deux défauts sur le même écran, Réglages → Options.
+
+**Le doublon n'était plus détecté.** `estDoublon()` lisait `e.code === '23505'` sur
+l'erreur reçue. Or Drizzle **encapsule** désormais l'erreur PostgreSQL dans une
+`DrizzleQueryError` : le code `23505` est dans `cause`. La contrainte d'unicité
+`(nom, prix)` de la base tenait toujours, mais l'opérateur ne recevait plus le message
+« Cette option existe déjà avec ce prix » — il tombait sur une erreur brute. Le code lit
+maintenant la `cause`.
+
+**Un chargement en échec ressemblait à un catalogue vide.** `useQuery` n'exposait que
+`data` : réseau coupé, serveur redémarré, requête en erreur — l'écran affichait
+sereinement « Aucune option pour l'instant, créez la première ci-dessus », et on créait
+une option qui existait déjà. L'erreur est désormais affichée avec un bouton
+**Réessayer**, l'état de chargement dit « Chargement des options… », et le message
+« aucune option » n'apparaît **que** si la requête a effectivement abouti sur zéro ligne.
+
+Le nouveau `admin-options.test.ts` couvre la création hors réseau (audit + outbox, sans
+appel `fetch`), le refus du doublon avec son message et sans écriture supplémentaire.
+
+**Déploiement** : modif serveur **et** caisse → **rebuild caisse** puis relancer l'exe.
+Rien côté base.
+
+---
+
+## 2026-09-10 — Catalogue vide sur TOUS les postes neufs : la clé portait les fichiers de migration, pas leur application
+
+**Symptôme terrain** : un site installé depuis la clé affiche une caisse **sans aucun
+produit**. Réglages → Catalogue est vide lui aussi. Constaté d'abord sur À la Braise,
+puis sur un deuxième restaurant installé dans la foulée — donc pas un problème de site.
+
+### Ce que ce n'était pas
+
+Quatre pistes écartées avant de trouver, elles valent d'être notées pour la prochaine
+fois :
+
+- **la descente cloud n'efface rien** — elle est en UPSERT pur (`descente.ts`), elle ne
+  peut pas vider un catalogue local ;
+- **le seed charge bien un catalogue** — 15 catégories et 128 produits depuis
+  `docs/menu_export.json`, un fichier suivi par git, donc présent sur la clé ;
+- **`preparer-base-master.sql` conserve le catalogue**, c'est écrit dans son en-tête ;
+- **ni la marque, ni les horaires, ni le filtre partenaire** ne peuvent masquer *tout*
+  un catalogue.
+
+Et surtout, sur le poste en panne, les produits étaient **bien là** :
+
+```
+ cat | cat_actives | art | art_actifs | ventes
+  16 |          15 | 131 |        131 |      0
+```
+
+### La cause
+
+`count(*)` passait, la caisse non — parce qu'ils ne lisent pas les mêmes colonnes.
+
+La base de la clé avait **31 migrations appliquées sur 33**. Il lui manquait
+`0031_a_la_braise` et `0032_disponibilite_horaire`. Or `0032` ajoute quatre colonnes à
+`categories`, et le code du catalogue les lit toutes :
+
+```
+avant : id, parent_id, nom, ordre, actif, partenaires
+après : id, parent_id, nom, ordre, actif, partenaires,
+        heure_debut, heure_fin, disponibilite_forcee, jour_semaine
+```
+
+`db.select().from(categories)` liste ses colonnes explicitement. Sur une base sans elles,
+la requête part en erreur SQL, `/api/catalogue` renvoie 500, et l'écran s'affiche
+**vide** — pas « en erreur », **vide**. Un `count(*)`, lui, ne touche à aucune de ces
+colonnes : d'où le diagnostic trompeur.
+
+### Pourquoi personne ne l'a vu venir
+
+**Ce journal l'affirmait faux.** Sa ligne de synthèse disait « Dernière migration 0032 —
+**sur la clé** ✔ ». C'était vrai des **fichiers** `.sql`, recopiés par le report du code,
+et faux de la **base**. Le report de code n'applique aucune migration : il copie des
+fichiers, rien d'autre.
+
+**Et rien ne rattrape l'oubli.** Ni `apps/server/src/index.ts` ni le lanceur Electron
+n'appliquent les migrations au démarrage — vérifié. La `PARTIE B` du
+`README-DEPLOIEMENT.md`, celle que suit la personne qui installe, ne mentionnait pas non
+plus `db:migrate` : copier, lancer l'exe, se connecter, configurer le restaurant,
+régénérer les QR, démarrage auto. Six étapes, aucune migration.
+
+Trois manques qui se recouvrent : une doc qui affirme le contraire de la réalité, un
+lanceur qui ne rattrape rien, une procédure d'installation qui n'en parle pas.
+
+### Le correctif
+
+**La base de la clé a été migrée le 10/09**, en travaillant sur une **copie locale** —
+on ne fait pas tourner une base de données sur une clé USB, et le master reste intact si
+quoi que ce soit tourne mal :
+
+1. copie de `D:\POS-Samer\data\pgdata` vers un dossier de travail local ;
+2. démarrage sur le **port 5433** (jamais 5432, pour ne pas risquer la base de dev) ;
+3. `appliquerMigrations()` avec l'URL passée explicitement — 31 → **33 lignes** dans
+   `drizzle.__drizzle_migrations` ;
+4. vérification par le **vrai code** : `chargerCatalogue()` renvoie **15 catégories et
+   131 articles** (Salades, Chawarmas, Sandwiches…) ;
+5. arrêt propre (`pg_ctl -m fast`, aucun `postmaster.pid` résiduel), sauvegarde de la
+   base d'origine de la clé, puis recopie — 38 fichiers, 18,7 Mo, **0 fichier supprimé**.
+
+Le master reste **neutre** après migration : `code = A_CONFIGURER`, 0 vente, 2 comptes
+propriétaire, pas de `cle_site`.
+
+### Ce qu'il faut faire sur les postes déjà installés
+
+Ils ne se réparent pas tout seuls : la clé corrigée ne change rien à une base déjà
+copiée. Sur chacun, depuis la racine du dossier portable, `PosSamer.exe` ouvert :
+
+```powershell
+$env:Path = "$PWD\runtime\node;$env:Path"; cd app\apps\server; node "..\..\node_modules\tsx\dist\cli.mjs" "src\db\migrate.ts"
+```
+
+Puis **Ctrl+Alt+Q** et relancer l'exe. Le menu réapparaît.
+
+### La dette qui reste
+
+Migrer la clé règle le symptôme du jour, **pas le mécanisme** : à la prochaine migration,
+la même mécanique produira le même écran vide sur les postes qui ne l'auront pas passée.
+Deux façons de le rendre impossible à oublier, à trancher :
+
+- **appliquer les migrations au démarrage du serveur** — le poste se répare seul, mais
+  une migration s'exécute alors sans personne devant l'écran ;
+- **un `.bat` de mise à jour** à double-cliquer, dans la lignée des lanceurs du 09/09 —
+  l'opérateur garde la main, mais il faut penser à le lancer.
+
+En attendant, la `PARTIE B` du `README-DEPLOIEMENT.md` porte l'étape, et l'avertissement
+en tête de « Comment lire ce fichier » interdit d'écrire qu'une migration est « sur la
+clé » sans avoir compté les lignes dans la base.
+---
+
 ## 2026-09-14 — Décider les explications d’inventaire depuis le siège
 
 La console siège porte désormais un onglet **Inventaire**. Il lit directement les
@@ -1109,3 +1465,81 @@ décision humaine à `en_attente`.
 
 Ce changement ne nécessite ni migration locale, ni rebuild de la caisse, ni
 redémarrage des mini-PC.
+
+---
+
+## 2026-09-25 — À la Braise sans horaires, et le PIN manager refusé aux caissiers promus
+
+Deux plaintes du terrain, deux causes indépendantes.
+
+### 1. « On ne peut pas activer un produit hors horaire » (À la Braise)
+
+Une catégorie hors de sa plage refusait la vente (`La catégorie « … » n'est pas
+disponible à cette heure`, posée côté serveur dans `commandes/service.ts`), et remettre
+le plat « disponible » dans Réglages → Plats du jour n'y changeait rien : seule la
+**dérogation** `disponibilite_forcee` rouvrait la catégorie, et personne ne la trouvait
+au comptoir. Décision du restaurant : **supprimer les horaires, garder les jours.**
+
+- `config/restaurants/a-la-braise/profil.json` : les 10 blocs `horaire` sont retirés.
+  Les 7 catégories « Sauces — Lundi/…/Dimanche » **gardent leur `jour`**, donc la sauce
+  du jour continue de remonter en tête de carte (`catalogue/service.ts` trie sur
+  `jour_semaine`). Sans ce retrait, un réimport du profil remettrait les horaires.
+- **`0038_a_la_braise_sans_horaire.sql`** : sur une base déjà en service, met
+  `heure_debut`/`heure_fin` à NULL et `disponibilite_forcee` à FALSE. **Gardée par la
+  marque** (`A_LA_BRAISE` / code / nom contenant « braise ») : Samer et Al Kayan gardent
+  leurs horaires, la migration y est un no-op. Le mécanisme d'horaires lui-même n'est pas
+  retiré du code — il reste disponible pour les autres marques.
+
+La bannière « Hors horaire » et le bouton « Réactiver exceptionnellement » disparaissent
+d'eux-mêmes de Réglages → Plats du jour : ils sont conditionnés à la présence d'une
+heure de début.
+
+### 2. « Le manager ne peut pas supprimer une table, son code ne passe pas »
+
+Vider une table qui porte des produits est une **annulation de commande** : PIN manager
++ motif (`POST /api/caisse/tables/:id/liberer`). Le PIN était refusé à des managers qui
+**étaient caissiers avant**, avec le code qui les connecte pourtant sans problème.
+
+Cause : `mapPosteRole` dans `equipe/sync-samtrackly.ts`. La règle `/caiss/` passait
+**avant** `/gérant|manager/`. Un caissier promu dont l'intitulé RH garde le mot
+« caisse » — « Gérante caisse », « Manager caissière », « Caissière responsable » —
+repartait donc en **CAISSIER à chaque synchro SamerTrackly, toutes les 5 minutes**. Il
+encaissait normalement (le caissier a `caisse.annuler_envoye`, donc le bouton corbeille
+s'affichait), mais `verifierPinManager` ne le voyait pas manager. C'est le **troisième**
+piège d'ordre dans cette fonction, après « plongeuse » et « comptoiriste » du 17/08.
+
+- La gérance passe maintenant **en premier**. `/responsable/` reste en dernier :
+  « responsable cuisine » ne doit pas hériter des droits d'un manager.
+- `auth/pin.ts` : en cas de refus, le message **dit pourquoi**. PIN bon mais compte sans
+  autorité → « Ce PIN est bien celui de X, mais son compte est encore « CAISSIER » …
+  Passez son rôle à Manager dans Réglages › Équipe ». Compte manager bloqué par des
+  essais ratés → on le dit, au lieu de « PIN manager incorrect ». La cause part aussi
+  dans `audit_log` (`cause: SANS_AUTORITE | COMPTE_BLOQUE | PIN_INCONNU`). Le diagnostic
+  ne coûte rien au chemin normal : il ne tourne qu'après l'échec.
+- Au passage : un `pin_hash` illisible ne fait plus échouer la vérification de tous les
+  autres comptes (`argon2.verify` lève au lieu de renvoyer `false`).
+- `apps/caisse/src/App.tsx` : le toast est borné en largeur (`max-w-[min(92vw,40rem)]`,
+  centré) — ces messages tenaient sur une seule ligne hors écran.
+
+**Ce que le correctif ne peut pas faire.** Si l'intitulé RH d'un manager dit encore
+simplement « Caissière », aucune synchro ne le corrigera : il faut soit corriger le poste
+dans SamerTrackly, soit passer son rôle à Manager dans **Réglages → Équipe** — ce qui
+verrouille le rôle (`champs_manuels`) et le protège des synchros suivantes. Le nouveau
+message d'erreur nomme la personne et son rôle, ce qui rend le cas lisible au comptoir.
+
+### Tests
+
+Serveur **vert : 64 fichiers / 380 tests**, PostgreSQL démarré depuis `runtime\pgsql`.
+Ajoutés : les cas de `mapPosteRole` pour les intitulés promus (et les garde-fous
+« ménagère »/« plongeuse »/« responsable cuisine » qui tiennent toujours), et les deux
+messages de refus du PIN manager (PIN d'un caissier vs PIN inconnu).
+`profil-a-la-braise.test.ts` vérifie maintenant qu'**aucune** catégorie ne porte
+d'horaire et que les 7 jours sont couverts.
+
+**Déploiement** : migrer (0038) + **rebuild caisse** + relancer l'exe. Le lanceur
+Electron applique les migrations au démarrage. Pas de redéploiement cloud, pas de
+repackaging `PosSamer.exe`.
+
+> ⚠️ Le paquet `correctif-a-la-braise/` à la racine du dossier de travail porte une
+> copie figée de l'ancien `profil.json`, **avec** les horaires. Ne pas le rejouer tel
+> quel sur un poste À la Braise : il les remettrait.

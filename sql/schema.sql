@@ -329,6 +329,9 @@ CREATE TABLE equipe_service (
   -- Heure d'ARRIVÉE = heure du clic sur « Pointer » (§6.7). Une heure saisie à
   -- la main est une heure négociable ; le clic, lui, est daté par le système.
   pointe_le      TIMESTAMPTZ,
+  -- Temps effectué avant ce shift dans une présence continue (sans les pauses
+  -- entre shifts). Les anciennes lignes commencent à zéro.
+  secondes_reportees INTEGER NOT NULL DEFAULT 0 CHECK (secondes_reportees >= 0),
   -- Départ (§6.8) : NULL = pas encore tranché, TRUE = reste, FALSE = parti.
   -- À la clôture, tout ce qui n'est pas TRUE est enregistré comme PARTI — le
   -- caissier ne marque donc que les exceptions.
@@ -552,6 +555,25 @@ CREATE TRIGGER audit_immutable
   BEFORE UPDATE OR DELETE ON audit_log
   FOR EACH ROW EXECUTE FUNCTION bloque_modification();
 
+-- Incidents techniques locaux affichés dans Réglages > Santé du système.
+-- Les erreurs répétées sont regroupées ; aucun corps de requête n'est stocké.
+CREATE TABLE erreurs_systeme (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  niveau               TEXT NOT NULL DEFAULT 'ERREUR',
+  origine              TEXT NOT NULL,
+  code                 TEXT,
+  message_fr           TEXT NOT NULL,
+  detail_technique     TEXT,
+  contexte             JSONB NOT NULL DEFAULT '{}',
+  occurrences          INTEGER NOT NULL DEFAULT 1,
+  premiere_occurrence  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  derniere_occurrence  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  resolue_le            TIMESTAMPTZ,
+  resolue_par           UUID REFERENCES utilisateurs(id)
+);
+CREATE INDEX idx_erreurs_systeme_derniere ON erreurs_systeme (derniere_occurrence DESC);
+CREATE INDEX idx_erreurs_systeme_non_resolues ON erreurs_systeme (resolue_le);
+
 -- ============================================================================
 -- 8. SYNCHRONISATION — LOCAL UNIQUEMENT (§3.5, outbox pattern)
 -- ============================================================================
@@ -663,7 +685,7 @@ CREATE TABLE notes_caissiers (
 -- grammes, la glace en pots (4,5) et les frites en sachets. Seuls les MONTANTS
 -- restent des entiers FCFA (règle du projet).
 
--- Catalogue de comptage — celui de SamerTrackly, identique sur les 7 sites.
+-- Catalogue de comptage — celui de SamerTrackly, identique sur tous les sites.
 -- Distinct du catalogue de VENTE (articles) : les lignes de consommation
 -- (« Manaïche (100g) ») et les totaux dérivés (« Total Fromage ») ne sont pas
 -- vendables. Le pont vers les ventes est la table inventaire_consommations

@@ -1,6 +1,6 @@
 # Console du siège (`apps/siege`)
 
-Vue de groupe sur les 7 restaurants, sans caisse. Elle ne remplace ni le POS,
+Vue de groupe sur tous les restaurants, sans caisse. Elle ne remplace ni le POS,
 ni SamerTrackly : elle les regarde tous les deux au même endroit, et diffuse
 vers plusieurs restaurants en une action.
 
@@ -95,13 +95,26 @@ maintenant, au design « Duo contrasté » (DESIGN_V2 § 6.12).
 | Tableau de bord | **Refondu le 2026-08-25** — six chiffres d'appel avec variation, CA quotidien empilé par restaurant, heures de pic, comparaisons, top des plats, modes de paiement, tables, canaux, retours, écarts par caissier, **livraisons partenaires par caissier**, dépenses, remises, annulations, inventaire, équipe et heures travaillées | `moi`, `tableau_bord` |
 | Clôtures | fond, compté, théorique, **écart** coloré au-delà de 2 000 F, ticket Z complet à la demande (blocs nommés, tous les champs, JSON brut dépliable) | `restaurants`, `clotures`, `rapport_z` |
 | Inventaire | pour la journée choisie, toutes les entrées POS et SamerTrackly regroupées par restaurant puis fournisseur, avant les explications d'écart ; un ADMIN peut prendre la même décision que dans SamerTrackly, LECTURE consulte seulement | `inventaire_explications`, `decider_explication_inventaire` |
+| Recettes d’inventaire | catalogue de comptage d’un restaurant ; un ADMIN crée un produit et associe les articles vendus avec leur quantité consommée. Le cloud diffuse ensuite les deux tables vers le POS. La création de produits À la Braise est bloquée. | `inventaire_catalogue`, `inventaire_produit_creer`, `inventaire_recette_enregistrer` |
 | Équipe | les travailleurs du groupe, filtrables par restaurant, **en lecture seule** | `equipe` |
+
+Pour faire apparaître les produits déjà présents dans une caisse, ouvrir sur le
+POS du restaurant **Administration → Recettes d’inventaire → Envoyer les produits
+existants au siège**. Cette publication initiale ne transmet que les lignes
+absentes du cloud. Si un code, un nom ou une recette correspond déjà à un autre
+identifiant, elle s'arrête et signale le conflit au lieu de créer un doublon.
+La publication est rejouable après une coupure réseau. À la Braise est exclu de
+ce transfert sans validation particulière.
+Le POS doit être enrôlé et sa synchronisation active. Les articles de vente
+utilisés par les recettes doivent déjà être arrivés au cloud ; sinon, attendre
+leur synchronisation puis relancer le transfert. Répéter l'opération sur le POS
+de chaque restaurant concerné, puis actualiser la console siège.
 
 ### Le tableau de bord
 
 Tout est agrégé **en SQL** (fonctions `siege_*` de
 `20260825020000_tableau_bord_siege.sql`), jamais dans l'Edge Function : un mois
-de ventes sur 7 restaurants fait ~10 000 lignes de `commandes`, les remonter
+de ventes sur tout le groupe fait plus de 10 000 lignes de `commandes`, les remonter
 dans Deno pour les additionner serait lent et exposé à la troncature de
 PostgREST. Une action, une réponse, quinze agrégats.
 
@@ -159,7 +172,7 @@ Le ticket Z lit cette action à l'ouverture plutôt que de figer la liste dans
 aussi. Le choix est tenu dans `App` et conservé d'un onglet à l'autre : on suit
 un restaurant du tableau de bord à ses clôtures puis à son équipe sans jamais le
 resélectionner. Il transporte le `samtrackly_id`, seul identifiant que possèdent
-les 7 restaurants — un site non enrôlé n'a pas d'UUID POS et doit rester
+tous les restaurants — un site non enrôlé n'a pas d'UUID POS et doit rester
 sélectionnable.
 
 Le seuil de 2 000 F est celui du POS (`parametres_locaux.seuil_alerte_ecart_caisse`),
@@ -190,17 +203,32 @@ L'écran Équipe, lui, fonctionne immédiatement — il lit SamerTrackly.
 Rien n'est perdu pendant ce temps : chaque caisse empile ses ventes dans
 `sync_outbox` et remonte tout au premier enrôlement.
 
-## Reste à faire
+## Gérer le menu des restaurants
 
-- Écran **Catalogue** : créer/modifier un plat, cocher les restaurants
-  destinataires, ajuster le prix par restaurant. La voie existe déjà côté cloud
-  (`admin-catalogue` + descente en moins de 5 min) ; il manque la boucle
-  multi-restaurants et l'interface.
+Dans **Menu → Articles déjà présents**, choisir un restaurant, rechercher un
+article puis modifier sa catégorie, son nom, son prix de base, sa description,
+sa photo ou sa disponibilité. « Afficher cet article au menu » permet de le
+masquer sans effacer les ventes passées. L'édition ne touche qu'au restaurant
+choisi ; elle ne crée aucun article. La création collective reste séparée et
+exclut À la Braise.
+
+L'enregistrement écrit dans le cloud POS. La caisse reçoit la modification à
+sa prochaine descente (intervalle habituel : 5 minutes) puis rafraîchit les
+écrans ouverts. Une caisse hors ligne garde son menu actuel jusqu'au retour de
+la connexion. La disponibilité définie au siège et l'état « épuisé » local
+doivent tous deux autoriser la vente. Les prix de canaux spécifiques ne sont pas
+modifiés par le champ « prix de base ».
+
+La nouvelle interface exige le déploiement de la console, de l'Edge Function
+`siege` et du serveur local mis à jour sur chaque site. Aucun changement de
+schéma cloud n'est nécessaire.
+
+## Reste à faire
 - Écran **Dépenses** et vue complète des inventaires : le nouvel onglet Inventaire
   couvre les entrées quotidiennes et les explications d'écart. Le stock à
   l'instant T sera ajouté plus tard comme vue interne du même onglet, pas comme
   un nouvel onglet principal.
-- **Sortir `SAMTRACKLY_KEY` du `.env` des 7 postes** (dette du 13/08). La clé
+- **Sortir `SAMTRACKLY_KEY` du `.env` de tous les postes** (dette du 13/08). La clé
   vivant désormais en secret de fonction, le POS pourra passer par un proxy au
   lieu d'appeler SamerTrackly en direct. Attention : retirer la clé des postes
   **avant** que ce proxy existe couperait la synchro équipe de chaque site.
