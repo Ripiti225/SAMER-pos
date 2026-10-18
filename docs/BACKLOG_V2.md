@@ -96,3 +96,25 @@ SONNERIE du téléphone, ni réveiller un téléphone écran éteint ou une app 
 arrière-plan : il faudrait les notifications système (service worker + Push),
 fermées en http. Le passage en HTTPS local, ou une petite app native, est le
 seul chemin vers une vraie sonnerie de téléphone.
+
+## Corriger un paiement saisi par erreur, tant que le shift est ouvert
+Une commande qui a reçu un paiement ne peut plus être annulée (le serveur
+refuse : « Une commande ayant reçu un paiement ne peut plus être annulée »), et
+la caisse n'a **aucune route pour retirer un paiement**. La réouverture manager
+repasse la commande en OUVERTE mais **laisse ses paiements en place** : la note
+du sprint 1 plus haut (« passer par réouverture manager ») ne suffit donc pas.
+
+Cas concret du 2026-10-16 : une commande test (ticket 1422, SP837, 5 000 FCFA)
+ouverte la veille a été encaissée dans le shift d'une caissière encore ouvert,
+en 2 000 espèces, 1 000 Wave et 2 000 Orange Money, tous fictifs. Rien ne permet
+de la neutraliser : la caissière aura un écart de −2 000 au comptage à l'aveugle,
+le ticket Z affichera 3 000 de mobile money jamais reçus, et la seule trace
+possible est l'explication d'écart.
+
+À prévoir : **annulation d'un paiement**, réservée au shift encore OUVERT dans
+lequel il a été encaissé, avec PIN manager et motif obligatoires, journalisée
+(`ANNULATION_PAIEMENT`) et écrite dans `sync_outbox` dans la même transaction.
+Le paiement n'est jamais supprimé : il est marqué annulé (ou contre-passé par une
+ligne négative), pour que le cloud, SamerTrackly et le journal d'audit restent
+cohérents. La commande redevient alors annulable par la voie normale. Une fois le
+shift clôturé, plus aucune correction côté caisse : le ticket Z reste figé.
