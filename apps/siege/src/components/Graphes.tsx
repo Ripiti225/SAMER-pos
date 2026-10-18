@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { formatFCFA } from '@pos/shared';
+import type { PlatHeure } from '../bord';
 
 /** Les huit créneaux de la palette catégorielle, dans l'ORDRE validé. */
 export const SERIES = [
@@ -155,15 +156,21 @@ export function BarresEmpilees({
  * Une seule série (le groupe, ou le restaurant filtré) : superposer sept
  * restaurants sur 24 heures donnerait une bouillie. L'heure de pointe est en
  * aplat plein et porte son étiquette ; les autres sont en retrait.
+ *
+ * Survoler (ou toucher, sur tablette) une heure montre ce qui s'y est vendu.
  */
 export function BarresHeures({
   heures,
   max: maxImpose,
+  plats,
 }: {
   heures: { heure: number; ca: number; nb: number }[];
   /** Voir `BarresEmpilees` : imposé dès qu'on compare deux colonnes. */
   max?: number;
+  /** Plats vendus par heure, déjà triés — l'infobulle de survol. */
+  plats?: Map<number, PlatHeure[]>;
 }) {
+  const [survol, setSurvol] = useState<number | null>(null);
   if (heures.length === 0) return <p className="py-6 text-center text-faible">Aucune vente sur cette période.</p>;
 
   const L = 900;
@@ -180,9 +187,13 @@ export function BarresHeures({
   const pointe = heures.reduce((a, b) => (b.ca > a.ca ? b : a));
   const pas = L / plage.length;
   const largeur = Math.max(4, Math.min(pas - 4, 44));
+  const indexSurvol = survol === null ? -1 : plage.indexOf(survol);
+  const detailSurvol = survol === null ? undefined : parHeure.get(survol);
+  const platsSurvol = survol === null ? [] : (plats?.get(survol) ?? []);
+  const VISIBLES = 8;
 
   return (
-    <figure className="m-0">
+    <figure className="relative m-0" onMouseLeave={() => setSurvol(null)}>
       <svg viewBox={`0 0 ${L} ${H}`} width="100%" height={H} role="img" aria-label="Chiffre d’affaires par heure">
         <line x1="0" y1={H - margeBas} x2={L} y2={H - margeBas} stroke="var(--filet)" strokeWidth="1" />
         {plage.map((h, i) => {
@@ -193,10 +204,23 @@ export function BarresHeures({
           const y = H - margeBas - haut;
           const estPointe = h === pointe.heure;
           return (
-            <g key={h}>
-              <rect x={x} y={y} width={largeur} height={haut} rx="4" fill="var(--marque)" opacity={estPointe ? 1 : 0.45}>
-                <title>{`${String(h).padStart(2, '0')} h — ${formatFCFA(ca)} · ${d?.nb ?? 0} commande(s)`}</title>
-              </rect>
+            <g
+              key={h}
+              onMouseEnter={() => setSurvol(h)}
+              onClick={() => setSurvol((s) => (s === h ? null : h))}
+              className="cursor-pointer"
+            >
+              {/* Cible pleine hauteur : une heure creuse fait une barre de 2 px. */}
+              <rect x={i * pas} y={0} width={pas} height={H} fill="transparent" />
+              <rect
+                x={x}
+                y={y}
+                width={largeur}
+                height={haut}
+                rx="4"
+                fill="var(--marque)"
+                opacity={survol === h ? 1 : survol !== null ? 0.3 : estPointe ? 1 : 0.45}
+              />
               {estPointe && (
                 <text x={x + largeur / 2} y={y - 5} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--txt)">
                   {formatFCFA(ca)}
@@ -209,6 +233,43 @@ export function BarresHeures({
           );
         })}
       </svg>
+
+      {/* Infobulle du côté opposé à la barre survolée, pour ne pas la cacher. */}
+      {survol !== null && (
+        <div
+          className={`pointer-events-none absolute top-0 z-10 w-72 max-w-[calc(100%-1rem)] rounded-jeton border border-filet bg-carte px-3 py-2 text-xs shadow-e2 ${
+            indexSurvol >= plage.length / 2 ? 'left-0' : 'right-0'
+          }`}
+        >
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="chiffres font-bold">
+              {String(survol).padStart(2, '0')} h → {String(survol + 1).padStart(2, '0')} h
+            </span>
+            <span className="chiffres font-semibold">{formatFCFA(detailSurvol?.ca ?? 0)}</span>
+          </div>
+          <div className="mb-1 text-faible">{detailSurvol?.nb ?? 0} commande(s)</div>
+          {platsSurvol.length === 0 ? (
+            <p className="text-faible">{plats ? 'Aucun plat vendu à cette heure.' : 'Détail des plats indisponible.'}</p>
+          ) : (
+            <>
+              {platsSurvol.slice(0, VISIBLES).map((p) => (
+                <div key={p.nom} className="flex items-center gap-2">
+                  <span className="chiffres w-8 flex-none text-right font-semibold">× {p.quantite}</span>
+                  <span className="min-w-0 flex-1 truncate text-doux">{p.nom}</span>
+                  <span className="chiffres flex-none">{formatFCFA(p.total)}</span>
+                </div>
+              ))}
+              {platsSurvol.length > VISIBLES && (
+                <div className="mt-1 text-faible">
+                  + {platsSurvol.length - VISIBLES} autre(s) plat(s) ·{' '}
+                  {platsSurvol.slice(VISIBLES).reduce((s, p) => s + p.quantite, 0)} article(s)
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       <p className="mt-1 text-xs text-faible">
         Heure de pointe : <b className="text-doux">{String(pointe.heure).padStart(2, '0')} h</b> ·{' '}
         {pointe.nb} commande(s) · {formatFCFA(pointe.ca)}

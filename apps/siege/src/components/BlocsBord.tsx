@@ -26,6 +26,7 @@ export function Bloc({ titre, note, children, large }: { titre: string; note?: s
 export interface Maxima {
   jour?: number;
   heures?: number;
+  caissiers?: number;
   plats?: number;
   modes?: number;
   tables?: number;
@@ -103,8 +104,12 @@ export function BlocsBord({
         <BarresEmpilees points={vue.pointsJour} series={series} max={maxima?.jour} />
       </Bloc>
 
-      <Bloc titre="Heures de pic" note="Quand renforcer l’équipe — l’heure de pointe est en aplat plein.">
-        <BarresHeures heures={vue.heures} max={maxima?.heures} />
+      <Bloc titre="Heures de pic" note="Quand renforcer l’équipe — l’heure de pointe est en aplat plein ; survolez une heure pour voir ce qui s’y est vendu.">
+        <BarresHeures heures={vue.heures} max={maxima?.heures} plats={vue.platsHeure} />
+      </Bloc>
+
+      <Bloc titre="Ventes par caissier" note="Commandes payées, rattachées au caissier du service — leur somme est le chiffre d’affaires.">
+        <BarresHorizontales lignes={vue.caissiers} max={maxima?.caissiers} vide="Aucune vente sur cette période." />
       </Bloc>
 
       {/* ---------- Couche 3 : comparer les restaurants ---------- */}

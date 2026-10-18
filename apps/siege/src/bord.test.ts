@@ -167,3 +167,58 @@ describe('vueBord — les agrégats par clé', () => {
     expect(v.equipe[0]?.libelle).toBe('Awa');
   });
 });
+
+describe('vueBord — ventes par caissier', () => {
+  const caissiers: Bord['caissiers'] = [
+    { restaurant_id: ANGRE, caissier_id: 'c1', caissier: 'Awa', nb_commandes: 10, ca: 50_000, nb_services: 1 },
+    { restaurant_id: ANGRE, caissier_id: 'c2', caissier: 'Koffi', nb_commandes: 20, ca: 90_000, nb_services: 2 },
+    { restaurant_id: RIVIERA, caissier_id: 'c3', caissier: 'Awa', nb_commandes: 5, ca: 20_000, nb_services: 1 },
+  ];
+
+  it('trie par CA décroissant et ne garde que le restaurant demandé', () => {
+    const v = vueBord(charge({ caissiers }), ctx(ANGRE));
+    expect(v.caissiers.map((c) => [c.libelle, c.valeur])).toEqual([
+      ['Koffi', 90_000],
+      ['Awa', 50_000],
+    ]);
+    expect(v.caissiers[0]?.detail).toBe('20 commande(s) · 2 service(s)');
+  });
+
+  it('en vue groupe, deux homonymes de deux sites restent deux lignes, avec leur site', () => {
+    const v = vueBord(charge({ caissiers }), ctx(null, 'Tous les restaurants'));
+    expect(v.caissiers).toHaveLength(3);
+    expect(v.caissiers.at(-1)?.detail).toBe('5 commande(s) · 1 service(s) · Riviera');
+  });
+
+  it('une fonction déployée sans le bloc rend une liste vide', () => {
+    expect(vueBord(charge(), ctx(ANGRE)).caissiers).toEqual([]);
+  });
+});
+
+describe('vueBord — plats de chaque heure', () => {
+  it('en vue groupe, cumule un même plat de deux sites sur la même heure, et trie', () => {
+    const v = vueBord(
+      charge({
+        plats_heure: [
+          { restaurant_id: ANGRE, heure: 12, plats: [{ nom: 'Chawarma', quantite: 3, total: 9000 }, { nom: 'Jus', quantite: 1, total: 1500 }] },
+          { restaurant_id: RIVIERA, heure: 12, plats: [{ nom: 'Jus', quantite: 4, total: 6000 }] },
+          { restaurant_id: RIVIERA, heure: 13, plats: [{ nom: 'Pizza', quantite: 1, total: 6500 }] },
+        ],
+      }),
+      ctx(null, 'Tous les restaurants'),
+    );
+    expect(v.platsHeure.get(12)).toEqual([
+      { nom: 'Jus', quantite: 5, total: 7500 },
+      { nom: 'Chawarma', quantite: 3, total: 9000 },
+    ]);
+    expect(v.platsHeure.get(13)).toEqual([{ nom: 'Pizza', quantite: 1, total: 6500 }]);
+  });
+
+  it('filtre sur le restaurant demandé', () => {
+    const v = vueBord(
+      charge({ plats_heure: [{ restaurant_id: RIVIERA, heure: 12, plats: [{ nom: 'Jus', quantite: 4, total: 6000 }] }] }),
+      ctx(ANGRE),
+    );
+    expect(v.platsHeure.size).toBe(0);
+  });
+});

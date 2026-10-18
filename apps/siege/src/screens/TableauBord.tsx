@@ -177,6 +177,7 @@ export function TableauBord({ filtre, onFiltre }: { filtre: FiltreResto; onFiltr
     return {
       jour: Math.max(totalJour(vueA), totalJour(vueB)),
       heures: Math.max(pic(vueA), pic(vueB)),
+      caissiers: Math.max(haut(vueA.caissiers), haut(vueB.caissiers)),
       plats: Math.max(haut(vueA.plats), haut(vueB.plats)),
       modes: Math.max(haut(vueA.modes), haut(vueB.modes)),
       tables: Math.max(haut(vueA.tables), haut(vueB.tables)),

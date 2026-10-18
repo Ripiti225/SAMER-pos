@@ -91,8 +91,12 @@ export interface VueBord {
 
   pointsJour: { cle: string; libelle: string; valeurs: Record<string, number> }[];
   heures: { heure: number; ca: number; nb: number }[];
+  /** Plats vendus pendant chaque heure, du plus vendu au moins vendu. */
+  platsHeure: Map<number, PlatHeure[]>;
 
   plats: LigneBarre[];
+  /** Ce que chaque caissier a vendu, du plus gros CA au plus petit. */
+  caissiers: LigneBarre[];
   modes: LigneBarre[];
   tables: LigneBarre[];
   canaux: LigneBarre[];
@@ -107,6 +111,13 @@ export interface VueBord {
   livraisons: Bord['livraisons'];
   totalLivraisons: { nb: number; contacts: number };
   absents: Bord['absents'];
+}
+
+/** Un plat de l'infobulle des heures de pic. */
+export interface PlatHeure {
+  nom: string;
+  quantite: number;
+  total: number;
 }
 
 /** Cumule des lignes par clé texte, puis trie et coupe. */
@@ -164,6 +175,48 @@ export function vueBord(data: Bord | undefined, ctx: ContexteVue): VueBord {
     parHeure.set(k, { heure: k, ca: vu.ca + nb(h.ca), nb: vu.nb + nb(h.nb) });
   }
   const heures = [...parHeure.values()].sort((a, b) => a.heure - b.heure);
+
+  // En vue groupe, un même plat vendu à 12 h dans trois restaurants n'est
+  // qu'UNE ligne de l'infobulle : on cumule par nom avant de trier.
+  const cumulHeure = new Map<number, Map<string, PlatHeure>>();
+  for (const h of mien(data?.plats_heure)) {
+    const k = nb(h.heure);
+    const seau = cumulHeure.get(k) ?? new Map<string, PlatHeure>();
+    for (const p of Array.isArray(h.plats) ? h.plats : []) {
+      const vu = seau.get(p.nom) ?? { nom: p.nom, quantite: 0, total: 0 };
+      seau.set(p.nom, { nom: p.nom, quantite: vu.quantite + nb(p.quantite), total: vu.total + nb(p.total) });
+    }
+    cumulHeure.set(k, seau);
+  }
+  const platsHeure = new Map(
+    [...cumulHeure.entries()].map(([k, seau]) => [
+      k,
+      [...seau.values()].sort((a, b) => b.quantite - a.quantite || a.nom.localeCompare(b.nom)),
+    ]),
+  );
+
+  // -- Les caissiers ------------------------------------------------------
+  // Clé = restaurant + caissier : deux homonymes de deux sites restent deux
+  // lignes. Sans id (commande orpheline), le nom tient lieu de clé.
+  const parCaissier = new Map<string, { restaurant_id: string; nom: string; ca: number; nb: number; services: number }>();
+  for (const c of mien(data?.caissiers)) {
+    const cle = `${c.restaurant_id}:${c.caissier_id ?? c.caissier}`;
+    const vu = parCaissier.get(cle) ?? { restaurant_id: c.restaurant_id, nom: c.caissier, ca: 0, nb: 0, services: 0 };
+    parCaissier.set(cle, {
+      ...vu,
+      ca: vu.ca + nb(c.ca),
+      nb: vu.nb + nb(c.nb_commandes),
+      services: vu.services + nb(c.nb_services),
+    });
+  }
+  const caissiers = [...parCaissier.entries()]
+    .sort(([, a], [, b]) => b.ca - a.ca)
+    .map(([cle, c]) => ({
+      cle,
+      libelle: c.nom,
+      valeur: c.ca,
+      detail: `${c.nb} commande(s) · ${c.services} service(s)${restaurantId ? '' : ` · ${noms.get(c.restaurant_id) ?? ''}`}`,
+    }));
 
   // -- Les plats ----------------------------------------------------------
   const parPlat = new Map<string, { q: number; t: number }>();
@@ -228,7 +281,9 @@ export function vueBord(data: Bord | undefined, ctx: ContexteVue): VueBord {
 
     pointsJour,
     heures,
+    platsHeure,
     plats,
+    caissiers,
     tables,
     canaux,
 

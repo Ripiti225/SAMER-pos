@@ -106,6 +106,19 @@ export interface Bord {
   tendance: { restaurant_id: string; jour: string; ca: number; nb_commandes: number }[];
   heures: { restaurant_id: string; heure: number; nb: number; ca: number }[];
   plats: { restaurant_id: string; nom: string; quantite: number; total: number }[];
+  /** Plats vendus pendant chaque heure — l'infobulle des heures de pic. Absent
+   *  d'une fonction déployée avant le 2026-10-18. */
+  plats_heure?: { restaurant_id: string; heure: number; plats: { nom: string; quantite: number; total: number }[] }[];
+  /** Ventes de chaque caissier ; leur somme par restaurant = son CA. Absent
+   *  d'une fonction déployée avant le 2026-10-18. */
+  caissiers?: {
+    restaurant_id: string;
+    caissier_id: string | null;
+    caissier: string;
+    nb_commandes: number;
+    ca: number;
+    nb_services: number;
+  }[];
   modes: { restaurant_id: string; mode: string; montant: number; nb: number }[];
   types: { restaurant_id: string; type: string; partenaire: string | null; nb: number; total: number }[];
   /** `numero` est NULL tant que `pnpm salle:republier` n'a pas tourné sur le site. */
