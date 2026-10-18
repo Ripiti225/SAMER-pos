@@ -220,8 +220,15 @@ Deno.serve(async (req) => {
        */
       case 'tableau_bord': {
         const { debut, fin } = periode(corps);
+        // Décalage arrondi au JOUR ENTIER supérieur : des jours entiers donnent
+        // toujours « la même durée juste avant », mais une plage horaire
+        // (08:24 → 16:18) se compare à la même plage la veille, pas à la nuit
+        // 00:30 → 08:24 qui la précède. Le décalage restant ≥ la durée, les
+        // deux plages ne se chevauchent jamais.
         const duree = new Date(fin).getTime() - new Date(debut).getTime();
-        const debutPrec = new Date(new Date(debut).getTime() - duree).toISOString();
+        const decalage = Math.ceil(duree / 86_400_000) * 86_400_000;
+        const debutPrec = new Date(new Date(debut).getTime() - decalage).toISOString();
+        const finPrec = new Date(new Date(fin).getTime() - decalage).toISOString();
 
         const bornes = { p_debut: debut, p_fin: fin };
         const restos = await restaurantsGroupe(admin);
@@ -233,7 +240,7 @@ Deno.serve(async (req) => {
         ] = await Promise.all([
           admin.rpc('siege_ventes', bornes),
           admin.rpc('siege_ventes_jour', bornes),
-          admin.rpc('siege_ventes', { p_debut: debutPrec, p_fin: debut }),
+          admin.rpc('siege_ventes', { p_debut: debutPrec, p_fin: finPrec }),
           admin.rpc('siege_ventes_heure', bornes),
           admin.rpc('siege_top_plats', bornes),
           admin.rpc('siege_par_mode', bornes),
@@ -299,7 +306,7 @@ Deno.serve(async (req) => {
         });
 
         return jsonCors({
-          periode: { debut, fin, debut_precedent: debutPrec },
+          periode: { debut, fin, debut_precedent: debutPrec, fin_precedent: finPrec },
           total: lignes.reduce((s, l) => s + l.ca, 0),
           total_precedent: lignes.reduce((s, l) => s + l.ca_precedent, 0),
           restaurants: lignes,

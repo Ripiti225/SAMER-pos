@@ -89,7 +89,9 @@ export interface LigneTableauBord extends RestoGroupe {
  * arrive VIDE plutôt que de faire échouer tout l'écran.
  */
 export interface Bord {
-  periode: { debut: string; fin: string; debut_precedent: string };
+  /** `fin_precedent` : absente d'une fonction déployée avant les plages
+   *  horaires — la période d'en face finissait alors à `debut`. */
+  periode: { debut: string; fin: string; debut_precedent: string; fin_precedent?: string };
   total: number;
   total_precedent: number;
   restaurants: (RestoGroupe & {
@@ -168,14 +170,14 @@ export interface Cloture {
   ecart: number | null;
   /** Écart global après correction des modes de paiement — anomalie réelle. */
   ecart_reconciliation?: number | null;
-}
-
   /** Nom du caissier (ticket Z figé, sinon fiche employé). */
   caissier?: string | null;
   /** Ce que le caissier a écrit sous son écart en validant son ticket. */
   explication_ecart?: string | null;
   /** Ticket validé par le caissier (« Terminer ») ; NULL : pas encore. */
   remis_le?: string | null;
+}
+
 export type StatutExplicationInventaire = 'en_attente' | 'validee' | 'refusee';
 
 /** Une réception de stock d'une journée, quelle que soit son origine. */

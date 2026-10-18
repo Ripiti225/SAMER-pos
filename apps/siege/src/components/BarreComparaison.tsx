@@ -19,6 +19,7 @@ export function BarreComparaison({
   libellePeriodeA,
   libellePeriodeB,
   nbJours,
+  joursDecalage = null,
 }: {
   mode: ModeComparaison;
   onMode: (m: ModeComparaison) => void;
@@ -35,6 +36,9 @@ export function BarreComparaison({
   /** Nombre de jours couverts par A — et donc par B. Écrit à l'écran : sans lui,
    *  « Ce mois-ci » un 25 septembre se lirait comme le mois d'août entier. */
   nbJours: number;
+  /** Plage horaire (08:24 → 16:18) : B est la même plage, ce nombre de jours
+   *  plus tôt. `null` pour des jours entiers. */
+  joursDecalage?: number | null;
 }) {
   const assezDeRestaurants = restaurants.length >= 2;
   const classeTerme = 'flex items-center gap-2 text-sm font-semibold text-doux';
@@ -115,7 +119,16 @@ export function BarreComparaison({
         )}
       </div>
 
-      {mode === 'periodes' && (
+      {mode === 'periodes' && joursDecalage !== null && (
+        <p className="mt-2 text-xs text-faible">
+          <b>
+            La même plage horaire, {joursDecalage === 1 ? 'la veille' : `${joursDecalage} jours plus tôt`}.
+          </b>{' '}
+          B n’est pas choisie : comparer 08:24 → 16:18 à la nuit qui le précède ne voudrait rien dire. On reprend
+          donc les mêmes heures, décalées de jours entiers.
+        </p>
+      )}
+      {mode === 'periodes' && joursDecalage === null && (
         <p className="mt-2 text-xs text-faible">
           <b>
             {nbJours === 1 ? '1 jour contre le précédent' : `${nbJours} jours contre les ${nbJours} précédents`}.

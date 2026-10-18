@@ -9,7 +9,7 @@ import { FiltreRestaurant } from '../components/FiltreRestaurant';
 import { SelecteurPeriode } from '../components/SelecteurPeriode';
 import { Synthese } from '../components/Synthese';
 import { BarresHorizontales, couleurSerie, type Serie } from '../components/Graphes';
-import { jourCourt, periodes, type Periode } from '../periode';
+import { libelleBornes, periodes, type Periode } from '../periode';
 import { restoChoisi, useRestaurants, type FiltreResto } from '../restaurants';
 
 const JOUR = 86_400_000;
@@ -50,7 +50,9 @@ export function TableauBord({ filtre, onFiltre }: { filtre: FiltreResto; onFiltr
    * de ce que « la période précédente » veut dire, et les deux doivent dire
    * la même chose.
    */
-  const bornesB = data?.periode ? { debut: data.periode.debut_precedent, fin: data.periode.debut } : null;
+  const bornesB = data?.periode
+    ? { debut: data.periode.debut_precedent, fin: data.periode.fin_precedent ?? data.periode.debut }
+    : null;
 
   /**
    * La seule requête que la comparaison ajoute, et seulement en « 2 périodes » :
@@ -114,8 +116,11 @@ export function TableauBord({ filtre, onFiltre }: { filtre: FiltreResto; onFiltr
   const restoB = restoChoisi(tous, termeB);
   const nomRestoCompare = restoA?.nom ?? 'Tous les restaurants';
 
-  /** Le nombre de jours réellement couvert — écrit à l'écran, jamais deviné. */
-  const nbJours = Math.round((new Date(periode.fin).getTime() - new Date(periode.debut).getTime()) / JOUR);
+  /** La durée réellement couverte — écrite à l'écran, jamais devinée. */
+  const dureeA = new Date(periode.fin).getTime() - new Date(periode.debut).getTime();
+  const nbJours = Math.round(dureeA / JOUR);
+  /** Plage horaire : B est la même plage, des jours plus tôt (voir la fonction). */
+  const joursDecalage = dureeA % JOUR === 0 ? null : Math.ceil(dureeA / JOUR);
 
   /**
    * La période d'en face, écrite en dates réelles plutôt qu'en « période
@@ -125,9 +130,7 @@ export function TableauBord({ filtre, onFiltre }: { filtre: FiltreResto; onFiltr
    */
   const libelleB = (() => {
     if (mode !== 'periodes' || !bornesB) return periode.libelle;
-    const premier = jourCourt(bornesB.debut);
-    const dernier = jourCourt(new Date(new Date(bornesB.fin).getTime() - JOUR).toISOString());
-    return premier === dernier ? premier : `${premier} → ${dernier}`;
+    return libelleBornes(bornesB.debut, bornesB.fin);
   })();
 
   /**
@@ -276,6 +279,7 @@ export function TableauBord({ filtre, onFiltre }: { filtre: FiltreResto; onFiltr
             libellePeriodeA={periode.libelle}
             libellePeriodeB={libelleB}
             nbJours={nbJours}
+            joursDecalage={joursDecalage}
           />
 
           {erreurB && mode === 'periodes' ? (

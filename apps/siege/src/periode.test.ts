@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DUREE_MAX_JOURS, personnalisee } from './periode';
+import { DUREE_MAX_JOURS, libelleBornes, personnalisee } from './periode';
 
 /**
  * `fin` est EXCLUE côté cloud (`< p_fin`). Une plage « jusqu'au 31 octobre »
@@ -86,5 +86,70 @@ describe('personnalisee — le libellé', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.periode.libelle).toBe('20 déc. 2024 → 10 janv. 2025');
+  });
+});
+
+/**
+ * « Qu'a-t-on vendu de 08:24 à 16:18 ? » : l'heure de fin tapée est INCLUSE,
+ * comme on la lit. La vente de 16:18:40 en fait partie, donc `fin` (exclue
+ * côté cloud) est posée à 16:19:00.
+ */
+describe('personnalisee — les heures', () => {
+  const enOctobre2026 = new Date('2026-10-18T10:00:00.000Z');
+
+  it('un seul jour, 08:24 → 16:18 : fin à 16:19, heure de fin incluse', () => {
+    const r = personnalisee('2026-10-18', '2026-10-18', enOctobre2026, { de: '08:24', a: '16:18' });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.periode.debut).toBe('2026-10-18T08:24:00.000Z');
+    expect(r.periode.fin).toBe('2026-10-18T16:19:00.000Z');
+    expect(r.periode.libelle).toBe('18 oct. · 08:24 → 16:18');
+  });
+
+  it('sur deux jours, chaque borne porte sa date', () => {
+    const r = personnalisee('2026-10-17', '2026-10-18', enOctobre2026, { de: '18:00', a: '02:30' });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.periode.debut).toBe('2026-10-17T18:00:00.000Z');
+    expect(r.periode.fin).toBe('2026-10-18T02:31:00.000Z');
+    expect(r.periode.libelle).toBe('17 oct. 18:00 → 18 oct. 02:30');
+  });
+
+  it("une seule heure : l'autre borne reste minuit", () => {
+    const r = personnalisee('2026-10-18', '2026-10-18', enOctobre2026, { de: '08:24', a: '' });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.periode.debut).toBe('2026-10-18T08:24:00.000Z');
+    expect(r.periode.fin).toBe('2026-10-19T00:00:00.000Z');
+  });
+
+  it('sans heure, rien ne change : journées entières', () => {
+    const r = personnalisee('2026-10-01', '2026-10-31', enOctobre2026, { de: '', a: '' });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.periode.debut).toBe('2026-10-01T00:00:00.000Z');
+    expect(r.periode.fin).toBe('2026-11-01T00:00:00.000Z');
+    expect(r.periode.libelle).toBe('1 → 31 oct.');
+  });
+
+  it('refuse une heure de fin avant celle de début, le même jour', () => {
+    expect(personnalisee('2026-10-18', '2026-10-18', enOctobre2026, { de: '16:18', a: '08:24' }))
+      .toEqual({ ok: false, refus: 'inversee' });
+  });
+
+  it('une heure à moitié tapée attend, sans message', () => {
+    expect(personnalisee('2026-10-18', '2026-10-18', enOctobre2026, { de: '08:2', a: '' }))
+      .toEqual({ ok: false, refus: 'incomplete' });
+  });
+});
+
+/** Le libellé de la période d'en face, rendue par le cloud. */
+describe('libelleBornes', () => {
+  it('des jours entiers restent des jours', () => {
+    expect(libelleBornes('2026-10-17T00:00:00.000Z', '2026-10-18T00:00:00.000Z')).toBe('sam. 17 oct.');
+  });
+
+  it('une plage horaire garde ses heures, fin incluse', () => {
+    expect(libelleBornes('2026-10-17T08:24:00.000Z', '2026-10-17T16:19:00.000Z')).toBe('sam. 17 oct. · 08:24 → 16:18');
   });
 });
