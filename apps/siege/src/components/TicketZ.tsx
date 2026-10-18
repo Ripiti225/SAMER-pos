@@ -71,11 +71,17 @@ export function TicketZ({
   restaurant,
   serviceId,
   restaurantId,
+  explication,
+  remisLe,
 }: {
   rapport: RapportZLu;
   restaurant: string;
   serviceId: string;
   restaurantId: string;
+  /** Explication saisie par le caissier sous son écart (`services_caisse.explication_ecart`). */
+  explication?: string | null;
+  /** Validation du ticket par le caissier ; NULL : pas encore terminé. */
+  remisLe?: string | null;
 }) {
   const ecartEspeces = nb(rapport.ecart);
   const ecart = typeof rapport.diff === 'number' && Number.isFinite(rapport.diff)
@@ -134,6 +140,23 @@ export function TicketZ({
           {graveEcart ? ` · au-delà du seuil d’alerte de ${formatFCFA(SEUIL_ECART)}` : ''}
         </div>
       </div>
+
+      {/* Hors du rapport figé : l'explication est saisie APRÈS la clôture, quand
+          le caissier valide son ticket. Le POS l'exige dès que l'écart réconcilié
+          n'est pas nul — son absence avec remisLe NULL veut dire « pas encore ». */}
+      {explication ? (
+        <div className="rounded-jeton border border-filet border-l-4 border-l-alerte bg-carte p-4">
+          <div className="text-[12px] font-bold uppercase tracking-wide text-faible">
+            Explication du caissier
+            {remisLe && <span className="chiffres font-semibold normal-case tracking-normal"> · {dateHeure(remisLe)}</span>}
+          </div>
+          <p className="mt-1 whitespace-pre-wrap font-medium">{explication}</p>
+        </div>
+      ) : ecart !== 0 && remisLe === null ? (
+        <p className="rounded-jeton bg-attente-tint px-4 py-3 text-sm text-attente-txt">
+          Le caissier n’a pas encore validé son ticket : son explication de l’écart n’est pas encore arrivée.
+        </p>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Mêmes lignes, même ordre que le ticket imprimé sur le site : un

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { formatFCFA } from '@pos/shared';
 import { appelSiege, ErreurSiege, type Cloture, type RestoGroupe } from '../api';
@@ -85,13 +85,16 @@ export function Clotures({ filtre, onFiltre }: { filtre: FiltreResto; onFiltre: 
                 // Au-delà du seuil, le POS écrit déjà une entrée d'audit
                 // ECART_CAISSE : la console montre le même seuil, pas un autre.
                 const grave = ecart !== null && Math.abs(ecart) > SEUIL_ECART;
+                const note = noteEcart(c, ecart);
                 return (
-                  <tr key={c.service_id} className="border-b border-filet last:border-0">
+                  <Fragment key={c.service_id}>
+                  <tr className={note ? '' : 'border-b border-filet last:border-0'}>
                     <td className="px-4 py-3">
                       <span className="flex items-center gap-2 font-semibold">
                         {r && <PastilleMarque marque={r.marque} />}
                         {r?.nom ?? 'Site inconnu'}
                       </span>
+                      {c.caissier && <span className="mt-0.5 block text-sm text-doux">{c.caissier}</span>}
                     </td>
                     <td className="chiffres px-4 py-3 text-doux">{dateHeure(c.ouvert_le)}</td>
                     <td className="chiffres px-4 py-3 text-doux">
@@ -141,6 +144,14 @@ export function Clotures({ filtre, onFiltre }: { filtre: FiltreResto; onFiltre: 
                       )}
                     </td>
                   </tr>
+                  {note && (
+                    <tr className="border-b border-filet last:border-0">
+                      <td colSpan={9} className="px-4 pb-3 pt-0">
+                        <NoteEcart note={note} />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
               {lignes.length === 0 && (
@@ -157,6 +168,48 @@ export function Clotures({ filtre, onFiltre }: { filtre: FiltreResto; onFiltre: 
 
       {ouverte && <ModaleTicketZ cloture={ouverte} nom={nomResto.get(ouverte.restaurant_id)?.nom ?? 'Site'} onFermer={() => setOuverte(null)} />}
     </section>
+  );
+}
+
+type Note =
+  | { genre: 'explication'; texte: string; remis_le: string | null }
+  | { genre: 'attente' }
+  | { genre: 'absente' };
+
+/**
+ * Ce que la ligne doit dire sous l'écart. L'explication est saisie par le
+ * caissier quand il valide son ticket (« Terminer ») ; le POS l'exige dès que
+ * l'écart RÉCONCILIÉ n'est pas nul. Un écart sans `remis_le` n'est donc pas
+ * un silence : le caissier n'a pas encore terminé.
+ *
+ * Champs `undefined` : la RPC cloud n'a pas encore la migration du
+ * 2026-10-17 — on n'affiche alors rien plutôt qu'un faux « sans explication ».
+ */
+function noteEcart(c: Cloture, ecart: number | null): Note | null {
+  if (c.explication_ecart) return { genre: 'explication', texte: c.explication_ecart, remis_le: c.remis_le ?? null };
+  if (c.remis_le === undefined || !c.cloture_le || !ecart) return null;
+  return c.remis_le === null ? { genre: 'attente' } : { genre: 'absente' };
+}
+
+function NoteEcart({ note }: { note: Note }) {
+  if (note.genre === 'attente') {
+    return (
+      <p className="rounded-sm bg-attente-tint px-3 py-2 text-sm text-attente-txt">
+        Le caissier n’a pas encore validé son ticket : son explication de l’écart n’est pas encore arrivée.
+      </p>
+    );
+  }
+  if (note.genre === 'absente') {
+    return <p className="px-3 text-sm text-faible">Aucune explication saisie pour cet écart.</p>;
+  }
+  return (
+    <div className="rounded-btn border-l-4 border-alerte bg-carte-douce px-3 py-2">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-faible">
+        Explication du caissier
+        {note.remis_le && <span className="chiffres normal-case tracking-normal"> · {dateHeure(note.remis_le)}</span>}
+      </div>
+      <p className="mt-1 whitespace-pre-wrap font-medium">{note.texte}</p>
+    </div>
   );
 }
 
@@ -198,6 +251,8 @@ function ModaleTicketZ({ cloture, nom, onFermer }: { cloture: Cloture; nom: stri
             restaurant={nom}
             serviceId={cloture.service_id}
             restaurantId={cloture.restaurant_id}
+            explication={(data?.cloture?.explication_ecart as string | null | undefined) ?? cloture.explication_ecart}
+            remisLe={(data?.cloture?.remis_le as string | null | undefined) ?? cloture.remis_le}
           />
         ) : (
           !isPending && !error && <p className="text-doux">Ce service n’a pas de rapport Z figé.</p>
