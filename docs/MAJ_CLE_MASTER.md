@@ -13,7 +13,8 @@ et les deux seuls comptes propriétaire. Tout ce qui est écrit ici est **posté
 > `docs/` changent : **ni migration locale, ni rebuild caisse, ni repackaging**. Anciens
 > fichiers dans `C:\Users\HP\Documents\POS-Samer\usb-backup-20261019-000223`, manifeste
 > `usb-copy-20261019-000223.csv`. Côté cloud, les migrations `20261017000000` et
-> `20261018000000`, la fonction `siege` et la console siège restent **à publier**.
+> `20261018000000`, la fonction `siege` et la console siège sont **publiés** (fait
+> depuis le Mac, confirmé le 19/10 ; non revérifié depuis ce poste).
 >
 > 🔴 **Virus sur la clé, nettoyé le 19/10** : `Virus:Win32/Grenam.VA!MSR` (Defender). Le
 > **16/10 vers 13h26**, sur un PC infecté, il a remplacé **82 exécutables** de la clé
