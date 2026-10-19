@@ -5,6 +5,29 @@
 La clé a été copiée le **2026-08-17 à 05h01:32**, avec l'identité neutre `A_CONFIGURER`
 et les deux seuls comptes propriétaire. Tout ce qui est écrit ici est **postérieur**.
 
+> **Report du 2026-10-19** : `origin/main` du 18/10 (`5eca679` — siège : explication du
+> caissier sous chaque écart de clôture, plage horaire dans la période personnalisée,
+> ventes par caissier et plats vendus au survol des heures de pic). **17 fichiers**
+> (2 ajoutés, 15 remplacés) copiés vers `D:\POS-Samer\app`, **17/17 vérifiés par
+> SHA-256** ; aucun autre fichier suivi ne différait. Seuls `apps/siege`, `supabase/` et
+> `docs/` changent : **ni migration locale, ni rebuild caisse, ni repackaging**. Anciens
+> fichiers dans `C:\Users\HP\Documents\POS-Samer\usb-backup-20261019-000223`, manifeste
+> `usb-copy-20261019-000223.csv`. Côté cloud, les migrations `20261017000000` et
+> `20261018000000`, la fonction `siege` et la console siège restent **à publier**.
+>
+> 🔴 **Virus sur la clé, nettoyé le 19/10** : `Virus:Win32/Grenam.VA!MSR` (Defender). Le
+> **16/10 vers 13h26**, sur un PC infecté, il a remplacé **82 exécutables** de la clé
+> (`PosSamer.exe`, `runtime\node\node.exe`, tout `runtime\pgsql\bin`, `electron.exe`,
+> `esbuild.exe`, `7za.exe`, `app-builder.exe`…) par lui-même (533 504 octets) et caché
+> chaque original en `g<nom>` (Caché + Système), plus 15 icônes vides `g*.ico`.
+> Réparation : copies virales supprimées, originaux renommés et rendus visibles —
+> **81/82 identiques par SHA-256** aux fichiers sains du poste 7E ; le 82e, `PosSamer.exe`
+> du 20/09 (74 330 255 octets), sans copie de référence, conforme au journal. Scan
+> Defender de `D:\` propre ensuite, `node`/`pg_ctl`/`postgres` se lancent. Détail :
+> `usb-reparation-grenam-20261019.csv`. **Le PC sur lequel la clé était branchée le 16/10
+> est à analyser, ainsi que tout poste servi par la clé depuis.** Repère rapide d'une
+> réinfection : un `.exe` de 533 504 octets, ou un fichier caché `g<nom>.exe` à côté.
+>
 > **Report du 2026-10-15** : `origin/main` du 15/10 (34 commits : paiement en points
 > fidélité, note du caissier SamerTrackly, sonnerie « commande prête » du serveur, KDS
 > adapté à l'appareil, PIN commençant par 0, verrouillage par inactivité désactivé,
@@ -141,7 +164,8 @@ avant que les 7 autres restaurants ne reçoivent quoi que ce soit.
 | Base de la clé | **migrée le 15/10** : `drizzle.__drizzle_migrations` compte **42 lignes sur 42**. Neutralité contrôlée : `A_CONFIGURER`, 0 commande, 0 service, 0 `cle_site`, 2 propriétaires, 16 catégories, 131 articles actifs. Sauvegarde préalable : `data\pgdata.backup-20261015` |
 | 🔴 Postes déjà installés depuis une clé antérieure au 15/10 | **doivent appliquer les migrations manquantes jusqu'à 0041** avant de servir la caisse. Le lanceur Electron actuel le fait au démarrage ; contrôler le résultat sur chaque poste |
 | Rebuild des interfaces | **caisse recompilée le 15/10**. KDS, serveur et client tournent en Vite dev depuis leurs sources (pas de `dist` servi) ; siège non recompilé |
-| Report du code sur la clé master | **fait le 15/10** — 121 fichiers ajoutés ou remplacés, **121/121 vérifiés par SHA-256** ; `.env`, base, runtime, dépendances portables et exécutable de la clé préservés. Migrations `0039` à `0041` reportées ET appliquées à la base de la clé |
+| Report du code sur la clé master | **fait le 19/10** (`5eca679`) — 17 fichiers ajoutés ou remplacés, **17/17 vérifiés par SHA-256**, siège et cloud uniquement. Le 15/10 : 121 fichiers, migrations `0039` à `0041` reportées ET appliquées à la base de la clé. `.env`, base, runtime, dépendances portables et exécutable de la clé préservés |
+| Virus Grenam | **nettoyé le 19/10** — 82 exécutables restaurés (voir le report du 19/10). Analyser le PC d'origine de l'infection (16/10, 13h26) |
 | Scripts à la racine du dossier portable | **à jour le 20/09** — tous les `.bat` et `.ps1` de `deploy/windows/` ont été recopiés |
 | Repackaging `PosSamer.exe` | **fait le 20/09 à 17h44** après la modification de `apps/desktop/main.js` ; nouvel exécutable de 74 330 255 octets copié à la racine |
 | Redéploiement Edge Function | `siege` : **donnée pour faite le 09/09** en même temps que la migration `marque_a_la_braise`, non revérifiée depuis ce poste — et `functions list` a déjà menti une fois (voir l'entrée du 17/08). **`samtrackly-points` : OUI** (pagination de la sélection + services clôturés sans `remis_le`). `sync-push` : redéployée le 04/09 |
