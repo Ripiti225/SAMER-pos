@@ -20,8 +20,38 @@ const RattacherSchema = z.object({
   utiliser_points: z.number().int().min(0).optional(),
 });
 
+const NomClientSchema = z.object({
+  nom: z.string().trim().max(60, 'Nom trop long'),
+});
+
 export function routesFidelite(app: FastifyInstance): void {
   const gardeCaisse = app.exigePermission('caisse.encaisser');
+
+  /**
+   * Nom du client, saisi au paiement (facultatif). Il s'imprime sur le reçu et
+   * sert au tirage au sort mensuel du siège. Une chaîne vide efface le nom.
+   */
+  app.patch('/api/clients-fidelite/:id', { preHandler: gardeCaisse }, async (req) => {
+    const { id } = req.params as { id: string };
+    const { nom } = valider(NomClientSchema, req.body);
+    return db.transaction(async (tx) => {
+      const [maj] = await tx
+        .update(clientsFidelite)
+        .set({ nom: nom || null })
+        .where(eq(clientsFidelite.id, id))
+        .returning();
+      if (!maj) throw new ErreurMetier('Client introuvable', 404);
+      await ecrireOutbox(tx, 'clients_fidelite', 'UPDATE', id, maj as unknown as Record<string, unknown>);
+      await journaliser(tx, {
+        user_id: req.session!.utilisateur_id,
+        action: 'NOM_CLIENT',
+        entite: 'clients_fidelite',
+        entite_id: id,
+        meta: { nom: maj.nom },
+      });
+      return { id: maj.id, telephone: maj.telephone, nom: maj.nom };
+    });
+  });
 
   // Consulter un solde par téléphone (pavé de saisie au paiement)
   app.get('/api/fidelite/:telephone', { preHandler: gardeCaisse }, async (req) => {

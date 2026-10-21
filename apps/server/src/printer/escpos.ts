@@ -18,7 +18,8 @@ import type { CommandeItemVue, CommandeVue, EtatStockInstant, NoteSplitVue, Paie
 import { clePosteImprimante, estLivraisonSansEncaissement, formatFCFA, libelleCategorieInventaire, libellePartenaire, LIBELLES_MODES, LIBELLES_POSTE_IMPRESSION, LIBELLES_TYPES_COMMANDE, titreRecuSousNote, vueSousNote } from '@pos/shared';
 import { db } from '../db/client.js';
 import { enregistrerIncident } from '../modules/sante/incidents.js';
-import { parametresLocaux, restaurant } from '../db/schema/index.js';
+import { clientsFidelite, parametresLocaux, restaurant } from '../db/schema/index.js';
+import { lireBareme, soldePoints } from '../modules/fidelite/service.js';
 import type { PrinterService } from './PrinterService.js';
 import { ConsolePrinter } from './ConsolePrinter.js';
 import { estModeLogo, logoTicket, type Marque, type ModeLogo } from './logo.js';
@@ -402,6 +403,39 @@ function ligneMonnaie(r: Ruban, p: PaiementVue): void {
   r.duo('   Monnaie rendue', formatFCFA(p.monnaie_rendue ?? 0));
 }
 
+export interface FideliteRecu {
+  nom: string | null;
+  solde: number;
+  valeur_fcfa: number;
+}
+
+/**
+ * Solde du client rattaché, lu APRÈS l'encaissement (les points de la vente
+ * sont déjà crédités). C'est le seul endroit où un client MTN ou Moov voit
+ * ses points : le SMS ne part que vers les numéros Orange. Une erreur de
+ * lecture ne doit jamais empêcher le reçu de sortir.
+ */
+export async function fideliteRecu(clientId: string | null): Promise<FideliteRecu | null> {
+  if (!clientId) return null;
+  try {
+    const [client] = await db.select({ nom: clientsFidelite.nom }).from(clientsFidelite).where(eq(clientsFidelite.id, clientId));
+    if (!client) return null;
+    const solde = await soldePoints(db, clientId);
+    const bareme = await lireBareme(db);
+    return { nom: client.nom, solde, valeur_fcfa: solde * bareme.valeur_point_fcfa };
+  } catch {
+    return null;
+  }
+}
+
+/** « Merci Awa » puis le solde, juste avant le pied du reçu. */
+function blocFidelite(r: Ruban, f: FideliteRecu | null): void {
+  if (!f) return;
+  r.tiret().centre();
+  if (f.nom) r.gras(true).ligne(`Merci ${f.nom} !`).gras(false);
+  r.ligne(`Vos points : ${f.solde} pts = ${formatFCFA(f.valeur_fcfa)}`);
+}
+
 function corpsArticles(r: Ruban, c: CommandeVue): void {
   for (const item of c.items) {
     if (item.statut_cuisine === 'ANNULE') continue;
@@ -517,6 +551,7 @@ export class EscposPrinter implements PrinterService {
 
   async imprimerTicket(c: CommandeVue): Promise<void> {
     const info = await this.infosResto();
+    const fidelite = await fideliteRecu(c.client_fidelite_id);
     await this.envoyer(
       () => {
         const r = new Ruban(info.colonnes);
@@ -536,6 +571,7 @@ export class EscposPrinter implements PrinterService {
           r.ligne('*** OFFERT - KDO ***');
           if (c.motif_offert) r.ligne(`Motif : ${c.motif_offert}`);
         }
+        blocFidelite(r, fidelite);
         r.tiret().centre().ligne(c.offert ? 'Offert - bonne degustation !' : 'Paye - merci de votre visite !');
         if (info.pied) r.ligne(info.pied);
         r.couper();
@@ -555,6 +591,7 @@ export class EscposPrinter implements PrinterService {
   async imprimerSousNote(c: CommandeVue, note: NoteSplitVue): Promise<void> {
     const info = await this.infosResto();
     const vue = vueSousNote(c, note);
+    const fidelite = await fideliteRecu(vue.client_fidelite_id);
     await this.envoyer(
       () => {
         const r = new Ruban(info.colonnes);
@@ -565,6 +602,7 @@ export class EscposPrinter implements PrinterService {
           r.duo(LIBELLES_MODES[p.mode], formatFCFA(p.montant));
           ligneMonnaie(r, p);
         }
+        blocFidelite(r, fidelite);
         r.tiret().centre().ligne('Paye - merci de votre visite !');
         if (info.pied) r.ligne(info.pied);
         r.couper();

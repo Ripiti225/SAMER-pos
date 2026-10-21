@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { IconStar, IconUser, IconX } from '@tabler/icons-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { IconPencil, IconStar, IconUser, IconX } from '@tabler/icons-react';
 import type { ClientPaiementVue, CommandeVue } from '@pos/shared';
 import { formatFCFA } from '@pos/shared';
 import { api } from '../api';
@@ -60,10 +61,7 @@ export function Fidelite({
     const { client, solde, points_gagnes, solde_apres, paiement_points } = info;
     return (
       <div className="rounded-2xl bg-surface-moyenne p-4 shadow-e1">
-        <div className="flex items-center gap-2 font-bold text-fort">
-          <IconUser size={20} className="flex-none text-marque-fonce" />
-          <span className="truncate">{client.nom ?? 'Client'} · {client.telephone ?? '—'}</span>
-        </div>
+        <NomClient clientId={client.id} nom={client.nom} telephone={client.telephone} />
         <div className="mt-3 grid grid-cols-2 gap-2 text-center">
           <div className="rounded-xl bg-surface p-2">
             <div className="text-[11px] font-bold uppercase tracking-wider text-doux">Solde actuel</div>
@@ -120,6 +118,81 @@ export function Fidelite({
       {commande.fidelite_montant > 0 && (
         <p className="mt-2 text-sm text-ok">Remise fidélité : −{formatFCFA(commande.fidelite_montant)}</p>
       )}
+    </div>
+  );
+}
+
+/**
+ * Nom du client, facultatif. Vide : une case pour le demander (« Comment vous
+ * appelez-vous ? »). Rempli : le nom, avec un crayon pour le corriger. Il
+ * s'imprime sur le reçu et sert au tirage au sort du mois au siège.
+ */
+function NomClient({ clientId, nom, telephone }: { clientId: string; nom: string | null; telephone: string | null }) {
+  const { afficherToast } = useCaisse();
+  const queryClient = useQueryClient();
+  const [edition, setEdition] = useState(false);
+  const [saisie, setSaisie] = useState(nom ?? '');
+  const [enCours, setEnCours] = useState(false);
+
+  const enregistrer = async () => {
+    if (saisie.trim() === (nom ?? '')) {
+      setEdition(false);
+      return;
+    }
+    setEnCours(true);
+    try {
+      await api(`/api/clients-fidelite/${clientId}`, { method: 'PATCH', corps: { nom: saisie.trim() } });
+      await queryClient.invalidateQueries({ queryKey: ['client-paiement'] });
+      setEdition(false);
+      afficherToast('Nom du client enregistré');
+    } catch (e) {
+      afficherToast((e as Error).message);
+    } finally {
+      setEnCours(false);
+    }
+  };
+
+  if (nom && !edition) {
+    return (
+      <div className="flex items-center gap-2 font-bold text-fort">
+        <IconUser size={20} className="flex-none text-marque-fonce" />
+        <span className="truncate">{nom} · {telephone ?? '—'}</span>
+        <button
+          type="button"
+          aria-label="Corriger le nom"
+          onClick={() => { setSaisie(nom); setEdition(true); }}
+          className="ml-auto flex h-10 w-10 flex-none items-center justify-center text-doux"
+        >
+          <IconPencil size={18} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 font-bold text-fort">
+        <IconUser size={20} className="flex-none text-marque-fonce" />
+        <span className="truncate">{telephone ?? '—'}</span>
+      </div>
+      <div className="mt-2 flex gap-2">
+        <input
+          className="champ min-w-0 flex-1"
+          placeholder="Nom du client (facultatif)"
+          maxLength={60}
+          value={saisie}
+          onChange={(e) => setSaisie(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && void enregistrer()}
+        />
+        <button
+          type="button"
+          disabled={enCours || (!saisie.trim() && !nom)}
+          onClick={() => void enregistrer()}
+          className="btn-accent flex-none px-4 disabled:opacity-40"
+        >
+          {enCours ? '…' : 'OK'}
+        </button>
+      </div>
     </div>
   );
 }

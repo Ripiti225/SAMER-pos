@@ -64,6 +64,9 @@ export type ActionAudit =
   // que c'est la pièce qu'on ressort quand Yango conteste une course : qui a
   // saisi quoi, et à quelle heure.
   | 'INFOS_LIVRAISON'
+  // Nom d'un client fidélité : il sert au tirage au sort mensuel, on garde
+  // qui l'a saisi ou corrigé.
+  | 'NOM_CLIENT'
   | 'ACCES_PROTEGE_REFUSE'
   // DESIGN_V2 — dépenses, pointage, inventaire (§ 6.7 à § 6.10).
   // Les paiements réels (salaire, encouragement) et le déblocage d'inventaire
