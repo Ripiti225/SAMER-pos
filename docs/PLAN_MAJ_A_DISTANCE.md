@@ -11,6 +11,15 @@ au rallumage avant d'ouvrir la caisse ; « en retard » au siège après 24 h ; 
 de la base et retour arrière automatique ; paquets signés ; une dernière mise à jour
 par clé USB pour installer le mécanisme.
 
+### Règle d'installation par type de site (décidée le 21/10/2026)
+
+| Type de site | Sites | Quand la mise à jour s'installe |
+|---|---|---|
+| **Ferme la nuit** | Al Kayan KMS, Samer Lavage, Samer Oasis | Téléchargée pendant le service, **installée au démarrage suivant du poste**, avant l'ouverture de la caisse. Filet de sécurité : si le poste n'a pas redémarré 24 h après la fin du téléchargement, installation à 05h00. |
+| **24h/24** | Palmeraie, Al Kayan Yop, Samer Maroc, Angré 7E, À la Braise | Installée **à l'heure définie (06h00), même si le poste est en service**, shift ouvert. Coupure de 2-3 min avec « Mise à jour en cours ». |
+
+Le type de chaque site est réglable dans la console siège.
+
 ## 1. Ce que le code impose
 
 - Le **lanceur** (`apps/desktop/main.js`) est le parent de tout : PostgreSQL portable,
@@ -120,8 +129,8 @@ ne prépare que la plus haute) ; horloge du PC fausse (remontée au siège).
 
 1. « Pas maintenant » : 3 reports par jour au maximum, puis report au lendemain
    (signalé au siège) ? Avec PIN gérant ?
-2. Poste rallumé en plein service (ex. 12 h) avec une mise à jour en attente : installer
-   quand même (2-3 min de plus au démarrage), ou attendre l'heure creuse ?
+2. ~~Poste rallumé en plein service avec une mise à jour en attente ?~~ **Tranché le
+   21/10** : voir « Règle d'installation par type de site » en tête.
 3. Forfait Supabase (taille max par fichier, stockage, bande passante) et débit internet
    réel des sites ?
 4. Qui garde la clé USB de signature et sa phrase de passe ? Une seconde personne de
