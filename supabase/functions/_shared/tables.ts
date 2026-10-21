@@ -36,6 +36,13 @@ export const COLONNES_VENTES: Record<string, string[]> = {
     // fond de monnaie de chaque site avec ces deux colonnes.
     'montant_recu', 'monnaie_rendue',
     'encaisse_par', 'service_id', 'created_at',
+    // 2026-10-21 — un paiement annulé au POS est CONTRE-PASSÉ par une ligne
+    // négative (montant, billet et monnaie en négatif) : elle remonte ici telle
+    // quelle et les sommes du cloud restent justes. `contrepasse_de`,
+    // `annule_par` et `annulation_motif` ne sont volontairement PAS listées :
+    // le cloud n'a pas ces colonnes, et les publier bloquerait l'outbox de tout
+    // site mis à jour avant une migration cloud. Le lien est dans l'audit
+    // ANNULATION_PAIEMENT (meta.contrepassation_id).
   ],
   services_caisse: [
     'id', 'caissier_id', 'fond_de_caisse', 'ouvert_le', 'cloture_le', 'statut',

@@ -10,7 +10,7 @@
  * la table du qr_token — un jeton ne voit et ne touche QUE sa propre table.
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { and, desc, eq, gt, gte, inArray, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, inArray, ne, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   AppelClientSchema,
@@ -43,7 +43,7 @@ import {
   genererCodeCommande,
   recalculerTotaux,
 } from '../commandes/service.js';
-import { lireBareme, pointsGagnes, soldePoints, trouverOuCreer } from '../fidelite/service.js';
+import { lireBareme, pointsGagnes, SOURCE_ANNULATION_PAIEMENT, soldePoints, trouverOuCreer } from '../fidelite/service.js';
 import { calculerDestinataire } from '../routage/routage.js';
 import { etatDUneTable } from '../tables/etat.js';
 import { construireRecuPdf, construireRecuSousNotePdf } from '../../printer/recu-pdf.js';
@@ -235,7 +235,7 @@ export function routesClient(app: FastifyInstance): void {
       .where(
         and(
           inArray(pointsFidelite.commande_id, lignes.map((c) => c.id)),
-          gt(pointsFidelite.points, 0),
+          gt(pointsFidelite.points, 0), ne(pointsFidelite.source, SOURCE_ANNULATION_PAIEMENT),
         ),
       );
     const creditParCommande = new Map(credits.map((c) => [c.commande_id, c.points]));
@@ -289,7 +289,7 @@ export function routesClient(app: FastifyInstance): void {
     const [credit] = await db
       .select({ points: pointsFidelite.points })
       .from(pointsFidelite)
-      .where(and(eq(pointsFidelite.commande_id, commande_id), gt(pointsFidelite.points, 0)));
+      .where(and(eq(pointsFidelite.commande_id, commande_id), gt(pointsFidelite.points, 0), ne(pointsFidelite.source, SOURCE_ANNULATION_PAIEMENT)));
     const bareme = await lireBareme(db);
     const pdf = await construireRecuPdf(
       vue,
@@ -334,7 +334,7 @@ export function routesClient(app: FastifyInstance): void {
     const [credit] = await db
       .select({ points: pointsFidelite.points })
       .from(pointsFidelite)
-      .where(and(eq(pointsFidelite.note_id, note_id), gt(pointsFidelite.points, 0)));
+      .where(and(eq(pointsFidelite.note_id, note_id), gt(pointsFidelite.points, 0), ne(pointsFidelite.source, SOURCE_ANNULATION_PAIEMENT)));
     const bareme = await lireBareme(db);
     const pdf = await construireRecuSousNotePdf(
       vue,

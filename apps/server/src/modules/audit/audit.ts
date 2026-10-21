@@ -25,6 +25,9 @@ export type ActionAudit =
   | 'ABANDON_COMMANDE_VIDE'
   | 'REOUVERTURE_NOTE'
   | 'PAIEMENT'
+  // Paiement saisi par erreur, contre-passé tant que son shift est ouvert —
+  // PIN administrateur et motif obligatoires (2026-10-21).
+  | 'ANNULATION_PAIEMENT'
   // Kdo : repas offert, clôturé sans encaissement. Le motif accompagne
   // toujours l'entrée — sans lui, un cadeau est indiscernable d'un vol.
   | 'COMMANDE_OFFERTE'

@@ -507,7 +507,7 @@ CREATE TABLE paiements (
   commande_id  UUID NOT NULL REFERENCES commandes(id),
   note_id      UUID REFERENCES notes_split(id),
   mode         mode_paiement NOT NULL,
-  montant      INTEGER NOT NULL CHECK (montant > 0),
+  montant      INTEGER NOT NULL,
   -- Billet posé par le client et monnaie rendue (ESPECES uniquement ; NULL
   -- partout ailleurs, et sur tout l'historique d'avant le 2026-08-28).
   montant_recu   INTEGER,
@@ -515,12 +515,27 @@ CREATE TABLE paiements (
   encaisse_par UUID NOT NULL REFERENCES utilisateurs(id),
   service_id   UUID NOT NULL REFERENCES services_caisse(id),
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- Annulation d'un paiement saisi par erreur (migration 0042) : jamais de
+  -- suppression, une ligne NÉGATIVE contre-passe l'original sur le même shift.
+  contrepasse_de   UUID REFERENCES paiements(id),
+  annule_par       UUID REFERENCES utilisateurs(id),   -- PIN administrateur
+  annulation_motif TEXT,
+  CONSTRAINT paiements_montant_check CHECK (
+    (contrepasse_de IS NULL AND montant > 0
+      AND annule_par IS NULL AND annulation_motif IS NULL)
+    OR (contrepasse_de IS NOT NULL AND montant < 0
+      AND annule_par IS NOT NULL AND annulation_motif IS NOT NULL)
+  ),
   CONSTRAINT paiements_monnaie_check CHECK (
     (montant_recu IS NULL AND monnaie_rendue IS NULL)
-    OR (montant_recu >= montant AND monnaie_rendue = montant_recu - montant)
+    OR (contrepasse_de IS NULL AND montant_recu >= montant
+      AND monnaie_rendue = montant_recu - montant)
+    OR (contrepasse_de IS NOT NULL AND montant_recu <= montant
+      AND monnaie_rendue = montant_recu - montant)
   )
 );
 CREATE INDEX idx_paiements_monnaie_jour ON paiements (created_at) WHERE monnaie_rendue > 0;
+CREATE UNIQUE INDEX uniq_paiements_contrepasse_de ON paiements (contrepasse_de) WHERE contrepasse_de IS NOT NULL;
 -- Règle serveur : SUM(paiements.montant) == commandes.total avant statut PAYEE.
 -- La monnaie rendue n'entre NI dans la vente NI dans l'écart de caisse : le
 -- billet entre dans le tiroir à l'instant où la monnaie en sort. Elle ne sert

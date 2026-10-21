@@ -26,6 +26,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -548,13 +549,34 @@ export const paiements = pgTable('paiements', {
   encaisse_par: uuid('encaisse_par').notNull().references(() => utilisateurs.id),
   service_id: uuid('service_id').notNull().references(() => servicesCaisse.id),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  /**
+   * Annulation d'un paiement saisi par erreur (migration 0042). Le paiement
+   * n'est jamais supprimé : une ligne NÉGATIVE du même mode, sur le même
+   * shift, le contre-passe. Toutes les sommes (théorique, ticket Z, cloud)
+   * restent justes sans filtre ; seuls les écrans qui LISTENT les paiements
+   * écartent la paire (voir paiements/actifs.ts).
+   */
+  contrepasse_de: uuid('contrepasse_de').references((): AnyPgColumn => paiements.id),
+  /** Administrateur dont le PIN a autorisé la contre-passation. */
+  annule_par: uuid('annule_par').references(() => utilisateurs.id),
+  annulation_motif: text('annulation_motif'),
 }, (t) => [
-  check('paiements_montant_check', sql`${t.montant} > 0`),
+  check(
+    'paiements_montant_check',
+    sql`(${t.contrepasse_de} IS NULL AND ${t.montant} > 0
+          AND ${t.annule_par} IS NULL AND ${t.annulation_motif} IS NULL)
+        OR (${t.contrepasse_de} IS NOT NULL AND ${t.montant} < 0
+          AND ${t.annule_par} IS NOT NULL AND ${t.annulation_motif} IS NOT NULL)`,
+  ),
   check(
     'paiements_monnaie_check',
     sql`(${t.montant_recu} IS NULL AND ${t.monnaie_rendue} IS NULL)
-        OR (${t.montant_recu} >= ${t.montant} AND ${t.monnaie_rendue} = ${t.montant_recu} - ${t.montant})`,
+        OR (${t.contrepasse_de} IS NULL AND ${t.montant_recu} >= ${t.montant}
+          AND ${t.monnaie_rendue} = ${t.montant_recu} - ${t.montant})
+        OR (${t.contrepasse_de} IS NOT NULL AND ${t.montant_recu} <= ${t.montant}
+          AND ${t.monnaie_rendue} = ${t.montant_recu} - ${t.montant})`,
   ),
+  uniqueIndex('uniq_paiements_contrepasse_de').on(t.contrepasse_de).where(sql`${t.contrepasse_de} IS NOT NULL`),
 ]);
 
 // ---------------------------------------------------------------------------

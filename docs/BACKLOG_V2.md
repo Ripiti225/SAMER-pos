@@ -25,7 +25,8 @@ Toute idée hors périmètre du sprint 1 est notée ici, jamais implémentée en
   en sprint 1 chaque échec est audité (`ECHEC_PIN`) mais sans compteur de verrouillage,
   car le PIN saisi n'est pas rattaché à un compte précis avant vérification.
 - Annulation partielle d'un paiement déjà enregistré (erreur de saisie du mode) : en sprint 1,
-  passer par réouverture manager de la commande.
+  passer par réouverture manager de la commande. → Livré le 21/10/2026 : « Annuler un paiement »
+  (PIN administrateur), voir la section dédiée plus bas.
 - Rendu monnaie tracé en base (sprint 1 : calculé à l'écran uniquement, seul le montant dû est enregistré).
 - Servir la PWA compilée directement depuis le serveur Fastify (déploiement mono-processus sur le mini-PC).
 
@@ -97,7 +98,7 @@ arrière-plan : il faudrait les notifications système (service worker + Push),
 fermées en http. Le passage en HTTPS local, ou une petite app native, est le
 seul chemin vers une vraie sonnerie de téléphone.
 
-## Corriger un paiement saisi par erreur, tant que le shift est ouvert
+## Corriger un paiement saisi par erreur, tant que le shift est ouvert — livré le 21/10/2026
 Une commande qui a reçu un paiement ne peut plus être annulée (le serveur
 refuse : « Une commande ayant reçu un paiement ne peut plus être annulée »), et
 la caisse n'a **aucune route pour retirer un paiement**. La réouverture manager
@@ -118,3 +119,33 @@ Le paiement n'est jamais supprimé : il est marqué annulé (ou contre-passé pa
 ligne négative), pour que le cloud, SamerTrackly et le journal d'audit restent
 cohérents. La commande redevient alors annulable par la voie normale. Une fois le
 shift clôturé, plus aucune correction côté caisse : le ticket Z reste figé.
+
+**Livré le 2026-10-21** (migration locale `0042_annulation_paiement`) :
+- Bouton discret « Annuler un paiement » sous chaque ligne de « Paiements
+  enregistrés » (écran Paiement, accessible aussi depuis Mes ventes pour un
+  ticket déjà soldé). Modale motif + **PIN administrateur** — décision du
+  propriétaire, plus stricte que le PIN manager prévu ci-dessus.
+  Administrateur = rôle **PROPRIETAIRE** seul (SAMER Zreik, Admin Willy) : ni
+  SUPERVISEUR, ni rôle personnalisé, ni permission cochable. Un PIN manager
+  valide est refusé en le disant (« seul un administrateur… »), audité
+  `ECHEC_PIN` type `PIN_ADMINISTRATEUR`.
+- Route `POST /api/paiements/:id/annuler` (`paiements/annulation.ts`), refusée
+  si le shift du paiement est clôturé. Le shift est verrouillé pendant
+  l'annulation : la clôture ne peut pas figer un ticket Z au même instant.
+- **Contre-passation**, jamais de suppression : une ligne NÉGATIVE du même mode,
+  même shift, même caissier, liée par `contrepasse_de` (+ `annule_par`,
+  `annulation_motif`). Toutes les sommes (théorique espèces, ticket Z, mobile
+  money, monnaie rendue, rapport X, réconciliation, SamerTrackly via le rapport
+  Z, tableau de bord du siège) retombent justes sans filtre ; les comptages
+  (`nb`) sont nets. Le cloud reçoit un INSERT ordinaire, sans colonne nouvelle :
+  aucun risque de bloquer l'outbox. Migration cloud facultative
+  `20261021000000_annulation_paiement.sql` (nombre de paiements net dans
+  `siege_par_mode`), non appliquée.
+- La commande soldée repasse OUVERTE (table réoccupée) ; sa sélection
+  implicite, si elle n'a plus aucun paiement valable, est annulée : la
+  commande se repaie ou s'annule par la voie normale.
+- Fidélité : un paiement en POINTS rend ses points ; une vente soldée qui avait
+  crédité des points les reprend (lignes `points_fidelite` source
+  `ANNULATION_PAIEMENT`) et les regagne si elle est payée à nouveau.
+- Audit `ANNULATION_PAIEMENT` (au nom de l'administrateur, motif, mode,
+  contre-passation, caissier demandeur) et outbox dans la même transaction.

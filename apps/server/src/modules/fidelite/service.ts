@@ -5,7 +5,7 @@
  * Barème descendu du siège (parametres_locaux).
  */
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { DbOuTx } from '../../db/client.js';
 import { db } from '../../db/client.js';
 import { clientsFidelite, parametresLocaux, pointsFidelite, syncEtat } from '../../db/schema/index.js';
@@ -18,6 +18,15 @@ export interface Bareme {
   valeur_point_fcfa: number;
   seuil_utilisation: number;
 }
+
+/**
+ * Source des lignes de points écrites par l'annulation d'un paiement
+ * (2026-10-21) : points rendus d'un paiement en POINTS annulé, et crédit d'une
+ * vente retiré quand la vente n'est plus payée. Elles comptent dans le solde
+ * comme toutes les autres — seul leur sens change : elles ne sont jamais un
+ * « crédit de vente », et ne doivent pas être lues comme tel.
+ */
+export const SOURCE_ANNULATION_PAIEMENT = 'ANNULATION_PAIEMENT';
 
 export async function lireBareme(tx: DbOuTx): Promise<Bareme> {
   const params = await tx.select().from(parametresLocaux);
@@ -85,14 +94,9 @@ export async function crediterVente(
   montant: number,
   noteId: string | null = null,
 ): Promise<number> {
-  if (noteId) {
-    const [dejaCredite] = await tx
-      .select({ id: pointsFidelite.id })
-      .from(pointsFidelite)
-      .where(and(eq(pointsFidelite.note_id, noteId), sql`${pointsFidelite.points} > 0`))
-      .limit(1);
-    if (dejaCredite) return 0;
-  }
+  // Une note ne crédite qu'une fois… sauf si ce crédit a été retiré par
+  // l'annulation d'un paiement : la note, payée à nouveau, regagne ses points.
+  if (noteId && (await pointsVenteCredites(tx, commandeId, noteId)) > 0) return 0;
   const bareme = await lireBareme(tx);
   const points = pointsGagnes(bareme, montant);
   if (points <= 0) return 0;
@@ -102,6 +106,28 @@ export async function crediterVente(
     .returning();
   await ecrireOutbox(tx, 'points_fidelite', 'INSERT', ligne!.id, ligne as unknown as Record<string, unknown>);
   return points;
+}
+
+/**
+ * Points de VENTE encore crédités pour une note (ou pour la commande entière
+ * quand `noteId` est null) : crédits positifs, moins les retraits écrits par
+ * l'annulation d'un paiement. Les points rendus d'un paiement en POINTS
+ * (positifs, même source d'annulation) n'en font pas partie.
+ */
+export async function pointsVenteCredites(tx: DbOuTx, commandeId: string, noteId: string | null): Promise<number> {
+  const [r] = await tx
+    .select({
+      net: sql<string>`COALESCE(SUM(${pointsFidelite.points}) FILTER (
+          WHERE (${pointsFidelite.points} > 0 AND ${pointsFidelite.source} <> ${SOURCE_ANNULATION_PAIEMENT})
+             OR (${pointsFidelite.points} < 0 AND ${pointsFidelite.source} = ${SOURCE_ANNULATION_PAIEMENT})
+        ), 0)`,
+    })
+    .from(pointsFidelite)
+    .where(and(
+      eq(pointsFidelite.commande_id, commandeId),
+      noteId ? eq(pointsFidelite.note_id, noteId) : isNull(pointsFidelite.note_id),
+    ));
+  return Number(r?.net ?? 0);
 }
 
 /**

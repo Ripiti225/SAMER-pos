@@ -5,6 +5,7 @@ import { db } from '../../db/client.js';
 import { commandeItems, commandes, notations, noteSplitItems, notesSplit, paiements, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
 import { aPermission } from '../../plugins/sessions.js';
 import { retoursDepuis, retoursDuService } from '../services/rapport.js';
+import { conditionPaiementActif, nbRendusNet } from '../paiements/actifs.js';
 
 function debutDuJour(): Date {
   const d = new Date();
@@ -214,8 +215,9 @@ export function routesRapports(app: FastifyInstance): void {
       .select({
         journee: sql<string>`to_char(${servicesCaisse.ouvert_le}, 'YYYY-MM-DD')`,
         total: sql<string>`COALESCE(SUM(${paiements.monnaie_rendue}), 0)`,
-        nb: sql<string>`COUNT(*) FILTER (WHERE ${paiements.monnaie_rendue} > 0)`,
-        plus_gros: sql<string>`COALESCE(MAX(${paiements.monnaie_rendue}), 0)`,
+        nb: nbRendusNet(),
+        // Le plus gros rendu d'un paiement ANNULÉ n'a jamais existé.
+        plus_gros: sql<string>`COALESCE(MAX(${paiements.monnaie_rendue}) FILTER (WHERE ${conditionPaiementActif()}), 0)`,
       })
       .from(paiements)
       .innerJoin(servicesCaisse, eq(servicesCaisse.id, paiements.service_id))

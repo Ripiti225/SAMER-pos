@@ -12,10 +12,11 @@ import {
   IconStar,
   IconTruckDelivery,
 } from '@tabler/icons-react';
-import type { ClientPaiementVue, CommandeVue, ModePaiement } from '@pos/shared';
+import type { ClientPaiementVue, CommandeVue, ModePaiement, PaiementVue } from '@pos/shared';
 import { estLivraisonSansEncaissement, formatFCFA, LIBELLES_MODES, MODES_PAIEMENT } from '@pos/shared';
 import { api } from '../api';
 import { Fidelite } from '../components/Fidelite';
+import { ModalePinManager } from '../components/ModalePinManager';
 import { SelectionArticlesPaiement, type NouvelleSousNotePaiement } from '../components/SelectionArticlesPaiement';
 import { useCaisse } from '../stores/session';
 
@@ -91,6 +92,8 @@ export function Paiement() {
   const [cible, setCible] = useState<'montant' | 'recu' | 'telephone'>('montant');
   /** Numéro du client en cours de frappe : le pavé peut l'écrire aussi. */
   const [telephoneClient, setTelephoneClient] = useState('');
+  /** Paiement saisi par erreur, en attente du PIN administrateur. */
+  const [paiementAAnnuler, setPaiementAAnnuler] = useState<PaiementVue | null>(null);
 
   const { data: commande } = useQuery({
     queryKey: ['commande', commandeId],
@@ -139,6 +142,30 @@ export function Paiement() {
         afficherToast('Paiement individuel encaissé ✔ — les autres articles restent en attente');
         aller(vue.table_id ? 'tables' : 'accueil');
       }
+    },
+    onError: (e: Error) => afficherToast(e.message),
+  });
+
+  /**
+   * Annulation d'un paiement saisi par erreur : PIN ADMINISTRATEUR + motif. Le
+   * serveur refuse si le shift du paiement est clôturé (ticket Z figé) — le
+   * bouton reste affiché, c'est le message du serveur qui l'explique.
+   */
+  const annulerPaiement = useMutation({
+    mutationFn: ({ paiementId, motif, pin }: { paiementId: string; motif: string; pin: string }) =>
+      api<CommandeVue>(`/api/paiements/${paiementId}/annuler`, {
+        method: 'POST',
+        corps: { motif, pin_administrateur: pin },
+      }),
+    onSuccess: (vue) => {
+      rafraichir(vue);
+      const p = paiementAAnnuler;
+      setPaiementAAnnuler(null);
+      // La sélection du paiement annulé a pu être annulée avec lui : l'écran
+      // reprend la prochaine à encaisser.
+      setNoteId(null);
+      void queryClient.invalidateQueries({ queryKey: ['client-paiement', commandeId] });
+      afficherToast(p ? `Paiement ${LIBELLES_MODES[p.mode]} de ${formatFCFA(p.montant)} annulé ✔` : 'Paiement annulé ✔');
     },
     onError: (e: Error) => afficherToast(e.message),
   });
@@ -668,9 +695,33 @@ export function Paiement() {
                         <span>Rendu {formatFCFA(p.monnaie_rendue ?? 0)}</span>
                       </div>
                     )}
+                    {/* Discret volontairement : c'est une correction d'erreur,
+                        pas un geste de caisse. Le PIN administrateur est exigé
+                        par le serveur, la caisse ne fait que le demander. */}
+                    <div className="mt-1 text-right">
+                      <button
+                        type="button"
+                        onClick={() => setPaiementAAnnuler(p)}
+                        className="min-h-[32px] text-xs font-semibold text-ard-txt-faible underline-offset-2 transition hover:text-alerte hover:underline"
+                      >
+                        Annuler un paiement
+                      </button>
+                    </div>
                   </div>
                 );
               })}
+              {/* Paiements annulés : barrés, avec leur motif, pour que personne
+                  ne les ressaisisse en croyant à un oubli. Ils ne comptent plus.
+                  `?? []` : un serveur pas encore mis à jour ne les envoie pas. */}
+              {(commande.paiements_annules ?? []).map((p) => (
+                <div key={p.id} className="rounded-xl border border-dashed border-ard-800 p-3 text-ard-txt-faible">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold line-through">{LIBELLES_MODES[p.mode]}</span>
+                    <span className="font-bold tabular-nums line-through">{formatFCFA(p.montant)}</span>
+                  </div>
+                  <div className="mt-1 text-xs">Annulé — {p.motif}</div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -710,6 +761,17 @@ export function Paiement() {
           )}
         </div>
       </div>
+
+      {paiementAAnnuler && (
+        <ModalePinManager
+          titre={`Annuler le paiement ${LIBELLES_MODES[paiementAAnnuler.mode]} de ${formatFCFA(paiementAAnnuler.montant)}`}
+          explication="Seulement pour un paiement saisi par erreur, tant que le shift est ouvert. Il ne comptera plus nulle part : tiroir, ticket Z, mobile money, points."
+          libellePin="PIN administrateur"
+          onConfirmer={({ pin, motif }) => annulerPaiement.mutate({ paiementId: paiementAAnnuler.id, motif, pin })}
+          onFermer={() => setPaiementAAnnuler(null)}
+          enCours={annulerPaiement.isPending}
+        />
+      )}
 
       {selectionOuverte && (
         <SelectionArticlesPaiement

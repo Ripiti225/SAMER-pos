@@ -5,6 +5,7 @@ import { MODES_PAIEMENT, PARTENAIRES_EXTERNES, TYPES_COMMANDE } from '@pos/share
 import type { DbOuTx } from '../../db/client.js';
 import { auditLog, commandeItems, commandes, noteSplitItems, notesSplit, utilisateurs } from '../../db/schema/index.js';
 import { paiements } from '../../db/schema/index.js';
+import { nbPaiementsNet, nbRendusNet } from '../paiements/actifs.js';
 
 export interface RemiseDetail {
   numero_ticket: number;
@@ -191,7 +192,8 @@ export async function reconciliationAuto(
 }> {
   const externes = [...PARTENAIRES_EXTERNES];
   const lignesModes = await dbx
-    .select({ mode: paiements.mode, total: sql<string>`SUM(${paiements.montant})`, nb: sql<string>`COUNT(*)` })
+    // `nb` NET : un paiement annulé (contre-passé) ne compte plus comme vente.
+    .select({ mode: paiements.mode, total: sql<string>`SUM(${paiements.montant})`, nb: nbPaiementsNet() })
     .from(paiements)
     .innerJoin(commandes, eq(commandes.id, paiements.commande_id))
     .where(
@@ -301,7 +303,7 @@ export async function calculerStatsService(dbx: DbOuTx, serviceId: string): Prom
   const [ligneMonnaie] = await dbx
     .select({
       total: sql<string>`COALESCE(SUM(${paiements.monnaie_rendue}), 0)`,
-      nb: sql<string>`COUNT(*) FILTER (WHERE ${paiements.monnaie_rendue} > 0)`,
+      nb: nbRendusNet(),
     })
     .from(paiements)
     .where(eq(paiements.service_id, serviceId));

@@ -3,6 +3,7 @@ import type { CreerSousNoteInput } from '@pos/shared';
 import type { DbOuTx } from '../../db/client.js';
 import { commandeItems, commandes, noteSplitItems, notesSplit, paiements, pointsFidelite } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
+import { conditionPaiementActif } from './actifs.js';
 import { ErreurMetier } from '../../lib/erreurs.js';
 import { journaliser } from '../audit/audit.js';
 import { lireBareme, trouverOuCreer, utiliserPoints } from '../fidelite/service.js';
@@ -186,7 +187,12 @@ export async function annulerSousNoteArticles(
     .where(and(eq(notesSplit.id, noteId), eq(notesSplit.commande_id, commandeId)));
   if (!note || note.type !== 'ARTICLES') throw new ErreurMetier('Paiement par articles inconnu', 404);
   if (note.statut === 'ANNULEE') return;
-  const [paiement] = await tx.select({ id: paiements.id }).from(paiements).where(eq(paiements.note_id, noteId)).limit(1);
+  // Un paiement annulé ne compte plus : la sélection redevient annulable.
+  const [paiement] = await tx
+    .select({ id: paiements.id })
+    .from(paiements)
+    .where(and(eq(paiements.note_id, noteId), conditionPaiementActif()))
+    .limit(1);
   if (paiement || note.statut !== 'A_PAYER') {
     throw new ErreurMetier('Une sélection ayant reçu un paiement ne peut plus être annulée', 409);
   }
@@ -260,7 +266,16 @@ export async function sousNoteArticlesActiveExiste(tx: DbOuTx, commandeId: strin
   return !!note;
 }
 
+/**
+ * La commande a-t-elle reçu un paiement ENCORE VALABLE ? Un paiement annulé
+ * (contre-passé) ne compte plus : la commande redevient annulable, remisable
+ * et déplaçable par la voie normale.
+ */
 export async function paiementExistePourCommande(tx: DbOuTx, commandeId: string): Promise<boolean> {
-  const [paiement] = await tx.select({ id: paiements.id }).from(paiements).where(eq(paiements.commande_id, commandeId)).limit(1);
+  const [paiement] = await tx
+    .select({ id: paiements.id })
+    .from(paiements)
+    .where(and(eq(paiements.commande_id, commandeId), conditionPaiementActif()))
+    .limit(1);
   return !!paiement;
 }

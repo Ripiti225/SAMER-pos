@@ -28,6 +28,7 @@ import {
 import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { journaliser } from '../audit/audit.js';
+import { paiementsActifs, paiementsAnnules } from '../paiements/actifs.js';
 import { promotionActive, type PromotionDb } from '../catalogue/promos.js';
 import { optionsAutoriseesPourArticle } from '../catalogue/options.js';
 import { articleDisponible } from '../catalogue/disponibilite.js';
@@ -361,7 +362,11 @@ export async function chargerCommandeVue(dbx: DbOuTx, commandeId: string): Promi
       : Promise.resolve([]),
   ]);
 
+  // Somme NETTE : un paiement annulé et sa contre-passation s'annulent.
   const paye = lignesPaiements.reduce((s, p) => s + p.montant, 0);
+  // Listes : la paire annulée sort des paiements, et va dans `paiements_annules`.
+  const actifs = paiementsActifs(lignesPaiements);
+  const annules = paiementsAnnules(lignesPaiements);
   const vueItems: CommandeItemVue[] = items.map((i) => {
     const allocationsItem = allocations.filter((a) => a.commande_item_id === i.id && a.statut_note !== 'ANNULEE');
     const quantitePayee = allocationsItem
@@ -412,7 +417,7 @@ export async function chargerCommandeVue(dbx: DbOuTx, commandeId: string): Promi
     paye,
     reste: Math.max(0, c.total - paye),
     items: vueItems,
-    paiements: lignesPaiements.map((p) => ({
+    paiements: actifs.map((p) => ({
       id: p.id,
       mode: p.mode,
       montant: p.montant,
@@ -421,8 +426,16 @@ export async function chargerCommandeVue(dbx: DbOuTx, commandeId: string): Promi
       monnaie_rendue: p.monnaie_rendue,
       created_at: p.created_at.toISOString(),
     })),
+    paiements_annules: annules.map(({ original, contrepassation }) => ({
+      id: original.id,
+      mode: original.mode,
+      montant: original.montant,
+      note_id: original.note_id,
+      motif: contrepassation.annulation_motif ?? '',
+      annule_le: contrepassation.created_at.toISOString(),
+    })),
     notes: notes.map((n) => {
-      const paiementsNote = lignesPaiements.filter((p) => p.note_id === n.id);
+      const paiementsNote = actifs.filter((p) => p.note_id === n.id);
       const payeNote = paiementsNote.reduce((s, p) => s + p.montant, 0);
       const allocationsNote = allocations.filter((a) => a.note_id === n.id);
       return {
@@ -492,6 +505,7 @@ export function construireFactureDisponible(c: CommandeVue): CommandeVue {
     paye: 0,
     reste: Math.max(0, c.total - montantFige),
     paiements: [],
+    paiements_annules: [],
     items: c.items
       .filter((item) => item.statut_cuisine !== 'ANNULE' && item.quantite_disponible > 0)
       .map((item) => ({
