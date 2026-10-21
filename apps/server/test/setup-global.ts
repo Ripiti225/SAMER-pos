@@ -5,14 +5,15 @@ import { appliquerMigrations, creerBaseSiAbsente } from '../src/db/migrate.js';
 // PostgreSQL portable est initialisé avec le rôle `postgres`. Sans utilisateur
 // explicite, le pilote reprend le compte Windows (ex. HP) et les tests échouent
 // avant même leur découverte avec « role does not exist ».
-const URL_TEST = 'postgres://postgres@localhost:5432/pos_samer_test';
+const BASE_TEST = process.env.POS_TEST_DB ?? 'pos_samer_test';
+const URL_TEST = `postgres://postgres@localhost:5432/${BASE_TEST}`;
 const ADMIN = process.env.ADMIN_DATABASE_URL ?? 'postgres://postgres@localhost:5432/postgres';
 
 export default async function setup(): Promise<void> {
   const admin = new pg.Client({ connectionString: ADMIN });
   await admin.connect();
   try {
-    await admin.query('DROP DATABASE IF EXISTS pos_samer_test WITH (FORCE)');
+    await admin.query(`DROP DATABASE IF EXISTS "${BASE_TEST}" WITH (FORCE)`);
   } finally {
     await admin.end();
   }
