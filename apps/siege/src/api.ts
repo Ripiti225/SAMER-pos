@@ -263,3 +263,41 @@ export interface MembreService {
   /** Payé à la journée : montant et HEURE DE PAIE, qui vaut heure de départ. */
   salaire: { montant: number; paye_le: string } | null;
 }
+
+/**
+ * Un participant au tirage des clients du mois. Le classement vient de la
+ * fonction `siege` (`siege_clients_mois` + départage dans `_shared/siege-tirage.ts`).
+ */
+export interface ParticipantTirage {
+  rang: number;
+  client_id: string;
+  telephone: string;
+  /** Facultatif à la caisse : sans nom, on affiche le téléphone. */
+  nom: string | null;
+  montant: number;
+  nb_visites: number;
+}
+
+/** Procès-verbal d'un tirage — append-only côté cloud, un par restaurant et par mois. */
+export interface TirageClients {
+  id: string;
+  restaurant_id: string;
+  /** Premier jour du mois concerné : « 2026-10-01 ». */
+  mois: string;
+  tire_le: string;
+  tire_par_nom: string;
+  /** La liste FIGÉE au moment du tirage, dans l'ordre du classement. */
+  participants: ParticipantTirage[];
+  gagnant_client_id: string;
+  gagnant_rang: number;
+}
+
+/** Réponse de l'action `clients_mois`. */
+export interface ClientsMois {
+  mois: string;
+  /** Un mois en cours se consulte mais ne se tire pas. */
+  mois_termine: boolean;
+  /** Classement d'aujourd'hui ; après le tirage, c'est `tirage.participants` qui fait foi. */
+  participants: ParticipantTirage[];
+  tirage: TirageClients | null;
+}
