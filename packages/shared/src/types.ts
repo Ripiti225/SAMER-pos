@@ -291,6 +291,21 @@ export interface PaiementVue {
   created_at: string;
 }
 
+/**
+ * Paiement annulé (contre-passé) : il ne compte plus nulle part, mais l'écran
+ * le montre barré, avec le motif, pour que personne ne le ressaisisse en
+ * croyant à un oubli.
+ */
+export interface PaiementAnnuleVue {
+  id: string;
+  mode: ModePaiement;
+  /** Montant de l'encaissement d'origine (positif). */
+  montant: number;
+  note_id: string | null;
+  motif: string;
+  annule_le: string;
+}
+
 export interface NoteSplitVue {
   id: string;
   numero: number;
@@ -348,7 +363,9 @@ export interface CommandeVue {
   paye: number;
   reste: number;
   items: CommandeItemVue[];
+  /** Paiements VALABLES seulement : un paiement annulé n'y figure plus. */
   paiements: PaiementVue[];
+  paiements_annules: PaiementAnnuleVue[];
   notes: NoteSplitVue[];
   created_at: string;
 }

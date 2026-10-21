@@ -285,6 +285,16 @@ export const AnnulerCommandeSchema = z.object({
 });
 
 /**
+ * Annulation d'un paiement saisi par erreur (2026-10-21). PIN ADMINISTRATEUR,
+ * pas manager : défaire de l'argent déjà encaissé est le geste le plus facile
+ * à détourner d'une caisse.
+ */
+export const AnnulerPaiementSchema = z.object({
+  motif: MotifObligatoire,
+  pin_administrateur: PinSaisiSchema,
+});
+
+/**
  * Clôture d'un Kdo (repas offert). Pas de PIN manager — décision client : le
  * caissier peut offrir seul — mais le motif reste OBLIGATOIRE, c'est la seule
  * trace qui permettra de repérer un abus dans le journal d'audit.

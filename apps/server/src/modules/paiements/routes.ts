@@ -1,12 +1,19 @@
 import type { FastifyInstance } from 'fastify';
 import { and, eq } from 'drizzle-orm';
-import { CreerSousNoteSchema, estLivraisonSansEncaissement, OffrirSchema, PaiementSchema } from '@pos/shared';
+import {
+  AnnulerPaiementSchema,
+  CreerSousNoteSchema,
+  estLivraisonSansEncaissement,
+  OffrirSchema,
+  PaiementSchema,
+} from '@pos/shared';
 import { db } from '../../db/client.js';
 import { appelsTable, commandes, notesSplit, paiements } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
+import { verifierPinAdministrateur } from '../auth/pin.js';
 import { crediterVente, debiterPaiementPoints } from '../fidelite/service.js';
 import {
   chargerCommandeVue,
@@ -15,6 +22,8 @@ import {
   serviceOuvertDe,
   verrouillerCommande,
 } from '../commandes/service.js';
+import { paiementsActifs } from './actifs.js';
+import { annulerPaiement } from './annulation.js';
 import {
   annulerSousNoteArticles,
   commandeEntierementAlloueeEtPayee,
@@ -88,13 +97,18 @@ export function routesPaiements(app: FastifyInstance): void {
       if (c.statut === 'PAYEE') throw new ErreurMetier('Cette commande est déjà encaissée', 409);
       if (c.total <= 0) throw new ErreurMetier('Ajoutez des articles avant d’encaisser', 400);
 
-      const existants = await tx.select().from(paiements).where(eq(paiements.commande_id, id));
+      // Un paiement annulé et sa contre-passation sortent ensemble : la commande
+      // se retrouve exactement comme avant l'encaissement erroné.
+      const existants = paiementsActifs(await tx.select().from(paiements).where(eq(paiements.commande_id, id)));
       let noteId = corps.note_id ?? null;
       let notesCommande = await tx.select().from(notesSplit).where(eq(notesSplit.commande_id, id));
       // Paiement simple : l'API crée elle-même une sous-note ARTICLES couvrant
       // tout le disponible. On conserve ainsi le parcours en un geste et les
       // anciens clients API, sans ouvrir une nouvelle voie hors allocations.
-      if (!noteId && notesCommande.length === 0 && existants.length === 0) {
+      // Une sélection ANNULÉE ne compte pas (celle d'un paiement annulé, par
+      // exemple) : sinon le nouvel encaissement retomberait sur l'ancien
+      // parcours sans note, qui ne trace plus les quantités payées.
+      if (!noteId && notesCommande.every((note) => note.statut === 'ANNULEE') && existants.length === 0) {
         const vueCourante = await chargerCommandeVue(tx, id);
         const selection = vueCourante.items
           .filter((item) => item.statut_cuisine !== 'ANNULE' && item.quantite_disponible > 0)
@@ -178,7 +192,14 @@ export function routesPaiements(app: FastifyInstance): void {
           entite: 'commandes',
           entite_id: id,
           montant: corps.montant,
-          meta: { paiement_id: paiement!.id, note_id: noteId, points: pointsDebites },
+          // `client_id` : c'est à lui que l'annulation éventuelle de ce
+          // paiement rendra les points.
+          meta: {
+            paiement_id: paiement!.id,
+            note_id: noteId,
+            points: pointsDebites,
+            client_id: noteCible ? noteCible.client_fidelite_id : c.client_fidelite_id,
+          },
         });
       }
       // Ce qui a été payé en points ne rapporte pas de points.
@@ -293,6 +314,26 @@ export function routesPaiements(app: FastifyInstance): void {
       await app.imprimante.imprimerTicket(vue);
     }
     app.diffuser('commande', id);
+    return vue;
+  });
+
+  /**
+   * Annulation d'un paiement saisi par erreur : PIN ADMINISTRATEUR + motif,
+   * seulement tant que le shift du paiement est ouvert. Le paiement est
+   * contre-passé, jamais supprimé — voir annulation.ts.
+   */
+  app.post('/api/paiements/:id/annuler', { preHandler: gardeCaisse }, async (req) => {
+    const { id } = req.params as { id: string };
+    if (!/^[0-9a-f-]{36}$/i.test(id)) throw new ErreurMetier('Paiement introuvable', 404);
+    const corps = valider(AnnulerPaiementSchema, req.body);
+    const administrateur = await verifierPinAdministrateur(corps.pin_administrateur, 'ANNULATION_PAIEMENT');
+
+    const { vue } = await db.transaction(async (tx) => {
+      const resultat = await annulerPaiement(tx, id, corps.motif, administrateur.id, req.session!.utilisateur_id);
+      return { vue: await chargerCommandeVue(tx, resultat.commande_id) };
+    });
+
+    app.diffuser('commande', vue.id);
     return vue;
   });
 

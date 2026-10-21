@@ -12,6 +12,7 @@ import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
+import { conditionPaiementActif } from '../paiements/actifs.js';
 import { chargerCommandeVue, exigerModifiable, recalculerTotaux, verrouillerCommande } from '../commandes/service.js';
 import { eligibilitePoints, lireBareme, pointsGagnes, soldePoints, trouverOuCreer, utiliserPoints } from './service.js';
 
@@ -176,7 +177,11 @@ export function routesFidelite(app: FastifyInstance): void {
       // partage posé), le total est réparti entre des notes qu'on ne recalcule
       // pas. La personne utilise alors ses points via « Payer par articles ».
       if (corps.utiliser_points && corps.utiliser_points > 0) {
-        const [dejaPaye] = await tx.select({ id: paiements.id }).from(paiements).where(eq(paiements.commande_id, id)).limit(1);
+        const [dejaPaye] = await tx
+          .select({ id: paiements.id })
+          .from(paiements)
+          .where(and(eq(paiements.commande_id, id), conditionPaiementActif()))
+          .limit(1);
         if (dejaPaye || notes.length > 0) {
           throw new ErreurMetier('Les points s’utilisent avant le premier encaissement', 409);
         }

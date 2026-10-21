@@ -23,6 +23,7 @@ import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
+import { nbRendusNet } from '../paiements/actifs.js';
 
 /** Id de la séquence OUVERTE (créée à la volée si aucune). */
 export async function sequenceOuverte(tx: DbOuTx): Promise<string> {
@@ -84,7 +85,7 @@ async function detailShifts(dbx: DbOuTx, sequenceId: string): Promise<ShiftSeque
         .select({
           service_id: paiements.service_id,
           total: sql<string>`COALESCE(SUM(${paiements.monnaie_rendue}), 0)`,
-          nb: sql<string>`COUNT(*) FILTER (WHERE ${paiements.monnaie_rendue} > 0)`,
+          nb: nbRendusNet(),
         })
         .from(paiements)
         .where(inArray(paiements.service_id, idsShifts))

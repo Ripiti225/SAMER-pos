@@ -115,18 +115,42 @@ async function peutApprouver(nomJoint: string | null, u: UtilisateurDb): Promise
 }
 
 /**
- * Vérifie un PIN manager/propriétaire pour les actions protégées
- * (remise, annulation d'article envoyé, réouverture, table vidée). Retourne
- * l'utilisateur autorisé, ou lève une erreur FR. Chaque échec est audité.
+ * Le compte est-il ADMINISTRATEUR ? Au POS, l'administrateur est le rôle
+ * PROPRIETAIRE — le patron et l'administrateur qui installe et dépanne les
+ * sites (seed : « SAMER Zreik » et « Admin Willy », tous deux PROPRIETAIRE).
+ *
+ * Volontairement le plus restrictif : ni le SUPERVISEUR, ni un rôle
+ * personnalisé, ni une permission cochable ne donnent cette autorité. Elle
+ * sert à défaire de l'argent déjà encaissé (annulation d'un paiement), le geste
+ * le plus facile à détourner d'une caisse.
+ */
+function estAdministrateur(nomJoint: string | null, u: UtilisateurDb): boolean {
+  return (nomJoint ?? u.role) === 'PROPRIETAIRE';
+}
+
+interface RegleApprobation {
+  /** `meta.type` de l'audit ECHEC_PIN. */
+  type: 'PIN_MANAGER' | 'PIN_ADMINISTRATEUR';
+  peutApprouver: (nomJoint: string | null, u: UtilisateurDb) => Promise<boolean> | boolean;
+  /** Le PIN est bon, mais son compte n'a pas l'autorité requise. */
+  messageSansAutorite: (nom: string, role: string) => string;
+  /** Aucun compte ne reconnaît ce PIN. */
+  messageInconnu: string;
+}
+
+/**
+ * Cherche, parmi les comptes actifs, celui dont le PIN est saisi et qui a
+ * l'autorité demandée. Retourne l'utilisateur autorisé, ou lève une erreur FR.
+ * Chaque échec est audité.
  *
  * En cas d'échec, le message DIT pourquoi. « PIN manager incorrect » envoyait
  * chercher une faute de frappe alors que le PIN était bon : le compte était
  * resté caissier (promotion non répercutée), ou bloqué par des essais ratés.
- * Le diagnostic se fait en second passage, uniquement quand aucun manager n'a
- * reconnu le PIN — la vérification argon2 est lente et le chemin normal ne doit
- * pas la payer.
+ * Le diagnostic se fait en second passage, uniquement quand aucun compte
+ * autorisé n'a reconnu le PIN — la vérification argon2 est lente et le chemin
+ * normal ne doit pas la payer.
  */
-export async function verifierPinManager(pin: string, contexte: string): Promise<UtilisateurDb> {
+async function verifierPinApprobateur(pin: string, contexte: string, regle: RegleApprobation): Promise<UtilisateurDb> {
   const comptes = await db
     .select({ utilisateur: utilisateurs, nom_role: roles.nom })
     .from(utilisateurs)
@@ -135,7 +159,7 @@ export async function verifierPinManager(pin: string, contexte: string): Promise
 
   const autorises: typeof comptes = [];
   for (const ligne of comptes) {
-    if (await peutApprouver(ligne.nom_role, ligne.utilisateur)) autorises.push(ligne);
+    if (await regle.peutApprouver(ligne.nom_role, ligne.utilisateur)) autorises.push(ligne);
   }
 
   for (const { utilisateur: m } of autorises) {
@@ -143,7 +167,7 @@ export async function verifierPinManager(pin: string, contexte: string): Promise
     if (await pinCorrespond(m.pin_hash, pin)) return m;
   }
 
-  // Aucun manager n'a reconnu ce PIN : à qui appartient-il ?
+  // Aucun compte autorisé n'a reconnu ce PIN : à qui appartient-il ?
   let bloque: { nom: string; secondes: number } | null = null;
   let sansAutorite: { nom: string; role: string } | null = null;
   for (const { utilisateur: m, nom_role } of comptes) {
@@ -152,12 +176,12 @@ export async function verifierPinManager(pin: string, contexte: string): Promise
     if (!verrou && autorise) continue; // déjà essayé ci-dessus
     if (!(await pinCorrespond(m.pin_hash, pin))) continue;
     if (verrou && autorise) {
-      // Un manager bloqué explique tout : on s'arrête là.
+      // Un approbateur bloqué explique tout : on s'arrête là.
       bloque = { nom: m.nom_complet, secondes: Math.ceil((verrou.getTime() - Date.now()) / 1000) };
       break;
     }
     // Deux comptes peuvent partager un PIN de 4 chiffres : on garde le premier
-    // trouvé mais on continue, un manager bloqué reste la meilleure explication.
+    // trouvé mais on continue, un approbateur bloqué reste la meilleure explication.
     sansAutorite ??= { nom: m.nom_complet, role: nomRole(nom_role, m) };
   }
 
@@ -167,7 +191,7 @@ export async function verifierPinManager(pin: string, contexte: string): Promise
       entite: 'utilisateurs',
       meta: {
         contexte,
-        type: 'PIN_MANAGER',
+        type: regle.type,
         cause: bloque ? 'COMPTE_BLOQUE' : sansAutorite ? 'SANS_AUTORITE' : 'PIN_INCONNU',
         ...(bloque ? { compte: bloque.nom } : {}),
         ...(sansAutorite ? { compte: sansAutorite.nom, role: sansAutorite.role } : {}),
@@ -181,12 +205,37 @@ export async function verifierPinManager(pin: string, contexte: string): Promise
       423,
     );
   }
-  if (sansAutorite) {
-    throw new ErreurMetier(
-      `Ce PIN est bien celui de ${sansAutorite.nom}, mais son compte est encore « ${sansAutorite.role} » : `
+  if (sansAutorite) throw new ErreurMetier(regle.messageSansAutorite(sansAutorite.nom, sansAutorite.role), 403);
+  throw new ErreurMetier(regle.messageInconnu, 403);
+}
+
+/**
+ * Vérifie un PIN manager/propriétaire pour les actions protégées
+ * (remise, annulation d'article envoyé, réouverture, table vidée).
+ */
+export async function verifierPinManager(pin: string, contexte: string): Promise<UtilisateurDb> {
+  return verifierPinApprobateur(pin, contexte, {
+    type: 'PIN_MANAGER',
+    peutApprouver,
+    messageSansAutorite: (nom, role) =>
+      `Ce PIN est bien celui de ${nom}, mais son compte est encore « ${role} » : `
         + 'il ne peut pas approuver cette action. Passez son rôle à Manager dans Réglages › Équipe.',
-      403,
-    );
-  }
-  throw new ErreurMetier('PIN manager incorrect', 403);
+    messageInconnu: 'PIN manager incorrect',
+  });
+}
+
+/**
+ * Vérifie un PIN ADMINISTRATEUR (rôle PROPRIETAIRE uniquement, voir
+ * `estAdministrateur`). Réservé aux corrections d'argent déjà encaissé : un
+ * PIN manager, même valide, est refusé — et le message le dit, pour qu'on
+ * n'aille pas chercher une faute de frappe.
+ */
+export async function verifierPinAdministrateur(pin: string, contexte: string): Promise<UtilisateurDb> {
+  return verifierPinApprobateur(pin, contexte, {
+    type: 'PIN_ADMINISTRATEUR',
+    peutApprouver: estAdministrateur,
+    messageSansAutorite: (nom, role) =>
+      `Ce PIN est bien celui de ${nom} (« ${role} »), mais seul un administrateur peut approuver cette action.`,
+    messageInconnu: 'PIN administrateur incorrect',
+  });
 }
