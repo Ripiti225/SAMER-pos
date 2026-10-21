@@ -50,9 +50,12 @@
 --   * Kdo (`offert`) : un repas offert n'est pas un achat — le site ne crédite
 --     d'ailleurs aucun point dessus. NULL (commandes montées avant le
 --     2026-08-25) = pas offert ;
---   * livraisons YANGO / GLOVO : réglées chez le partenaire, pas au restaurant
---     (cf. PARTENAIRES_EXTERNES dans packages/shared). Samer Delly, livraison
---     propre du restaurant, encaisse au comptoir : elle compte.
+--   * TOUTES les livraisons, Samer Delly compris (décision du propriétaire,
+--     21/10/2026) : le tirage récompense les clients qui viennent au
+--     restaurant ;
+--   * ce qui a été PAYÉ EN POINTS (décision du 21/10/2026) : c'est déjà une
+--     récompense, pas une dépense. Retiré du montant de la note ou du ticket ;
+--     une note entièrement réglée en points ne compte donc pas comme visite.
 --
 -- Un client sans téléphone au cloud (fiche pas encore montée) est écarté : on
 -- ne pourrait pas l'appeler s'il gagnait.
@@ -82,11 +85,17 @@ LANGUAGE sql STABLE AS $$
       AND c.created_at >= p_debut AND c.created_at < p_fin
       AND c.statut = 'PAYEE'
       AND c.offert IS NOT TRUE
-      AND (c.partenaire IS NULL OR c.partenaire NOT IN ('YANGO', 'GLOVO'))
+      AND c.partenaire IS NULL
+      AND c.type IS DISTINCT FROM 'LIVRAISON'
   ),
   parts AS (
-    -- Paiement par sous-notes : la part de chaque note revient à SON client.
-    SELECT n.client_fidelite_id AS client_id, n.commande_id, COALESCE(n.montant, 0)::BIGINT AS montant
+    -- Paiement par sous-notes : la part de chaque note revient à SON client,
+    -- moins ce qu'il a réglé en points.
+    SELECT n.client_fidelite_id AS client_id, n.commande_id,
+           (COALESCE(n.montant, 0) - COALESCE((
+              SELECT sum(pa.montant) FROM paiements pa
+              WHERE pa.restaurant_id = p_restaurant_id AND pa.note_id = n.id AND pa.mode = 'POINTS'
+           ), 0))::BIGINT AS montant
     FROM notes_split n
     JOIN cmd ON cmd.id = n.commande_id
     WHERE n.restaurant_id = p_restaurant_id
@@ -96,7 +105,12 @@ LANGUAGE sql STABLE AS $$
     UNION ALL
 
     -- Commande sans sous-note : le client est celui qui a gagné les points.
-    SELECT credit.client_id, cmd.id, COALESCE(cmd.total, 0)::BIGINT
+    -- Moins ce qui a été réglé en points sur le ticket.
+    SELECT credit.client_id, cmd.id,
+           (COALESCE(cmd.total, 0) - COALESCE((
+              SELECT sum(pa.montant) FROM paiements pa
+              WHERE pa.restaurant_id = p_restaurant_id AND pa.commande_id = cmd.id AND pa.mode = 'POINTS'
+           ), 0))::BIGINT
     FROM cmd
     JOIN LATERAL (
       SELECT p.client_id
@@ -121,6 +135,7 @@ LANGUAGE sql STABLE AS $$
     -- ne font qu'une visite.
     SELECT parts.client_id, sum(parts.montant)::BIGINT AS montant, count(DISTINCT parts.commande_id) AS nb_visites
     FROM parts
+    WHERE parts.montant > 0
     GROUP BY parts.client_id
   ),
   classes AS (
@@ -139,7 +154,7 @@ LANGUAGE sql STABLE AS $$
 $$;
 
 COMMENT ON FUNCTION siege_clients_mois(UUID, TIMESTAMPTZ, TIMESTAMPTZ, INTEGER) IS
-  'Dépense des clients fidélité d''un restaurant sur une période (commandes PAYEE, hors Kdo et hors Yango/Glovo). Rend les ex aequo du dernier rang : le départage est fait par la fonction `siege`.';
+  'Dépense des clients fidélité d''un restaurant sur une période (commandes PAYEE, hors Kdo, hors livraisons, hors part payée en points). Rend les ex aequo du dernier rang : le départage est fait par la fonction `siege`.';
 
 
 -- ── 2. Procès-verbal des tirages ────────────────────────────────────────────
