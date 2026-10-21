@@ -8,6 +8,7 @@ import { chargerConfigSync, prochainBackoff } from './config.js';
 import { ClientCloud, ErreurSync } from './cloud-client.js';
 import { compterEnAttente, pousserUnLot, purgerOutbox } from './montee.js';
 import { tirerCatalogue } from './descente.js';
+import { construireBattement } from './battement.js';
 import { executerOrdre, type EffetsOrdre } from './ordres.js';
 import { hier, reconcilierJour } from './reconcile.js';
 import { etatSync } from './etat.js';
@@ -163,11 +164,16 @@ export class MoteurSync {
   private boucleDescente(base: number): void {
     const tick = async () => {
       try {
-        const nbLignes = await tirerCatalogue(this.client!);
+        // Le battement voyage avec la descente (toutes les 5 min, même sans
+        // vente). S'il ne peut pas être construit, la descente part sans lui.
+        const sante = await construireBattement().catch(() => undefined);
+        const nbLignes = await tirerCatalogue(this.client!, sante);
+        etatSync.succesDescente();
         // La descente écrit directement en base : sans événement LAN, les
         // caisses déjà ouvertes garderaient leur ancien cache du menu.
         if (nbLignes > 0) this.effetsOrdres?.diffuser('catalogue', '');
       } catch (e) {
+        etatSync.echecDescente(e instanceof Error ? e.message : String(e));
         await enregistrerIncident(
           'SYNCHRONISATION', e, { operation: 'réception du catalogue' },
           'La mise à jour du catalogue depuis le cloud a échoué. Le POS conserve le dernier catalogue reçu et réessaiera automatiquement.',

@@ -19,6 +19,20 @@ class EtatSync {
   premier_echec: Date | null = null;
   revoque = false;
   derniere_reconciliation: ReconciliationVue | null = null;
+  /**
+   * Échec de la DESCENTE, à part de celui de la montée : il ne change pas le
+   * voyant de la caisse (les ventes partent), mais il bloque à terme le
+   * paiement en points (règle des 24 h). Le siège doit donc le voir.
+   */
+  erreur_descente: string | null = null;
+
+  succesDescente(): void {
+    this.erreur_descente = null;
+  }
+
+  echecDescente(message: string): void {
+    this.erreur_descente = message;
+  }
 
   succesMontee(lignesRestantes: number): void {
     this.dernier_acquittement = new Date();

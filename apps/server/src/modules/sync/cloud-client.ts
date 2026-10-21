@@ -116,8 +116,13 @@ export class ClientCloud {
     return this.appeler<ReponsePush>('sync-push', { lignes });
   }
 
-  pull(versions: Record<string, number>): Promise<ReponsePull> {
-    return this.appeler<ReponsePull>('sync-pull', { versions });
+  /**
+   * `sante` : le battement de cœur du site (voir battement.ts). Facultatif —
+   * une fonction `sync-pull` antérieure l'ignore sans erreur, ce qui permet de
+   * déployer le POS et le cloud dans n'importe quel ordre.
+   */
+  pull(versions: Record<string, number>, sante?: object): Promise<ReponsePull> {
+    return this.appeler<ReponsePull>('sync-pull', sante ? { versions, sante } : { versions });
   }
 
   reconcile(jour: string, local: { nb_payees: number; total_ventes: number; par_mode: Record<string, number> }): Promise<ReponseReconcile> {

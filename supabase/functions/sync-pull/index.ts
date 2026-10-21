@@ -3,6 +3,7 @@
 // filtrées pour ce restaurant. Ne touche JAMAIS aux ventes.
 import { clientAdmin, ErreurAuth, json, verifierCleSite } from '../_shared/auth.ts';
 import { FLUX_DESCENTE } from '../_shared/tables.ts';
+import { lireBattement } from '../_shared/sante-sites.ts';
 
 interface LigneDescente {
   table_name: string;
@@ -15,10 +16,12 @@ Deno.serve(async (req) => {
 
   let restaurantId: string;
   let versions: Record<string, number>;
+  let sante: unknown;
   try {
     const corps = await req.json();
     restaurantId = await verifierCleSite(admin, corps.cle_site);
     versions = corps.versions ?? {};
+    sante = corps.sante;
   } catch (e) {
     if (e instanceof ErreurAuth) return json({ erreur: e.message }, 401);
     return json({ erreur: 'Requête invalide' }, 400);
@@ -66,5 +69,21 @@ Deno.serve(async (req) => {
   }
 
   await admin.from('sync_journal').insert({ restaurant_id: restaurantId, type: 'PULL', nb_lignes: 0 });
+
+  // BATTEMENT DE CŒUR (2026-10-21) : version, ventes en attente, dernière
+  // erreur — ce que seul le site sait, pour l'écran « Santé des sites ».
+  // Porté par la descente et non par la montée : la montée ne parle au cloud
+  // QUE s'il y a des ventes à envoyer, un site calme la nuit paraîtrait mort.
+  // La descente, elle, passe toutes les 5 min quoi qu'il arrive.
+  // Au mieux : une table absente (migration pas encore passée) ne doit jamais
+  // priver le site de son catalogue.
+  const battement = lireBattement(sante);
+  if (battement) {
+    const { error } = await admin
+      .from('sites_sante')
+      .upsert({ restaurant_id: restaurantId, recu_le: new Date().toISOString(), ...battement }, { onConflict: 'restaurant_id' });
+    if (error) console.error(`battement ignoré (${error.message})`);
+  }
+
   return json(resultat);
 });
