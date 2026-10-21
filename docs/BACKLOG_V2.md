@@ -139,7 +139,7 @@ shift clôturé, plus aucune correction côté caisse : le ticket Z reste figé.
   Z, tableau de bord du siège) retombent justes sans filtre ; les comptages
   (`nb`) sont nets. Le cloud reçoit un INSERT ordinaire, sans colonne nouvelle :
   aucun risque de bloquer l'outbox. Migration cloud facultative
-  `20261021000000_annulation_paiement.sql` (nombre de paiements net dans
+  `20261021020000_annulation_paiement.sql` (nombre de paiements net dans
   `siege_par_mode`), non appliquée.
 - La commande soldée repasse OUVERTE (table réoccupée) ; sa sélection
   implicite, si elle n'a plus aucun paiement valable, est annulée : la
