@@ -82,7 +82,7 @@ export async function seed(): Promise<void> {
     { cle: 'kds_jeton_appareil', valeur: 'SAMER-ANGRE7E-KDS-1' },
     // Sprint 4 B : barème fidélité (descendu du siège en production)
     { cle: 'fidelite_points_par_tranche', valeur: { tranche_fcfa: 1000, points: 1 } },
-    { cle: 'fidelite_valeur_point_fcfa', valeur: 10 },
+    { cle: 'fidelite_valeur_point_fcfa', valeur: 100 },
     { cle: 'fidelite_seuil_utilisation', valeur: 50 },
     // Sprint 4 C : QR de table — adresse web de l'APP CLIENT (port 5176).
     // Vide = le serveur détecte l'IP LAN automatiquement (joignable depuis un

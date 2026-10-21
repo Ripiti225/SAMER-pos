@@ -26,7 +26,7 @@ export async function lireBareme(tx: DbOuTx): Promise<Bareme> {
   return {
     tranche_fcfa: tranche?.tranche_fcfa ?? 1000,
     points_par_tranche: tranche?.points ?? 1,
-    valeur_point_fcfa: (lire('fidelite_valeur_point_fcfa') as number) ?? 10,
+    valeur_point_fcfa: (lire('fidelite_valeur_point_fcfa') as number) ?? 100,
     seuil_utilisation: (lire('fidelite_seuil_utilisation') as number) ?? 50,
   };
 }
