@@ -84,11 +84,44 @@ describe('Infos de livraison — saisie et garde-fous', () => {
 
   it('un champ absent du formulaire ne touche pas à l’autre', async () => {
     const id = await commande('LIVRAISON', 'GLOVO');
-    await infos(id, { ref_partenaire: 'GL-1', contact_client: '0505050505' });
+    await infos(id, { ref_partenaire: '4821', contact_client: '0505050505' });
     const rep = await infos(id, { contact_client: '0606060606' });
     expect(rep.statusCode).toBe(200);
-    expect(rep.json().ref_partenaire).toBe('GL-1');
+    expect(rep.json().ref_partenaire).toBe('4821');
     expect(rep.json().contact_client).toBe('0606060606');
+  });
+
+  it('Glovo : refuse un n° de moins de 4 chiffres (le n° à 3 chiffres du livreur)', async () => {
+    const id = await commande('LIVRAISON', 'GLOVO');
+    for (const mauvais of ['123', '7', 'GL-1', '12a4']) {
+      const rep = await infos(id, { ref_partenaire: mauvais });
+      expect(rep.statusCode).toBe(400);
+      expect(rep.json().erreur).toContain('4 derniers chiffres');
+    }
+    const ok = await infos(id, { ref_partenaire: ' 0937 ' });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().ref_partenaire).toBe('0937');
+    // Plus de 4 chiffres (le numéro entier) : accepté aussi.
+    const long = await infos(id, { ref_partenaire: '100457820937' });
+    expect(long.statusCode).toBe(200);
+    expect(long.json().ref_partenaire).toBe('100457820937');
+  });
+
+  it('Glovo : refuse aussi le mauvais format dès la création de la commande', async () => {
+    const rep = await app.inject({
+      method: 'POST',
+      url: '/api/commandes',
+      cookies,
+      payload: { type: 'LIVRAISON', partenaire: 'GLOVO', ref_partenaire: '123' },
+    });
+    expect(rep.statusCode).toBe(400);
+    expect(rep.json().erreur).toContain('4 derniers chiffres');
+  });
+
+  it('la règle des 4 chiffres ne concerne que Glovo', async () => {
+    const id = await commande('LIVRAISON', 'YANGO');
+    const rep = await infos(id, { ref_partenaire: '123' });
+    expect(rep.statusCode).toBe(200);
   });
 });
 
@@ -150,9 +183,9 @@ describe('Ticket Z — commandes et contacts par partenaire', () => {
     expect(z.partenaires.SAMER_DELLY.refs).toBe(2);
     expect(z.partenaires.SAMER_DELLY.total).toBe(12000);
     // Les courses soldées au balayage restent comptées avec ce qu'elles
-    // portaient : 2 Yango, toutes deux contactées, une seule avec le n° du
-    // partenaire (l'enregistrement vide du garde-fou a bien été refusé).
-    expect(z.partenaires.YANGO).toEqual({ nb: 2, total: 6000, contacts: 2, refs: 1 });
+    // portaient : 3 Yango, deux contactées, deux avec le n° du partenaire
+    // (l'enregistrement vide du garde-fou a bien été refusé).
+    expect(z.partenaires.YANGO).toEqual({ nb: 3, total: 9000, contacts: 2, refs: 2 });
   });
 
   it('le shift clôturé n’accepte plus de saisie — son Z est figé', async () => {

@@ -12,6 +12,7 @@ import {
   ModifierItemSchema,
   RemiseSchema,
   ReouvrirSchema,
+  erreurRefPartenaire,
   estLivraisonSansEncaissement,
   estTableKdo,
 } from '@pos/shared';
@@ -61,6 +62,8 @@ export function routesCommandes(app: FastifyInstance): void {
       offert = estTableKdo(table.partenaire);
     }
     if (corps.type !== 'LIVRAISON') partenaire = null;
+    const erreurRef = erreurRefPartenaire(partenaire, corps.ref_partenaire);
+    if (erreurRef) throw new ErreurMetier(erreurRef, 400);
 
     const vueId = await db.transaction(async (tx) => {
       // Table déjà ouverte par erreur (commande sans aucun article) : on la
@@ -532,6 +535,10 @@ export function routesCommandes(app: FastifyInstance): void {
       // chaîne vide = le caissier a effacé volontairement.
       const ref = corps.ref_partenaire === undefined ? c.ref_partenaire : (corps.ref_partenaire || null);
       const contact = corps.contact_client === undefined ? c.contact_client : (corps.contact_client || null);
+      // Contrôlé seulement quand le n° change : compléter le contact d'une
+      // commande enregistrée avant la règle ne doit pas être bloqué.
+      const erreurRef = ref !== c.ref_partenaire ? erreurRefPartenaire(c.partenaire, ref) : null;
+      if (erreurRef) throw new ErreurMetier(erreurRef, 400);
 
       const [maj] = await tx
         .update(commandes)

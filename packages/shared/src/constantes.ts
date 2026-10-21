@@ -245,6 +245,21 @@ export function estLivraisonSansEncaissement(partenaire: string | null | undefin
 }
 
 /**
+ * N° de commande Glovo : au moins 4 chiffres (en pratique les 4 derniers du
+ * long numéro de commande, ou le numéro entier). Des caissiers saisissaient le
+ * numéro à 3 chiffres affiché pour le livreur, qui ne permet pas de retrouver
+ * la commande lors des vérifications — refusé par la caisse ET le serveur.
+ */
+export const MESSAGE_REF_GLOVO =
+  'Le numéro de commande, ce sont les 4 derniers chiffres du numéro à plusieurs chiffres (pas le numéro à 3 chiffres du livreur).';
+
+/** Message d'erreur si le n° de commande ne respecte pas le format du partenaire, sinon null. */
+export function erreurRefPartenaire(partenaire: string | null | undefined, ref: string | null | undefined): string | null {
+  if (partenaire !== 'GLOVO' || !ref?.trim()) return null;
+  return /^\d{4,}$/.test(ref.trim()) ? null : MESSAGE_REF_GLOVO;
+}
+
+/**
  * Table virtuelle du Kdo (repas offert). Elle vit en zone **RC** et non en
  * « Livraison » : le cadeau se consomme sur place. La commande qui en part est
  * marquée `offert` par le SERVEUR (jamais sur la foi du client) et se clôture

@@ -21,6 +21,8 @@ import {
   couleurCategorie,
   estLivraisonSansEncaissement,
   formatFCFA,
+  MESSAGE_REF_GLOVO,
+  erreurRefPartenaire,
   libellePartenaire,
   LIBELLES_TYPES_COMMANDE,
   PARTENAIRES,
@@ -891,7 +893,11 @@ function ModaleInfosLivraison({
   const [contact, setContact] = useState(commande.contact_client ?? '');
   // Le serveur refuse un enregistrement entièrement vide : il n'ajouterait rien
   // et effacerait une saisie précédente. Le bouton dit la même chose.
-  const valide = ref.trim() !== '' || contact.trim() !== '';
+  const glovo = commande.partenaire === 'GLOVO';
+  // N° déjà enregistré avant la règle des 4 chiffres : le serveur le laisse
+  // passer tant qu'il ne change pas, la caisse aussi.
+  const erreurRef = ref.trim() !== (commande.ref_partenaire ?? '') ? erreurRefPartenaire(commande.partenaire, ref) : null;
+  const valide = (ref.trim() !== '' || contact.trim() !== '') && !erreurRef;
 
   const enregistrer = () => {
     if (!valide) return;
@@ -916,11 +922,17 @@ function ModaleInfosLivraison({
               id="ref-partenaire"
               autoFocus
               value={ref}
-              onChange={(e) => setRef(e.target.value)}
+              onChange={(e) => setRef(glovo ? e.target.value.replace(/\D/g, '') : e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && enregistrer()}
-              placeholder="Tel qu'il apparaît sur l'écran du coursier"
+              inputMode={glovo ? 'numeric' : undefined}
+              placeholder={glovo ? '4 derniers chiffres (ou plus)' : "Tel qu'il apparaît sur l'écran du coursier"}
               className="w-full rounded-[13px] border border-bordure bg-surface p-4 text-lg"
             />
+            {glovo && (
+              <p className={`mt-1 text-sm ${erreurRef ? 'font-semibold text-alerte' : 'text-doux'}`}>
+                {MESSAGE_REF_GLOVO}
+              </p>
+            )}
           </div>
           <div>
             <label htmlFor="contact-client" className="mb-1 block text-sm font-semibold text-doux">
