@@ -77,7 +77,7 @@ export function SanteSites({ filtre, onFiltre }: { filtre: FiltreResto; onFiltre
 
       {error && <Erreur texte={error instanceof ErreurSiege ? error.message : 'Lecture impossible'} />}
       {data?.migration_absente && (
-        <Erreur texte="Le cloud n’a pas encore la table de santé des sites (migration 20261021000000_sante_sites à appliquer). Seule la liste des restaurants s’affiche." />
+        <Erreur texte="Le cloud n’a pas encore la table de santé des sites (migration 20261021010000_sante_sites à appliquer). Seule la liste des restaurants s’affiche." />
       )}
       {nbPointsBloques > 0 && (
         <Erreur
