@@ -5,6 +5,19 @@
 La clé a été copiée le **2026-08-17 à 05h01:32**, avec l'identité neutre `A_CONFIGURER`
 et les deux seuls comptes propriétaire. Tout ce qui est écrit ici est **postérieur**.
 
+> **Report du 2026-10-21** : `siege-8-sites-et-releve` à `5a2ce89` — n° de commande
+> Glovo d'au moins 4 chiffres (`6a57705` : le n° à 3 chiffres du livreur est refusé par
+> la caisse ET le serveur, message « ce sont les 4 derniers chiffres du numéro à
+> plusieurs chiffres ») et point fidélité à 100 F par défaut (`5a2ce89` : seed + repli).
+> **9 fichiers** (1 ajouté, 8 remplacés) copiés vers `D:\POS-Samer\app`, **9/9 vérifiés
+> par SHA-256**. Caisse recompilée avant copie (`index-BNWJHFPj.js`, CSS inchangé
+> `index-D7E_U2_2.css`). **Ni migration, ni repackaging.** Anciens fichiers dans
+> `C:\Users\HP\Documents\POS-Samer\usb-backup-20261021-211412`, manifeste
+> `usb-copy-20261021-211412.csv`. Clé contrôlée saine avant copie (aucun `.exe` de
+> 533 504 octets ni `g*.exe` caché). **La base neutre de la clé garde
+> `fidelite_valeur_point_fcfa = 10`** (le seed ne rejoue pas) : un site neuf prend le
+> barème du siège à sa première descente — le passer à 100 dans Réglages → Fidélité.
+>
 > **Report du 2026-10-19** : `origin/main` du 18/10 (`5eca679` — siège : explication du
 > caissier sous chaque écart de clôture, plage horaire dans la période personnalisée,
 > ventes par caissier et plats vendus au survol des heures de pic). **17 fichiers**
@@ -164,8 +177,8 @@ avant que les 7 autres restaurants ne reçoivent quoi que ce soit.
 | Dernière migration | **0041** (`0041_notes_caissiers.sql`) — 0039 à 0041 viennent de `main`, renumérotées (voir le report du 15/10) |
 | Base de la clé | **migrée le 15/10** : `drizzle.__drizzle_migrations` compte **42 lignes sur 42**. Neutralité contrôlée : `A_CONFIGURER`, 0 commande, 0 service, 0 `cle_site`, 2 propriétaires, 16 catégories, 131 articles actifs. Sauvegarde préalable : `data\pgdata.backup-20261015` |
 | 🔴 Postes déjà installés depuis une clé antérieure au 15/10 | **doivent appliquer les migrations manquantes jusqu'à 0041** avant de servir la caisse. Le lanceur Electron actuel le fait au démarrage ; contrôler le résultat sur chaque poste |
-| Rebuild des interfaces | **caisse recompilée le 15/10**. KDS, serveur et client tournent en Vite dev depuis leurs sources (pas de `dist` servi) ; siège non recompilé |
-| Report du code sur la clé master | **fait le 19/10** (`5eca679`) — 17 fichiers ajoutés ou remplacés, **17/17 vérifiés par SHA-256**, siège et cloud uniquement. Le 15/10 : 121 fichiers, migrations `0039` à `0041` reportées ET appliquées à la base de la clé. `.env`, base, runtime, dépendances portables et exécutable de la clé préservés |
+| Rebuild des interfaces | **caisse recompilée le 21/10** (`index-BNWJHFPj.js`). KDS, serveur et client tournent en Vite dev depuis leurs sources (pas de `dist` servi) ; siège non recompilé |
+| Report du code sur la clé master | **fait le 21/10** (`5a2ce89`) — 9 fichiers, **9/9 vérifiés par SHA-256** (Glovo 4 chiffres, point à 100 F, caisse recompilée). Le 19/10 (`5eca679`) : 17 fichiers, siège et cloud uniquement. Le 15/10 : 121 fichiers, migrations `0039` à `0041` reportées ET appliquées à la base de la clé. `.env`, base, runtime, dépendances portables et exécutable de la clé préservés |
 | Virus Grenam | **nettoyé le 19/10** — 82 exécutables restaurés (voir le report du 19/10). Analyser le PC d'origine de l'infection (16/10, 13h26) |
 | Scripts à la racine du dossier portable | **à jour le 20/09** — tous les `.bat` et `.ps1` de `deploy/windows/` ont été recopiés |
 | Repackaging `PosSamer.exe` | **fait le 20/09 à 17h44** après la modification de `apps/desktop/main.js` ; nouvel exécutable de 74 330 255 octets copié à la racine |
