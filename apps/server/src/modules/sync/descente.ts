@@ -154,7 +154,7 @@ async function appliquerLigne(
  * Tire les nouveautés depuis le cloud et les applique. Retourne le nombre de
  * lignes appliquées. Peut lever ErreurSync (réseau) — l'appelant réessaiera.
  */
-export async function tirerCatalogue(client: ClientCloud): Promise<number> {
+export async function tirerCatalogue(client: ClientCloud, sante?: object): Promise<number> {
   // Versions courantes (lues hors transaction, lecture seule)
   const etat = await pool.query<{ flux: string; version: string }>(
     `SELECT flux, version FROM sync_etat WHERE flux = ANY($1)`,
@@ -164,7 +164,7 @@ export async function tirerCatalogue(client: ClientCloud): Promise<number> {
   const requete: Record<string, number> = {};
   for (const f of FLUX) requete[f.toLowerCase()] = versionParFlux.get(f) ?? 0;
 
-  const reponse = await client.pull(requete);
+  const reponse = await client.pull(requete, sante);
 
   const clientPg = await pool.connect();
   let applique = 0;

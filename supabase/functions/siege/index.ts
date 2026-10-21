@@ -277,6 +277,32 @@ Deno.serve(async (req) => {
         return jsonCors({ restaurants: await restaurantsGroupe(admin) });
       }
 
+      // -- SANTÉ DES SITES : quand chaque restaurant a parlé au cloud pour la
+      // -- dernière fois, ce qu'il garde en attente, quelle version il fait
+      // -- tourner. Les couleurs et la règle des 24 h sont tirées dans la
+      // -- console (`apps/siege/src/sante.ts`) : ici on ne rend que des faits.
+      // --
+      // -- `maintenant` est l'heure du CLOUD : la console calcule les âges
+      // -- contre elle, pas contre l'horloge du PC de la personne connectée.
+      case 'sante_sites': {
+        const [restos, sante] = await Promise.all([
+          restaurantsGroupe(admin),
+          admin.rpc('siege_sante_sites'),
+        ]);
+        // Migration pas encore passée : la liste s'affiche quand même, sans
+        // données de santé, et la console dit pourquoi.
+        const lignes = sante.error ? [] : ((sante.data ?? []) as { restaurant_id: string }[]);
+        const parId = new Map(lignes.map((l) => [l.restaurant_id, l]));
+        return jsonCors({
+          maintenant: new Date().toISOString(),
+          migration_absente: !!sante.error,
+          sites: restos.map((r) => ({
+            ...r,
+            sante: r.restaurant_id ? parId.get(r.restaurant_id) ?? null : null,
+          })),
+        });
+      }
+
       /**
        * Tableau de bord — TOUT en une requête.
        *

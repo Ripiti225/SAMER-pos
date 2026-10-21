@@ -14,10 +14,11 @@ import { RecettesInventaire } from './screens/RecettesInventaire';
 import { Categories } from './screens/Categories';
 import { Menu } from './screens/Menu';
 import { Parametres } from './screens/Parametres';
+import { SanteSites } from './screens/SanteSites';
 import { Sequences } from './screens/Sequences';
 import { TableauBord } from './screens/TableauBord';
 
-type Ecran = 'tableau-bord' | 'clotures' | 'clients-mois' | 'inventaire' | 'recettes-inventaire' | 'sequences' | 'menu' | 'categories' | 'equipe' | 'parametres';
+type Ecran = 'tableau-bord' | 'clotures' | 'clients-mois' | 'inventaire' | 'recettes-inventaire' | 'sequences' | 'sante-sites' | 'menu' | 'categories' | 'equipe' | 'parametres';
 
 const SECTIONS: { cle: Ecran; libelle: string }[] = [
   { cle: 'tableau-bord', libelle: 'Tableau de bord' },
@@ -26,6 +27,7 @@ const SECTIONS: { cle: Ecran; libelle: string }[] = [
   { cle: 'inventaire', libelle: 'Inventaire' },
   { cle: 'recettes-inventaire', libelle: 'Recettes d’inventaire' },
   { cle: 'sequences', libelle: 'Séquences' },
+  { cle: 'sante-sites', libelle: 'Santé des sites' },
   { cle: 'menu', libelle: 'Menu' },
   { cle: 'categories', libelle: 'Catégories' },
   { cle: 'equipe', libelle: 'Équipe' },
@@ -242,6 +244,7 @@ export function App() {
           {ecran === 'inventaire' && <Inventaire siege={siege} filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'recettes-inventaire' && <RecettesInventaire siege={siege} filtre={filtreResto} />}
           {ecran === 'sequences' && <Sequences filtre={filtreResto} onFiltre={setFiltreResto} />}
+          {ecran === 'sante-sites' && <SanteSites filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'menu' && <Menu filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'categories' && <Categories filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'equipe' && <Equipe filtre={filtreResto} onFiltre={setFiltreResto} />}
