@@ -30,6 +30,16 @@ import {
 } from '../_shared/siege-inventaire.ts';
 import { lireModificationArticle } from '../_shared/siege-menu.ts';
 import { lireLiaisonRecette, lireProduitInventaire, uuidValide } from '../_shared/siege-recettes.ts';
+import {
+  lireMois,
+  moisTermine,
+  NB_PARTICIPANTS,
+  selectionnerParticipants,
+  tirerAuSort,
+  type DepenseClient,
+  type Mois,
+  type Participant,
+} from '../_shared/siege-tirage.ts';
 
 // ---------------------------------------------------------------------------
 // SamerTrackly — source de vérité des restaurants et des employés.
@@ -202,6 +212,37 @@ function periode(corps: Record<string, unknown>): { debut: string; fin: string }
   const fin = typeof corps.fin === 'string' ? corps.fin : '';
   if (!debut || !fin) throw new Error('Période manquante');
   return { debut, fin };
+}
+
+// ---------------------------------------------------------------------------
+// Meilleurs clients du mois et tirage au sort (2026-10-21).
+// ---------------------------------------------------------------------------
+
+/** Les participants d'un restaurant pour un mois, classés et départagés. */
+async function participantsDuMois(admin: SupabaseClient, restaurantId: string, mois: Mois): Promise<Participant[]> {
+  const { data, error } = await admin.rpc('siege_clients_mois', {
+    p_restaurant_id: restaurantId,
+    p_debut: mois.debut,
+    p_fin: mois.fin,
+    p_limite: NB_PARTICIPANTS,
+  });
+  if (error) throw new Error('Lecture des clients du mois impossible');
+  return selectionnerParticipants((data ?? []) as DepenseClient[]);
+}
+
+const COLONNES_TIRAGE =
+  'id, restaurant_id, mois, tire_le, tire_par_nom, participants, gagnant_client_id, gagnant_rang';
+
+/** Le tirage déjà enregistré pour ce restaurant et ce mois, s'il existe. */
+async function tirageDuMois(admin: SupabaseClient, restaurantId: string, mois: Mois): Promise<unknown | null> {
+  const { data, error } = await admin
+    .from('tirages_clients')
+    .select(COLONNES_TIRAGE)
+    .eq('restaurant_id', restaurantId)
+    .eq('mois', mois.premier_jour)
+    .maybeSingle();
+  if (error) throw new Error('Lecture des tirages impossible');
+  return data ?? null;
 }
 
 Deno.serve(async (req) => {
@@ -1285,6 +1326,116 @@ Deno.serve(async (req) => {
         });
 
         return jsonCors({ ordre_id: id });
+      }
+
+      // -- Meilleurs clients du mois d'UN restaurant, et son tirage s'il a eu
+      // -- lieu. Lecture : ouverte au niveau LECTURE.
+      case 'clients_mois': {
+        if (!uuidValide(corps.restaurant_id)) return jsonCors({ erreur: 'Choisissez un restaurant' }, 400);
+        const mois = lireMois(corps.mois);
+        if (!mois) return jsonCors({ erreur: 'Mois invalide' }, 400);
+        const [participants, tirage] = await Promise.all([
+          participantsDuMois(admin, corps.restaurant_id, mois),
+          tirageDuMois(admin, corps.restaurant_id, mois),
+        ]);
+        return jsonCors({
+          mois: mois.mois,
+          mois_termine: moisTermine(mois, new Date()),
+          // Le classement TEL QU'IL EST AUJOURD'HUI. Une fois le tirage fait,
+          // c'est la liste figée dans `tirage.participants` qui fait foi : une
+          // vente montée en retard peut avoir bougé le classement depuis.
+          participants,
+          tirage,
+        });
+      }
+
+      /**
+       * Tirage au sort du gagnant d'un restaurant pour un mois.
+       *
+       * Tout se décide ICI : la liste des participants est recalculée (on ne
+       * prend pas celle que la console a affichée — elle pourrait être forgée),
+       * l'aléa est cryptographique, et la ligne est écrite dans une table
+       * append-only à clé unique (restaurant, mois). Un second tirage échoue
+       * donc en base, même lancé au même instant depuis deux navigateurs : on
+       * ne peut pas relancer jusqu'à tomber sur le gagnant voulu.
+       */
+      case 'tirage_clients': {
+        exigeAdmin(siege);
+        if (!uuidValide(corps.restaurant_id)) return jsonCors({ erreur: 'Choisissez un restaurant' }, 400);
+        const restaurantId = corps.restaurant_id;
+        const mois = lireMois(corps.mois);
+        if (!mois) return jsonCors({ erreur: 'Mois invalide' }, 400);
+        if (!moisTermine(mois, new Date())) {
+          return jsonCors({ erreur: 'Ce mois n’est pas terminé : le tirage se fait à partir du 1er du mois suivant' }, 409);
+        }
+
+        const { data: restaurant, error: erreurRestaurant } = await admin.from('restaurants')
+          .select('restaurant_id, nom').eq('restaurant_id', restaurantId).maybeSingle();
+        if (erreurRestaurant) throw new Error('Vérification du restaurant impossible');
+        if (!restaurant) return jsonCors({ erreur: 'Restaurant introuvable' }, 404);
+
+        const existant = await tirageDuMois(admin, restaurantId, mois);
+        if (existant) {
+          return jsonCors({ erreur: 'Le tirage de ce mois a déjà eu lieu pour ce restaurant', tirage: existant }, 409);
+        }
+
+        const participants = await participantsDuMois(admin, restaurantId, mois);
+        if (participants.length === 0) {
+          return jsonCors({ erreur: 'Aucun client fidélité n’a acheté dans ce restaurant ce mois-là' }, 409);
+        }
+        const gagnant = tirerAuSort(participants);
+
+        const { data: tirage, error } = await admin.from('tirages_clients').insert({
+          restaurant_id: restaurantId,
+          mois: mois.premier_jour,
+          tire_par: siege.userId,
+          tire_par_nom: siege.nomComplet,
+          participants,
+          gagnant_client_id: gagnant.client_id,
+          gagnant_rang: gagnant.rang,
+        }).select(COLONNES_TIRAGE).single();
+        if (error) {
+          // Course perdue contre un autre tirage du même mois : la contrainte
+          // d'unicité a tranché, on renvoie celui qui a été enregistré.
+          if (error.code === '23505') {
+            return jsonCors({
+              erreur: 'Le tirage de ce mois a déjà eu lieu pour ce restaurant',
+              tirage: await tirageDuMois(admin, restaurantId, mois),
+            }, 409);
+          }
+          throw new Error(`Enregistrement du tirage impossible : ${error.message}`);
+        }
+
+        await tracer(admin, siege, 'TIRAGE_CLIENTS', {
+          entite: 'tirages_clients',
+          entiteId: (tirage as { id: string }).id,
+          portee: [restaurantId],
+          meta: {
+            mois: mois.mois,
+            nb_participants: participants.length,
+            gagnant_client_id: gagnant.client_id,
+            gagnant_rang: gagnant.rang,
+          },
+        });
+
+        return jsonCors({ tirage });
+      }
+
+      // -- Historique des tirages, du plus récent au plus ancien. Sans
+      // -- restaurant : tout le groupe (8 gagnants par mois).
+      case 'tirages_clients': {
+        let requete = admin.from('tirages_clients')
+          .select(COLONNES_TIRAGE)
+          .order('mois', { ascending: false })
+          .order('tire_le', { ascending: false })
+          .limit(500);
+        if (corps.restaurant_id !== undefined && corps.restaurant_id !== null && corps.restaurant_id !== '') {
+          if (!uuidValide(corps.restaurant_id)) return jsonCors({ erreur: 'Restaurant invalide' }, 400);
+          requete = requete.eq('restaurant_id', corps.restaurant_id);
+        }
+        const { data, error } = await requete;
+        if (error) throw new Error('Lecture des tirages impossible');
+        return jsonCors({ tirages: data ?? [] });
       }
 
       default:

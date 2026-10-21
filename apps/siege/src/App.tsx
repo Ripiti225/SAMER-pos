@@ -5,6 +5,7 @@ import { appelSiege, ErreurSiege, type Siege } from './api';
 import { modeInitial, poserMode, type Mode } from './affichage';
 import type { FiltreResto } from './restaurants';
 import { supabase } from './supabase';
+import { ClientsMois } from './screens/ClientsMois';
 import { Clotures } from './screens/Clotures';
 import { Connexion } from './screens/Connexion';
 import { Equipe } from './screens/Equipe';
@@ -16,11 +17,12 @@ import { Parametres } from './screens/Parametres';
 import { Sequences } from './screens/Sequences';
 import { TableauBord } from './screens/TableauBord';
 
-type Ecran = 'tableau-bord' | 'clotures' | 'inventaire' | 'recettes-inventaire' | 'sequences' | 'menu' | 'categories' | 'equipe' | 'parametres';
+type Ecran = 'tableau-bord' | 'clotures' | 'clients-mois' | 'inventaire' | 'recettes-inventaire' | 'sequences' | 'menu' | 'categories' | 'equipe' | 'parametres';
 
 const SECTIONS: { cle: Ecran; libelle: string }[] = [
   { cle: 'tableau-bord', libelle: 'Tableau de bord' },
   { cle: 'clotures', libelle: 'Clôtures' },
+  { cle: 'clients-mois', libelle: 'Clients du mois' },
   { cle: 'inventaire', libelle: 'Inventaire' },
   { cle: 'recettes-inventaire', libelle: 'Recettes d’inventaire' },
   { cle: 'sequences', libelle: 'Séquences' },
@@ -236,6 +238,7 @@ export function App() {
         <main className="min-w-0 overflow-y-auto bg-plan p-4 sm:p-6">
           {ecran === 'tableau-bord' && <TableauBord filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'clotures' && <Clotures filtre={filtreResto} onFiltre={setFiltreResto} />}
+          {ecran === 'clients-mois' && <ClientsMois filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'inventaire' && <Inventaire siege={siege} filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'recettes-inventaire' && <RecettesInventaire siege={siege} filtre={filtreResto} />}
           {ecran === 'sequences' && <Sequences filtre={filtreResto} onFiltre={setFiltreResto} />}
