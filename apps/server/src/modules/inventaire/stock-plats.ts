@@ -204,7 +204,6 @@ export function nomIngredient(produit: Produit): string {
   }
 }
 
-
 /**
  * Le stock d'un plat, à partir du stock courant de son produit de référence.
  * Épuisé = plus aucun plat possible (≤ 0) ; bientôt = au plus `seuil` plats.
@@ -354,8 +353,9 @@ export async function calculerStockPlats(dbx: DbOuTx): Promise<StockPlatsVue> {
  * Plusieurs caisses et tablettes reçoivent le même événement WebSocket et
  * redemandent le stock dans la même seconde : elles partagent le calcul en
  * cours au lieu d'en lancer un chacune. Aucune mise en cache au-delà — un
- * appel arrivé APRÈS la fin du calcul en relance un, donc jamais de chiffre
- * périmé après une vente.
+ * appel arrivé APRÈS la fin du calcul en relance un ; au pire, un appel reçoit
+ * le chiffre d'un calcul lancé quelques millisecondes plus tôt. Le refus d'une
+ * commande QR, lui, recalcule toujours (`platsEpuises`).
  */
 let calculEnCours: Promise<StockPlatsVue> | null = null;
 export function stockPlatsPartage(dbx: DbOuTx): Promise<StockPlatsVue> {

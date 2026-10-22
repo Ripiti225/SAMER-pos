@@ -37,7 +37,7 @@ import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
 import { chargerCatalogueClient } from '../catalogue/service.js';
-import { calculerStockPlats, platsEpuises } from '../inventaire/stock-plats.js';
+import { platsEpuises, stockPlatsPartage } from '../inventaire/stock-plats.js';
 import {
   chargerCommandeVue,
   figerNouvelItem,
@@ -184,7 +184,7 @@ export function routesClient(app: FastifyInstance): void {
     await tableParJeton(qr_token); // borne au jeton (404 si inconnu)
     // Variante CLIENT : sans les catégories réservées aux partenaires de
     // livraison (migration 0023). Un client au QR est sur place.
-    const [catalogue, stock] = await Promise.all([chargerCatalogueClient(), calculerStockPlats(db)]);
+    const [catalogue, stock] = await Promise.all([chargerCatalogueClient(), stockPlatsPartage(db)]);
     // Stock en cuisine épuisé : le plat devient « Épuisé », comme un plat
     // retiré à la main. Le client ne reçoit JAMAIS de quantité — seulement ce
     // booléen ; les chiffres restent entre la caisse et la cuisine.
