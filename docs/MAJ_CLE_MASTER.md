@@ -5,6 +5,33 @@
 La clé a été copiée le **2026-08-17 à 05h01:32**, avec l'identité neutre `A_CONFIGURER`
 et les deux seuls comptes propriétaire. Tout ce qui est écrit ici est **postérieur**.
 
+> **Report du 2026-10-22** : `main` à `5dc4502` — nom du client fidélité et solde sur
+> le reçu, annulation d'un paiement (PIN administrateur = PROPRIÉTAIRE, contre-passation),
+> battement de cœur vers le siège (santé des sites, version), stock en cuisine sous la
+> photo des plats (caisse, tablette, page client). **126 fichiers** (42 ajoutés, 84
+> remplacés) copiés vers `D:\POS-Samer\app`, **126/126 vérifiés par SHA-256**. Caisse
+> recompilée (`index-BXg_32YM.js` / `index-ButD2Wly.css`). Migrations **0042**
+> (`annulation_paiement`) et **0043** (`stock_plats_reference`) reportées ET appliquées à
+> la base de la clé (port 5433) : `drizzle.__drizzle_migrations` **42 → 44**, neutralité
+> contrôlée (0 commande, 0 service, 0 `cle_site`, 2 utilisateurs, 131 articles actifs).
+> Sauvegarde préalable `data\pgdata.backup-20261022` (1 503 fichiers, identique).
+> Anciens fichiers dans `C:\Users\HP\Documents\POS-Samer\usb-backup-20261022-220044`,
+> manifeste `usb-copy-20261022-220044.csv`. Ni dépendance ni `apps/desktop` modifiés :
+> pas d'installation, pas de repackaging. Côté cloud, migrations `20261021000000`,
+> `20261021010000`, `20261021020000` appliquées et fonctions `siege` + `sync-pull`
+> déployées le 22/10.
+>
+> 🔴 **Copies périmées du code partagé — corrigé le 22/10.** Sur la clé,
+> `apps/<app>/node_modules/@pos/{shared,shared-ui,theme}` sont de **vraies copies**
+> (`injectWorkspacePackages`), pas des liens. Elles dataient du **05/09** : les reports
+> du 15/10, du 19/10 et du 21/10 avaient mis à jour `packages/` mais **pas ces copies**.
+> Vérifié : le serveur de la clé chargeait l'ancien `@pos/shared` (sans `cleSonnerie`
+> ni `erreurRefPartenaire`) — un poste installé depuis la clé après le 15/10 n'aurait
+> pas démarré. Les 51 fichiers des copies ont été remis à niveau ; contrôle : le
+> serveur de la clé charge `app.ts` et tous ses modules. **Désormais, tout report doit
+> recopier chaque fichier de `packages/<p>/` dans chaque
+> `apps/*/node_modules/@pos/<p>/` présent sur la clé**, et le contrôler.
+
 > **Report du 2026-10-21** : `siege-8-sites-et-releve` à `5a2ce89` — n° de commande
 > Glovo d'au moins 4 chiffres (`6a57705` : le n° à 3 chiffres du livreur est refusé par
 > la caisse ET le serveur, message « ce sont les 4 derniers chiffres du numéro à
@@ -174,11 +201,11 @@ avant que les 7 autres restaurants ne reçoivent quoi que ce soit.
 
 | | |
 |---|---|
-| Dernière migration | **0041** (`0041_notes_caissiers.sql`) — 0039 à 0041 viennent de `main`, renumérotées (voir le report du 15/10) |
-| Base de la clé | **migrée le 15/10** : `drizzle.__drizzle_migrations` compte **42 lignes sur 42**. Neutralité contrôlée : `A_CONFIGURER`, 0 commande, 0 service, 0 `cle_site`, 2 propriétaires, 16 catégories, 131 articles actifs. Sauvegarde préalable : `data\pgdata.backup-20261015` |
-| 🔴 Postes déjà installés depuis une clé antérieure au 15/10 | **doivent appliquer les migrations manquantes jusqu'à 0041** avant de servir la caisse. Le lanceur Electron actuel le fait au démarrage ; contrôler le résultat sur chaque poste |
-| Rebuild des interfaces | **caisse recompilée le 21/10** (`index-BNWJHFPj.js`). KDS, serveur et client tournent en Vite dev depuis leurs sources (pas de `dist` servi) ; siège non recompilé |
-| Report du code sur la clé master | **fait le 21/10** (`5a2ce89`) — 9 fichiers, **9/9 vérifiés par SHA-256** (Glovo 4 chiffres, point à 100 F, caisse recompilée). Le 19/10 (`5eca679`) : 17 fichiers, siège et cloud uniquement. Le 15/10 : 121 fichiers, migrations `0039` à `0041` reportées ET appliquées à la base de la clé. `.env`, base, runtime, dépendances portables et exécutable de la clé préservés |
+| Dernière migration | **0043** (`0043_stock_plats_reference.sql`) — 0042 = annulation de paiement (report du 22/10) |
+| Base de la clé | **migrée le 22/10** : `drizzle.__drizzle_migrations` compte **44 lignes sur 44**. Neutralité contrôlée : 0 commande, 0 service, 0 `cle_site`, 2 propriétaires, 131 articles actifs. Sauvegarde préalable : `datapgdata.backup-20261022` |
+| 🔴 Postes déjà installés depuis une clé antérieure | **doivent appliquer les migrations manquantes jusqu'à 0043** avant de servir la caisse. Le lanceur Electron actuel le fait au démarrage ; contrôler le résultat sur chaque poste. Un poste installé depuis la clé entre le 15/10 et le 22/10 a des copies `@pos/*` périmées (voir le report du 22/10) |
+| Rebuild des interfaces | **caisse recompilée le 22/10** (`index-BXg_32YM.js`). KDS, serveur et client tournent en Vite dev depuis leurs sources (pas de `dist` servi) ; siège publié par Vercel depuis `main` |
+| Report du code sur la clé master | **fait le 22/10** (`5dc4502`) — 126 fichiers, **126/126 vérifiés par SHA-256**, dont les copies `@pos/*` des apps remises à niveau. Le 21/10 (`5a2ce89`) : 9 fichiers. `.env`, base (hors migrations), runtime, dépendances portables et exécutable de la clé préservés |
 | Virus Grenam | **nettoyé le 19/10** — 82 exécutables restaurés (voir le report du 19/10). Analyser le PC d'origine de l'infection (16/10, 13h26) |
 | Scripts à la racine du dossier portable | **à jour le 20/09** — tous les `.bat` et `.ps1` de `deploy/windows/` ont été recopiés |
 | Repackaging `PosSamer.exe` | **fait le 20/09 à 17h44** après la modification de `apps/desktop/main.js` ; nouvel exécutable de 74 330 255 octets copié à la racine |
@@ -187,7 +214,7 @@ avant que les 7 autres restaurants ne reçoivent quoi que ce soit.
 | SQL cloud ponctuel | `sql/cloud/ajouts_samerdelly_20260908.sql` — 4 produits SamerDelly, **publication non confirmée** (voir l'entrée du 08/09) |
 | Rattrapage à lancer par site | `pnpm services:republier` — republie les explications d'écart que le cloud jetait entre le 28/08 et le 04/09. **Fait sur le 7E le 04/09** |
 | 🔴 À vérifier sur les 7 autres sites | `SELECT count(*) FROM sync_outbox WHERE synced_at IS NULL;` — la FK `notes_split_payee_par_fk` a gelé 12 h de ventes sur le 7E, elle a pu geler les leurs |
-| Tests | **verts au 15/10** — serveur : **70 fichiers / 413 tests** ; siège : **37 tests** ; fonctions Supabase partagées : **146 tests**. Typecheck serveur, caisse, siège, kds, serveur (tablette) et shared OK |
+| Tests | **verts au 22/10** — serveur : **75 fichiers / 475 tests** ; siège : **68 tests** ; fonctions Supabase partagées : **163 tests**. Typecheck serveur, caisse, siège, kds, serveur (tablette), client et shared OK |
 
 > **Trou de journal à combler.** Le journal reprend au 25/08, mais les commits du
 > **22 au 24/08** (séquences, ordres du siège, console du siège, republication des
