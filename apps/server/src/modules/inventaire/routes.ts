@@ -17,8 +17,10 @@ import {
   entreesStock,
   inventaireLignes,
   inventairesService,
+  articles,
   produitsInventaire,
   servicesCaisse,
+  stockPlatsReference,
   utilisateurs,
 } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
@@ -30,6 +32,7 @@ import { serviceOuvertCourant } from '../depenses/service.js';
 import { etatInventaire } from './service.js';
 import { tirerEtatStock } from './etat-stock.js';
 import { expliqueeInvalide } from './calcul.js';
+import { referencesPourReglages, stockPlatsPartage } from './stock-plats.js';
 
 /** Quantité d'inventaire : jamais un entier — fromage en grammes, glace en pots. */
 const Quantite = z
@@ -48,6 +51,13 @@ const EntreeSchema = z.object({
   quantite: Quantite.positive('La quantité reçue doit être supérieure à zéro'),
   fournisseur: z.string().trim().max(120).optional(),
 });
+
+/** Réglages › Stock en cuisine : automatique, un produit précis, ou rien. */
+const ReferencePlatSchema = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('AUTO') }),
+  z.object({ mode: z.literal('AUCUN') }),
+  z.object({ mode: z.literal('PRODUIT'), produit_id: z.string().uuid('Produit invalide') }),
+], { errorMap: () => ({ message: 'Choix invalide : automatique, un produit, ou rien' }) });
 
 const DebloquerSchema = z.object({
   pin_manager: z.string().min(4, 'PIN manager obligatoire'),
@@ -440,4 +450,59 @@ export function routesInventaire(app: FastifyInstance): void {
     };
     return { valide_par: await nom(inv.valide_par), debloque_par: await nom(inv.debloque_par) };
   });
+
+  /**
+   * Stock en cuisine de TOUS les plats, d'un coup (sous la photo, à la prise
+   * de commande). Ouvert à toute session : le caissier comme le serveur en ont
+   * besoin, et cette lecture ne crée ni n'écrit rien — elle est rappelée à
+   * chaque vente, envoi en cuisine ou réception de marchandise.
+   */
+  app.get('/api/stock-plats', { preHandler: app.exigerAuth }, async () => stockPlatsPartage(db));
+
+  // Corriger, plat par plat, le produit que la déduction automatique a choisi.
+  // Même permission que les recettes d'inventaire, dont c'est le prolongement.
+  const gardeReglages = app.exigePermission('reglages.parametres');
+
+  app.get('/api/admin/stock-plats', { preHandler: gardeReglages }, async () => referencesPourReglages(db));
+
+  app.put('/api/admin/stock-plats/:articleId', { preHandler: gardeReglages }, async (req) => {
+    const { articleId } = req.params as { articleId: string };
+    const corps = valider(ReferencePlatSchema, req.body);
+    const [article] = await db.select({ id: articles.id, nom: articles.nom }).from(articles).where(eq(articles.id, articleId));
+    if (!article) throw introuvable('Plat');
+    if (corps.mode === 'PRODUIT') {
+      const [produit] = await db.select().from(produitsInventaire).where(eq(produitsInventaire.id, corps.produit_id));
+      if (!produit || !produit.actif) throw introuvable('Produit d’inventaire');
+    }
+
+    await db.transaction(async (tx) => {
+      const [avant] = await tx.select().from(stockPlatsReference).where(eq(stockPlatsReference.article_id, articleId));
+      if (corps.mode === 'AUTO') {
+        // Revenir à l'automatique, c'est EFFACER l'exception : la déduction
+        // suivra ensuite toute recette corrigée plus tard.
+        await tx.delete(stockPlatsReference).where(eq(stockPlatsReference.article_id, articleId));
+      } else {
+        const valeurs = { mode: corps.mode, produit_id: corps.mode === 'PRODUIT' ? corps.produit_id : null, updated_at: new Date() };
+        await tx
+          .insert(stockPlatsReference)
+          .values({ article_id: articleId, ...valeurs })
+          .onConflictDoUpdate({ target: stockPlatsReference.article_id, set: valeurs });
+      }
+      await journaliser(tx, {
+        user_id: req.session!.utilisateur_id,
+        action: 'MODIF_PARAMETRE',
+        entite: 'stock_plats_reference',
+        entite_id: articleId,
+        meta: {
+          plat: article.nom,
+          avant: avant ? { mode: avant.mode, produit_id: avant.produit_id } : { mode: 'AUTO' },
+          apres: corps,
+        },
+      });
+    });
+    // Les vignettes des caisses et tablettes se recalculent sur cet événement.
+    app.diffuser('inventaire');
+    return { article_id: articleId, ...corps };
+  });
+
 }

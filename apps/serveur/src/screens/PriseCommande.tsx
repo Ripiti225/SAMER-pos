@@ -10,9 +10,9 @@ import {
   IconSend,
   IconX,
 } from '@tabler/icons-react';
-import type { ArticleVue, CatalogueVue, CommandeVue, TableVue } from '@pos/shared';
+import type { ArticleVue, CatalogueVue, CommandeVue, StockPlatsVue, TableVue } from '@pos/shared';
 import { categorieVisiblePour, couleurCategorie, formatFCFA, uuidLocal } from '@pos/shared';
-import { api, Modale } from '@pos/shared-ui';
+import { api, BandeStock, INTERVALLE_STOCK_PLATS_MS, Modale } from '@pos/shared-ui';
 import { fileAttente } from '../file-attente';
 import { FactureNumerique } from '../components/FactureNumerique';
 
@@ -64,6 +64,14 @@ export function PriseCommande({
     queryKey: ['catalogue'],
     queryFn: () => api<CatalogueVue>('/api/catalogue'),
     staleTime: 5 * 60 * 1000,
+  });
+  // Stock en cuisine sous la photo : une requête pour toute la carte,
+  // relue sur les événements WebSocket (NotificationsServeur) et chaque minute.
+  const { data: stockPlats } = useQuery({
+    queryKey: ['stock-plats'],
+    queryFn: () => api<StockPlatsVue>('/api/stock-plats'),
+    staleTime: 10_000,
+    refetchInterval: INTERVALLE_STOCK_PLATS_MS,
   });
   const { data: tables } = useQuery({
     queryKey: ['tables'],
@@ -312,6 +320,8 @@ export function PriseCommande({
                       <span className="rounded-full bg-alerte px-2.5 py-0.5 text-xs font-bold text-white">Épuisé</span>
                     </div>
                   )}
+                  {/* Stock en cuisine : informe le serveur, ne bloque jamais l'envoi. */}
+                  {a.disponible && <BandeStock stock={stockPlats?.plats[a.id]} />}
                 </div>
                 <div className="flex flex-1 flex-col gap-0.5 p-2">
                   <div className="line-clamp-2 text-sm font-semibold leading-tight text-txt">{a.nom}</div>

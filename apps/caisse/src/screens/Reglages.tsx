@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MODES_SONNERIE, LIBELLES_SONNERIE, type ModeSonnerie } from '@pos/shared';
+import { MODES_SONNERIE, LIBELLES_SONNERIE, type ModeSonnerie, type RaisonReferenceStock, type StockPlat, type StockPlatsVue } from '@pos/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconArrowLeft, IconLock } from '@tabler/icons-react';
 import { DISPONIBILITES, type Disponibilite, formatFCFA, LIBELLES_DISPONIBILITE, LIBELLES_POSTE_IMPRESSION, POSTES_IMPRESSION, type PosteImpression, SECTIONS_PERMISSIONS, PERMISSION_PROTEGEE, type SessionInfo } from '@pos/shared';
@@ -44,6 +44,7 @@ export function Reglages() {
         { cle: 'reglages.restaurant', groupe: 'Établissement', libelle: 'Restaurant', rendu: () => <ConfigRestaurant /> },
         { cle: 'reglages.parametres', groupe: 'Établissement', libelle: 'Paramètres', rendu: () => <Parametres /> },
         { cle: 'recettes', perm: 'reglages.parametres', groupe: 'Établissement', libelle: 'Recettes d’inventaire', rendu: () => <RecettesInventaire /> },
+        { cle: 'stock-cuisine', perm: 'reglages.parametres', groupe: 'Établissement', libelle: 'Stock en cuisine', rendu: () => <StockCuisine /> },
         { cle: 'reglages.audit', groupe: 'Établissement', libelle: "Journal d'audit", rendu: () => <Audit /> },
         { cle: 'reglages.sante', groupe: 'Établissement', libelle: 'Santé du système', rendu: () => <SanteSysteme /> },
       ].filter((s) => a(s.perm ?? s.cle)),
@@ -2669,6 +2670,186 @@ function ConfigRestaurant() {
       <p className="text-xs text-doux">
         Le catalogue reste local à ce poste : les modifications de menu ici n'affectent pas les autres restaurants.
       </p>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Stock en cuisine (2026-10-22) — « quel stock afficher sous la photo du plat ? »
+// ---------------------------------------------------------------------------
+interface StockCuisineVue {
+  seuil: number;
+  source: StockPlatsVue['source'];
+  produits: { id: string; nom: string; categorie: string; unite: string }[];
+  articles: {
+    article_id: string;
+    nom: string;
+    categorie: string;
+    recette: string[];
+    automatique: { produit_id: string; produit_nom: string; raison: RaisonReferenceStock } | null;
+    mode: 'AUTO' | 'PRODUIT' | 'AUCUN';
+    produit_id: string | null;
+    affichage: StockPlat | null;
+  }[];
+}
+
+const LIBELLES_RAISON_STOCK: Record<RaisonReferenceStock, string> = {
+  PRODUIT_FINI: 'produit fini',
+  FROMAGE: 'contient du fromage',
+  POULET: 'contient du poulet',
+  INGREDIENT: 'ingrédient principal',
+  MANUEL: 'choisi à la main',
+};
+
+/**
+ * Le produit d'inventaire lu sous chaque plat est DÉDUIT des recettes
+ * d'inventaire ; cet écran ne sert qu'aux exceptions. « Automatique » efface
+ * l'exception : le plat suivra ensuite toute recette corrigée plus tard.
+ */
+function StockCuisine() {
+  const qc = useQueryClient();
+  const [msg, setMsg] = useState<{ texte: string; ok: boolean } | null>(null);
+  const [recherche, setRecherche] = useState('');
+  const [avecRecetteSeulement, setAvecRecetteSeulement] = useState(true);
+  const [seuilSaisi, setSeuilSaisi] = useState<string | null>(null);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['admin', 'stock-plats'],
+    queryFn: () => api<StockCuisineVue>('/api/admin/stock-plats'),
+  });
+  const invalider = () => {
+    void qc.invalidateQueries({ queryKey: ['admin', 'stock-plats'] });
+    void qc.invalidateQueries({ queryKey: ['stock-plats'] });
+  };
+
+  const choisir = useMutation({
+    mutationFn: (v: { article_id: string; choix: string }) =>
+      api(`/api/admin/stock-plats/${v.article_id}`, {
+        method: 'PUT',
+        corps: v.choix === 'AUTO' || v.choix === 'AUCUN' ? { mode: v.choix } : { mode: 'PRODUIT', produit_id: v.choix },
+      }),
+    onSuccess: () => { setMsg({ texte: 'Choix enregistré.', ok: true }); invalider(); },
+    onError: (e: Error) => setMsg({ texte: e.message, ok: false }),
+  });
+  const enregistrerSeuil = useMutation({
+    mutationFn: (valeur: number) =>
+      api('/api/admin/parametres', { method: 'PATCH', corps: { cle: 'stock_plats_seuil_bientot_epuise', valeur } }),
+    onSuccess: () => { setMsg({ texte: 'Seuil enregistré.', ok: true }); setSeuilSaisi(null); invalider(); },
+    onError: (e: Error) => setMsg({ texte: e.message, ok: false }),
+  });
+
+  if (isLoading || !data) return <p className="text-doux">Chargement…</p>;
+
+  const rech = recherche.trim().toLowerCase();
+  const plats = data.articles.filter(
+    (a) =>
+      (!avecRecetteSeulement || a.recette.length > 0 || a.mode !== 'AUTO')
+      && (rech.length === 0 || a.nom.toLowerCase().includes(rech) || a.categorie.toLowerCase().includes(rech)),
+  );
+  const seuil = seuilSaisi ?? String(data.seuil);
+  const seuilValide = /^\d{1,3}$/.test(seuil);
+
+  return (
+    <section className="max-w-4xl">
+      <h2 className="mb-1 text-xl font-bold">Stock en cuisine</h2>
+      <p className="mb-3 text-sm text-doux">
+        Sous la photo de chaque plat, la caisse et la tablette affichent le stock du produit qui le limite et
+        le nombre de plats encore possibles (« Fromage 2,4 kg · ≈ 12 »). Ce produit est choisi
+        <b> automatiquement</b> d’après les recettes d’inventaire : produit fini, sinon fromage, sinon poulet,
+        sinon l’ingrédient principal. Corrigez ici seulement les plats où ce choix ne convient pas. Le stock est
+        <b> théorique</b> : la caisse et la tablette peuvent toujours vendre un plat « épuisé » ; seule la page
+        client (QR) le refuse.
+      </p>
+
+      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-jeton border border-bordure p-3">
+        <label className="text-sm font-semibold">
+          Orange « bientôt épuisé » à partir de
+          <span className="mt-1 flex items-center gap-2">
+            <input
+              className="champ w-24"
+              inputMode="numeric"
+              value={seuil}
+              onChange={(e) => setSeuilSaisi(e.target.value)}
+            />
+            <span className="font-normal text-doux">plats possibles ou moins</span>
+          </span>
+        </label>
+        <button
+          type="button"
+          className="btn-blanc"
+          disabled={!seuilValide || seuilSaisi === null || enregistrerSeuil.isPending}
+          onClick={() => enregistrerSeuil.mutate(Number(seuil))}
+        >
+          {enregistrerSeuil.isPending ? 'Enregistrement…' : 'Enregistrer le seuil'}
+        </button>
+        {data.source === 'AUCUNE' && (
+          <span className="text-sm font-semibold text-attente-txt">
+            Aucun inventaire validé pour l’instant : rien ne s’affiche encore sous les plats.
+          </span>
+        )}
+        {data.source === 'DERNIER_INVENTAIRE' && (
+          <span className="text-sm text-doux">Aucun service ouvert : stock du dernier inventaire validé.</span>
+        )}
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <input
+          className="champ max-w-xs"
+          placeholder="Rechercher un plat…"
+          value={recherche}
+          onChange={(e) => setRecherche(e.target.value)}
+        />
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={avecRecetteSeulement} onChange={(e) => setAvecRecetteSeulement(e.target.checked)} />
+          Seulement les plats qui ont une recette
+        </label>
+      </div>
+      <Message texte={msg?.texte ?? null} ok={msg?.ok} />
+
+      <div className="grid gap-2">
+        {plats.map((a) => {
+          const valeur = a.mode === 'PRODUIT' && a.produit_id ? a.produit_id : a.mode;
+          const auto = a.automatique
+            ? `Automatique — ${a.automatique.produit_nom} (${LIBELLES_RAISON_STOCK[a.automatique.raison]})`
+            : 'Automatique — rien (aucune recette)';
+          const couleur = a.affichage?.etat === 'EPUISE'
+            ? 'bg-alerte text-white'
+            : a.affichage?.etat === 'BIENTOT'
+              ? 'bg-[#D85A30] text-white'
+              : 'bg-carte-douce text-fort';
+          return (
+            <div key={a.article_id} className="grid items-center gap-2 rounded-jeton border border-bordure p-3 sm:grid-cols-[1fr_minmax(0,18rem)_10rem]">
+              <div className="min-w-0">
+                <div className="truncate font-semibold">{a.nom}</div>
+                <div className="truncate text-xs text-doux">
+                  {a.categorie}
+                  {a.recette.length > 0 ? ` · recette : ${a.recette.join(', ')}` : ' · aucune recette d’inventaire'}
+                </div>
+              </div>
+              <select
+                className="champ"
+                value={valeur}
+                disabled={choisir.isPending}
+                onChange={(e) => choisir.mutate({ article_id: a.article_id, choix: e.target.value })}
+              >
+                <option value="AUTO">{auto}</option>
+                <option value="AUCUN">Ne rien afficher</option>
+                <optgroup label="Un produit précis">
+                  {data.produits.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {(LIBELLES_CATEGORIE_INVENTAIRE[p.categorie] ?? p.categorie)} — {p.nom}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+              <div className={`truncate rounded-jeton px-2 py-1 text-xs font-semibold tabular-nums ${a.affichage ? couleur : 'text-doux'}`}>
+                {a.affichage ? (a.affichage.etat === 'EPUISE' ? `ÉPUISÉ · ${a.affichage.texte}` : a.affichage.texte) : 'Rien d’affiché'}
+              </div>
+            </div>
+          );
+        })}
+        {plats.length === 0 && <p className="text-doux">Aucun plat ne correspond.</p>}
+      </div>
     </section>
   );
 }

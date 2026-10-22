@@ -26,6 +26,9 @@ export function PageTable({ jeton, table, visiteId }: { jeton: string; table: Ta
     queryKey: ['catalogue-client', jeton],
     queryFn: () => api<CatalogueVue>(`/api/client/${jeton}/catalogue`),
     staleTime: 5 * 60 * 1000,
+    // Un plat qui s'épuise en cuisine doit se griser sans que le client
+    // recharge la page (le serveur refuse de toute façon de le commander).
+    refetchInterval: 60_000,
   });
 
   const flash = (m: string) => {
@@ -65,7 +68,11 @@ export function PageTable({ jeton, table, visiteId }: { jeton: string; table: Ta
       flash(r.confirmation);
       void queryClient.invalidateQueries({ queryKey: ['suivi', jeton] });
     },
-    onError: (e: Error) => flash(e.message),
+    onError: (e: Error) => {
+      flash(e.message);
+      // Refus « épuisé » : relire la carte pour griser le plat aussitôt.
+      void queryClient.invalidateQueries({ queryKey: ['catalogue-client', jeton] });
+    },
   });
 
   const categories = catalogue?.categories ?? [];

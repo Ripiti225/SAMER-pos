@@ -706,6 +706,24 @@ export const inventaireConsommations = pgTable('inventaire_consommations', {
   check('inventaire_consommations_quantite_check', sql`${t.quantite} > 0`),
 ]);
 
+/**
+ * Stock affiché sous la photo des plats (migration 0043) : SEULES les
+ * exceptions à la déduction automatique (`inventaire/stock-plats.ts`).
+ * PRODUIT = ce produit précis ; AUCUN = rien sous ce plat ; pas de ligne =
+ * automatique. Table LOCALE : jamais publiée, jamais écrasée par le cloud.
+ */
+export const stockPlatsReference = pgTable('stock_plats_reference', {
+  article_id: uuid('article_id').primaryKey().references(() => articles.id, { onDelete: 'cascade' }),
+  mode: text('mode').notNull(),
+  produit_id: uuid('produit_id').references(() => produitsInventaire.id, { onDelete: 'cascade' }),
+  updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check(
+    'stock_plats_reference_mode_check',
+    sql`(${t.mode} = 'PRODUIT' AND ${t.produit_id} IS NOT NULL) OR (${t.mode} = 'AUCUN' AND ${t.produit_id} IS NULL)`,
+  ),
+]);
+
 export const entreesStock = pgTable('entrees_stock', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   inventaire_id: uuid('inventaire_id').notNull().references(() => inventairesService.id, { onDelete: 'cascade' }),

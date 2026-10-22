@@ -302,6 +302,13 @@
       "when": 1790431000000,
       "tag": "0042_annulation_paiement",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1790432000000,
+      "tag": "0043_stock_plats_reference",
+      "breakpoints": true
     }
   ]
 }

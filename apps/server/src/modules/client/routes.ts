@@ -37,6 +37,7 @@ import { ecrireOutbox } from '../../db/outbox.js';
 import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
 import { chargerCatalogueClient } from '../catalogue/service.js';
+import { platsEpuises, stockPlatsPartage } from '../inventaire/stock-plats.js';
 import {
   chargerCommandeVue,
   figerNouvelItem,
@@ -183,7 +184,16 @@ export function routesClient(app: FastifyInstance): void {
     await tableParJeton(qr_token); // borne au jeton (404 si inconnu)
     // Variante CLIENT : sans les catégories réservées aux partenaires de
     // livraison (migration 0023). Un client au QR est sur place.
-    return chargerCatalogueClient();
+    const [catalogue, stock] = await Promise.all([chargerCatalogueClient(), stockPlatsPartage(db)]);
+    // Stock en cuisine épuisé : le plat devient « Épuisé », comme un plat
+    // retiré à la main. Le client ne reçoit JAMAIS de quantité — seulement ce
+    // booléen ; les chiffres restent entre la caisse et la cuisine.
+    return {
+      ...catalogue,
+      articles: catalogue.articles.map((a) =>
+        stock.plats[a.id]?.etat === 'EPUISE' ? { ...a, disponible: false } : a,
+      ),
+    };
   });
 
   // Suivi : UNIQUEMENT les commandes de SA table (portée du jeton — testé)
@@ -423,6 +433,21 @@ export function routesClient(app: FastifyInstance): void {
     if (table.partenaire) throw new ErreurMetier('Cette table ne prend pas de commande', 400);
     const visite = await exigerVisite(req, table.id);
     const position = await verifierProximiteClient(db, corps.localisation);
+
+    // Plat épuisé en cuisine : refusé ICI, pas seulement grisé à l'écran — un
+    // téléphone resté ouvert sur l'ancienne carte enverrait sinon une commande
+    // que la cuisine ne peut pas servir. La caisse et la tablette, elles,
+    // peuvent toujours vendre : le stock théorique se trompe dès qu'une
+    // livraison n'a pas encore été saisie, et le serveur, lui, le sait.
+    const epuises = await platsEpuises(db, corps.items.flatMap((i) => (i.article_id ? [i.article_id] : [])));
+    if (epuises.length > 0) {
+      throw new ErreurMetier(
+        epuises.length === 1
+          ? `« ${epuises[0]} » est épuisé pour le moment. Retirez-le de votre commande.`
+          : `Ces plats sont épuisés pour le moment : ${epuises.join(', ')}. Retirez-les de votre commande.`,
+        409,
+      );
+    }
 
     const { commandeId, destinataire, rattache } = await db.transaction(async (tx) => {
       await tx.select().from(tablesSalle).where(eq(tablesSalle.id, table.id)).for('update');
