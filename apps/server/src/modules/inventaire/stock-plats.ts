@@ -25,6 +25,7 @@ import { and, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 import type { DbOuTx } from '../../db/client.js';
 import {
   articles,
+  categories,
   commandeItems,
   commandes,
   inventaireConsommations,
@@ -376,26 +377,44 @@ export async function platsEpuises(dbx: DbOuTx, articleIds: string[]): Promise<s
   return noms.map((n) => n.nom);
 }
 
-/** Vue des Réglages : la déduction automatique, la surcharge, le résultat. */
+/**
+ * Vue des Réglages : pour chaque plat, sa recette, ce que la déduction
+ * automatique choisit, la correction éventuelle et la bande telle qu'elle
+ * s'affiche en ce moment — le manager voit l'effet de son choix sans quitter
+ * l'écran.
+ */
 export async function referencesPourReglages(dbx: DbOuTx) {
-  const { produits, recetteDe, surchargeDe, arts } = await chargerReferences(dbx);
+  const [{ produits, recetteDe, surchargeDe, arts }, cats, artsCat, apercu] = await Promise.all([
+    chargerReferences(dbx),
+    dbx.select({ id: categories.id, nom: categories.nom, ordre: categories.ordre }).from(categories),
+    dbx.select({ id: articles.id, categorie_id: articles.categorie_id }).from(articles),
+    calculerStockPlats(dbx),
+  ]);
   const parId = new Map(produits.map((p) => [p.id, p]));
+  const categorieDe = new Map(artsCat.map((a) => [a.id, cats.find((c) => c.id === a.categorie_id)]));
   return {
+    seuil: apercu.seuil,
+    source: apercu.source,
     produits: produits
       .filter((p) => seCompte(p) && p.role !== 'ENTREE')
       .sort((a, b) => a.categorie.localeCompare(b.categorie) || a.ordre - b.ordre)
       .map((p) => ({ id: p.id, nom: p.nom, categorie: p.categorie, unite: p.unite })),
     articles: arts.map((a) => {
       const recette = recetteDe.get(a.id) ?? [];
+      const categorie = categorieDe.get(a.id);
       const auto = deduireReference(a.nom, recette, produits);
       const surcharge = surchargeDe.get(a.id);
       return {
         article_id: a.id,
+        nom: a.nom,
+        categorie: categorie?.nom ?? '',
+        categorie_ordre: categorie?.ordre ?? 0,
+        affichage: apercu.plats[a.id] ?? null,
         recette: recette.map((r) => parId.get(r.produit_id)?.nom).filter((n): n is string => !!n),
         automatique: auto ? { produit_id: auto.produit.id, produit_nom: auto.produit.nom, raison: auto.raison } : null,
         mode: surcharge?.mode ?? 'AUTO',
         produit_id: surcharge?.mode === 'PRODUIT' ? surcharge.produit_id : null,
       };
-    }),
+    }).sort((x, y) => x.categorie_ordre - y.categorie_ordre || x.nom.localeCompare(y.nom, 'fr')),
   };
 }

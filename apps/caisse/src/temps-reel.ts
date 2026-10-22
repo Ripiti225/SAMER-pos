@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { SessionInfo } from '@pos/shared';
+import { evenementToucheStock } from '@pos/shared-ui';
 import { api } from './api';
 import { consommerEcho } from './echo-mutations';
 import { sons } from './sons';
@@ -9,6 +10,13 @@ import { useCaisse } from './stores/session';
 export function connecterTempsReel(queryClient: QueryClient): () => void {
   let socket: WebSocket | null = null;
   let arrete = false;
+  // Une vente produit une rafale d'événements (article, envoi, paiement,
+  // table) : on attend qu'elle retombe avant de relire le stock des plats.
+  let minuteurStock: ReturnType<typeof setTimeout> | null = null;
+  const rafraichirStock = () => {
+    if (minuteurStock) clearTimeout(minuteurStock);
+    minuteurStock = setTimeout(() => void queryClient.invalidateQueries({ queryKey: ['stock-plats'] }), 800);
+  };
 
   const connecter = () => {
     if (arrete) return;
@@ -39,6 +47,7 @@ export function connecterTempsReel(queryClient: QueryClient): () => void {
           void queryClient.invalidateQueries({ queryKey: ['tables'] });
           void queryClient.invalidateQueries({ queryKey: ['mes-ventes'] });
         }
+        if (evenementToucheStock(type)) rafraichirStock();
         if (type.startsWith('table')) void queryClient.invalidateQueries({ queryKey: ['tables'] });
         if (type === 'catalogue') {
           void queryClient.invalidateQueries({ queryKey: ['catalogue'] });
@@ -64,6 +73,7 @@ export function connecterTempsReel(queryClient: QueryClient): () => void {
   connecter();
   return () => {
     arrete = true;
+    if (minuteurStock) clearTimeout(minuteurStock);
     socket?.close();
   };
 }

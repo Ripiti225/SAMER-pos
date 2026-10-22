@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { IconBell, IconBellOff, IconCheck, IconChefHat, IconHandStop, IconX } from '@tabler/icons-react';
 import type { AppelVue, SessionInfo } from '@pos/shared';
 import { LIBELLES_APPEL } from '@pos/shared';
-import { api } from '@pos/shared-ui';
+import { api, evenementToucheStock } from '@pos/shared-ui';
 import { arreterSonnerie, DUREE_SONNERIE_S, sonner } from '../sonnerie';
 
 interface NotifPrete {
@@ -97,6 +97,7 @@ export function NotificationsServeur({ session, afficherToast }: { session: Sess
     let socket: WebSocket | null = null;
     let arrete = false;
     let battement: ReturnType<typeof setInterval> | null = null;
+    let minuteurStock: ReturnType<typeof setTimeout> | null = null;
 
     const connecter = () => {
       if (arrete) return;
@@ -130,6 +131,11 @@ export function NotificationsServeur({ session, afficherToast }: { session: Sess
         // commandes prêtes au lieu de deviner ce qui a changé.
         if (type === 'commande:servie' || type === 'commande' || type === 'commande:modifiee') rafraichir();
         if (typeof type === 'string' && type.startsWith('table')) void queryClient.invalidateQueries({ queryKey: ['tables'] });
+        // Stock sous la photo des plats : relu une fois la rafale retombée.
+        if (typeof type === 'string' && evenementToucheStock(type)) {
+          if (minuteurStock) clearTimeout(minuteurStock);
+          minuteurStock = setTimeout(() => void queryClient.invalidateQueries({ queryKey: ['stock-plats'] }), 800);
+        }
       };
       socket.onclose = () => {
         if (battement) clearInterval(battement);
@@ -137,7 +143,7 @@ export function NotificationsServeur({ session, afficherToast }: { session: Sess
       };
     };
     connecter();
-    return () => { arrete = true; if (battement) clearInterval(battement); socket?.close(); };
+    return () => { arrete = true; if (battement) clearInterval(battement); if (minuteurStock) clearTimeout(minuteurStock); socket?.close(); };
   }, [moi]);
 
   const valider = async (id: string) => { try { await api(`/api/commandes/${id}/valider`, { method: 'POST', corps: {} }); rafraichir(); } catch (e) { afficherToast((e as Error).message); } };

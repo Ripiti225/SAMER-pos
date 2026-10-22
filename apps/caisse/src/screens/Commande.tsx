@@ -29,6 +29,8 @@ import {
 } from '@pos/shared';
 import { api } from '../api';
 import { optionsCatalogue } from '../catalogue-cache';
+import { optionsStockPlats } from '../stock-plats';
+import { BandeStock } from '@pos/shared-ui';
 import { Modale } from '../components/Modale';
 import { ModalePinManager } from '../components/ModalePinManager';
 import { PiluleSync } from '../components/SanteSync';
@@ -49,6 +51,7 @@ export function Commande() {
   const [deplacement, setDeplacement] = useState<{ item: CommandeItemVue } | { commande: true } | null>(null);
 
   const { data: catalogue } = useQuery(optionsCatalogue);
+  const { data: stockPlats } = useQuery(optionsStockPlats);
   const { data: commande } = useQuery({
     queryKey: ['commande', commandeId],
     queryFn: () => api<CommandeVue>(`/api/commandes/${commandeId}`),
@@ -428,6 +431,8 @@ export function Commande() {
                         <span className="rounded-full bg-alerte px-3 py-0.5 text-xs font-bold text-white">Épuisé</span>
                       </div>
                     )}
+                    {/* Stock en cuisine : informe, ne bloque jamais la vente. */}
+                    {a.disponible && <BandeStock stock={stockPlats?.plats[a.id]} />}
                   </div>
                   {/* Prix en encre normale, pas en orange (maquette § 6.4) :
                       l'orange est réservé aux actions et aux totaux. */}
