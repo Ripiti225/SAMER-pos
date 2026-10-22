@@ -276,6 +276,9 @@ export const PARAMETRES_EDITABLES: ParametreEditable[] = [
   { cle: 'client_qr_latitude', libelle: 'Latitude du restaurant pour les QR', type: 'position', defaut: 0 },
   { cle: 'client_qr_longitude', libelle: 'Longitude du restaurant pour les QR', type: 'position', defaut: 0 },
   { cle: 'client_qr_rayon_metres', libelle: 'Distance maximale des commandes QR', type: 'entier', unite: 'm', defaut: 50 },
+  // Stock en cuisine sous la photo des plats : orange à partir de ce nombre
+  // de plats encore faisables (et en dessous), rouge « ÉPUISÉ » à zéro.
+  { cle: 'stock_plats_seuil_bientot_epuise', libelle: 'Stock en cuisine — « bientôt épuisé » à partir de', type: 'entier', unite: 'plats', defaut: 5 },
   { cle: 'ticket_entete', libelle: 'En-tête du ticket', type: 'texte', defaut: '' },
   { cle: 'ticket_pied', libelle: 'Pied du ticket', type: 'texte', defaut: '' },
   { cle: 'url_base_client', libelle: 'Adresse web des QR clients', type: 'texte', defaut: '' },

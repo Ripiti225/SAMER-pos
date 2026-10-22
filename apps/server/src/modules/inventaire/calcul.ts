@@ -239,6 +239,20 @@ export function calculerLignes(
     });
 }
 
+/**
+ * Sorties de chaque produit pour un jeu de ventes donné, sans rien d'autre.
+ *
+ * Exposé pour le stock affiché sous la photo des plats (`stock-plats.ts`) :
+ * « combien de grammes de fromage UNE pizza consomme-t-elle ? », « combien de
+ * plats encore en cuisine ? » doivent se lire avec les MÊMES formules que le
+ * ticket Z (ratio du fromage, poulets entiers, portions par sachet), pas avec
+ * une copie qui finirait par diverger.
+ */
+export function sortiesPourVentes(produits: Produit[], ventes: Map<string, number>): Map<string, number> {
+  const ctx: Contexte = { produits, ventes, entrees: new Map() };
+  return new Map(produits.map((p) => [p.id, sortiesDe(ctx, p)]));
+}
+
 /** Compteurs du panneau droit + manquant non expliqué chiffré. */
 export function bilan(lignes: LigneCalculee[]): Bilan {
   let aCompter = 0;

@@ -758,3 +758,38 @@ export interface NoteCaissierVue {
   periode_fin: string | null;
   calcule_le: string;
 }
+
+/**
+ * Stock en cuisine sous la photo des plats (GET /api/stock-plats, 2026-10-22).
+ * Calculé côté serveur avec les formules de l'inventaire ; les écrans ne font
+ * qu'afficher `texte` et colorer selon `etat`. Jamais envoyé à la page client.
+ */
+export type RaisonReferenceStock = 'PRODUIT_FINI' | 'FROMAGE' | 'POULET' | 'INGREDIENT' | 'MANUEL';
+/** OK ; BIENTOT = au plus le seuil du site (orange) ; EPUISE = plus aucun plat (rouge). */
+export type EtatStockPlat = 'OK' | 'BIENTOT' | 'EPUISE';
+
+export interface StockPlat {
+  produit_id: string;
+  produit_nom: string;
+  raison: RaisonReferenceStock;
+  stock: number;
+  unite: string;
+  /** Plats encore faisables, arrondi vers le bas ; null si la recette ne le dit pas. */
+  plats_possibles: number | null;
+  etat: EtatStockPlat;
+  /** « Fromage 2,4 kg · ≈ 12 », « Poulet 18 · ≈ 9 », « Reste 18 ». */
+  texte: string;
+}
+
+export interface StockPlatsVue {
+  /**
+   * SERVICE : shift ouvert, stock à l'instant ; DERNIER_INVENTAIRE : entre
+   * deux shifts, stock compté au dernier inventaire validé ; AUCUNE : rien
+   * de fiable à montrer (aucun inventaire encore), rien n'est affiché.
+   */
+  source: 'SERVICE' | 'DERNIER_INVENTAIRE' | 'AUCUNE';
+  seuil: number;
+  calcule_le: string;
+  /** Par `article_id` ; un plat absent n'affiche rien. */
+  plats: Record<string, StockPlat>;
+}

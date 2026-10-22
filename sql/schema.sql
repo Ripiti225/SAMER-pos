@@ -738,6 +738,19 @@ CREATE TABLE inventaire_consommations (
 );
 CREATE INDEX idx_inventaire_consommations_article ON inventaire_consommations (article_id);
 
+-- STOCK SOUS LA PHOTO DES PLATS (migration 0043) : seules les exceptions à la
+-- déduction automatique du produit de référence. PRODUIT = ce produit précis,
+-- AUCUN = rien sous ce plat, pas de ligne = automatique. Table locale.
+CREATE TABLE stock_plats_reference (
+  article_id  UUID PRIMARY KEY REFERENCES articles(id) ON DELETE CASCADE,
+  mode        TEXT NOT NULL,
+  produit_id  UUID REFERENCES produits_inventaire(id) ON DELETE CASCADE,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT stock_plats_reference_mode_check CHECK (
+    (mode = 'PRODUIT' AND produit_id IS NOT NULL)
+    OR (mode = 'AUCUN' AND produit_id IS NULL))
+);
+
 -- Un inventaire par service. valide verrouille tout en lecture seule.
 CREATE TABLE inventaires_service (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -149,6 +149,83 @@ export async function assurerInventaire(dbx: DbOuTx, serviceId: string): Promise
   return cree!;
 }
 
+/**
+ * Stock final (compté) du DERNIER inventaire validé d'un autre service que
+ * `serviceIdExclu` : c'est le stock initial que reprendra le service suivant.
+ */
+export async function stocksReportes(dbx: DbOuTx, serviceIdExclu: string | null): Promise<Map<string, string>> {
+  const [precedent] = await dbx
+    .select()
+    .from(inventairesService)
+    .where(
+      serviceIdExclu
+        ? and(eq(inventairesService.valide, true), ne(inventairesService.service_id, serviceIdExclu))
+        : eq(inventairesService.valide, true),
+    )
+    .orderBy(desc(inventairesService.valide_le))
+    .limit(1);
+  if (!precedent) return new Map();
+  const finales = await dbx
+    .select({ produit_id: inventaireLignes.produit_id, stock: inventaireLignes.stock_compte })
+    .from(inventaireLignes)
+    .where(eq(inventaireLignes.inventaire_id, precedent.id));
+  return new Map(finales.map((f) => [f.produit_id, f.stock ?? '0']));
+}
+
+/**
+ * Le même calcul que `etatInventaire()`, en LECTURE SEULE : rien n'est créé.
+ *
+ * Sert au stock affiché sous les plats, interrogé par chaque caisse et chaque
+ * tablette plusieurs fois par minute — il ne doit ni ouvrir l'inventaire du
+ * service ni écrire en base (même règle que la pastille `/api/inventaire/etat`).
+ * Les produits sans ligne reçoivent le stock initial qu'`assurerInventaire()`
+ * leur donnerait : le chiffre est donc celui que l'écran d'inventaire
+ * afficherait au même instant.
+ *
+ * `serviceId` null (aucun shift ouvert, entre deux relèves) : ni ventes ni
+ * entrées, le résultat est le stock compté du dernier inventaire validé —
+ * exactement ce que le prochain shift reprendra.
+ */
+export async function lignesInventaireSansCreer(dbx: DbOuTx, serviceId: string | null): Promise<LigneCalculee[]> {
+  const produits: Produit[] = await dbx.select().from(produitsInventaire).where(eq(produitsInventaire.actif, true));
+  const [inventaire] = serviceId
+    ? await dbx.select().from(inventairesService).where(eq(inventairesService.service_id, serviceId))
+    : [];
+  const lignesDb = inventaire
+    ? await dbx.select().from(inventaireLignes).where(eq(inventaireLignes.inventaire_id, inventaire.id))
+    : [];
+
+  const presents = new Set(lignesDb.map((l) => l.produit_id));
+  const manquants = produits.filter((p) => seCompte(p) && !presents.has(p.id));
+  if (manquants.length > 0) {
+    const report = await stocksReportes(dbx, serviceId);
+    for (const p of manquants) {
+      lignesDb.push({
+        id: '',
+        inventaire_id: inventaire?.id ?? '',
+        produit_id: p.id,
+        stock_initial: report.get(p.id) ?? '0',
+        entrees: '0',
+        sorties: '0',
+        stock_compte: null,
+        ecart: null,
+        produit_code: p.code,
+        produit_nom: p.nom,
+        produit_prix: p.prix,
+        quantite_expliquee: '0',
+        explication: null,
+      });
+    }
+  }
+
+  return calculerLignes(
+    produits,
+    lignesDb,
+    inventaire ? await entreesParProduit(dbx, inventaire.id) : new Map(),
+    serviceId ? await ventesParProduit(dbx, serviceId) : new Map(),
+  );
+}
+
 export interface EtatInventaire {
   inventaire: Inventaire;
   lignes: LigneCalculee[];
