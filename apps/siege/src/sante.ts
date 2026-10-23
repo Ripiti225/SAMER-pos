@@ -43,16 +43,44 @@ export interface SanteBrute {
   derniere_descente: string | null;
   derniere_erreur: string | null;
   heure_site: string | null;
+  // Mise à jour à distance (migration 20261023000000) — absents avant elle,
+  // NULL tant que le site ne remonte pas le bloc `sante.maj`.
+  maj_etat?: EtatMajSite | null;
+  maj_numero_installe?: number | null;
+  maj_numero_prete?: number | null;
+  maj_installation_prevue?: string | null;
+  maj_report_jusqua?: string | null;
+  maj_derniere_erreur?: string | null;
+  maj_espace_libre_mo?: number | null;
+  maj_taille_pgdata_mo?: number | null;
+  maj_suspects_grenam?: number | null;
+  maj_lanceur_numero?: number | null;
+  maj_consulte_le?: string | null;
+}
+
+export type EtatMajSite = 'A_JOUR' | 'TELECHARGEMENT' | 'PRETE' | 'REPORTEE' | 'INSTALLATION' | 'ECHEC' | 'REFUSEE';
+
+/** Ce que le cloud attend de ce site (action `sante_sites`, bloc `maj`). */
+export interface MajSite {
+  cible: { numero: number; version: string; disponible_le: string | null; raison: 'EPINGLEE' | 'PILOTE' | 'GENERALE' } | null;
+  type_site: 'FERME_LA_NUIT' | 'H24';
+  heure_installation: string;
+  anneau: 'PILOTE' | 'GENERAL';
+  pause: boolean;
 }
 
 export interface SiteSante extends RestoGroupe {
   sante: SanteBrute | null;
+  /** Absent avant la migration de mise à jour à distance, ou site non enrôlé. */
+  maj?: MajSite | null;
 }
 
 export interface ReponseSante {
   maintenant: string;
   /** La fonction SQL manque : migration cloud pas encore passée. */
   migration_absente: boolean;
+  /** Les tables de mise à jour à distance manquent (migration 20261023000000). */
+  maj_absente?: boolean;
   sites: SiteSante[];
 }
 
@@ -215,4 +243,103 @@ export function trierParUrgence<T extends { evaluation: EvaluationSite; nom: str
   return [...lignes].sort(
     (a, b) => RANG[b.evaluation.couleur] - RANG[a.evaluation.couleur] || a.nom.localeCompare(b.nom, 'fr'),
   );
+}
+
+// ---------------------------------------------------------------------------
+// Mise à jour à distance (plan docs/PLAN_MAJ_A_DISTANCE.md § 4)
+// ---------------------------------------------------------------------------
+
+/**
+ * « En retard » : la version cible est disponible pour ce site depuis plus de
+ * 24 h et il ne l'a toujours pas. Décision du propriétaire : au-delà, le siège
+ * doit le voir — un poste resté éteint, un disque plein, un antivirus…
+ */
+export const SEUIL_RETARD_MAJ_MS = 24 * HEURE;
+
+/** AAAAMMJJnn → AAAA.MM.JJ-n (affichage, quand le site ne donne que le numéro). */
+export function versionDeNumero(numero: number | null | undefined): string | null {
+  if (!numero || !Number.isSafeInteger(numero) || numero < 1_000_000_000) return numero ? String(numero) : null;
+  const s = String(numero);
+  return `${s.slice(0, 4)}.${s.slice(4, 6)}.${s.slice(6, 8)}-${Number(s.slice(8))}`;
+}
+
+export type TonMaj = 'ok' | 'attente' | 'alerte' | 'neutre';
+
+export interface EvaluationMaj {
+  installe: number | null;
+  cible: number | null;
+  /** Libellé court de l'état, en français. */
+  etat: string;
+  ton: TonMaj;
+  en_retard: boolean;
+  /** Depuis combien de temps la cible attend ce site (si pas à jour). */
+  attente_ms: number | null;
+  /** Sentinelle Grenam : fichiers suspects trouvés par le site. */
+  suspects_grenam: number;
+  detail: string | null;
+}
+
+const LIBELLE_ETAT: Record<EtatMajSite, { texte: string; ton: TonMaj }> = {
+  A_JOUR: { texte: 'À jour', ton: 'ok' },
+  TELECHARGEMENT: { texte: 'Téléchargement', ton: 'attente' },
+  PRETE: { texte: 'Prête', ton: 'attente' },
+  REPORTEE: { texte: 'Reportée', ton: 'attente' },
+  INSTALLATION: { texte: 'Installation en cours', ton: 'attente' },
+  ECHEC: { texte: 'Échec', ton: 'alerte' },
+  REFUSEE: { texte: 'Refusée', ton: 'alerte' },
+};
+
+function heureCourte(iso: string | null | undefined): string | null {
+  const v = t(iso);
+  if (v === null) return null;
+  const d = new Date(v);
+  // Abidjan = UTC+0 : l'heure UTC EST l'heure du restaurant.
+  return `${String(d.getUTCHours()).padStart(2, '0')}h${String(d.getUTCMinutes()).padStart(2, '0')}`;
+}
+
+export function evaluerMaj(site: Pick<SiteSante, 'enrole' | 'sante' | 'maj'>, maintenant: Date): EvaluationMaj {
+  const s = site.sante;
+  const installe = s?.maj_numero_installe ?? null;
+  const cible = site.maj?.cible ?? null;
+  const suspects = s?.maj_suspects_grenam ?? 0;
+  const base = { installe, cible: cible?.numero ?? null, suspects_grenam: suspects };
+
+  if (!site.enrole) return { ...base, etat: '—', ton: 'neutre', en_retard: false, attente_ms: null, detail: null };
+
+  const aJour = cible === null || (installe !== null && installe >= cible.numero);
+  const dispo = t(cible?.disponible_le);
+  const attente = !aJour && dispo !== null ? Math.max(0, maintenant.getTime() - dispo) : null;
+  // Un site en pause n'est pas « en retard » : c'est voulu par le siège.
+  const enRetard = attente !== null && attente > SEUIL_RETARD_MAJ_MS && !site.maj?.pause;
+
+  let etat: string;
+  let ton: TonMaj;
+  let detail: string | null = null;
+  const e = s?.maj_etat ?? null;
+  if (e) {
+    etat = LIBELLE_ETAT[e].texte;
+    ton = LIBELLE_ETAT[e].ton;
+    if (e === 'PRETE' && s?.maj_installation_prevue) detail = `installation prévue à ${heureCourte(s.maj_installation_prevue)}`;
+    if (e === 'REPORTEE' && s?.maj_report_jusqua) detail = `reportée jusqu’à ${heureCourte(s.maj_report_jusqua)}`;
+    if ((e === 'ECHEC' || e === 'REFUSEE') && s?.maj_derniere_erreur) detail = s.maj_derniere_erreur;
+    // Le site se dit à jour mais n'a pas la cible : il ne la connaît pas encore.
+    if (e === 'A_JOUR' && !aJour) {
+      etat = 'En attente';
+      ton = 'attente';
+    }
+  } else if (installe === null) {
+    etat = 'Inconnu';
+    ton = 'neutre';
+    detail = 'Ce POS ne remonte pas encore l’état de ses mises à jour.';
+  } else {
+    etat = aJour ? 'À jour' : 'En attente';
+    ton = aJour ? 'ok' : 'attente';
+  }
+  if (site.maj?.pause) detail = detail ? `${detail} · en pause` : 'mises à jour en pause';
+  if (enRetard) ton = 'alerte';
+  if (suspects > 0) {
+    ton = 'alerte';
+    detail = `${suspects} fichier(s) suspect(s) Grenam détecté(s) sur le poste${detail ? ` · ${detail}` : ''}`;
+  }
+  return { ...base, etat, ton, en_retard: enRetard, attente_ms: attente, detail };
 }

@@ -7,13 +7,24 @@ import { dateHeure } from '../periode';
 import { restoChoisi, useRestaurants, type FiltreResto } from '../restaurants';
 import {
   duree,
+  evaluerMaj,
   evaluerSite,
   ilYa,
   trierParUrgence,
+  versionDeNumero,
   versionMajoritaire,
   type CouleurSante,
   type ReponseSante,
+  type TonMaj,
 } from '../sante';
+
+/** Ton de l'état de mise à jour → pastille (mêmes jetons que la colonne État). */
+const TON_MAJ: Record<TonMaj, string> = {
+  ok: 'bg-ok-tint text-ok-txt',
+  attente: 'bg-attente-tint text-attente-txt',
+  alerte: 'bg-alerte-tint text-alerte-txt',
+  neutre: 'bg-carte-douce text-doux',
+};
 
 const PASTILLE: Record<CouleurSante, { classe: string; texte: string }> = {
   vert: { classe: 'bg-ok-tint text-ok-txt', texte: 'À jour' },
@@ -50,13 +61,15 @@ export function SanteSites({ filtre, onFiltre }: { filtre: FiltreResto; onFiltre
     return trierParUrgence(
       data.sites
         .filter((s) => !choisi || s.samtrackly_id === choisi.samtrackly_id)
-        .map((s) => ({ ...s, evaluation: evaluerSite(s, maintenant) })),
+        .map((s) => ({ ...s, evaluation: evaluerSite(s, maintenant), majEval: evaluerMaj(s, maintenant) })),
     );
   }, [data, choisi]);
 
   const majoritaire = useMemo(() => versionMajoritaire(data?.sites ?? []), [data]);
   const maintenantMs = data ? new Date(data.maintenant).getTime() : 0;
   const nbPointsBloques = lignes.filter((l) => l.enrole && l.evaluation.points_bloques).length;
+  const nbEnRetard = lignes.filter((l) => l.majEval.en_retard).length;
+  const nbGrenam = lignes.filter((l) => l.majEval.suspects_grenam > 0).length;
 
   return (
     <section className="max-w-6xl">
@@ -85,11 +98,25 @@ export function SanteSites({ filtre, onFiltre }: { filtre: FiltreResto; onFiltre
         />
       )}
 
+      {nbGrenam > 0 && (
+        <Erreur
+          texte={`Fichiers suspects (virus Grenam : exécutable de 533 504 octets ou g*.exe caché) signalés par ${nbGrenam} poste${nbGrenam > 1 ? 's' : ''} : ne plus y brancher de clé USB et faire analyser le poste.`}
+        />
+      )}
+      {nbEnRetard > 0 && (
+        <Erreur
+          texte={`${nbEnRetard} restaurant${nbEnRetard > 1 ? 's n’ont' : ' n’a'} pas installé la mise à jour disponible depuis plus de 24 h.`}
+        />
+      )}
+      {data && !data.migration_absente && data.maj_absente && (
+        <Info>Mise à jour à distance : migration cloud 20261023000000_maj_postes pas encore appliquée, colonnes « cible » vides.</Info>
+      )}
+
       {isPending ? (
         <Squelette lignes={4} />
       ) : (
         <div className="overflow-x-auto rounded-jeton border border-filet bg-carte">
-          <table className="w-full min-w-[820px] border-collapse text-left text-sm">
+          <table className="w-full min-w-[980px] border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-filet text-[11px] uppercase tracking-wide text-faible">
                 <th className="px-4 py-2 font-semibold">Restaurant</th>
@@ -97,7 +124,8 @@ export function SanteSites({ filtre, onFiltre }: { filtre: FiltreResto; onFiltre
                 <th className="px-3 py-2 font-semibold">Dernière synchro</th>
                 <th className="px-3 py-2 text-right font-semibold">En attente</th>
                 <th className="px-3 py-2 font-semibold">Points</th>
-                <th className="px-4 py-2 font-semibold">Version</th>
+                <th className="px-3 py-2 font-semibold">Version installée / cible</th>
+                <th className="px-4 py-2 font-semibold">Mise à jour</th>
               </tr>
             </thead>
             <tbody>
@@ -164,7 +192,12 @@ export function SanteSites({ filtre, onFiltre }: { filtre: FiltreResto; onFiltre
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
+                      {l.majEval.installe !== null && (
+                        <div>
+                          <code className="chiffres text-xs">{versionDeNumero(l.majEval.installe)}</code>
+                        </div>
+                      )}
                       {s?.version_code ? (
                         <>
                           <code className="chiffres text-xs" title={s.commit_git ?? undefined}>{s.version_code}</code>
@@ -173,7 +206,35 @@ export function SanteSites({ filtre, onFiltre }: { filtre: FiltreResto; onFiltre
                           )}
                         </>
                       ) : (
-                        <span className="text-xs text-faible">{l.enrole ? 'inconnue' : '—'}</span>
+                        l.majEval.installe === null && <span className="text-xs text-faible">{l.enrole ? 'inconnue' : '—'}</span>
+                      )}
+                      {l.maj?.cible && (
+                        <div className="mt-1 text-xs text-doux">
+                          cible : <code className="chiffres">{l.maj.cible.version}</code>
+                          {l.maj.cible.raison === 'EPINGLEE' && ' (épinglée)'}
+                          {l.maj.cible.raison === 'PILOTE' && ' (pilote)'}
+                        </div>
+                      )}
+                    </td>
+                    <td className="max-w-[240px] px-4 py-3">
+                      {l.enrole ? (
+                        <>
+                          <span className={`inline-block rounded-sm px-2 py-0.5 text-xs font-semibold ${TON_MAJ[l.majEval.ton]}`}>
+                            {l.majEval.etat}
+                          </span>
+                          {l.majEval.en_retard && l.majEval.attente_ms !== null && (
+                            <p className="mt-1 text-xs font-semibold text-alerte-txt">En retard ({duree(l.majEval.attente_ms)})</p>
+                          )}
+                          {l.majEval.detail && <p className="mt-1 text-xs text-doux">{l.majEval.detail}</p>}
+                          {l.maj && (
+                            <p className="mt-1 text-xs text-faible">
+                              {l.maj.type_site === 'FERME_LA_NUIT' ? 'au démarrage' : `à ${l.maj.heure_installation.replace(':', 'h')}`}
+                              {l.maj.anneau === 'PILOTE' && ' · pilote'}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-xs text-faible">—</span>
                       )}
                     </td>
                   </tr>
@@ -181,7 +242,7 @@ export function SanteSites({ filtre, onFiltre }: { filtre: FiltreResto; onFiltre
               })}
               {lignes.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-doux">Aucun restaurant.</td>
+                  <td colSpan={7} className="px-4 py-6 text-center text-doux">Aucun restaurant.</td>
                 </tr>
               )}
             </tbody>

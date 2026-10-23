@@ -62,6 +62,11 @@ export interface Siege {
   nomComplet: string;
   /** LECTURE voit tout et n'écrit rien — pour un comptable ou un associé. */
   niveau: 'ADMIN' | 'LECTURE';
+  /**
+   * Seul le propriétaire publie, promeut et retire une version des postes.
+   * Absent d'une fonction `siege` antérieure au 23/10/2026 : vaut « non ».
+   */
+  proprietaire?: boolean;
 }
 
 export interface RestoGroupe {
