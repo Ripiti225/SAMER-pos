@@ -32,3 +32,8 @@ verify_jwt = false
 # pour qu'on voie que ce n'est pas un oubli.
 [functions.samtrackly-points]
 verify_jwt = true
+
+# Mise à jour à distance des postes (contrat docs/MAJ_CONTRAT.md § 2) :
+# authentifiée par clé de site, comme sync-pull et ordres.
+[functions.maj]
+verify_jwt = false
