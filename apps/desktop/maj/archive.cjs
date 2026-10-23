@@ -26,6 +26,41 @@ const TAILLE_MORCEAU_DEFAUT = 40 * 1024 * 1024;
 const BLOC = 512;
 const RE_PREFIXE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,100}$/;
 
+/**
+ * `pipeline` qui rend l'erreur d'origine. Quand l'étape finale (ou la source)
+ * lève, Node détruit le reste de la chaîne et `pipeline` peut rejeter avec un
+ * simple AbortError : on perdrait le code précis (LIEN_INTERDIT…) qui part au
+ * siège. On mémorise donc la première vraie erreur et c'est elle qu'on relance.
+ */
+async function pipelineFidele(source, transformation, consommateur) {
+  let premiere = null;
+  const garder = (fn) =>
+    async function* garde(...args) {
+      try {
+        yield* fn(...args);
+      } catch (e) {
+        premiere = premiere || e;
+        throw e;
+      }
+    };
+  try {
+    await pipeline(
+      Readable.from(garder(source)()),
+      transformation,
+      async (flux) => {
+        try {
+          await consommateur(flux);
+        } catch (e) {
+          premiere = premiere || e;
+          throw e;
+        }
+      },
+    );
+  } catch (e) {
+    throw premiere || e;
+  }
+}
+
 // --------------------------------------------------------------------------
 // En-têtes ustar
 // --------------------------------------------------------------------------
@@ -158,7 +193,7 @@ async function ecrireArchive({ racine, chemins, dossierSortie, prefixe = 'paquet
   }
 
   try {
-    await pipeline(Readable.from(flux()), zlib.createGzip({ level: 9 }), decouper);
+    await pipelineFidele(flux, zlib.createGzip({ level: 9 }), decouper);
   } finally {
     if (courant) await courant.fh.close().catch(() => {});
   }
@@ -323,7 +358,7 @@ async function extraireDans(dossierMorceaux, manifeste, racine) {
   }
 
   try {
-    await pipeline(Readable.from(concatener()), zlib.createGunzip(), lire);
+    await pipelineFidele(concatener, zlib.createGunzip(), lire);
   } finally {
     // Sur Windows, un fichier resté ouvert empêcherait de supprimer le
     // dossier de préparation après un échec.
