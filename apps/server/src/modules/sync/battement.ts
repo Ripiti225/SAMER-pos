@@ -15,6 +15,7 @@ import { syncEtat, syncOutbox } from '../../db/schema/index.js';
 import { etatSync } from './etat.js';
 import { compterEnAttente } from './montee.js';
 import { versionCode } from './version.js';
+import { moteurMajCourant, type BlocSanteMaj } from '../maj/moteur.js';
 
 /** Forme attendue par `supabase/functions/_shared/sante-sites.ts`. */
 export interface Battement {
@@ -26,6 +27,12 @@ export interface Battement {
   derniere_descente: string | null;
   derniere_erreur: string | null;
   heure_site: string;
+  /**
+   * Mise à jour à distance (contrat docs/MAJ_CONTRAT.md § 3). FACULTATIF :
+   * absent sur un poste sans dossier portable (développement), ignoré par un
+   * cloud antérieur.
+   */
+  maj?: BlocSanteMaj;
 }
 
 /**
@@ -66,7 +73,10 @@ export async function construireBattement(): Promise<Battement> {
   // descente n'apparaît que si les ventes, elles, partent bien.
   const erreur = etatSync.derniere_erreur
     ?? (etatSync.erreur_descente ? `Descente du catalogue : ${etatSync.erreur_descente}` : null);
+  const moteurMaj = moteurMajCourant();
+  const maj = moteurMaj ? await moteurMaj.blocSante().catch(() => undefined) : undefined;
   return {
+    ...(maj ? { maj } : {}),
     version_code: version.version_code,
     commit_git: version.commit_git,
     lignes_en_attente: enAttente,

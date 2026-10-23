@@ -4,6 +4,7 @@ import type { SessionInfo } from '@pos/shared';
 import { api, ErreurApi, surNonAutorise } from './api';
 import { prechargerCatalogue } from './catalogue-cache';
 import { BandeauAdditions } from './components/BandeauAdditions';
+import { BandeauMaj } from './components/BandeauMaj';
 import { NotificationsCaisse } from './components/NotificationsCaisse';
 import { VerrouInactivite } from './components/VerrouInactivite';
 import { Accueil } from './screens/Accueil';
@@ -119,6 +120,7 @@ export function App() {
     <div className="h-full">
       {contenu}
       <BandeauAdditions />
+      <BandeauMaj />
       {session && <NotificationsCaisse />}
       <VerrouInactivite />
       {/* Largeur bornée : certains refus expliquent quoi faire (rôle à changer,

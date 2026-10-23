@@ -286,3 +286,164 @@ export declare function renommerAvecReprises(source: string, cible: string, opti
 export declare function sha256Fichier(chemin: string): Promise<string>;
 export declare function sha256(octets: Uint8Array | string): string;
 export declare function attendre(ms: number): Promise<void>;
+
+// ---------------------------------------------------------------- clés embarquées (L4)
+export declare const FICHIER_CLES: 'cles-publiques.json';
+export declare const MOTIF_SANS_CLE: string;
+/** `trousseau` null = mise à jour désactivée, `motif` dit pourquoi. Ne lève jamais. */
+export declare function chargerTrousseau(chemin?: string): { trousseau: Trousseau | null; motif: string | null };
+
+// ---------------------------------------------------------------- dossier du site (contrat § 4)
+export interface CheminsSite {
+  racine: string;
+  app: string;
+  appPrecedente: string;
+  data: string;
+  pgdata: string;
+  sauvegardes: string;
+  maj: string;
+  etat: string;
+  journal: string;
+  lanceur: string;
+  telechargement: string;
+  pret: string;
+}
+export interface ReglagesMaj {
+  type_site: TypeSite;
+  heure_installation: string;
+  heure_filet: string;
+  pause: boolean;
+  installer_maintenant: string | null;
+  reessayer: string | null;
+}
+export interface DependancesPretes {
+  empreinte: string;
+  /** Relatif au ROOT : `maj/pret/deps-<e>/node_modules`. */
+  dossier: string;
+  /** Ajouts au contrat minimal : de quoi revérifier les dépendances avant installation. */
+  manifeste?: string;
+  signature?: string;
+}
+export interface VersionPrete {
+  numero: number;
+  version: string;
+  /** Relatif au ROOT : `maj/pret/<n>/app`. */
+  dossier: string;
+  pret_le: string;
+  manifeste: string;
+  signature: string;
+  dependances: DependancesPretes | null;
+}
+export interface EtatSite {
+  format: 1;
+  pret: VersionPrete | null;
+  reglages: ReglagesMaj | null;
+  report: { demande_le: string; par: string; par_id?: string | null; numero: number } | null;
+  jetons_traites: { installer_maintenant: string | null; reessayer: string | null };
+  /** Champs libres du serveur (rapports déjà envoyés, dernière erreur…). */
+  [cle: string]: unknown;
+}
+export interface MemoireLanceur {
+  format: 1;
+  jetons_traites: { installer_maintenant: string | null; reessayer: string | null };
+}
+export declare const FORMAT_ETAT: 1;
+export declare const FICHIER_EMPREINTE_DEPS: '.empreinte-deps';
+export declare const TAILLE_GRENAM: 533504;
+export declare function cheminsSite(racine: string): CheminsSite;
+export declare function resoudreDansRacine(racine: string, relatif: unknown): string | null;
+export declare function etatVide(): EtatSite;
+export declare function lireEtat(chemin: string): Promise<EtatSite>;
+export declare function ecrireEtat(chemin: string, etat: EtatSite): Promise<void>;
+export declare function lireMemoireLanceur(chemin: string): Promise<MemoireLanceur>;
+export declare function lireEmpreinteDeps(dossierApp: string): string | null;
+export declare function tailleDossier(dossier: string): Promise<number>;
+export declare function espaceLibre(chemin: string): Promise<number | null>;
+export declare function chercherSuspectsGrenam(racine: string, options?: { limite?: number; ignorer?: string[] }): Promise<string[]>;
+
+// ---------------------------------------------------------------- opérations réelles (L4)
+export interface ProcessusLanceur {
+  arreterApi(): Promise<void>;
+  arreterVite(): Promise<void>;
+  arreterServeur(): Promise<void>;
+  arreterPg(): Promise<void>;
+  demarrerPg(): Promise<void>;
+  migrer(): Promise<void>;
+  demarrerServeur(o: { validation: boolean }): Promise<{ vivant(): boolean }>;
+  validerServeur(): Promise<void>;
+  serveurActif(): boolean;
+}
+export declare const DELAIS_DEFAUT: Readonly<{
+  santeTotalMs: number;
+  santeVivantApresMs: number;
+  santeIntervalleMs: number;
+  renommageEssais: number;
+  renommageDelaiMs: number;
+}>;
+export declare const MARQUEUR_COMPLET: 'COMPLET';
+export declare function creerOperations(o: {
+  racine: string;
+  trousseau: Trousseau | null;
+  numeroLanceur: number;
+  versionNode: () => Promise<string>;
+  processus: ProcessusLanceur;
+  port: number;
+  delais?: Partial<typeof DELAIS_DEFAUT>;
+  margeEspaceOctets?: number;
+  horloge?: () => Date;
+  log?: (m: string) => void;
+  progression?: (texte: string) => void;
+  pointCoupure?: (point: string) => Promise<void> | void;
+  mesurerEspace?: (chemin: string) => Promise<number | null>;
+}): { operations: Operations; nettoyer(o?: { numero?: number; proteger?: string[] }): Promise<void> };
+export declare function controlerSante(o: {
+  port: number;
+  hote?: string;
+  numero: number;
+  estVivant?: () => boolean;
+  totalMs?: number;
+  vivantApresMs?: number;
+  intervalleMs?: number;
+  maintenant?: () => number;
+}): Promise<void>;
+export declare function rafraichirCopiesPos(arbre: string): Promise<number>;
+export declare function fichiersPropresAuSite(arbre: string): Promise<string[]>;
+export declare function emplacementsNodeModules(arbre: string): Promise<string[]>;
+
+// ---------------------------------------------------------------- orchestration (L4)
+export interface SituationInstallation {
+  pret: VersionPrete | null;
+  decision: DecisionCreneau | null;
+  raison: string | null;
+  installerMaintenant: string | null;
+}
+export declare function situationInstallation(e: {
+  etat: EtatSite;
+  journal: JournalLu;
+  memoire: MemoireLanceur | null;
+  installee: { numero: number };
+  maintenant: Date;
+  auDemarrage: boolean;
+  tentativesMax?: number;
+}): SituationInstallation;
+export type ResultatLanceur =
+  | { action: 'RIEN'; raison: string | null; decision: DecisionCreneau | null }
+  | { action: 'OCCUPE' }
+  | { action: 'BLOQUE'; raison: string; journal: JournalLu }
+  | { action: 'REPRISE' | 'INSTALLATION'; resultat: 'INSTALLEE' | 'REVENUE' | 'RETOUR_ECHOUE'; journal: JournalInstallation }
+  | { action: 'RETOUR'; resultat: EtatInstallation; journal: JournalInstallation };
+export declare function creerLanceurMaj(o: {
+  racine: string;
+  trousseau: Trousseau | null;
+  motifSansCle?: string | null;
+  operations: Operations;
+  nettoyer?: (o: { numero?: number; proteger?: string[] }) => Promise<void>;
+  horloge?: () => Date;
+  log?: (m: string) => void;
+  avantInstallation?: (info: { numero: number; version: string; reprise: boolean; auDemarrage: boolean }) => void | Promise<void>;
+}): {
+  auDemarrage(): Promise<ResultatLanceur>;
+  verifierCreneau(): Promise<ResultatLanceur>;
+  examiner(o: { auDemarrage: boolean }): Promise<SituationInstallation & { motif?: string | null }>;
+  readonly enCours: boolean;
+};

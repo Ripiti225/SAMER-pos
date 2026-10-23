@@ -7,8 +7,22 @@ const { spawn } = require('node:child_process');
 const path = require('node:path');
 const http = require('node:http');
 const fs = require('node:fs');
+const crypto = require('node:crypto');
+// Mise à jour à distance : la copie des modules embarquée dans l'asar de CET
+// exécutable, avec SA clé publique, fait foi (pas celle de app/).
+const maj = require('./maj/index.cjs');
 
 const PORT = process.env.PORT || 3001;
+
+// Numéro de ce lanceur, comparé au `lanceur_min` des paquets : un paquet qui
+// exige un lanceur plus récent est refusé (il faudra d'abord changer
+// PosSamer.exe). À incrémenter à chaque repackaging qui change le comportement
+// de la mise à jour. 1 = premier lanceur capable de mettre à jour à distance.
+const NUMERO_LANCEUR = 1;
+// Jeton des routes /api/maj/lanceur/* : tiré à chaque lancement, transmis au
+// seul serveur que ce lanceur démarre. Un poste du réseau ne peut donc pas
+// couper la caisse en appelant ces routes.
+const JETON_LANCEUR = crypto.randomBytes(24).toString('hex');
 
 // Journal de démarrage (diagnostic) : utile en double-clic normal, où il n'y
 // a pas de console attachée pour voir les logs.
@@ -73,8 +87,17 @@ function resoudreCli(dossierApp, ...sousChemin) {
   return trouve || candidats[1];
 }
 
-function envPortable() {
-  return { ...process.env, PATH: `${NODE_BIN};${PGBIN};${process.env.PATH}` };
+function envPortable(extra = {}) {
+  return {
+    ...process.env,
+    PATH: `${NODE_BIN};${PGBIN};${process.env.PATH}`,
+    // Le serveur prépare les mises à jour dans ROOT/maj (contrat § 4) ; sans
+    // POS_RACINE (poste de développement, `pnpm dev`), il ne le fait pas.
+    POS_RACINE: ROOT,
+    POS_JETON_LANCEUR: JETON_LANCEUR,
+    POS_LANCEUR_NUMERO: String(NUMERO_LANCEUR),
+    ...extra,
+  };
 }
 
 function pgDejaActif() {
@@ -116,8 +139,30 @@ async function demarrerPostgres() {
   });
 }
 
+/**
+ * Arrêt de PostgreSQL. `-m fast` : les connexions du serveur sont coupées
+ * proprement (transactions annulées, pas d'attente des clients) ; `-w` :
+ * pg_ctl ne rend la main qu'une fois la base réellement arrêtée. Sans `-w`
+ * (l'ancien code), le lanceur se fermait avant la fin de l'arrêt — sans
+ * conséquence à la fermeture, mais fatal avant une sauvegarde à froid de
+ * pgdata, qui copierait une base encore ouverte.
+ * Résout `true` si la base est arrêtée.
+ */
 function arreterPostgres() {
-  spawn(path.join(PGBIN, 'pg_ctl.exe'), ['-D', PGDATA, 'stop'], { env: envPortable(), windowsHide: true });
+  return new Promise((resolve) => {
+    const proc = spawn(path.join(PGBIN, 'pg_ctl.exe'), ['-D', PGDATA, '-m', 'fast', '-w', '-t', '60', 'stop'], {
+      env: envPortable(),
+      windowsHide: true,
+    });
+    proc.on('exit', async (code) => {
+      journal(`arreterPostgres() fin (code ${code})`);
+      resolve(!(await pgDejaActif()));
+    });
+    proc.on('error', (e) => {
+      journal(`arreterPostgres() erreur : ${e}`);
+      resolve(false);
+    });
+  });
 }
 
 /**
@@ -153,8 +198,13 @@ function migrerBase() {
   });
 }
 
-function demarrerServeur() {
-  journal('demarrerServeur() spawn');
+/**
+ * `validation` : démarrage juste après l'échange de code, en mode validation
+ * (POS_MODE_VALIDATION=1 : ni vente, ni synchro, ni ordre) le temps du
+ * contrôle de santé ; `/api/maj/lanceur/valider` l'en sort ensuite.
+ */
+function demarrerServeur({ validation = false } = {}) {
+  journal(`demarrerServeur() spawn${validation ? ' (mode validation)' : ''}`);
   // On invoque node.exe directement sur le point d'entrée réel de tsx
   // (et non le .CMD .bin, dont le shell-wrapping via `shell: true` s'est
   // révélé peu fiable) : plus robuste, aucun souci de quoting Windows.
@@ -162,7 +212,7 @@ function demarrerServeur() {
   const tsxCli = resoudreCli(SERVER_DIR, 'tsx', 'dist', 'cli.mjs');
   serverProcess = spawn(nodeExe, [tsxCli, 'src/index.ts'], {
     cwd: SERVER_DIR,
-    env: envPortable(),
+    env: envPortable(validation ? { POS_MODE_VALIDATION: '1' } : {}),
     stdio: 'inherit',
     windowsHide: true,
   });
@@ -177,6 +227,7 @@ function demarrerServeur() {
       dernierEchec = dernierEchec || `Le serveur s'est arrêté tout seul (code ${code}).`;
     }
   });
+  return serverProcess;
 }
 
 function demarrerAutresApps() {
@@ -245,6 +296,7 @@ function creerFenetre() {
 
 function chargerCaisse() {
   pageErreurAffichee = false;
+  caisseAffichee = true;
   fenetre.loadURL(`http://localhost:${PORT}`);
 }
 
@@ -262,6 +314,7 @@ function chargerErreur() {
   // sur la caisse.
   if (pageErreurAffichee) return;
   pageErreurAffichee = true;
+  caisseAffichee = false;
   let extraitJournal = '';
   try {
     extraitJournal = fs.readFileSync(LOG_PATH, 'utf8').trim().split('\n').slice(-12).join('\n');
@@ -312,6 +365,226 @@ function chargerErreur() {
   fenetre.loadFile(chemin);
 }
 
+// ============================================================================
+// Mise à jour à distance (lot L4 — plan § 3, contrat docs/MAJ_CONTRAT.md)
+// ============================================================================
+//
+// Le serveur télécharge et prépare la version dans ROOT/maj ; c'est le
+// LANCEUR qui installe (un processus ne se remplace pas lui-même). La logique
+// (quand installer, reprise après coupure, retour arrière) et les opérations
+// disque sont dans maj/*.cjs, éprouvées par le banc d'essai ; ici, seulement
+// le pilotage des processus et l'affichage.
+
+const { trousseau: TROUSSEAU_MAJ, motif: MOTIF_SANS_CLE } = maj.chargerTrousseau(
+  path.join(__dirname, 'maj', maj.FICHIER_CLES),
+);
+if (!TROUSSEAU_MAJ) journal(MOTIF_SANS_CLE);
+
+let caisseAffichee = false;
+// Après un « retour arrière impossible », l'écran d'erreur l'a dit une fois :
+// « Réessayer » démarre alors la caisse sans retenter la mise à jour.
+let majBloqueeSignalee = false;
+
+/** Résout quand le processus est sorti, ou au bout de `delaiMs`. */
+function attendreFin(proc, delaiMs) {
+  return new Promise((resolve) => {
+    if (!proc || proc.exitCode !== null || proc.signalCode !== null) return resolve();
+    const minuteur = setTimeout(resolve, delaiMs);
+    proc.once('exit', () => {
+      clearTimeout(minuteur);
+      resolve();
+    });
+  });
+}
+
+/** POST local vers une route réservée au lanceur (jeton + localhost). */
+function postLanceur(chemin, delaiMs) {
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      { host: '127.0.0.1', port: PORT, path: chemin, method: 'POST', headers: { 'x-jeton-lanceur': JETON_LANCEUR, 'content-length': 0 } },
+      (res) => {
+        res.resume();
+        res.on('end', () => resolve(res.statusCode));
+      },
+    );
+    req.setTimeout(delaiMs, () => req.destroy(new Error('délai dépassé')));
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+function versionNodePortable() {
+  return new Promise((resolve) => {
+    let sortie = '';
+    const proc = spawn(path.join(NODE_BIN, 'node.exe'), ['-v'], { windowsHide: true });
+    proc.stdout.on('data', (b) => { sortie += b.toString(); });
+    proc.on('exit', () => resolve(sortie.trim()));
+    proc.on('error', () => resolve(''));
+  });
+}
+
+const serveurVivant = () => !!serverProcess && serverProcess.exitCode === null && serverProcess.signalCode === null;
+
+/** Processus pilotés par les étapes d'installation (voir maj/operations.cjs). */
+const processusMaj = {
+  async arreterApi() {
+    if (!serveurVivant()) return;
+    // Le serveur répond quand les requêtes en cours sont finies (contrat § 5).
+    const statut = await postLanceur('/api/maj/lanceur/arret', 30_000);
+    journal(`maj : arret API -> ${statut}`);
+  },
+  async arreterVite() {
+    const liste = autresProcess;
+    autresProcess = [];
+    liste.forEach((p) => p.kill());
+    await Promise.all(liste.map((p) => attendreFin(p, 5_000)));
+  },
+  async arreterServeur() {
+    const p = serverProcess;
+    if (p && serveurVivant()) {
+      p.kill();
+      await attendreFin(p, 10_000);
+    }
+    serverProcess = null;
+  },
+  async arreterPg() {
+    if (!(await pgDejaActif())) return;
+    if (!(await arreterPostgres())) throw new Error('PostgreSQL ne s’est pas arrêté.');
+  },
+  async demarrerPg() {
+    await demarrerPostgres();
+    if (!(await pgDejaActif())) throw new Error('PostgreSQL n’a pas redémarré.');
+  },
+  async migrer() {
+    migrationsTerminees = false;
+    await migrerBase();
+  },
+  async demarrerServeur({ validation }) {
+    const p = demarrerServeur({ validation });
+    return { vivant: () => p.exitCode === null && p.signalCode === null };
+  },
+  async validerServeur() {
+    const statut = await postLanceur('/api/maj/lanceur/valider', 15_000);
+    if (statut !== 200) throw new Error(`le serveur a répondu ${statut}`);
+  },
+  serveurActif: serveurVivant,
+};
+
+function afficherEtapeMaj(texte) {
+  journal(`maj : ${texte}`);
+  if (!fenetre) return;
+  fenetre.webContents
+    .executeJavaScript(`(function(){var e=document.getElementById('etape');if(e)e.textContent=${JSON.stringify(texte)};})()`)
+    .catch(() => {});
+}
+
+/** Page locale affichée pendant l'installation (le serveur est arrêté : rien d'autre ne peut s'afficher). */
+function afficherPageMaj({ version }) {
+  caisseAffichee = false;
+  if (!fenetre) return;
+  const html = `<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>Mise à jour en cours</title><style>
+  body { margin: 0; height: 100vh; display: flex; align-items: center; justify-content: center;
+         background: #0f172a; color: #e2e8f0; font-family: Segoe UI, system-ui, sans-serif; text-align: center; }
+  h1 { color: #EF9F27; font-size: 44px; margin: 0 0 18px; }
+  p { font-size: 26px; margin: 8px 0; }
+  .fort { font-weight: 700; color: #fbbf24; }
+  #etape { color: #94a3b8; font-size: 20px; margin-top: 28px; min-height: 28px; }
+  .roue { width: 64px; height: 64px; margin: 0 auto 28px; border: 7px solid #334155;
+          border-top-color: #EF9F27; border-radius: 50%; animation: t 1s linear infinite; }
+  @keyframes t { to { transform: rotate(360deg); } }
+</style></head><body><main>
+  <div class="roue"></div>
+  <h1>Mise à jour en cours</h1>
+  <p>2 à 3 minutes</p>
+  <p class="fort">Ne pas éteindre le poste.</p>
+  <p id="etape">Préparation…</p>
+  <p style="font-size:16px;color:#64748b;margin-top:30px">Version ${echapper(version || '')} — les commandes et le service en cours sont conservés.</p>
+</main></body></html>`;
+  const chemin = path.join(require('node:os').tmpdir(), 'possamer-maj.html');
+  fs.writeFileSync(chemin, html, 'utf8');
+  pageErreurAffichee = false;
+  return fenetre.loadFile(chemin).catch(() => {});
+}
+
+const operationsMaj = maj.creerOperations({
+  racine: ROOT,
+  trousseau: TROUSSEAU_MAJ,
+  numeroLanceur: NUMERO_LANCEUR,
+  versionNode: versionNodePortable,
+  processus: processusMaj,
+  port: Number(PORT),
+  log: (m) => journal(`maj : ${m}`),
+  progression: afficherEtapeMaj,
+});
+
+const lanceurMaj = maj.creerLanceurMaj({
+  racine: ROOT,
+  trousseau: TROUSSEAU_MAJ,
+  motifSansCle: MOTIF_SANS_CLE,
+  operations: operationsMaj.operations,
+  nettoyer: operationsMaj.nettoyer,
+  log: (m) => journal(`maj : ${m}`),
+  avantInstallation: afficherPageMaj,
+});
+
+function texteRetourEchoue(r) {
+  const cause = r.journal && r.journal.erreur ? r.journal.erreur.message : r.raison || 'cause inconnue';
+  return `La mise à jour n'a pas pu être annulée proprement (${cause}). Appelez le support avant de vendre.`;
+}
+
+/**
+ * Démarrage complet : d'abord la mise à jour (reprise d'une installation
+ * coupée, ou installation en attente — plan § 3 « poste éteint à l'heure
+ * prévue »), PUIS la caisse. Sert aussi au bouton « Réessayer ».
+ */
+async function sequenceDemarrage() {
+  if (!majBloqueeSignalee) {
+    let r;
+    try {
+      r = await lanceurMaj.auDemarrage();
+    } catch (e) {
+      // Une erreur imprévue de la mise à jour ne doit jamais empêcher la caisse d'ouvrir.
+      journal(`maj au demarrage : erreur ${e && e.stack ? e.stack : e}`);
+      r = { action: 'ERREUR' };
+    }
+    journal(`maj au demarrage : ${r.action}${r.resultat ? ` ${r.resultat}` : ''}${r.raison ? ` (${r.raison})` : ''}`);
+    if (r.action === 'BLOQUE' || r.resultat === 'RETOUR_ECHOUE') {
+      majBloqueeSignalee = true;
+      dernierEchec = texteRetourEchoue(r);
+      chargerErreur();
+      return false;
+    }
+    if (r.resultat === 'INSTALLEE') migrationsTerminees = true;
+  }
+  return demarrerEtAfficher();
+}
+
+/** Toutes les 60 s pendant le service : l'heure d'installer est-elle venue ? */
+function surveillerCreneauMaj() {
+  setInterval(async () => {
+    if (arretDejaLance || lanceurMaj.enCours || !caisseAffichee || !TROUSSEAU_MAJ) return;
+    let r;
+    try {
+      r = await lanceurMaj.verifierCreneau();
+    } catch (e) {
+      journal(`maj : verification du creneau en erreur ${e && e.stack ? e.stack : e}`);
+      return;
+    }
+    if (r.action !== 'INSTALLATION') return;
+    if (r.resultat === 'RETOUR_ECHOUE') {
+      majBloqueeSignalee = true;
+      dernierEchec = texteRetourEchoue(r);
+      chargerErreur();
+      return;
+    }
+    if (r.resultat === 'INSTALLEE') migrationsTerminees = true;
+    // Installée (serveur déjà relancé et validé) ou revenue (tout arrêté) :
+    // la séquence normale remet en route ce qui manque, puis KDS & co.
+    if (await demarrerEtAfficher()) setTimeout(demarrerAutresApps, 4000);
+  }, 60_000);
+}
+
 // Séquence commune au démarrage et au bouton « Réessayer ».
 async function demarrerEtAfficher() {
   dernierEchec = null;
@@ -344,9 +617,12 @@ async function arreterProprement() {
   if (arretDejaLance) return;
   arretDejaLance = true;
   globalShortcut.unregisterAll();
-  if (serverProcess) serverProcess.kill();
+  const serveur = serverProcess;
+  if (serveur) serveur.kill();
   autresProcess.forEach((p) => p.kill());
-  arreterPostgres();
+  await attendreFin(serveur, 10_000);
+  // Attendu (pg_ctl -w) : on ne quitte qu'une fois la base fermée proprement.
+  await arreterPostgres();
 }
 
 // UNE SEULE INSTANCE. Sans ce verrou, rouvrir par l'icône alors que la caisse
@@ -392,7 +668,11 @@ app.whenReady().then(async () => {
 
   creerFenetre();
   journal('fenetre creee');
-  const pret = await demarrerEtAfficher();
+  // La mise à jour passe AVANT la caisse : une installation coupée est
+  // terminée ou défaite, une version en attente installée (poste éteint à
+  // l'heure prévue, site « ferme la nuit »), puis seulement la caisse s'ouvre.
+  const pret = await sequenceDemarrage();
+  surveillerCreneauMaj();
 
   // KDS/serveur/client démarrent après coup : évite de faire concurrence en
   // CPU/disque au serveur principal pendant la phase critique (affichage de
@@ -412,17 +692,25 @@ ipcMain.on('fermer-app', () => {
 
 let reessaiEnCours = false;
 ipcMain.on('reessayer-demarrage', async () => {
-  if (reessaiEnCours || arretDejaLance) return;
+  if (reessaiEnCours || arretDejaLance || lanceurMaj.enCours) return;
   reessaiEnCours = true;
   journal('Reessai demande depuis l ecran d erreur');
   try {
-    if (await demarrerEtAfficher()) setTimeout(demarrerAutresApps, 4000);
+    if (await sequenceDemarrage()) setTimeout(demarrerAutresApps, 4000);
   } finally {
     reessaiEnCours = false;
   }
 });
 
 app.on('before-quit', (e) => {
+  // Pendant une installation, fermer couperait l'échange de dossiers ou la
+  // sauvegarde en plein milieu : on refuse (une coupure de courant reste
+  // rattrapée au démarrage suivant par le journal d'installation).
+  if (lanceurMaj.enCours) {
+    e.preventDefault();
+    journal('Fermeture refusee : mise a jour en cours');
+    return;
+  }
   if (!arretDejaLance) {
     e.preventDefault();
     arreterProprement().then(() => app.exit(0));

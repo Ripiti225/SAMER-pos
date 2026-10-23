@@ -82,7 +82,10 @@ export type ActionAudit =
   | 'POINTAGE_ARRIVEE'
   | 'MARQUAGE_DEPART'
   | 'VALIDATION_INVENTAIRE'
-  | 'DEBLOCAGE_INVENTAIRE';
+  | 'DEBLOCAGE_INVENTAIRE'
+  // « Pas maintenant » sur le bandeau de mise à jour (PIN gérant, un seul
+  // report de 30 min) : on garde qui a décalé la coupure de la caisse.
+  | 'REPORT_MAJ';
 
 export interface EntreeAudit {
   user_id?: string | null;

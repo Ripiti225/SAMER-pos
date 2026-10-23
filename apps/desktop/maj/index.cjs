@@ -17,4 +17,9 @@ module.exports = {
   ...require('./installation.cjs'),
   ...require('./retention.cjs'),
   ...require('./disque.cjs'),
+  // Lot L4 : clés embarquées, dossier du site, opérations disque, orchestration.
+  ...require('./cles.cjs'),
+  ...require('./site.cjs'),
+  ...require('./operations.cjs'),
+  ...require('./lanceur.cjs'),
 };

@@ -1,7 +1,8 @@
 # Plan — mise à jour à distance des postes (sans clé USB)
 
-**Statut : plan validé par le propriétaire (23/10/2026). Lot L0 livré (voir § 6 bis).
-Lots L1-L2 et L5 côté siège livrés, NON déployés (voir § 6 ter).**
+**Statut : plan validé par le propriétaire (23/10/2026). Lot L0 livré (§ 6 bis), lots L1-L2 et
+console siège livrés (§ 6 ter), lots L3-L4 et bandeau caisse livrés (§ 6 quater) — rien de
+déployé dans le cloud ni sur les sites.**
 
 Décisions déjà prises : mise à jour automatique des 8 sites ; téléchargement pendant
 le service ; installation à une heure creuse **réglable par restaurant** (06h00 pour
@@ -254,6 +255,111 @@ au dossier temporaire, après contrôle que son `.pnpm/lock.yaml` est identique 
 4. Déployer les fonctions `maj` (nouvelle, `verify_jwt = false` dans `config.toml`),
    `sync-pull`, `siege`.
 5. Publier la console siège (Vercel).
+## 6 quater. Lots L3-L4 — livrés (23/10/2026)
+
+Branche `agent/maj-site`. Contrat suivi : `docs/MAJ_CONTRAT.md` (écarts listés plus bas).
+
+### L3 — serveur (`apps/server/src/modules/maj/`)
+
+| Fichier | Rôle |
+|---|---|
+| `config.ts` | `POS_RACINE` (absent = module inactif : postes de développement, tests), `POS_JETON_LANCEUR`, `POS_LANCEUR_NUMERO`, débit (`MAJ_DEBIT_MAX_KO_S`, 512 Ko/s par défaut), intervalle (`MAJ_INTERVALLE_S`, 15 min), version démarrée (`VERSION.json` de l'arbre qui tourne) |
+| `client.ts` | Edge Function `maj` : `consulter`, `rapporter` (détail borné à ~7 Ko) |
+| `telechargement.ts` | client HTTP dédié : délai d'INACTIVITÉ de 60 s (pas de délai global), reprise morceau par morceau et `Range` dans un morceau (`.partiel`), lien expiré (400/401/403) → nouvelle consultation, débit bridé, SHA-256 contrôlé avant renommage |
+| `moteur.ts` | boucle 15 min ; signature (clé de l'arbre, `apps/desktop/maj/cles-publiques.json`), `problemesCompatibilite`, dépendances seulement si l'empreinte diffère de `node_modules/.empreinte-deps`, contrôle d'espace (paquets + pgdata + 500 Mo), extraction via `.partiel` puis renommage, `etat.json` atomique (verrou interne), seule la cible gardée, comptes rendus une fois chacun (y compris ceux tirés du journal du lanceur : INSTALLE, ECHEC_RETOUR_ARRIERE, REFUSEE, BLOQUE), tick 60 s du créneau (événement `maj`, compte rendu AVERTI), report, bloc `sante.maj`, sentinelle Grenam (toutes les 6 h) |
+| `mode.ts` | NORMAL / VALIDATION (`POS_MODE_VALIDATION=1`) / ARRET : 503 « Mise à jour en cours » sur `/api/*` sauf `/api/sante*` et `/api/maj/*`, compteur des requêtes en cours, tâches de fond différées jusqu'à la validation |
+| `routes.ts` | `/api/maj/lanceur/arret` et `/valider` (jeton + localhost, 404 sinon), `/api/sante/version`, `/api/maj/etat`, `/api/maj/reporter` (PIN gérant, un seul report, audit `REPORT_MAJ`) |
+
+Raccordements : `app.ts` (hook + routes), `index.ts` (aucune boucle de fond en mode
+validation), `battement.ts` (bloc `maj` facultatif), `version.ts` (`VERSION.json` avant
+git), `ws.ts` (événements `maj`, `maj_debut`, `maj_terminee`), `audit.ts` (`REPORT_MAJ`).
+
+### L4 — lanceur (`apps/desktop`)
+
+| Fichier | Rôle |
+|---|---|
+| `maj/cles-publiques.json` | trousseau `{ actuelle, suivante }` embarqué dans l'asar (`build.files`). **Vide** : mise à jour désactivée, motif remonté au siège |
+| `maj/cles.cjs` | `chargerTrousseau` (ne lève jamais) |
+| `maj/site.cjs` | chemins du dossier portable, `etat.json` (serveur), `lanceur.json` (jetons traités par le lanceur), empreinte des dépendances, taille, espace libre, sentinelle Grenam |
+| `maj/operations.cjs` | opérations RÉELLES des étapes : revérification (signature avec la clé DU LANCEUR, arbre, dépendances, espace), arrêt (API → Vite → serveur → `pg_ctl stop -m fast -w`), sauvegarde à froid avec marqueur `COMPLET`, échange (`.env*` recopiés, node_modules déplacés ou paquet de dépendances, copies `@pos/*` régénérées depuis `packages/`, renommages retentés ~60 s), migrations, contrôle de santé 90 s, finalisation (qui ne revient jamais en arrière), retour arrière idempotent, nettoyage et rétention |
+| `maj/lanceur.cjs` | `auDemarrage` (`deciderReprise`, puis installation si `deciderCreneau` le veut), `verifierCreneau` (60 s), jetons « installer maintenant » / « réessayer » ; `situationInstallation`, partagée avec le serveur |
+| `main.js` | `NUMERO_LANCEUR = 1`, jeton tiré à chaque lancement, variables passées au serveur, `sequenceDemarrage` avant la caisse, surveillance 60 s, page « Mise à jour en cours — 2 à 3 minutes, ne pas éteindre », fermeture refusée pendant une installation, arrêt de PostgreSQL attendu à la fermeture |
+
+Comportement du lanceur :
+
+| Cas | Ce qui se passe |
+|---|---|
+| 24h/24, poste allumé à 06h00 | à H-10 bandeau sur la caisse ; à 06h00 (vérification toutes les 60 s) page « Mise à jour en cours », installation, caisse rechargée |
+| « Pas maintenant » (une fois) | installation à 06h30, rappel sans bouton à 06h28 |
+| 24h/24, poste éteint à 06h00 | au rallumage, installation AVANT d'ouvrir la caisse |
+| 24h/24, redémarrage en journée avant l'heure | rien, la caisse s'ouvre |
+| Ferme la nuit | installation au démarrage suivant ; filet 05h00 si pas de redémarrage 24 h après « prête » |
+| Migration ou contrôle de santé raté | retour arrière (ancien code, base restaurée), version refusée, compte rendu au prochain démarrage du serveur |
+| Fichier verrouillé, disque plein | retour arrière sans refus : seconde chance au créneau suivant (2 tentatives par version) |
+| Signature invalide, lanceur trop ancien | refus avant tout arrêt |
+| Coupure de courant | au démarrage, reprise ou retour selon le journal ; un retour coupé est rejoué |
+| Retour arrière impossible (3 fois) | écran d'erreur « appelez le support » ; « Réessayer » ouvre la caisse sans retenter |
+| Sans clé publique | rien n'est jamais installé |
+
+### L5 côté caisse
+
+`components/BandeauMaj.tsx`, `stores/maj.ts`, `temps-reel.ts` : bandeau à H-10, « Pas
+maintenant » (PIN gérant, une fois), rappel, écran « Mise à jour en cours » sur
+`maj_debut`, rechargement après `maj_terminee` dès que la caisse est au repos (accueil,
+tables, mes ventes, supervision), avec repli par interrogation de `/api/maj/etat`.
+**Caisse non recompilée.**
+
+### Tests
+
+- `node --test "apps/desktop/maj/test/*.test.cjs"` : 166 (114 L0 + 52 du banc d'essai
+  `banc-lanceur.test.cjs` : nominale, dépendances, migration ratée, santé ratée, serveur
+  qui meurt, signature, fichier modifié, sans clé, lanceur trop ancien, disque plein,
+  EBUSY passager et permanent, poste éteint, ferme la nuit, jetons du siège, rétention,
+  coupure à 24 points de l'installation et à 9 points du retour arrière, deux coupures).
+  Le banc passe aussi sous le runtime Electron 33 (Node 20.18).
+- Serveur : `test/maj-serveur.test.ts` (14), `test/maj-routes.test.ts` (7).
+- Build de contrôle `electron-builder --win dir` : `maj/*.cjs` et `cles-publiques.json`
+  présents dans l'asar et chargés.
+
+### Écarts au contrat (à reporter dans `MAJ_CONTRAT.md` d'un commun accord)
+
+1. `etat.json` porte des champs EN PLUS du minimal : `pret.dependances.manifeste` et
+   `.signature` (le lanceur revérifie aussi les dépendances), `report.numero` et
+   `report.par_id`, `rapports_envoyes`, `consulte_le`.
+2. Nouveau fichier `ROOT/maj/lanceur.json` (seul écrivain : le lanceur) : jetons
+   « installer maintenant » / « réessayer » traités ; le serveur le recopie dans
+   `etat.json.jetons_traites`.
+3. Mode validation : les fichiers statiques de la caisse et `/ws` restent servis (le
+   contrôle de santé exige justement « la caisse servie ») ; seule l'API `/api/*` est en 503.
+4. `GET /api/maj/etat` est public (bandeau visible dès l'écran de connexion).
+5. « Réessayer » ne porte pas de numéro : le lanceur lève TOUS les refus locaux.
+6. Paquet DEPENDANCES : chemins supposés relatifs à `app/` (`node_modules/…`,
+   `apps/<a>/node_modules/…`), extraits dans `maj/pret/deps-<e>/`. **À confirmer avec L2.**
+7. DEBUT est rapporté par le serveur à l'arrêt, INSTALLE à la validation ; les autres
+   issues de l'installation partent du journal au démarrage suivant du serveur.
+8. `integrite.suspects_grenam` vaut `null` avant la première analyse (2 min après le
+   démarrage) ; Node ne lit pas l'attribut « caché » : la sentinelle compte les `.exe`
+   de 533 504 octets et les paires `g<nom>.exe` / `<nom>.exe`.
+
+### Ce que la dernière clé USB (L7) devra contenir
+
+- un **nouveau `PosSamer.exe`** repackagé depuis cette branche (lanceur n° 1), avec la
+  **vraie clé publique** du propriétaire dans `apps/desktop/maj/cles-publiques.json` ;
+- `app/VERSION.json` (numéro et version de l'arbre de la clé, écrit par l'outil L2) ;
+- `app/node_modules/.empreinte-deps` = SHA-256 du `pnpm-lock.yaml` de la clé (sans lui,
+  la première mise à jour retélécharge tout le paquet de dépendances) ;
+- le code de cette branche (module serveur, caisse recompilée avec le bandeau) et les
+  copies `@pos/*` à jour dans `apps/*/node_modules/@pos/*` ;
+- le dossier `maj/` se crée tout seul (inutile de le copier).
+
+### Reste
+
+- Clé du propriétaire (`generer-cle.mjs`), puis repackaging ; rebuild de la caisse.
+- L6, suite : banc sur un vrai poste (vrai PostgreSQL, Defender, vraie coupure secteur).
+- L'installation « au démarrage » suppose que la session Windows s'ouvre seule (la tâche
+  `POS-Samer` démarre à l'ouverture de session) : vérifier l'ouverture automatique sur
+  chaque site « ferme la nuit ».
+- Pendant les 2-3 min, KDS, tablettes et écran client (Vite) sont arrêtés eux aussi.
 
 ## 7. Réponses du propriétaire (23/10/2026)
 

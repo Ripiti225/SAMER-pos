@@ -3,6 +3,9 @@ import { construireApp } from './app.js';
 import { moteurSync } from './modules/sync/moteur.js';
 import { samtracklyConfigure, synchroniserEquipe } from './modules/equipe/sync-samtrackly.js';
 import { enregistrerIncident } from './modules/sante/incidents.js';
+import { etatMode } from './modules/maj/mode.js';
+import { INTERVALLE_CONSULTATION_MS } from './modules/maj/config.js';
+import { moteurMajDuSite } from './modules/maj/moteur.js';
 
 const PORT = Number(process.env.PORT ?? 3001);
 
@@ -13,7 +16,7 @@ await app.sessions.charger().catch((e) => app.log.error({ e }, 'Rechargement des
 
 // 0.0.0.0 : les terminaux de caisse se connectent depuis le réseau local
 await app.listen({ port: PORT, host: '0.0.0.0' });
-console.log(`Serveur POS démarré sur le port ${PORT}`);
+console.log(`Serveur POS démarré sur le port ${PORT}${etatMode.mode === 'VALIDATION' ? ' (mode validation de mise à jour)' : ''}`);
 
 // Ordres du siège : le moteur ne connaît pas Fastify, on lui passe de quoi
 // sortir le papier du gérant et rafraîchir les écrans. AVANT demarrer().
@@ -22,27 +25,44 @@ moteurSync.brancherOrdres({
   diffuser: (canal, id) => app.diffuser(canal as never, id),
 });
 
-// Synchro cloud en tâche de fond (n'empêche jamais la caisse de fonctionner).
-void moteurSync.demarrer();
+// Mise à jour à distance : construit dès maintenant (le battement et le
+// bandeau en ont besoin), boucles démarrées avec les autres tâches de fond.
+// Inactif sans POS_RACINE (poste de développement).
+const moteurMaj = await moteurMajDuSite((type) => app.diffuser(type));
 
-// Synchro automatique de l'équipe depuis SamerTrackly (si clé configurée) :
-// au démarrage puis à intervalle régulier, quand la caisse est en ligne.
-if (samtracklyConfigure()) {
-  const intervalleS = Number(process.env.SAMTRACKLY_INTERVALLE ?? 300);
-  const lancer = () =>
-    synchroniserEquipe(null)
-      .then((r) => {
-        if (!r.saute && (r.crees || r.maj || r.desactives)) {
-          app.log.info({ r }, 'Synchro équipe SamerTrackly');
-        }
-      })
-      .catch((e) => {
-        app.log.warn({ e: String(e) }, 'Synchro équipe SamerTrackly échouée (réessai plus tard)');
-        void enregistrerIncident(
-          'SAMERTRACKLY', e, { operation: 'synchronisation de l’équipe' },
-          'La mise à jour automatique de l’équipe depuis SamerTrackly a échoué. Les employés déjà présents dans le POS restent utilisables.',
-        );
-      });
-  void lancer();
-  if (intervalleS > 0) setInterval(lancer, intervalleS * 1000);
+/**
+ * Tâches de fond. En mode validation (juste après l'échange de code par le
+ * lanceur), AUCUNE ne démarre : si la nouvelle version est refusée, la base
+ * est restaurée, et rien ne doit être parti au cloud ni chez SamerTrackly
+ * entre-temps. Elles démarrent quand le lanceur valide la version.
+ */
+function demarrerTachesDeFond(): void {
+  // Synchro cloud en tâche de fond (n'empêche jamais la caisse de fonctionner).
+  void moteurSync.demarrer();
+
+  moteurMaj?.demarrer(INTERVALLE_CONSULTATION_MS);
+
+  // Synchro automatique de l'équipe depuis SamerTrackly (si clé configurée) :
+  // au démarrage puis à intervalle régulier, quand la caisse est en ligne.
+  if (samtracklyConfigure()) {
+    const intervalleS = Number(process.env.SAMTRACKLY_INTERVALLE ?? 300);
+    const lancer = () =>
+      synchroniserEquipe(null)
+        .then((r) => {
+          if (!r.saute && (r.crees || r.maj || r.desactives)) {
+            app.log.info({ r }, 'Synchro équipe SamerTrackly');
+          }
+        })
+        .catch((e) => {
+          app.log.warn({ e: String(e) }, 'Synchro équipe SamerTrackly échouée (réessai plus tard)');
+          void enregistrerIncident(
+            'SAMERTRACKLY', e, { operation: 'synchronisation de l’équipe' },
+            'La mise à jour automatique de l’équipe depuis SamerTrackly a échoué. Les employés déjà présents dans le POS restent utilisables.',
+          );
+        });
+    void lancer();
+    if (intervalleS > 0) setInterval(lancer, intervalleS * 1000);
+  }
 }
+
+etatMode.quandNormal(demarrerTachesDeFond);

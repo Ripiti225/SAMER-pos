@@ -6,9 +6,11 @@
  * Ordre de lecture :
  *  1. `POS_VERSION` (variable d'environnement) — pour un paquet livré sans
  *     dépôt git, ou un numéro choisi par l'installateur ;
- *  2. le commit du dépôt, lu DIRECTEMENT dans `.git` : `git` n'est pas installé
+ *  2. `VERSION.json` à la racine de `app/` — posé par chaque paquet de mise à
+ *     jour à distance (AAAA.MM.JJ-n), il fait foi sur un site mis à jour ;
+ *  3. le commit du dépôt, lu DIRECTEMENT dans `.git` : `git` n'est pas installé
  *     sur les mini-PC (seuls Node et PostgreSQL portables le sont) ;
- *  3. rien : le siège affichera « version inconnue » plutôt qu'un faux numéro.
+ *  4. rien : le siège affichera « version inconnue » plutôt qu'un faux numéro.
  *
  * Lue UNE fois puis gardée en mémoire : c'est la version DÉMARRÉE qui compte.
  * Un `git pull` sans redémarrage change `.git` mais pas le code qui tourne.
@@ -86,6 +88,29 @@ export function trouverRacineDepot(depart: string, niveaux = 8): string | null {
   return null;
 }
 
+/** VERSION.json le plus proche en remontant depuis `depart` (paquet de mise à jour). */
+export function lireFichierVersion(depart: string, niveaux = 8): { version: string; commit: string | null } | null {
+  let dossier = resolve(depart);
+  for (let i = 0; i < niveaux; i++) {
+    const brut = lire(join(dossier, 'VERSION.json'));
+    if (brut) {
+      try {
+        const v = JSON.parse(brut.replace(/^﻿/, '')) as { version?: unknown; commit?: unknown };
+        if (typeof v.version === 'string' && /^\d{4}\.\d{2}\.\d{2}-\d+$/.test(v.version)) {
+          return { version: v.version, commit: typeof v.commit === 'string' ? v.commit : null };
+        }
+      } catch {
+        /* illisible : on continue avec git */
+      }
+      return null;
+    }
+    const parent = dirname(dossier);
+    if (parent === dossier) return null;
+    dossier = parent;
+  }
+  return null;
+}
+
 /** Calcule la version (sans cache) — exposée pour les tests. */
 export function calculerVersion(
   depart: string,
@@ -94,9 +119,11 @@ export function calculerVersion(
   const racine = trouverRacineDepot(depart);
   const commit = racine ? lireCommit(racine) : null;
   const forcee = env.POS_VERSION?.trim();
+  const fichier = lireFichierVersion(depart);
+  const commitFichier = fichier?.commit && RE_COMMIT.test(fichier.commit) ? fichier.commit : null;
   return {
-    version_code: forcee || (commit ? commit.slice(0, 7) : null),
-    commit_git: commit,
+    version_code: forcee || fichier?.version || (commit ? commit.slice(0, 7) : null),
+    commit_git: commit ?? commitFichier,
   };
 }
 

@@ -24,7 +24,12 @@ export type EvenementWs =
   // DESIGN_V2 : le bandeau d'équipe et l'écran d'inventaire suivent le service
   // en cours, quel que soit le poste qui a saisi (§ 6.7, § 6.9).
   | 'pointage'
-  | 'inventaire';
+  | 'inventaire'
+  // Mise à jour à distance (contrat § 5) : bandeau à rafraîchir, coupure qui
+  // commence, nouvelle version en service (recharger la caisse au repos).
+  | 'maj'
+  | 'maj_debut'
+  | 'maj_terminee';
 
 /**
  * Présence des serveurs (point 1b) : un serveur est « présent » s'il a une
