@@ -373,7 +373,14 @@ async function publier(o) {
       if (base === 'pos_samer') throw new Refus('Jamais la base pos_samer pour les tests.');
       lancerNode(`tests serveur (base ${base})`, [path.join(arbre, 'node_modules', 'vitest', 'vitest.mjs'), 'run'], {
         cwd: path.join(arbre, 'apps', 'server'),
-        env: { POS_TEST_DB: base },
+        // Explicites : le dossier extrait n'a pas de .env (exclu du paquet), et
+        // sans utilisateur le pilote pg prend le compte Windows comme rôle.
+        env: {
+          POS_TEST_DB: base,
+          PGUSER: 'postgres',
+          DATABASE_URL: `postgres://postgres@localhost:5432/${base}`,
+          ADMIN_DATABASE_URL: 'postgres://postgres@localhost:5432/postgres',
+        },
       });
     }
     lancerNode('build de la caisse', [path.join(arbre, 'node_modules', 'vite', 'bin', 'vite.js'), 'build'], { cwd: path.join(arbre, 'apps', 'caisse') });

@@ -1,6 +1,7 @@
 # Plan — mise à jour à distance des postes (sans clé USB)
 
-**Statut : plan validé par le propriétaire (23/10/2026). Lot L0 livré (voir § 6 bis).**
+**Statut : plan validé par le propriétaire (23/10/2026). Lot L0 livré (voir § 6 bis).
+Lots L1-L2 et L5 côté siège livrés, NON déployés (voir § 6 ter).**
 
 Décisions déjà prises : mise à jour automatique des 8 sites ; téléchargement pendant
 le service ; installation à une heure creuse **réglable par restaurant** (06h00 pour
@@ -159,6 +160,100 @@ Test de raccordement côté serveur : `apps/server/test/maj-fondations.test.ts` 
 - L4 : numéro du lanceur (`lanceur_min`), clés publiques réelles dans `main.js` (à générer par le
   propriétaire avec `generer-cle.mjs`), opérations disque réelles des étapes, appel de
   `deciderReprise` puis `deciderCreneau` au démarrage, `choisirSauvegardesASupprimer`.
+
+## 6 ter. Lots L1-L2 — livrés (23/10/2026), rien d'appliqué dans le cloud
+
+Contrat suivi : `docs/MAJ_CONTRAT.md` (non modifié).
+
+### L1 — cloud
+
+- **Migration** `supabase/migrations/20261023000000_maj_postes.sql` (rejouable, testée sur
+  une base vierge avec toutes les migrations cloud) : `maj_versions` (BROUILLON → PILOTE →
+  GENERALE, ou RETIREE ; manifeste et signature recopiés au caractère près),
+  `maj_dependances` (paquets DEPENDANCES par empreinte du lock — 4ᵉ table, une version APP
+  n'en est qu'un renvoi), `maj_reglages_site` (pré-remplie par `sites_autorises.code` :
+  FERME_LA_NUIT pour AL_KAYAN_KMS, SAMER_LAVAGE, SAMER_OASIS ; H24 à 06:00 pour les cinq
+  autres ; anneau PILOTE pour SAMER_ANGRE_7E ; `ON CONFLICT DO NOTHING`, un réglage changé
+  au siège n'est jamais écrasé), `maj_rapports`, colonnes `maj_*` de `sites_sante`,
+  `siege_sante_sites()` recréée avec ces colonnes, `siege_utilisateurs.proprietaire`,
+  bucket PRIVÉ `paquets-pos` (50 Mo par objet) créé par `storage.buckets`.
+- **Fonction `maj`** (clé de site) : `consulter` / `rapporter` du contrat § 2. Cible =
+  épinglée si servable, sinon plus haute PILOTE|GENERALE (anneau pilote) ou GENERALE ;
+  jamais un brouillon ni une retirée ; une épingle sur une version retirée est ignorée.
+  URL signées d'1 h. Tables absentes → défauts + `migration_absente: true`.
+- **`sync-pull`** : bloc `sante.maj` lu par `lireBlocMaj` et écrit APRÈS le battement, à
+  part — sans la migration, seul ce bloc est perdu.
+- **Fonction `siege`** (`siege/maj.ts`) : `maj_preparer_envoi`, `maj_enregistrer` (relit
+  manifeste et signature DANS LE STOCKAGE, vérifie Ed25519 par WebCrypto avec le secret
+  `MAJ_CLE_PUBLIQUE`, contrôle numéro ↔ version et présence/taille des morceaux),
+  `maj_promouvoir` (48 h de pilote, sinon confirmation `forcer`), `maj_retirer` (motif
+  obligatoire) — **propriétaire seulement** ; `maj_reglages_site` (ADMIN, jeton neuf par
+  « installer maintenant » / « réessayer ») ; `maj_historique` (LECTURE). Tout est tracé
+  dans `siege_audit` (`MAJ_*`). Rétention : après chaque promotion, les morceaux sortis
+  des 3 dernières versions et cibles de personne sont effacés du bucket.
+- **Propriétaire** : drapeau `siege_utilisateurs.proprietaire` + `exigeProprietaire`
+  (= ADMIN ET drapeau). `verifierSiege` lit la ligne par `select('*')` pour que la console
+  reste ouverte tant que la colonne n'existe pas.
+- Logique pure et tests (Node) : `_shared/maj-cible.ts`, `maj-signature.ts`,
+  `maj-siege.ts`, `sante-sites.ts` — la vérification WebCrypto est testée contre des
+  signatures produites par le lot L0.
+
+### L5 côté siège
+
+Santé des sites : colonnes « Version installée / cible » et « Mise à jour » (état, « en
+retard » après 24 h de disponibilité de la cible hors pause, sentinelle Grenam). Écran
+« Mises à jour » : versions, envoyer au pilote / à tous, retirer (propriétaire), réglages
+par restaurant (ADMIN), comptes rendus.
+
+### L2 — outil de publication `scripts/maj/publier.mjs`
+
+`node scripts/maj/publier.mjs --aide`. Étapes et refus décrits en tête du script ;
+bibliothèques testées dans `scripts/maj/lib/` (`node --test "scripts/maj/test/*.test.mjs"`).
+Sur ce poste (pas de pnpm) : mode par défaut = `node_modules` du dépôt relié par jonction
+au dossier temporaire, après contrôle que son `.pnpm/lock.yaml` est identique au
+`pnpm-lock.yaml` du commit ; `--pnpm <chemin vers pnpm.cjs>` pour une installation neuve.
+
+- **Paquet APP** : arbre du commit (`git archive`) + `apps/caisse/dist` construit + les
+  `node_modules` LOCAUX des apps et paquets (`@pos/*` rematérialisés depuis `packages/` du
+  commit, plus les rares dépendances propres à une app comme `idb` d'`apps/serveur`).
+  Écart assumé au § 2 (« exclus : node_modules ») : sur les sites ces copies sont de vrais
+  fichiers et doivent suivre le code (incident du 22/10). Exclus : `.env*`, `.git`,
+  `node_modules` racine, `data/`, `runtime/`, `apps/siege`, `supabase/`, `docs/`,
+  `.claude/`, `publications/`, caches `.vite`, `apps/desktop/release`,
+  `apps/caisse/dist.avant-optimisation`. Aucun binaire (`.exe`, `.dll`…) accepté.
+- **Paquet DEPENDANCES** : construit seulement si l'empreinte SHA-256 du `pnpm-lock.yaml`
+  n'est pas déjà publiée (cloud) ou forcé par `--dependances`. Contenu : le `node_modules`
+  RACINE vérifié contre le lock, chemins `node_modules/…` (extrait dans
+  `maj/pret/deps-<e>/`, il donne `deps-<e>/node_modules` du contrat § 4), SANS `electron`,
+  `electron-builder`, `app-builder-*`, `7zip-bin`, `@electron`, `dmg-builder`,
+  `builder-util*`, `.bin`, caches (≈ 400 Mo au lieu de 900) : `PosSamer.exe` embarque déjà
+  Electron. Pas de liens (nodeLinker hoisted). Contrôle anti-Grenam et Defender dessus.
+  `node_modules/.empreinte-deps` n'est PAS dans l'archive : c'est au site (L3/L4) de
+  l'écrire après installation.
+- Numéro `AAAAMMJJnn` (rang du jour ≤ 99), version `AAAA.MM.JJ-n`.
+- Migrations : journal ↔ fichiers, `when` strictement croissants, tag = index, migrations
+  déjà livrées (commit `--depuis`) intactes, nouvelles après la dernière livrée ; `DROP`
+  (hors contrainte/index/déclencheur/fonction/politique/défaut/NOT NULL) et `RENAME`
+  refusés sans `--migrations-destructives`.
+- `apps/desktop` modifié depuis la version des sites (hors `maj/test/`) : refus sans
+  `--desktop-modifie` (phase 3 pas encore là).
+- Vérifié de bout en bout en simulation sur ce poste avec une clé JETABLE : paquet signé,
+  relu par `ouvrirManifesteSigne` + `verifierMorceaux` + `extraireArchive` du lot L0.
+
+### À faire dans le cloud (dans cet ordre, rien n'est fait)
+
+1. Appliquer la migration `20261023000000_maj_postes.sql`. Vérifier le bucket privé
+   `paquets-pos` ; s'il manque, le créer privé (limite 50 Mo). Vérifier que la limite
+   globale de taille de fichier du projet (Storage → Settings) est ≥ 50 Mo.
+2. `UPDATE siege_utilisateurs SET proprietaire = true, niveau = 'ADMIN' WHERE user_id =
+   (SELECT id FROM auth.users WHERE email = '<adresse du propriétaire>');`
+3. Le propriétaire génère SA paire (`node scripts/maj/generer-cle.mjs --sortie <clé USB
+   signature>`), puis secret de la fonction `siege` : `MAJ_CLE_PUBLIQUE` = forme courte
+   imprimée (et plus tard `MAJ_CLE_PUBLIQUE_SUIVANTE` pour une rotation). La même clé
+   publique part dans le lanceur (L4).
+4. Déployer les fonctions `maj` (nouvelle, `verify_jwt = false` dans `config.toml`),
+   `sync-pull`, `siege`.
+5. Publier la console siège (Vercel).
 
 ## 7. Réponses du propriétaire (23/10/2026)
 
