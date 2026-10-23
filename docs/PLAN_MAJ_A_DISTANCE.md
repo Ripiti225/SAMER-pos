@@ -1,6 +1,6 @@
 # Plan — mise à jour à distance des postes (sans clé USB)
 
-**Statut : plan à valider par le propriétaire (21/10/2026). Rien n'est codé.**
+**Statut : plan validé par le propriétaire (23/10/2026). Lot L0 livré (voir § 6 bis).**
 
 Décisions déjà prises : mise à jour automatique des 8 sites ; téléchargement pendant
 le service ; installation à une heure creuse **réglable par restaurant** (06h00 pour
@@ -124,6 +124,41 @@ ne prépare que la plus haute) ; horloge du PC fausse (remontée au siège).
 | L7 | Dernière clé USB, site par site (7E d'abord) |
 | L8 | Pilote Angré 7E : une version sans changement, puis une petite migration, puis les 7 autres |
 | L9 | Phase 3 : mise à jour automatique de `PosSamer.exe` avec garde |
+
+## 6 bis. Lot L0 — livré (23/10/2026)
+
+**Emplacement** : `apps/desktop/maj/*.cjs` (CommonJS pur, aucune dépendance, `node:crypto`
+et `zlib` natifs), types dans `apps/desktop/maj/index.d.cts`.
+- Le **lanceur** les embarque dans l'asar (`"maj/*.cjs"` dans `build.files`, vérifié sur un
+  build `--dir`) et fera `require('./maj/index.cjs')` en L4. C'est sa copie, avec sa clé
+  publique, qui fait foi.
+- Le **serveur** les importe via `apps/server/src/modules/maj/fondations.ts`
+  (`export * from '../../../../desktop/maj/index.cjs'`), vérifié avec tsc, tsx et vitest.
+  Sur site, le chemin relatif reste valable : `apps/desktop` fait partie de l'arbre livré.
+
+| Module | Contenu |
+|---|---|
+| `manifeste.cjs` | format `manifeste.json` (types APP et DEPENDANCES), validation stricte écrite à la main, `problemeChemin` (absolu, `..`, `\`, lecteur, `:`, noms réservés Windows, doublons de casse), `ouvrirManifesteSigne` (signature vérifiée AVANT tout parsing), `problemesCompatibilite` |
+| `signature.cjs` | Ed25519 sur les octets exacts ; trousseau `{ actuelle, suivante }` pour la rotation ; clé publique en PEM ou en forme courte (32 octets en base64) |
+| `archive.cjs` | tar ustar + gzip maison, morceaux de 40 Mo (paramétrable) avec SHA-256, `verifierMorceaux` (pour la reprise), `extraireArchive` (liens, types spéciaux, `..`, absolus refusés ; chaque fichier comparé au manifeste ; dossier supprimé en cas d'échec), `verifierArbre` (revérification avant installation) |
+| `creneau.cjs` | `deciderCreneau` : règles du 21 et du 23/10 (ferme la nuit / 24h/24, filet de 05h00, report unique de 30 min avec rappel, rattrapage de 2 h, poste éteint) |
+| `installation.cjs` | étapes, journal `installation.json` atomique, `deciderReprise` (2 tentatives par version), exécuteur générique `executerInstallation` / `executerRetour` à opérations injectées |
+| `retention.cjs` | sauvegardes : 7 jours, toujours les 2 dernières |
+| `version.cjs` | `VERSION.json` (repli `dev` = numéro 0), `AAAA.MM.JJ-n`, `deciderMontee` (jamais de numéro inférieur) |
+| `scripts/maj/generer-cle.mjs` | paire Ed25519, clé privée PKCS#8 chiffrée par phrase de passe, refuse d'écrire dans le dépôt |
+
+**Tests** (114, sans base de données, clés jetables) :
+`node --test "apps/desktop/maj/test/*.test.cjs"` depuis la racine, ou `pnpm --filter @pos/desktop test`.
+Ils passent aussi sous le runtime Electron (`ELECTRON_RUN_AS_NODE=1 electron --test …`).
+Test de raccordement côté serveur : `apps/server/test/maj-fondations.test.ts` (vitest).
+
+**Reste pour la suite** :
+- L1 : tables, bucket, fonction `maj` (le manifeste et la signature sont publiés tels quels) ;
+- L2 : `scripts/maj/publier.mjs` = liste des fichiers + `ecrireArchive` + `serialiserManifeste` + `signer` ;
+- L3 : téléchargement, `verifierMorceaux` pour la reprise, `ouvrirManifesteSigne` + `extraireArchive` vers `maj/pret/<numero>/` ;
+- L4 : numéro du lanceur (`lanceur_min`), clés publiques réelles dans `main.js` (à générer par le
+  propriétaire avec `generer-cle.mjs`), opérations disque réelles des étapes, appel de
+  `deciderReprise` puis `deciderCreneau` au démarrage, `choisirSauvegardesASupprimer`.
 
 ## 7. Réponses du propriétaire (23/10/2026)
 
