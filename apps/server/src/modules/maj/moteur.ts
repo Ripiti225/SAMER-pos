@@ -668,7 +668,12 @@ export class MoteurMaj {
       numero_prete: s.pret && d ? s.pret.numero : null,
       installation_prevue: d?.echeance?.toISOString() ?? null,
       report_jusqua: etat === 'REPORTEE' ? (d?.echeance?.toISOString() ?? null) : null,
-      derniere_erreur: this.derniereErreur ?? (journal && !('illisible' in journal) && journal.etat !== 'INSTALLEE' ? (journal.erreur?.message ?? null) : null),
+      // Sinon, l'échec d'installation d'une version toujours pas en place.
+      derniere_erreur:
+        this.derniereErreur ??
+        (journal && !('illisible' in journal) && journal.etat !== 'INSTALLEE' && journal.numero > this.d.versionInstallee.numero
+          ? (journal.erreur?.message ?? null)
+          : null),
       espace_libre_mo: libre === null ? null : Math.round(libre / MO),
       taille_pgdata_mo: pg === null ? null : Math.round(pg / MO),
       integrite: { suspects_grenam: this.suspectsGrenam },
