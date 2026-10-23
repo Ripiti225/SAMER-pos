@@ -125,7 +125,18 @@ ne prépare que la plus haute) ; horloge du PC fausse (remontée au siège).
 | L8 | Pilote Angré 7E : une version sans changement, puis une petite migration, puis les 7 autres |
 | L9 | Phase 3 : mise à jour automatique de `PosSamer.exe` avec garde |
 
-## 7. Questions pour le propriétaire
+## 7. Réponses du propriétaire (23/10/2026)
+
+1. « Pas maintenant » : **un seul report**, de 30 min ; à la fin, rappel à l'écran puis
+   installation. (PIN gérant pour reporter.)
+2. Supabase : **forfait payant**.
+3. Clé de signature : **le propriétaire seul**.
+4. `PosSamer.exe` : **mis à jour à distance aussi** (phase 3, avec garde).
+5. Règle « ajouter d'abord, supprimer une version plus tard » pour les migrations : **oui**.
+6. Pilote **48 h sur Angré 7E** ; **publication réservée au propriétaire**.
+7. Sauvegardes de base avant mise à jour : **gardées 7 jours, au moins les 2 dernières**.
+
+## 7 bis. Questions initiales
 
 1. « Pas maintenant » : 3 reports par jour au maximum, puis report au lendemain
    (signalé au siège) ? Avec PIN gérant ?
