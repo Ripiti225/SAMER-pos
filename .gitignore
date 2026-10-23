@@ -29,3 +29,7 @@ apps/desktop/release/
 
 # Espace de travail des exécutions de plan (superpowers) — jamais versionné.
 .superpowers/
+
+# Traces locales de l'outil de publication des mises à jour
+# (scripts/maj/publier.mjs) : paquets signés, journaux. Jamais versionnées.
+publications/

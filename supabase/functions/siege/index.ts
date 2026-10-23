@@ -29,6 +29,7 @@ import {
   type StatutDecisionInventaire,
 } from '../_shared/siege-inventaire.ts';
 import { lireModificationArticle } from '../_shared/siege-menu.ts';
+import { actionMaj, ciblesParSite } from './maj.ts';
 import { lireLiaisonRecette, lireProduitInventaire, uuidValide } from '../_shared/siege-recettes.ts';
 import {
   lireMois,
@@ -285,9 +286,12 @@ Deno.serve(async (req) => {
       // -- `maintenant` est l'heure du CLOUD : la console calcule les âges
       // -- contre elle, pas contre l'horloge du PC de la personne connectée.
       case 'sante_sites': {
-        const [restos, sante] = await Promise.all([
+        const [restos, sante, maj] = await Promise.all([
           restaurantsGroupe(admin),
           admin.rpc('siege_sante_sites'),
+          // Mise à jour à distance : la version que chaque site DEVRAIT avoir.
+          // `null` tant que la migration 20261023000000 n'est pas passée.
+          ciblesParSite(admin).catch(() => null),
         ]);
         // Migration pas encore passée : la liste s'affiche quand même, sans
         // données de santé, et la console dit pourquoi.
@@ -296,10 +300,25 @@ Deno.serve(async (req) => {
         return jsonCors({
           maintenant: new Date().toISOString(),
           migration_absente: !!sante.error,
-          sites: restos.map((r) => ({
-            ...r,
-            sante: r.restaurant_id ? parId.get(r.restaurant_id) ?? null : null,
-          })),
+          maj_absente: maj === null,
+          sites: restos.map((r) => {
+            const m = r.restaurant_id ? maj?.get(r.restaurant_id) : undefined;
+            return {
+              ...r,
+              sante: r.restaurant_id ? parId.get(r.restaurant_id) ?? null : null,
+              maj: m
+                ? {
+                    cible: m.cible
+                      ? { numero: m.cible.numero, version: m.cible.version, disponible_le: m.cible.disponible_le, raison: m.cible.raison }
+                      : null,
+                    type_site: m.reglages.type_site,
+                    heure_installation: m.reglages.heure_installation,
+                    anneau: m.reglages.anneau,
+                    pause: m.reglages.pause,
+                  }
+                : null,
+            };
+          }),
         });
       }
 
@@ -1464,8 +1483,13 @@ Deno.serve(async (req) => {
         return jsonCors({ tirages: data ?? [] });
       }
 
-      default:
-        return jsonCors({ erreur: `Action inconnue : ${action}` }, 400);
+      default: {
+        // Mise à jour à distance des postes : actions `maj_*` (siege/maj.ts).
+        const reponse = action.startsWith('maj_')
+          ? await actionMaj(admin, siege, action, corps, (a, d) => tracer(admin, siege, a, d))
+          : null;
+        return reponse ?? jsonCors({ erreur: `Action inconnue : ${action}` }, 400);
+      }
     }
   } catch (e) {
     if (e instanceof ErreurAuth) return jsonCors({ erreur: e.message }, 403);

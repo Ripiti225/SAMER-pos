@@ -14,11 +14,12 @@ import { RecettesInventaire } from './screens/RecettesInventaire';
 import { Categories } from './screens/Categories';
 import { Menu } from './screens/Menu';
 import { Parametres } from './screens/Parametres';
+import { MisesAJour } from './screens/MisesAJour';
 import { SanteSites } from './screens/SanteSites';
 import { Sequences } from './screens/Sequences';
 import { TableauBord } from './screens/TableauBord';
 
-type Ecran = 'tableau-bord' | 'clotures' | 'clients-mois' | 'inventaire' | 'recettes-inventaire' | 'sequences' | 'sante-sites' | 'menu' | 'categories' | 'equipe' | 'parametres';
+type Ecran = 'tableau-bord' | 'clotures' | 'clients-mois' | 'inventaire' | 'recettes-inventaire' | 'sequences' | 'sante-sites' | 'mises-a-jour' | 'menu' | 'categories' | 'equipe' | 'parametres';
 
 const SECTIONS: { cle: Ecran; libelle: string }[] = [
   { cle: 'tableau-bord', libelle: 'Tableau de bord' },
@@ -28,6 +29,7 @@ const SECTIONS: { cle: Ecran; libelle: string }[] = [
   { cle: 'recettes-inventaire', libelle: 'Recettes d’inventaire' },
   { cle: 'sequences', libelle: 'Séquences' },
   { cle: 'sante-sites', libelle: 'Santé des sites' },
+  { cle: 'mises-a-jour', libelle: 'Mises à jour' },
   { cle: 'menu', libelle: 'Menu' },
   { cle: 'categories', libelle: 'Catégories' },
   { cle: 'equipe', libelle: 'Équipe' },
@@ -163,7 +165,7 @@ export function App() {
           <div className="min-w-0">
             <div className="truncate text-[16px] font-semibold tracking-tight sm:text-[17px]">Console du siège</div>
             <div className="truncate text-[12px] font-medium text-ard-txt-doux sm:text-[12.5px]">
-              {siege.nomComplet} · {siege.niveau === 'ADMIN' ? 'Administrateur' : 'Lecture seule'}
+              {siege.nomComplet} · {siege.proprietaire ? 'Propriétaire' : siege.niveau === 'ADMIN' ? 'Administrateur' : 'Lecture seule'}
             </div>
           </div>
         </div>
@@ -245,6 +247,7 @@ export function App() {
           {ecran === 'recettes-inventaire' && <RecettesInventaire siege={siege} filtre={filtreResto} />}
           {ecran === 'sequences' && <Sequences filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'sante-sites' && <SanteSites filtre={filtreResto} onFiltre={setFiltreResto} />}
+          {ecran === 'mises-a-jour' && <MisesAJour siege={siege} filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'menu' && <Menu filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'categories' && <Categories filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'equipe' && <Equipe filtre={filtreResto} onFiltre={setFiltreResto} />}

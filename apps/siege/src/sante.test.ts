@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { evaluerSite, ilYa, trierParUrgence, versionMajoritaire, type SanteBrute } from './sante';
+import { evaluerMaj, evaluerSite, ilYa, trierParUrgence, versionDeNumero, versionMajoritaire, type MajSite, type SanteBrute } from './sante';
 
 const MAINTENANT = new Date('2026-10-21T12:00:00Z');
 const avant = (minutes: number) => new Date(MAINTENANT.getTime() - minutes * 60_000).toISOString();
@@ -133,5 +133,68 @@ describe('détails', () => {
     expect(ilYa(5 * 60_000)).toBe('il y a 5 min');
     expect(ilYa(3 * 3_600_000)).toBe('il y a 3 h');
     expect(ilYa(72 * 3_600_000)).toBe('il y a 3 j');
+  });
+});
+
+describe('mise à jour à distance', () => {
+  const cible = (numero: number, dispoMinutes: number): MajSite => ({
+    cible: { numero, version: versionDeNumero(numero)!, disponible_le: avant(dispoMinutes), raison: 'GENERALE' },
+    type_site: 'H24',
+    heure_installation: '06:00',
+    anneau: 'GENERAL',
+    pause: false,
+  });
+  const maj = (s: Partial<SanteBrute>, m: MajSite | null, enrole = true) => evaluerMaj({ enrole, sante: sante(s), maj: m }, MAINTENANT);
+
+  it('écrit le numéro comme une version', () => {
+    expect(versionDeNumero(2026102401)).toBe('2026.10.24-1');
+    expect(versionDeNumero(2026102412)).toBe('2026.10.24-12');
+    expect(versionDeNumero(null)).toBeNull();
+    expect(versionDeNumero(7)).toBe('7');
+  });
+
+  it('à jour : la cible est installée', () => {
+    const r = maj({ maj_etat: 'A_JOUR', maj_numero_installe: 2026102401 }, cible(2026102401, 60));
+    expect(r.etat).toBe('À jour');
+    expect(r.ton).toBe('ok');
+    expect(r.en_retard).toBe(false);
+  });
+
+  it('en retard au-delà de 24 h de disponibilité', () => {
+    const r = maj({ maj_etat: 'TELECHARGEMENT', maj_numero_installe: 2026102301 }, cible(2026102401, 25 * 60));
+    expect(r.en_retard).toBe(true);
+    expect(r.ton).toBe('alerte');
+    expect(maj({ maj_etat: 'PRETE', maj_numero_installe: 2026102301 }, cible(2026102401, 23 * 60)).en_retard).toBe(false);
+  });
+
+  it('pas en retard quand le site est en pause', () => {
+    const m = { ...cible(2026102401, 48 * 60), pause: true };
+    const r = maj({ maj_numero_installe: 2026102301, maj_etat: 'A_JOUR' }, m);
+    expect(r.en_retard).toBe(false);
+    expect(r.detail).toContain('pause');
+  });
+
+  it('prête : dit l’heure prévue ; échec : dit la cause', () => {
+    expect(maj({ maj_etat: 'PRETE', maj_numero_installe: 1, maj_installation_prevue: '2026-10-22T06:00:00Z' }, cible(2, 60)).detail)
+      .toBe('installation prévue à 06h00');
+    const e = maj({ maj_etat: 'ECHEC', maj_numero_installe: 1, maj_derniere_erreur: 'Migration 0044 en échec' }, cible(2, 60));
+    expect(e.ton).toBe('alerte');
+    expect(e.detail).toBe('Migration 0044 en échec');
+  });
+
+  it('POS sans bloc maj : état inconnu, pas d’alerte', () => {
+    const r = maj({}, cible(2026102401, 60));
+    expect(r.etat).toBe('Inconnu');
+    expect(r.ton).toBe('neutre');
+  });
+
+  it('sentinelle Grenam : alerte, quel que soit l’état', () => {
+    const r = maj({ maj_etat: 'A_JOUR', maj_numero_installe: 2, maj_suspects_grenam: 3 }, cible(2, 60));
+    expect(r.ton).toBe('alerte');
+    expect(r.detail).toContain('Grenam');
+  });
+
+  it('non enrôlé : rien', () => {
+    expect(maj({}, null, false).etat).toBe('—');
   });
 });

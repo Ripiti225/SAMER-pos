@@ -57,6 +57,12 @@ export interface Siege {
   userId: string;
   nomComplet: string;
   niveau: 'ADMIN' | 'LECTURE';
+  /**
+   * Le propriétaire du groupe : seul à publier, promouvoir et retirer une
+   * version de mise à jour des postes (décision du 23/10/2026). Drapeau à part
+   * du niveau, voir la migration 20261023000000_maj_postes.
+   */
+  proprietaire: boolean;
 }
 
 /**
@@ -78,7 +84,10 @@ export async function verifierSiege(admin: SupabaseClient, req: Request): Promis
 
   const { data, error: e2 } = await admin
     .from('siege_utilisateurs')
-    .select('user_id, nom_complet, niveau, actif')
+    // '*' et non une liste : la colonne `proprietaire` n'existe qu'après la
+    // migration 20261023000000. Nommée ici, son absence fermerait la console
+    // entière à tout le monde ; lue par '*', elle vaut simplement « non ».
+    .select('*')
     .eq('user_id', auth.user.id)
     .maybeSingle();
   if (e2) throw new ErreurAuth('Vérification impossible');
@@ -88,6 +97,7 @@ export async function verifierSiege(admin: SupabaseClient, req: Request): Promis
     userId: data.user_id as string,
     nomComplet: data.nom_complet as string,
     niveau: data.niveau as 'ADMIN' | 'LECTURE',
+    proprietaire: data.proprietaire === true,
   };
 }
 
@@ -95,6 +105,18 @@ export async function verifierSiege(admin: SupabaseClient, req: Request): Promis
 export function exigeAdmin(siege: Siege): void {
   if (siege.niveau !== 'ADMIN') {
     throw new ErreurAuth('Votre compte est en lecture seule');
+  }
+}
+
+/**
+ * Réservé au propriétaire : publier, promouvoir, retirer une version des
+ * postes. Il doit AUSSI être ADMIN — un compte repassé en lecture seule perd ce
+ * droit sans qu'il faille penser à retirer le drapeau.
+ */
+export function exigeProprietaire(siege: Siege): void {
+  exigeAdmin(siege);
+  if (!siege.proprietaire) {
+    throw new ErreurAuth('Action réservée au propriétaire');
   }
 }
 

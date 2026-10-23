@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lireBattement } from './sante-sites.ts';
+import { lireBattement, lireBlocMaj } from './sante-sites.ts';
 
 describe('battement de cœur d’un site', () => {
   test('absent ou mal formé : null, la descente continue', () => {
@@ -43,5 +43,50 @@ describe('battement de cœur d’un site', () => {
     assert.equal(b.derniere_descente, null);
     assert.equal(b.derniere_erreur?.length, 500);
     assert.equal(b.version_code, null);
+  });
+});
+
+describe('bloc « maj » du battement (contrat MAJ § 3)', () => {
+  test('absent : null, ancien POS', () => {
+    assert.equal(lireBlocMaj({ version_code: 'x' }), null);
+    assert.equal(lireBlocMaj(undefined), null);
+    assert.equal(lireBlocMaj({ maj: 'oui' }), null);
+  });
+
+  test('bloc complet', () => {
+    const b = lireBlocMaj({
+      maj: {
+        etat: 'PRETE',
+        numero_installe: 2026102301,
+        numero_prete: 2026102401,
+        installation_prevue: '2026-10-25T06:00:00Z',
+        report_jusqua: null,
+        derniere_erreur: null,
+        espace_libre_mo: 51234,
+        taille_pgdata_mo: 70,
+        integrite: { suspects_grenam: 0 },
+      },
+    });
+    assert.deepEqual(b, {
+      maj_etat: 'PRETE',
+      maj_numero_installe: 2026102301,
+      maj_numero_prete: 2026102401,
+      maj_installation_prevue: '2026-10-25T06:00:00.000Z',
+      maj_report_jusqua: null,
+      maj_derniere_erreur: null,
+      maj_espace_libre_mo: 51234,
+      maj_taille_pgdata_mo: 70,
+      maj_suspects_grenam: 0,
+    });
+  });
+
+  test('champs abîmés : NULL un par un, le reste passe', () => {
+    const b = lireBlocMaj({ maj: { etat: 'FINI', numero_installe: '12', espace_libre_mo: -5, integrite: { suspects_grenam: 2 }, derniere_erreur: 'y'.repeat(900) } });
+    assert.ok(b);
+    assert.equal(b.maj_etat, null);
+    assert.equal(b.maj_numero_installe, null);
+    assert.equal(b.maj_espace_libre_mo, null);
+    assert.equal(b.maj_suspects_grenam, 2);
+    assert.equal(b.maj_derniere_erreur?.length, 500);
   });
 });

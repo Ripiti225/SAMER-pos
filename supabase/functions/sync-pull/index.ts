@@ -3,7 +3,7 @@
 // filtrées pour ce restaurant. Ne touche JAMAIS aux ventes.
 import { clientAdmin, ErreurAuth, json, verifierCleSite } from '../_shared/auth.ts';
 import { FLUX_DESCENTE } from '../_shared/tables.ts';
-import { lireBattement } from '../_shared/sante-sites.ts';
+import { lireBattement, lireBlocMaj } from '../_shared/sante-sites.ts';
 
 interface LigneDescente {
   table_name: string;
@@ -83,6 +83,16 @@ Deno.serve(async (req) => {
       .from('sites_sante')
       .upsert({ restaurant_id: restaurantId, recu_le: new Date().toISOString(), ...battement }, { onConflict: 'restaurant_id' });
     if (error) console.error(`battement ignoré (${error.message})`);
+  }
+
+  // Bloc `sante.maj` (mise à jour à distance, contrat MAJ § 3) : écrit À PART,
+  // après le battement de base. Tant que la migration 20261023000000 n'est pas
+  // passée, les colonnes `maj_*` manquent et cette écriture-là échoue seule —
+  // les mettre dans l'upsert ci-dessus aurait fait perdre tout le battement.
+  const blocMaj = battement ? lireBlocMaj(sante) : null;
+  if (blocMaj) {
+    const { error } = await admin.from('sites_sante').update(blocMaj).eq('restaurant_id', restaurantId);
+    if (error) console.error(`état de mise à jour ignoré (${error.message})`);
   }
 
   return json(resultat);
