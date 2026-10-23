@@ -5,6 +5,7 @@ import { api } from './api';
 import { consommerEcho } from './echo-mutations';
 import { sons } from './sons';
 import { useCaisse } from './stores/session';
+import { useMaj } from './stores/maj';
 
 /** WebSocket LAN : invalide les requêtes quand le serveur pousse un changement. */
 export function connecterTempsReel(queryClient: QueryClient): () => void {
@@ -49,6 +50,10 @@ export function connecterTempsReel(queryClient: QueryClient): () => void {
         }
         if (evenementToucheStock(type)) rafraichirStock();
         if (type.startsWith('table')) void queryClient.invalidateQueries({ queryKey: ['tables'] });
+        // Mise à jour à distance : bandeau à rafraîchir, coupure, nouvelle version.
+        if (type === 'maj') void queryClient.invalidateQueries({ queryKey: ['maj-etat'] });
+        if (type === 'maj_debut') useMaj.getState().debut();
+        if (type === 'maj_terminee') useMaj.getState().terminee();
         if (type === 'catalogue') {
           void queryClient.invalidateQueries({ queryKey: ['catalogue'] });
           void queryClient.invalidateQueries({ queryKey: ['admin', 'disponibilite'] });
