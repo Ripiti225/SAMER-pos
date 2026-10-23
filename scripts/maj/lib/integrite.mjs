@@ -37,9 +37,13 @@ export function suspectsGrenam(fichiers, caches = new Set()) {
   return suspects;
 }
 
-/** Exécutables dans le paquet APP : il n'en contient aucun (sauf le lanceur en phase 3). */
+/**
+ * Binaires dans le paquet APP : il n'en contient aucun (sauf le lanceur en phase 3).
+ * Les scripts .bat/.ps1 de deploy/ et scripts/ sont du texte relu dans git, pas
+ * des binaires opaques : ils restent permis.
+ */
 export function executablesApp(chemins) {
-  return chemins.filter((c) => /\.(exe|dll|scr|com|bat|cmd|ps1|vbs)$/i.test(c) && c !== '_lanceur/PosSamer.exe');
+  return chemins.filter((c) => /\.(exe|dll|scr|com|msi|sys)$/i.test(c) && c !== '_lanceur/PosSamer.exe');
 }
 
 /**

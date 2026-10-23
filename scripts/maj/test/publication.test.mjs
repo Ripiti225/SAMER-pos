@@ -179,7 +179,7 @@ describe('anti-Grenam', () => {
   });
 
   test('aucun exécutable dans le paquet APP', () => {
-    assert.deepEqual(executablesApp(['apps/a.js', 'scripts/x.ps1', 'b.exe', '_lanceur/PosSamer.exe']), ['scripts/x.ps1', 'b.exe']);
+    assert.deepEqual(executablesApp(['apps/a.js', 'scripts/x.ps1', 'deploy/a.bat', 'b.exe', 'c.DLL', '_lanceur/PosSamer.exe']), ['b.exe', 'c.DLL']);
   });
 });
 
