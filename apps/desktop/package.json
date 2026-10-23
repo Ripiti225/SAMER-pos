@@ -24,6 +24,7 @@
       "main.js",
       "preload-bouton.js",
       "maj/*.cjs",
+      "maj/cles-publiques.json",
       "build/icon.png",
       "package.json"
     ],

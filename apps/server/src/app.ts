@@ -19,6 +19,8 @@ import { routesServeur } from './modules/serveur/routes.js';
 import { routesClient } from './modules/client/routes.js';
 import { routesSalle } from './modules/salle/routes.js';
 import { routesSante } from './modules/sante/routes.js';
+import { routesMaj } from './modules/maj/routes.js';
+import { enregistrerModeMaj } from './modules/maj/mode.js';
 import { routesFidelite } from './modules/fidelite/routes.js';
 import { routesNotes } from './modules/notes/routes.js';
 import { routesRoles } from './modules/roles/routes.js';
@@ -48,6 +50,9 @@ export async function construireApp(options: { logger?: boolean } = {}): Promise
   await app.register(cookie);
   enregistrerGestionErreurs(app);
   enregistrerSessions(app);
+  // Avant toute route : pendant une mise à jour (arrêt ou mode validation),
+  // l'API répond 503 « Mise à jour en cours » — voir modules/maj/mode.ts.
+  enregistrerModeMaj(app);
   await enregistrerWs(app);
 
   // ESC/POS si une file d'impression est configurée (Réglages), sinon console.
@@ -65,6 +70,7 @@ export async function construireApp(options: { logger?: boolean } = {}): Promise
   routesSalle(app);
   routesClient(app);
   routesSante(app);
+  routesMaj(app);
   routesFidelite(app);
   routesNotes(app);
   routesRoles(app);
