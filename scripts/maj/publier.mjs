@@ -310,7 +310,9 @@ async function publier(o) {
       }
       // Jonction : la vérification lit ce node_modules sans le recopier (≈ 900 Mo).
       fs.symlinkSync(nm, path.join(arbre, 'node_modules'), 'junction');
-      for (const f of copierDependancesLocales(RACINE_DEPOT, arbre)) dire(`  copie locale : ${f}`);
+      // Les dépendances propres aux apps viennent de la MÊME installation que
+      // ce node_modules (celle qui a été vérifiée contre le lock).
+      for (const f of copierDependancesLocales(path.dirname(nm), arbre)) dire(`  copie locale : ${f}`);
       racineDeps = path.dirname(nm);
     }
     for (const f of materialiserPaquetsInternes(arbre)) dire(`  copie ${f}`);
