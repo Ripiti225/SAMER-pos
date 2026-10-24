@@ -87,7 +87,9 @@ if (phrase.length < 12) quitter('La phrase de passe doit faire au moins 12 carac
 const { clePubliquePem, clePriveePemChiffree } = genererPaire({ phrase });
 if (!clePriveePemChiffree.includes('ENCRYPTED PRIVATE KEY')) quitter('Erreur interne : la clé privée ne serait pas chiffrée.');
 
-fs.mkdirSync(dossier, { recursive: true });
+// Racine d'une clé USB (`D:\`) : Windows refuse mkdir dessus (EPERM) même en
+// récursif, alors qu'elle existe déjà.
+if (!fs.existsSync(dossier)) fs.mkdirSync(dossier, { recursive: true });
 fs.writeFileSync(cheminPrivee, clePriveePemChiffree, { flag: 'wx', mode: 0o600 });
 const brute = clePubliqueBrute(clePubliquePem);
 const empreinte = empreinteCle(clePubliquePem);
