@@ -22,6 +22,13 @@ et les deux seuls comptes propriétaire. Tout ce qui est écrit ici est **posté
 > à `deploy/windows`. Anciens fichiers : `C:\Users\HP\Documents\POS-Samer\usb-backup-20261025-000050`,
 > manifeste `usb-copy-20261025-000050.csv`. **Après passage de cette clé sur un site, ses
 > mises à jour suivantes arrivent à distance** (cloud prêt depuis le 24/10).
+> **Testé de bout en bout le 25/10 à 00h20** : `D:POS-SamerPosSamer.exe` lancé depuis la clé (base et
+> serveur de la clé) → PostgreSQL, migrations, serveur prêt en 18 s ; `/api/sante/version` =
+> 2026.10.24-1 ; nouvelle caisse servie ; `/api/maj/etat` actif, À JOUR (clé publique reconnue) ;
+> arrêt propre ; base toujours neutre (0 commande, 0 service, 0 session). ⚠️ Lancé depuis VS Code,
+> l'exe se ferme aussitôt : VS Code transmet `ELECTRON_RUN_AS_NODE=1` — le retirer avant tout test.
+> La base de la clé porte 15 lignes `sync_outbox` (audit_log du 17 au 29/08) jamais envoyées,
+> présentes à chaque installation depuis : elles partiront au premier enrôlement.
 >
 > **Report du 2026-10-22** : `main` à `5dc4502` — nom du client fidélité et solde sur
 > le reçu, annulation d'un paiement (PIN administrateur = PROPRIÉTAIRE, contre-passation),
