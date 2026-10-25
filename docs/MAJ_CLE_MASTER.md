@@ -5,6 +5,24 @@
 La clé a été copiée le **2026-08-17 à 05h01:32**, avec l'identité neutre `A_CONFIGURER`
 et les deux seuls comptes propriétaire. Tout ce qui est écrit ici est **postérieur**.
 
+> **Report du 2026-10-25 — DERNIÈRE CLÉ (lot L7, mise à jour à distance)** : `main` à
+> `d08ca34`. **89 fichiers** (63 ajoutés) copiés, **89/89 vérifiés par SHA-256**, copies
+> `@pos/*` comprises. Caisse recompilée (`index-CE8JGpAD.js`, bandeau « Mise à jour »).
+> **Nouveau `PosSamer.exe`** (74 349 977 octets, lanceur n° 1) repackagé avec la clé
+> publique du propriétaire embarquée dans l'asar (`maj/cles-publiques.json`, empreinte
+> **`dea8976c7e3b9fe8`**) ; l'ancien (20/09) est gardé dans le dossier de sauvegarde.
+> `app/VERSION.json` = version de base **2026.10.24-1** (n° `2026102401`, commit
+> `d08ca34`) : la première publication à distance devra avoir un numéro supérieur et
+> `--depuis d08ca34`. Dossier `maj/` créé à la racine. **`node_modules/.empreinte-deps`
+> volontairement NON écrit** : le `node_modules/.pnpm/lock.yaml` de la clé (`54076c95…`)
+> diffère du `pnpm-lock.yaml` (`8827eaf2…`) — affirmer l'empreinte serait faux ; chaque
+> site téléchargera donc une fois le paquet DEPENDANCES (~67 Mo) à la première mise à
+> jour. Aucune migration nouvelle (dernière : 0043), base de la clé inchangée. Contrôle :
+> le serveur de la clé charge `app.ts` et les fondations MAJ ; scripts racine identiques
+> à `deploy/windows`. Anciens fichiers : `C:\Users\HP\Documents\POS-Samer\usb-backup-20261025-000050`,
+> manifeste `usb-copy-20261025-000050.csv`. **Après passage de cette clé sur un site, ses
+> mises à jour suivantes arrivent à distance** (cloud prêt depuis le 24/10).
+>
 > **Report du 2026-10-22** : `main` à `5dc4502` — nom du client fidélité et solde sur
 > le reçu, annulation d'un paiement (PIN administrateur = PROPRIÉTAIRE, contre-passation),
 > battement de cœur vers le siège (santé des sites, version), stock en cuisine sous la
