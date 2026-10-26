@@ -10,7 +10,7 @@
  * contrairement à SamerTrackly qui déduit.
  */
 import type { FastifyInstance } from 'fastify';
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db/client.js';
 import {
@@ -50,6 +50,18 @@ const EntreeSchema = z.object({
   produit_id: z.string().uuid('Produit invalide'),
   quantite: Quantite.positive('La quantité reçue doit être supérieure à zéro'),
   fournisseur: z.string().trim().max(120).optional(),
+});
+
+/**
+ * Bon de réception (2026-10-26) : un fournisseur livre souvent plusieurs
+ * produits. Le fournisseur est saisi UNE fois, les produits suivent.
+ */
+const ReceptionSchema = z.object({
+  fournisseur: z.string().trim().max(120).optional(),
+  lignes: z
+    .array(EntreeSchema.omit({ fournisseur: true }))
+    .min(1, 'Ajoutez au moins un produit')
+    .max(60, 'Trop de produits sur un même bon'),
 });
 
 /** Réglages › Stock en cuisine : automatique, un produit précis, ou rien. */
@@ -216,6 +228,46 @@ export function routesInventaire(app: FastifyInstance): void {
       app.diffuser('inventaire', service.id);
       return { ...entree!, quantite: Number(entree!.quantite) };
     });
+  });
+
+  /**
+   * Bon de réception : plusieurs produits d'un même fournisseur, en UNE
+   * transaction — tout le bon passe, ou rien (pas de bon à moitié saisi).
+   */
+  app.post('/api/inventaire/entrees/reception', { preHandler: garde }, async (req) => {
+    const corps = valider(ReceptionSchema, req.body);
+    const service = await serviceOuvertCourant(db);
+
+    const entrees = await db.transaction(async (tx) => {
+      const etat = await etatInventaire(tx, service.id);
+      if (etat.inventaire.valide) {
+        throw new ErreurMetier('Cet inventaire est validé : il n’est plus modifiable', 409);
+      }
+      const ids = [...new Set(corps.lignes.map((l) => l.produit_id))];
+      const connus = await tx
+        .select({ id: produitsInventaire.id })
+        .from(produitsInventaire)
+        .where(inArray(produitsInventaire.id, ids));
+      if (connus.length !== ids.length) throw introuvable('Produit');
+
+      const lignes = await tx
+        .insert(entreesStock)
+        .values(corps.lignes.map((l) => ({
+          inventaire_id: etat.inventaire.id,
+          produit_id: l.produit_id,
+          quantite: String(l.quantite),
+          fournisseur: corps.fournisseur || null,
+          saisi_par: req.session!.utilisateur_id,
+        })))
+        .returning();
+      for (const e of lignes) {
+        await ecrireOutbox(tx, 'entrees_stock', 'INSERT', e.id, e as unknown as Record<string, unknown>);
+      }
+      return lignes;
+    });
+
+    app.diffuser('inventaire', service.id);
+    return { entrees: entrees.map((e) => ({ ...e, quantite: Number(e.quantite) })) };
   });
 
   app.delete('/api/inventaire/entrees/:id', { preHandler: garde }, async (req) => {

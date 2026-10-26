@@ -128,6 +128,51 @@ describe('§ 6.9 — inventaire : sorties automatiques et formules dérivées', 
     expect(etat.bilan.a_compter).toBe(2); // p1 et f10 ; f2 n'en est pas
   });
 
+  it('enregistre un bon de réception : un fournisseur, plusieurs produits, tout ou rien', async () => {
+    const lire = async () =>
+      (await app.inject({ method: 'GET', url: '/api/inventaire', cookies })).json().entrees as Array<{
+        produit_id: string; quantite: number; fournisseur: string | null;
+      }>;
+    const avant = (await lire()).length;
+
+    const bon = await app.inject({
+      method: 'POST',
+      url: '/api/inventaire/entrees/reception',
+      cookies,
+      payload: { fournisseur: 'Boulangerie du Plateau', lignes: [
+        { produit_id: pain, quantite: 40 },
+        { produit_id: totalFromage, quantite: 500 },
+      ] },
+    });
+    expect(bon.statusCode).toBe(200);
+    const apres = await lire();
+    expect(apres.length).toBe(avant + 2);
+    expect(apres.slice(-2).every((e) => e.fournisseur === 'Boulangerie du Plateau')).toBe(true);
+
+    // Une ligne invalide : le bon entier est refusé, rien n'est enregistré.
+    const casse = await app.inject({
+      method: 'POST',
+      url: '/api/inventaire/entrees/reception',
+      cookies,
+      payload: { fournisseur: 'X', lignes: [
+        { produit_id: pain, quantite: 10 },
+        { produit_id: '00000000-0000-4000-8000-000000000000', quantite: 5 },
+      ] },
+    });
+    expect(casse.statusCode).toBe(404);
+    expect((await lire()).length).toBe(avant + 2);
+
+    const vide = await app.inject({
+      method: 'POST', url: '/api/inventaire/entrees/reception', cookies, payload: { lignes: [] },
+    });
+    expect(vide.statusCode).toBe(400);
+
+    // Les autres tests attendent les quantités d'avant : on retire ce bon.
+    for (const e of (await lire()).slice(-2) as Array<{ id?: string }>) {
+      await app.inject({ method: 'DELETE', url: `/api/inventaire/entrees/${e.id}`, cookies });
+    }
+  });
+
   /**
    * Migration 0022 — le pont est une RECETTE, pas une colonne : un produit est
    * consommé par plusieurs articles, avec une quantité qui n'est pas toujours 1

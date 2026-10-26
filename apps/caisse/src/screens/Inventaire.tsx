@@ -485,6 +485,7 @@ function OngletEntrees({
       {ajout && (
         <ModaleEntree
           lignes={vue.lignes}
+          fournisseursConnus={[...new Set(vue.entrees.map((e) => e.fournisseur).filter((f): f is string => !!f))]}
           onFermer={() => setAjout(false)}
           onEnregistre={() => {
             setAjout(false);
@@ -497,26 +498,55 @@ function OngletEntrees({
   );
 }
 
+interface LigneBon {
+  cle: number;
+  produit: string;
+  quantite: string;
+}
+
+/**
+ * Bon de réception (2026-10-26) : un fournisseur livre souvent plusieurs
+ * produits. On saisit le fournisseur UNE fois, puis autant de produits qu'il
+ * en a livré ; le bon entier part en un seul envoi (tout ou rien).
+ */
 function ModaleEntree({
   lignes,
+  fournisseursConnus,
   onFermer,
   onEnregistre,
   onErreur,
 }: {
   lignes: LigneInventaire[];
+  /** Fournisseurs déjà saisis sur ce service : proposés à la frappe. */
+  fournisseursConnus: string[];
   onFermer: () => void;
   onEnregistre: () => void;
   onErreur: (m: string) => void;
 }) {
-  const [produit, setProduit] = useState(lignes[0]?.produit_id ?? '');
-  const [quantite, setQuantite] = useState('');
+  // Les consommations ne se reçoivent pas : elles se déduisent.
+  const recevables = lignes.filter((l) => !l.role.startsWith('CONSO'));
   const [fournisseur, setFournisseur] = useState('');
+  const [bon, setBon] = useState<LigneBon[]>([{ cle: 1, produit: '', quantite: '' }]);
+  const [prochaineCle, setProchaineCle] = useState(2);
+
+  const modifier = (cle: number, champ: Partial<LigneBon>) =>
+    setBon((b) => b.map((l) => (l.cle === cle ? { ...l, ...champ } : l)));
+  const ajouterLigne = () => {
+    setBon((b) => [...b, { cle: prochaineCle, produit: '', quantite: '' }]);
+    setProchaineCle((c) => c + 1);
+  };
+  const retirerLigne = (cle: number) => setBon((b) => (b.length > 1 ? b.filter((l) => l.cle !== cle) : b));
+
+  const complet = bon.every((l) => l.produit && Number(l.quantite) > 0);
 
   const enregistrer = useMutation({
     mutationFn: () =>
-      api('/api/inventaire/entrees', {
+      api('/api/inventaire/entrees/reception', {
         method: 'POST',
-        corps: { produit_id: produit, quantite: Number(quantite), fournisseur: fournisseur.trim() || undefined },
+        corps: {
+          fournisseur: fournisseur.trim() || undefined,
+          lignes: bon.map((l) => ({ produit_id: l.produit, quantite: Number(l.quantite) })),
+        },
       }),
     onSuccess: onEnregistre,
     onError: (e: unknown) => onErreur((e as Error).message),
@@ -525,55 +555,93 @@ function ModaleEntree({
   return (
     <Modale
       titre="Réception de marchandise"
+      large
       onFermer={onFermer}
       enfants={
         <div className="space-y-4">
           <div>
-            <div className="mb-2 text-sm font-semibold text-doux">Produit</div>
-            <select
-              value={produit}
-              onChange={(e) => setProduit(e.target.value)}
-              className="w-full rounded-btn border border-bordure bg-surface px-4 py-3 outline-none focus:border-marque"
-            >
-              {lignes
-                // Les consommations ne se reçoivent pas : elles se déduisent.
-                .filter((l) => !l.role.startsWith('CONSO'))
-                .map((l) => (
-                  <option key={l.produit_id} value={l.produit_id}>
-                    {libelleCategorieInventaire(l.categorie)} — {l.nom} ({l.unite})
-                  </option>
-                ))}
-            </select>
-          </div>
-          <div>
-            <div className="mb-2 text-sm font-semibold text-doux">Quantité reçue</div>
-            <input
-              type="number"
-              inputMode="decimal"
-              step="any"
-              min={0}
-              value={quantite}
-              onChange={(e) => setQuantite(e.target.value)}
-              className="w-full rounded-btn border border-bordure bg-surface px-4 py-3 text-2xl font-bold tabular-nums outline-none focus:border-marque"
-              placeholder="0"
-            />
-          </div>
-          <div>
             <div className="mb-2 text-sm font-semibold text-doux">Fournisseur (optionnel)</div>
             <input
               type="text"
+              list="fournisseurs-connus"
               value={fournisseur}
               onChange={(e) => setFournisseur(e.target.value)}
+              placeholder="Ex. : Boulangerie du Plateau"
               className="w-full rounded-btn border border-bordure bg-surface px-4 py-3 outline-none focus:border-marque"
             />
+            <datalist id="fournisseurs-connus">
+              {fournisseursConnus.map((f) => <option key={f} value={f} />)}
+            </datalist>
           </div>
+
+          <div>
+            <div className="mb-2 text-sm font-semibold text-doux">Produits reçus</div>
+            <div className="space-y-2">
+              {bon.map((l) => {
+                const choisis = new Set(bon.filter((x) => x.cle !== l.cle).map((x) => x.produit));
+                const unite = recevables.find((r) => r.produit_id === l.produit)?.unite;
+                return (
+                  <div key={l.cle} className="flex items-center gap-2">
+                    <select
+                      value={l.produit}
+                      onChange={(e) => modifier(l.cle, { produit: e.target.value })}
+                      className="min-w-0 flex-1 rounded-btn border border-bordure bg-surface px-3 py-3 outline-none focus:border-marque"
+                    >
+                      <option value="">Choisir un produit…</option>
+                      {recevables.map((r) => (
+                        // Un produit déjà sur le bon n'est pas reproposé : on
+                        // corrige sa quantité au lieu de le saisir deux fois.
+                        <option key={r.produit_id} value={r.produit_id} disabled={choisis.has(r.produit_id)}>
+                          {libelleCategorieInventaire(r.categorie)} — {r.nom} ({r.unite})
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="any"
+                      min={0}
+                      value={l.quantite}
+                      onChange={(e) => modifier(l.cle, { quantite: e.target.value })}
+                      className="w-28 flex-none rounded-btn border border-bordure bg-surface px-3 py-3 text-right text-lg font-bold tabular-nums outline-none focus:border-marque"
+                      placeholder="0"
+                    />
+                    <span className="w-12 flex-none text-sm text-doux">{unite ?? ''}</span>
+                    <button
+                      type="button"
+                      aria-label="Retirer ce produit"
+                      disabled={bon.length === 1}
+                      onClick={() => retirerLigne(l.cle)}
+                      className="flex h-11 w-11 flex-none items-center justify-center rounded-full text-doux transition hover:bg-alerte/10 hover:text-alerte disabled:opacity-30"
+                    >
+                      <IconTrash size={18} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={ajouterLigne}
+              disabled={bon.length >= recevables.length}
+              className="btn-blanc mt-3 flex w-full items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <IconPlus size={18} />
+              Ajouter un produit
+            </button>
+          </div>
+
           <button
             type="button"
-            disabled={!produit || Number(quantite) <= 0 || enregistrer.isPending}
+            disabled={!complet || enregistrer.isPending}
             className="btn-accent w-full py-4 text-lg disabled:opacity-50"
             onClick={() => enregistrer.mutate()}
           >
-            Enregistrer la réception
+            {enregistrer.isPending
+              ? 'Enregistrement…'
+              : complet
+                ? `Enregistrer la réception (${bon.length} produit${bon.length > 1 ? 's' : ''})`
+                : 'Choisissez chaque produit et sa quantité'}
           </button>
         </div>
       }
