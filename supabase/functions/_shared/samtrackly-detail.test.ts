@@ -134,6 +134,31 @@ describe('construirePresences — qui était là, et combien il a touché', () =
     assert.equal(l.statut, 'Présent');
   });
 
+  test('chacun porte SES heures réelles : arrivée et sortie pointées', () => {
+    const lignes = construirePresences([
+      { utilisateur_id: 'pos-flora', poste_jour: 'Caisse', pointe_le: '2026-08-17T15:40:00Z', reste: false,
+        depart_le: '2026-08-17T23:10:00Z' },
+      // Pas de sortie pointée : il part à la clôture du shift.
+      { utilisateur_id: 'pos-adama', poste_jour: 'Cuisine', pointe_le: '2026-08-17T16:25:00Z', reste: false,
+        depart_le: null },
+    ], DEPENSES, RH, CTX);
+    const flora = lignes.find((l) => l.travailleur_id === 'trav-flora')!;
+    const adama = lignes.find((l) => l.travailleur_id === 'trav-adama')!;
+    assert.equal(flora.heure_debut, '15:40');
+    assert.equal(flora.heure_fin, '23:10');
+    assert.equal(adama.heure_debut, '16:25');
+    assert.equal(adama.heure_fin, '01:30');
+  });
+
+  test('sans heure d’arrivée (ancienne ligne), on retombe sur les heures du shift', () => {
+    const [l] = construirePresences(
+      [{ utilisateur_id: 'pos-flora', poste_jour: 'Caisse', pointe_le: null, reste: false }],
+      DEPENSES, RH, CTX,
+    );
+    assert.equal(l.heure_debut, '16:00');
+    assert.equal(l.heure_fin, '01:30');
+  });
+
   test('une équipe vide ne casse rien', () => {
     assert.deepEqual(construirePresences([], DEPENSES, RH, CTX), []);
     assert.deepEqual(construirePresences(null, DEPENSES, RH, CTX), []);

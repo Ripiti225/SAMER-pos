@@ -81,6 +81,11 @@ export type ActionAudit =
   | 'ENCOURAGEMENT'
   | 'POINTAGE_ARRIVEE'
   | 'MARQUAGE_DEPART'
+  // Poste du jour changé en cours de shift (appui sur la fiche du bandeau).
+  | 'CHANGEMENT_POSTE_JOUR'
+  // Pointeuse Hikvision : réglage de l'appareil et n° employé d'une personne.
+  | 'REGLAGE_POINTEUSE'
+  | 'NUMERO_POINTEUSE'
   | 'VALIDATION_INVENTAIRE'
   | 'DEBLOCAGE_INVENTAIRE'
   // « Pas maintenant » sur le bandeau de mise à jour (PIN gérant, un seul

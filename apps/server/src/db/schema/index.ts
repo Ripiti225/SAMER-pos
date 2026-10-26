@@ -130,6 +130,8 @@ export const utilisateurs = pgTable('utilisateurs', {
   // Salaire journalier proposé à l'écran Dépenses › Paie (modifiable, avec
   // motif obligatoire). NULL = employé qui n'est pas payé à la journée.
   taux_journalier: integer('taux_journalier'),
+  // « N° employé » de cette personne dans la pointeuse Hikvision (unique).
+  pointeuse_no: text('pointeuse_no'),
   pin_hash: text('pin_hash').notNull(),
   telephone: text('telephone'),
   actif: boolean('actif').notNull().default(true),
@@ -365,8 +367,34 @@ export const equipeService = pgTable('equipe_service', {
   // À la clôture, tout ce qui n'est pas `true` est enregistré comme PARTI —
   // le caissier ne marque donc que les exceptions.
   reste: boolean('reste'),
+  // Pointeuse (2026-10-26) : dernière sortie pointée (NULL = encore là, ou
+  // parti sans pointer → sa sortie est la clôture) et cumul des absences
+  // Sortie → Entrée du shift, DÉDUIT des heures faites.
+  depart_le: timestamp('depart_le', { withTimezone: true }),
+  secondes_absence: integer('secondes_absence').notNull().default(0),
+  // Qui a daté l'arrivée : POINTEUSE, CAISSE (secours PIN manager) ou OUVERTURE.
+  source: text('source').notNull().default('OUVERTURE'),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex('equipe_service_service_utilisateur_key').on(t.service_id, t.utilisateur_id)]);
+
+/**
+ * Pointages lus sur la pointeuse Hikvision, gardés tels quels et une seule
+ * fois (appareil + n° d'événement) : relire l'appareil ne double rien.
+ */
+export const pointeuseEvenements = pgTable('pointeuse_evenements', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  appareil: text('appareil').notNull(),
+  numero: bigint('numero', { mode: 'number' }).notNull(),
+  employe_no: text('employe_no').notNull(),
+  nom_appareil: text('nom_appareil'),
+  utilisateur_id: uuid('utilisateur_id').references(() => utilisateurs.id),
+  sens: text('sens').notNull(), // ENTREE | SORTIE
+  pointe_le: timestamp('pointe_le', { withTimezone: true }).notNull(),
+  // APPLIQUE | EN_ATTENTE | INCONNU | IGNORE
+  statut: text('statut').notNull(),
+  service_id: uuid('service_id').references(() => servicesCaisse.id, { onDelete: 'set null' }),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('pointeuse_evenements_numero_key').on(t.appareil, t.numero)]);
 
 // Sessions serveur PERSISTÉES : survivent à un redémarrage du serveur/mini-PC
 // (le magasin les recharge au démarrage). Cookie httpOnly = id de session.

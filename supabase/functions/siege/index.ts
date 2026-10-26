@@ -749,7 +749,7 @@ Deno.serve(async (req) => {
 
         const { data: membres, error } = await admin
           .from('equipe_service')
-          .select('utilisateur_id, poste_jour, pointe_le, reste')
+          .select('utilisateur_id, poste_jour, pointe_le, reste, depart_le, secondes_absence')
           .eq('restaurant_id', restaurantId)
           .eq('service_id', serviceId);
         if (error) throw new Error('Lecture de l’équipe impossible');
@@ -806,6 +806,10 @@ Deno.serve(async (req) => {
               poste: m.poste_jour ?? (fiche?.poste as string | null) ?? null,
               taux_journalier: (fiche?.taux_journalier as number | null) ?? null,
               arrive_le: m.pointe_le,
+              /** Sortie pointée à la pointeuse ; NULL = partie à la clôture (ou restée). */
+              parti_le: m.depart_le ?? null,
+              /** Absences Sortie → Entrée du shift, déduites des heures (pointeuse). */
+              minutes_absence: Math.floor(Number(m.secondes_absence ?? 0) / 60),
               /** NULL = pas encore tranché ; à la clôture, tout ce qui n'est pas `true` est PARTI. */
               reste: m.reste,
               salaire: paye,

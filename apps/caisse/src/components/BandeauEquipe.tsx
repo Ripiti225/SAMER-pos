@@ -15,8 +15,10 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconChevronDown, IconChevronLeft, IconChevronRight, IconUserPlus } from '@tabler/icons-react';
+import { LIBELLES_POSTES, POSTES_JOUR, type PosteJour } from '@pos/shared';
 import { api } from '../api';
 import { Modale } from './Modale';
+import { ModalePinManager } from './ModalePinManager';
 import { useAffichage } from '../stores/affichage';
 import { useCaisse } from '../stores/session';
 
@@ -35,10 +37,15 @@ export interface MembrePointage {
   heures_faites: boolean;
   reste: boolean | null;
   salaire_paye: boolean;
+  /** Sortie pointée à la pointeuse. */
+  depart_le: string | null;
+  source: 'POINTEUSE' | 'CAISSE' | 'OUVERTURE';
 }
 
 export interface VuePointage {
   service_id: string;
+  /** Pointeuse en service : la caisse ne pointe plus qu'en secours (PIN manager). */
+  pointeuse: boolean;
   duree_service_heures: number;
   presents: number;
   attendus: number;
@@ -78,6 +85,7 @@ export function BandeauEquipe() {
   const deplie = useAffichage((e) => e.bandeauEquipeDeplie);
   const poserDeplie = useAffichage((e) => e.poserBandeauEquipeDeplie);
   const [pointer, setPointer] = useState(false);
+  const [posteDe, setPosteDe] = useState<MembrePointage | null>(null);
   const liste = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
@@ -162,7 +170,7 @@ export function BandeauEquipe() {
             className="flex flex-none items-center gap-2 rounded-btn border border-vitrine-bordure bg-vitrine-surface-2 px-3 py-2 text-[13.5px] font-semibold text-vitrine-txt transition hover:bg-vitrine-bordure/50"
           >
             <IconUserPlus size={17} />
-            Pointer une arrivée
+            {data.pointeuse ? 'Pointage de secours' : 'Pointer une arrivée'}
           </button>
         )}
       </div>
@@ -175,17 +183,31 @@ export function BandeauEquipe() {
             className="grid min-w-0 flex-1 snap-x snap-mandatory grid-flow-col gap-2.5 overflow-x-auto p-0.5 [grid-auto-columns:calc((100%-3*10px)/4)] [scrollbar-width:none]"
           >
             {membres.map((m) => (
-              <FicheAgent key={m.utilisateur_id} membre={m} duree={data.duree_service_heures} />
+              <FicheAgent key={m.utilisateur_id} membre={m} duree={data.duree_service_heures} onChoisir={() => setPosteDe(m)} />
             ))}
           </div>
           <FlecheDefilement direction="droite" onClick={() => faire(320)} />
         </div>
       )}
 
+      {posteDe && (
+        <ModalePoste
+          membre={posteDe}
+          onFermer={() => setPosteDe(null)}
+          onChange={() => {
+            setPosteDe(null);
+            void queryClient.invalidateQueries({ queryKey: ['pointage'] });
+          }}
+          onErreur={afficherToast}
+        />
+      )}
+
       {pointer && (
         <ModalePointer
           duree={data.duree_service_heures}
-          dejaPresents={membres.filter((m) => !m.attendu).map((m) => m.utilisateur_id)}
+          secours={data.pointeuse}
+          // Sorti à la pointeuse : peut être repointé (retour non reconnu).
+          dejaPresents={membres.filter((m) => !m.attendu && !m.depart_le).map((m) => m.utilisateur_id)}
           onFermer={() => setPointer(false)}
           onPointe={() => {
             setPointer(false);
@@ -219,14 +241,18 @@ function FlecheDefilement({ direction, onClick }: { direction: 'gauche' | 'droit
  * la couleur devient informative en fin de service et dans le rapport du
  * manager — c'est voulu (§ 6.7).
  */
-function FicheAgent({ membre, duree }: { membre: MembrePointage; duree: number }) {
+function FicheAgent({ membre, duree, onChoisir }: { membre: MembrePointage; duree: number; onChoisir: () => void }) {
   const couleur = couleurDe(membre.utilisateur_id);
   const pct = Math.min(100, (membre.minutes_cumulees / (duree * 60)) * 100);
   const fait = membre.heures_faites;
 
+  // Toute la fiche est la cible : appui = changer le poste du jour.
   return (
-    <div
-      className={`grid snap-start grid-cols-[auto_1fr] items-start gap-3 rounded-jeton border bg-vitrine-surface-2 p-3 ${
+    <button
+      type="button"
+      onClick={onChoisir}
+      title="Changer le poste du jour"
+      className={`grid snap-start grid-cols-[auto_1fr] items-start gap-3 rounded-jeton border bg-vitrine-surface-2 p-3 text-left transition hover:bg-vitrine-bordure/40 ${
         membre.attendu ? 'border-vitrine-bordure' : fait ? 'border-ok/45' : 'border-alerte/45'
       }`}
     >
@@ -241,7 +267,7 @@ function FicheAgent({ membre, duree }: { membre: MembrePointage; duree: number }
           {membre.nom_complet}
         </span>
         <span className="mt-0.5 block truncate text-[11.5px] font-medium text-vitrine-txt-doux">
-          {membre.poste_jour}
+          {LIBELLES_POSTES[membre.poste_jour as PosteJour] ?? membre.poste_jour} ›
         </span>
 
         {membre.attendu ? (
@@ -249,8 +275,12 @@ function FicheAgent({ membre, duree }: { membre: MembrePointage; duree: number }
         ) : (
           <>
             <span className="mt-2 block text-[11.5px] font-medium text-vitrine-txt-doux">
-              Arrivé <b className="font-bold text-vitrine-txt">{hhmm(membre.pointe_le)}</b> · fin{' '}
-              <b className="font-bold text-vitrine-txt">{hhmm(membre.fin_prevue)}</b>
+              Arrivé <b className="font-bold text-vitrine-txt">{hhmm(membre.pointe_le)}</b> ·{' '}
+              {membre.depart_le ? (
+                <>sorti <b className="font-bold text-vitrine-txt">{hhmm(membre.depart_le)}</b></>
+              ) : (
+                <>fin <b className="font-bold text-vitrine-txt">{hhmm(membre.fin_prevue)}</b></>
+              )}
             </span>
             <span className="mt-2 block h-1 overflow-hidden rounded-full bg-vitrine-bordure">
               <i
@@ -285,33 +315,37 @@ function FicheAgent({ membre, duree }: { membre: MembrePointage; duree: number }
           </span>
         )}
       </span>
-    </div>
+    </button>
   );
 }
 
 function ModalePointer({
   duree,
+  secours,
   dejaPresents,
   onFermer,
   onPointe,
   onErreur,
 }: {
   duree: number;
+  /** Pointeuse en service : chaque pointage à la caisse demande PIN manager + motif. */
+  secours: boolean;
   dejaPresents: string[];
   onFermer: () => void;
   onPointe: () => void;
   onErreur: (message: string) => void;
 }) {
+  const [aAutoriser, setAAutoriser] = useState<EmployePropose | null>(null);
   const { data: proposes, isLoading } = useQuery({
     queryKey: ['equipe-proposee'],
     queryFn: () => api<EmployePropose[]>('/api/services/equipe-proposee'),
   });
 
   const pointage = useMutation({
-    mutationFn: (e: EmployePropose) =>
+    mutationFn: (v: { e: EmployePropose; pin?: string; motif?: string }) =>
       api('/api/pointage', {
         method: 'POST',
-        corps: { utilisateur_id: e.utilisateur_id, poste_jour: e.poste_defaut },
+        corps: { utilisateur_id: v.e.utilisateur_id, poste_jour: v.e.poste_defaut, pin_manager: v.pin, motif: v.motif },
       }),
     onSuccess: onPointe,
     onError: (e: unknown) => onErreur((e as Error).message),
@@ -320,13 +354,27 @@ function ModalePointer({
   const candidats = (proposes ?? []).filter((e) => !dejaPresents.includes(e.utilisateur_id));
   const maintenant = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
+  if (aAutoriser) {
+    return (
+      <ModalePinManager
+        titre={`Pointer ${aAutoriser.nom_complet} à ${maintenant}`}
+        explication="La pointeuse n’a pas enregistré cette arrivée. Un manager valide le pointage à la caisse ; il est tracé dans le journal."
+        exempleMotif="ex : visage non reconnu, pointeuse en panne…"
+        enCours={pointage.isPending}
+        onFermer={() => setAAutoriser(null)}
+        onConfirmer={({ pin, motif }) => pointage.mutate({ e: aAutoriser, pin, motif })}
+      />
+    );
+  }
+
   return (
     <Modale
-      titre="Pointer une arrivée"
+      titre={secours ? 'Pointage de secours' : 'Pointer une arrivée'}
       onFermer={onFermer}
       enfants={
         <div>
           <p className="mb-4 text-sm leading-relaxed text-doux">
+            {secours && <>Les arrivées se pointent <b>à la pointeuse</b>. Ici, seulement si elle n’a pas reconnu la personne ou est en panne — <b>PIN manager</b> demandé. </>}
             L’heure enregistrée est <b>l’heure du clic</b> — il est {maintenant}. Elle sert de base au
             calcul des {duree} h et apparaît dans le rapport du manager.
           </p>
@@ -341,7 +389,7 @@ function ModalePointer({
                 type="button"
                 disabled={pointage.isPending}
                 className="btn-blanc flex h-[60px] items-center justify-between px-4 disabled:opacity-60"
-                onClick={() => pointage.mutate(e)}
+                onClick={() => (secours ? setAAutoriser(e) : pointage.mutate({ e }))}
               >
                 <span className="flex items-center gap-3">
                   <span
@@ -361,6 +409,58 @@ function ModalePointer({
                 <span className="text-[13px] font-bold text-marque-sur-plan">Pointer {maintenant}</span>
               </button>
             ))}
+          </div>
+        </div>
+      }
+    />
+  );
+}
+
+/** Poste du jour, pour ce shift seulement (ni la fiche ni les droits ne changent). */
+function ModalePoste({
+  membre,
+  onFermer,
+  onChange,
+  onErreur,
+}: {
+  membre: MembrePointage;
+  onFermer: () => void;
+  onChange: () => void;
+  onErreur: (message: string) => void;
+}) {
+  const changer = useMutation({
+    mutationFn: (poste: PosteJour) =>
+      api(`/api/pointage/${membre.utilisateur_id}/poste`, { method: 'PATCH', corps: { poste_jour: poste } }),
+    onSuccess: onChange,
+    onError: (e: unknown) => onErreur((e as Error).message),
+  });
+
+  return (
+    <Modale
+      titre={`Poste du jour — ${membre.nom_complet}`}
+      onFermer={onFermer}
+      enfants={
+        <div>
+          <p className="mb-4 text-sm text-doux">
+            Pour ce shift seulement. Les droits de la personne dans la caisse ne changent pas.
+          </p>
+          <div className="grid grid-cols-3 gap-2.5">
+            {POSTES_JOUR.map((p) => {
+              const actuel = p === membre.poste_jour;
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  disabled={changer.isPending}
+                  onClick={() => (actuel ? onFermer() : changer.mutate(p))}
+                  className={`h-[56px] rounded-btn border-2 text-sm font-semibold transition disabled:opacity-60 ${
+                    actuel ? 'border-marque bg-marque-tint text-fort' : 'border-bordure bg-surface hover:bg-surface-douce'
+                  }`}
+                >
+                  {LIBELLES_POSTES[p]}
+                </button>
+              );
+            })}
           </div>
         </div>
       }

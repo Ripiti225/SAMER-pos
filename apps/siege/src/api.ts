@@ -263,6 +263,10 @@ export interface MembreService {
   taux_journalier: number | null;
   /** Heure d'arrivée = heure du clic sur « Pointer » sur le site. */
   arrive_le: string | null;
+  /** Sortie pointée à la pointeuse (2026-10-26) ; NULL = pas de sortie pointée. */
+  parti_le?: string | null;
+  /** Absences Sortie → Entrée du shift, déduites des heures. */
+  minutes_absence?: number;
   /** NULL = pas tranché ; à la clôture, tout ce qui n'est pas `true` est PARTI. */
   reste: boolean | null;
   /** Payé à la journée : montant et HEURE DE PAIE, qui vaut heure de départ. */

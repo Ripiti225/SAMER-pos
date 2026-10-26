@@ -8,7 +8,20 @@ import { Numpad } from '../components/Numpad';
 import { ModaleDeblocage } from './Inventaire';
 import { useCaisse } from '../stores/session';
 
-type Etape = 'compter' | 'saisir' | 'confirmer' | 'rapport';
+type Etape = 'compter' | 'saisir' | 'equipe' | 'confirmer' | 'rapport';
+
+interface MembreDepart {
+  utilisateur_id: string;
+  nom_complet: string;
+  poste_jour: string;
+  pointe_le: string | null;
+  depart_le: string | null;
+  minutes_cumulees: number;
+  reste: boolean | null;
+}
+
+const hhmm = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—';
 
 /** État léger de l'inventaire : sert le verrou d'étape 1, ne crée rien. */
 interface EtatInventaire {
@@ -81,14 +94,46 @@ export function Cloture() {
   // Décompte des départs, annoncé AVANT la validation (§ 6.8) : la clôture
   // enregistre comme PARTI tout ce qui n'est pas marqué « Reste », et c'est
   // irréversible — le caissier doit le voir venir.
-  const { data: equipe } = useQuery({
+  const { data: equipe, isError: equipeIndisponible, refetch: rechargerEquipe } = useQuery({
     queryKey: ['pointage'],
-    queryFn: () => api<{ membres: { reste: boolean | null; pointe_le: string | null }[] }>('/api/pointage'),
-    enabled: etape === 'confirmer',
+    queryFn: () => api<{ pointeuse?: boolean; membres: MembreDepart[] }>('/api/pointage'),
+    enabled: etape === 'saisir' || etape === 'equipe' || etape === 'confirmer',
   });
   const membres = equipe?.membres ?? [];
   const restent = membres.filter((m) => m.reste === true).length;
   const partent = membres.filter((m) => m.reste !== true).length;
+
+  /**
+   * Départs, un employé à la fois : qui est arrivé et n'a ni pointé sa sortie
+   * à la pointeuse ni été tranché — « il reste » ou « il part ». Ceux qui ont
+   * pointé leur sortie ne sont pas redemandés.
+   * Tous les sites, avec ou sans pointeuse.
+   */
+  const aTrancher = membres.filter((m) => m.pointe_le && !m.depart_le && m.reste === null);
+  const [totalATrancher, setTotalATrancher] = useState(0);
+  const [marquage, setMarquage] = useState(false);
+  const allerAuxDeparts = () => {
+    if (aTrancher.length === 0) return setEtape('confirmer');
+    setTotalATrancher(aTrancher.length);
+    setEtape('equipe');
+  };
+  // Tranchés entre-temps (Dépenses › Paie & départs, autre caisse) : on avance.
+  useEffect(() => {
+    if (etape === 'equipe' && equipe && aTrancher.length === 0) setEtape('confirmer');
+  }, [etape, equipe, aTrancher.length]);
+  const trancher = async (utilisateurId: string, reste: boolean) => {
+    setMarquage(true);
+    try {
+      await api(`/api/pointage/${utilisateurId}/depart`, { method: 'PATCH', corps: { reste } });
+      const { data } = await rechargerEquipe();
+      const suivants = (data?.membres ?? []).filter((m) => m.pointe_le && !m.depart_le && m.reste === null);
+      if (suivants.length === 0) setEtape('confirmer');
+    } catch (e) {
+      afficherToast((e as Error).message);
+    } finally {
+      setMarquage(false);
+    }
+  };
 
   const { data: preview } = useQuery({
     queryKey: ['recon-preview'],
@@ -162,9 +207,9 @@ export function Cloture() {
     <div className="flex min-h-full flex-col items-center justify-center p-6">
       <div className="w-full max-w-lg">
         <div className="mb-6 flex items-center justify-between text-sm text-doux">
-          {(['compter', 'saisir', 'confirmer', 'rapport'] as Etape[]).map((e, i) => (
+          {(['compter', 'saisir', 'equipe', 'confirmer', 'rapport'] as Etape[]).map((e, i) => (
             <span key={e} className={etape === e ? 'font-bold text-marque-fonce' : ''}>
-              {i + 1}. {{ compter: 'Compter', saisir: 'Réconcilier', confirmer: 'Confirmer', rapport: 'Ticket' }[e]}
+              {i + 1}. {{ compter: 'Compter', saisir: 'Réconcilier', equipe: 'Départs', confirmer: 'Confirmer', rapport: 'Ticket' }[e]}
             </span>
           ))}
         </div>
@@ -321,10 +366,47 @@ export function Cloture() {
               <span className="text-xl font-black text-marque-fonce tabular-nums">{formatFCFA(venteTotale)}</span>
             </div>
 
-            <button type="button" className="btn-accent w-full py-4 text-lg" disabled={!especeValide} onClick={() => setEtape('confirmer')}>
+            <button type="button" className="btn-accent w-full py-4 text-lg" disabled={!especeValide || (!equipe && !equipeIndisponible)} onClick={allerAuxDeparts}>
               {especeValide ? 'Continuer' : 'Saisissez l’espèce comptée'}
             </button>
             <button type="button" className="btn-blanc w-full" onClick={() => setEtape('compter')}>← Retour</button>
+          </div>
+        )}
+
+        {etape === 'equipe' && aTrancher[0] && (
+          <div className="carte space-y-5 p-6 text-center">
+            <div className="text-sm font-semibold text-doux">
+              Départs · {Math.min(totalATrancher, totalATrancher - aTrancher.length + 1)} / {totalATrancher}
+            </div>
+            <p className="text-sm text-doux">{equipe?.pointeuse ? 'N’a pas pointé sa sortie à la pointeuse :' : 'Départ pas encore indiqué :'}</p>
+            <div>
+              <div className="text-3xl font-black text-fort">{aTrancher[0].nom_complet}</div>
+              <div className="mt-1 text-sm text-doux">
+                {aTrancher[0].poste_jour} · arrivé à {hhmm(aTrancher[0].pointe_le)} ·{' '}
+                {Math.floor(aTrancher[0].minutes_cumulees / 60)} h {String(aTrancher[0].minutes_cumulees % 60).padStart(2, '0')} faites
+              </div>
+            </div>
+            <div className="text-xl font-bold">Il reste ou il part ?</div>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                className="btn-blanc py-5 text-lg"
+                disabled={marquage}
+                onClick={() => trancher(aTrancher[0]!.utilisateur_id, true)}
+              >
+                Il reste
+              </button>
+              <button
+                type="button"
+                className="btn-accent py-5 text-lg"
+                disabled={marquage}
+                onClick={() => trancher(aTrancher[0]!.utilisateur_id, false)}
+              >
+                Il part
+              </button>
+            </div>
+            <p className="text-xs text-doux">« Il reste » : il enchaîne sur le shift suivant, ses heures continuent.</p>
+            <button type="button" className="btn-blanc w-full" disabled={marquage} onClick={() => setEtape('saisir')}>← Retour</button>
           </div>
         )}
 

@@ -7,6 +7,7 @@ import { api } from '../api';
 import { Modale } from '../components/Modale';
 import { CarteSante, PiluleSync } from '../components/SanteSync';
 import { useCaisse } from '../stores/session';
+import { Pointeuse } from './ReglagesPointeuse';
 
 /**
  * Espace Administration (sprint 4C), au design « Duo contrasté » (DESIGN_V2 § 6.11).
@@ -33,6 +34,7 @@ export function Reglages() {
       [
         { cle: 'reglages.equipe', groupe: 'Équipe & accès', libelle: 'Équipe', rendu: () => <Equipe /> },
         { cle: 'roles.gerer', groupe: 'Équipe & accès', libelle: 'Rôles & accès', rendu: () => <Roles /> },
+        { cle: 'pointeuse', perm: 'reglages.parametres', groupe: 'Équipe & accès', libelle: 'Pointeuse', rendu: () => <Pointeuse /> },
         { cle: 'reglages.catalogue', groupe: 'Carte', libelle: 'Catalogue', rendu: () => <Catalogue /> },
         { cle: 'options', perm: 'reglages.catalogue', groupe: 'Carte', libelle: 'Options', rendu: () => <Options /> },
         { cle: 'promotions', perm: 'reglages.catalogue', groupe: 'Carte', libelle: 'Promotions', rendu: () => <Promotions /> },

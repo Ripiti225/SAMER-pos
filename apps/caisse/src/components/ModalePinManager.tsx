@@ -13,6 +13,8 @@ interface Props {
   libellePin?: string;
   /** Une ligne d'explication sous le titre (ce que l'action va défaire). */
   explication?: string;
+  /** Exemple affiché dans le champ motif. */
+  exempleMotif?: string;
 }
 
 /**
@@ -30,6 +32,7 @@ export function ModalePinManager({
   enCours,
   libellePin = 'PIN manager',
   explication,
+  exempleMotif = 'ex : Client fidèle, erreur de saisie…',
 }: Props) {
   const [pin, setPin] = useState('');
   const [motif, setMotif] = useState('');
@@ -61,7 +64,7 @@ export function ModalePinManager({
               className="champ"
               value={motif}
               onChange={(e) => setMotif(e.target.value)}
-              placeholder="ex : Client fidèle, erreur de saisie…"
+              placeholder={exempleMotif}
             />
           </div>
         )}

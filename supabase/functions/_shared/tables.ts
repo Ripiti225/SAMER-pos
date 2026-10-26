@@ -64,7 +64,10 @@ export const COLONNES_VENTES: Record<string, string[]> = {
   // `equipe_service` est écrite à chaque ouverture de service, le premier site
   // enrôlé aurait gelé sa synchro dès son premier shift, ventes comprises.
   // ---------------------------------------------------------------------------
-  equipe_service: ['id', 'service_id', 'utilisateur_id', 'poste_jour', 'pointe_le', 'reste', 'created_at'],
+  // 2026-10-26 — pointeuse : sortie pointée, absences, origine de l'arrivée
+  // (migration 20261026000000, à appliquer AVANT de déployer cette liste).
+  equipe_service: ['id', 'service_id', 'utilisateur_id', 'poste_jour', 'pointe_le', 'reste', 'created_at',
+    'depart_le', 'secondes_absence', 'source'],
   sequences_caisse: ['id', 'ouverte_le', 'cloturee_le', 'cloturee_par', 'statut', 'rapport'],
   roles: ['id', 'nom', 'systeme', 'actif', 'created_at', 'updated_at'],
   // Le POS envoie la LISTE ENTIÈRE des permissions du rôle, `record_id` = role_id.

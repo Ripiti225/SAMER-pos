@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { and, desc, eq, isNull, notInArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
 import { CloturerServiceSchema, OuvrirServiceSchema, RemettreClotureSchema, TransfererServiceSchema } from '@pos/shared';
 import type { RapportZ } from '@pos/shared';
 import { db } from '../../db/client.js';
@@ -14,6 +14,7 @@ import { calculerStatsService, reconciliationAuto, retoursDuService } from './ra
 import { sequenceOuverte } from './sequences.js';
 import { totalDepenses } from '../depenses/service.js';
 import { DUREE_SERVICE_HEURES } from '../pointage/routes.js';
+import { equipePointee, pointeuseActive, posteParDefaut, solderAttente } from '../pointeuse/presence.js';
 import { etatInventaire } from '../inventaire/service.js';
 import { aPermission } from '../../plugins/sessions.js';
 import { permissionsDuRole } from '../roles/service.js';
@@ -105,16 +106,44 @@ export function routesServices(app: FastifyInstance): void {
         poste_jour: equipeService.poste_jour,
         pointe_le: equipeService.pointe_le,
         secondes_reportees: equipeService.secondes_reportees,
+        secondes_absence: equipeService.secondes_absence,
       })
       .from(equipeService)
       .where(and(eq(equipeService.service_id, dernier.id), eq(equipeService.reste, true)));
     return new Map(restants.map((r) => [r.utilisateur_id, {
       poste_jour: r.poste_jour,
+      // Les absences pointées pendant le shift ne se reportent pas.
       secondes_reportees: r.secondes_reportees + (r.pointe_le
-        ? Math.max(0, Math.floor((dernier.cloture_le!.getTime() - r.pointe_le.getTime()) / 1000))
+        ? Math.max(0, Math.floor((dernier.cloture_le!.getTime() - r.pointe_le.getTime()) / 1000) - r.secondes_absence)
         : 0),
     }]));
   }
+
+  /**
+   * Équipe donnée par la pointeuse au shift qui s'ouvre (le caissier ne coche
+   * plus personne) : qui a pointé son entrée, plus la relève restée.
+   */
+  app.get('/api/services/equipe-pointeuse', { preHandler: gardeCaisse }, async () => {
+    if (!(await pointeuseActive())) return { active: false, membres: [] };
+    const restants = await restantsDuDernierService();
+    const equipe = await equipePointee(db, restants.keys());
+    if (equipe.size === 0) return { active: true, membres: [] };
+    const agents = await db
+      .select()
+      .from(utilisateurs)
+      .where(and(eq(utilisateurs.actif, true), inArray(utilisateurs.id, [...equipe.keys()])))
+      .orderBy(utilisateurs.nom_complet);
+    return {
+      active: true,
+      membres: agents.map((a) => ({
+        utilisateur_id: a.id,
+        nom_complet: a.nom_complet,
+        poste_defaut: restants.get(a.id)?.poste_jour ?? posteParDefaut(a),
+        pointe_le: equipe.get(a.id)?.pointe_le?.toISOString() ?? null,
+        reste_precedent: restants.has(a.id),
+      })),
+    };
+  });
 
   // Employés actifs proposés pour l'équipe du jour, avec un poste par défaut.
   app.get('/api/services/equipe-proposee', { preHandler: gardeCaisse }, async () => {
@@ -163,6 +192,7 @@ export function routesServices(app: FastifyInstance): void {
     }
 
     const restants = await restantsDuDernierService();
+    const avecPointeuse = await pointeuseActive();
     const service = await db.transaction(async (tx) => {
       // Rattache le shift à la séquence ouverte (créée à la volée si aucune).
       const sequenceId = await sequenceOuverte(tx);
@@ -184,14 +214,40 @@ export function routesServices(app: FastifyInstance): void {
       // datée de l'ouverture (§ 6.7). Les retardataires sont pointés ensuite
       // depuis le bandeau de l'accueil, à l'heure de leur propre clic.
       const ouvertureLe = new Date();
-      for (const m of corps.equipe ?? []) {
+      // Avec la pointeuse, c'est ELLE qui dit qui est là (heure réelle du
+      // pointage) ; la caisse ne transmet plus que le poste du jour choisi.
+      const membresOuverture: { utilisateur_id: string; poste_jour: string; pointe_le: Date; source: string }[] = [];
+      if (avecPointeuse) {
+        const postes = new Map((corps.equipe ?? []).map((m) => [m.utilisateur_id, m.poste_jour]));
+        const pointes = await equipePointee(tx, restants.keys());
+        const agents = pointes.size === 0 ? [] : await tx
+          .select()
+          .from(utilisateurs)
+          .where(and(eq(utilisateurs.actif, true), inArray(utilisateurs.id, [...pointes.keys()])));
+        for (const a of agents) {
+          const p = pointes.get(a.id)!;
+          membresOuverture.push({
+            utilisateur_id: a.id,
+            poste_jour: postes.get(a.id) ?? restants.get(a.id)?.poste_jour ?? posteParDefaut(a),
+            pointe_le: p.pointe_le ?? ouvertureLe,
+            source: p.pointe_le ? 'POINTEUSE' : 'OUVERTURE',
+          });
+        }
+        await solderAttente(tx, s!.id, [...pointes.values()].flatMap((p) => p.evenements));
+      } else {
+        for (const m of corps.equipe ?? []) {
+          membresOuverture.push({ ...m, pointe_le: ouvertureLe, source: 'OUVERTURE' });
+        }
+      }
+      for (const m of membresOuverture) {
         const [membre] = await tx
           .insert(equipeService)
           .values({
             service_id: s!.id,
             utilisateur_id: m.utilisateur_id,
             poste_jour: m.poste_jour,
-            pointe_le: ouvertureLe,
+            pointe_le: m.pointe_le,
+            source: m.source,
             secondes_reportees: restants.get(m.utilisateur_id)?.secondes_reportees ?? 0,
           })
           .onConflictDoNothing()

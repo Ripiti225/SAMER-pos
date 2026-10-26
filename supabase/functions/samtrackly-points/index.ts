@@ -270,7 +270,7 @@ async function transfererService(
       .eq('service_id', service.id),
     admin
       .from('equipe_service')
-      .select('utilisateur_id, poste_jour, pointe_le, reste')
+      .select('utilisateur_id, poste_jour, pointe_le, reste, depart_le')
       .eq('service_id', service.id),
   ]);
 

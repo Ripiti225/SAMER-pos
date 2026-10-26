@@ -73,6 +73,8 @@ CREATE TABLE utilisateurs (
   -- Salaire journalier proposé au paiement (§6.8). Modifiable au moment de
   -- payer, mais tout écart au taux de la fiche exige un motif.
   taux_journalier INTEGER CHECK (taux_journalier IS NULL OR taux_journalier >= 0),
+  -- « N° employé » dans la pointeuse Hikvision (2026-10-26), unique si renseigné.
+  pointeuse_no    TEXT,
   actif           BOOLEAN NOT NULL DEFAULT TRUE,
   -- anti-force brute (§14.1)
   tentatives_pin  SMALLINT NOT NULL DEFAULT 0,
@@ -336,9 +338,36 @@ CREATE TABLE equipe_service (
   -- À la clôture, tout ce qui n'est pas TRUE est enregistré comme PARTI — le
   -- caissier ne marque donc que les exceptions.
   reste          BOOLEAN,
+  -- Pointeuse (2026-10-26) : dernière sortie pointée (NULL = encore là, ou
+  -- parti sans pointer : sa sortie est la clôture) et absences Sortie → Entrée
+  -- du shift, DÉDUITES des heures faites.
+  depart_le        TIMESTAMPTZ,
+  secondes_absence INTEGER NOT NULL DEFAULT 0 CHECK (secondes_absence >= 0),
+  -- Qui a daté l'arrivée : la pointeuse, la caisse (secours PIN manager) ou
+  -- l'ouverture du shift (fonctionnement d'avant la pointeuse).
+  source         TEXT NOT NULL DEFAULT 'OUVERTURE' CHECK (source IN ('POINTEUSE','CAISSE','OUVERTURE')),
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (service_id, utilisateur_id)
 );
+
+CREATE UNIQUE INDEX utilisateurs_pointeuse_no_key ON utilisateurs (pointeuse_no) WHERE pointeuse_no IS NOT NULL;
+
+-- Pointages lus sur la pointeuse Hikvision, gardés tels quels et une seule fois.
+CREATE TABLE pointeuse_evenements (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  appareil       TEXT NOT NULL,          -- n° de série de l'appareil
+  numero         BIGINT NOT NULL,        -- serialNo de l'événement
+  employe_no     TEXT NOT NULL,
+  nom_appareil   TEXT,
+  utilisateur_id UUID REFERENCES utilisateurs(id),
+  sens           TEXT NOT NULL CHECK (sens IN ('ENTREE','SORTIE')),
+  pointe_le      TIMESTAMPTZ NOT NULL,
+  statut         TEXT NOT NULL CHECK (statut IN ('APPLIQUE','EN_ATTENTE','INCONNU','IGNORE')),
+  service_id     UUID REFERENCES services_caisse(id) ON DELETE SET NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (appareil, numero)
+);
+CREATE INDEX idx_pointeuse_evenements_utilisateur ON pointeuse_evenements (utilisateur_id, pointe_le);
 
 -- Registre des dépenses du service (§6.8) : services_caisse.depenses en est la
 -- SOMME, la caissière ne retape aucun total.

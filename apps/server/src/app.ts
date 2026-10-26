@@ -31,6 +31,7 @@ import { routesReglages } from './modules/reglages/routes.js';
 import { routesPoste } from './modules/poste/affichage.js';
 import { routesDepenses } from './modules/depenses/routes.js';
 import { routesPointage } from './modules/pointage/routes.js';
+import { routesPointeuse } from './modules/pointeuse/routes.js';
 import { routesInventaire } from './modules/inventaire/routes.js';
 import { routesCatalogueAdmin } from './modules/catalogue/admin-catalogue.js';
 import { routesOptionsAdmin } from './modules/catalogue/admin-options.js';
@@ -81,6 +82,7 @@ export async function construireApp(options: { logger?: boolean } = {}): Promise
   routesPoste(app);
   routesDepenses(app);
   routesPointage(app);
+  routesPointeuse(app);
   routesInventaire(app);
   routesCatalogueAdmin(app);
   routesOptionsAdmin(app);

@@ -9,16 +9,24 @@
  * Départ : NULL = pas encore tranché, true = reste, false = parti. À la
  * clôture, tout ce qui n'est pas « reste » est enregistré comme PARTI ; le
  * caissier ne marque donc que les exceptions.
+ *
+ * Depuis la pointeuse (2026-10-26), arrivées et sorties viennent de
+ * l'appareil (modules/pointeuse). Le bouton « Pointer » de la caisse reste un
+ * SECOURS (panne, visage non reconnu) : PIN manager et motif obligatoires.
  */
 import type { FastifyInstance } from 'fastify';
 import { and, asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { POSTES_JOUR } from '@pos/shared';
 import { db } from '../../db/client.js';
+import { ecrireOutbox } from '../../db/outbox.js';
 import { depenses, equipeService, utilisateurs } from '../../db/schema/index.js';
 import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
+import { verifierPinManager } from '../auth/pin.js';
 import { serviceOuvertCourant } from '../depenses/service.js';
+import { pointeuseActive } from '../pointeuse/presence.js';
 
 /** Durée d'un service (§ 6.7). Sert à la fin prévue et à la jauge. */
 export const DUREE_SERVICE_HEURES = 8;
@@ -26,10 +34,17 @@ export const DUREE_SERVICE_HEURES = 8;
 const PointerSchema = z.object({
   utilisateur_id: z.string().uuid('Employé invalide'),
   poste_jour: z.string().trim().min(1).optional(),
+  // Exigés quand la pointeuse est en service (pointage de secours).
+  pin_manager: z.string().optional(),
+  motif: z.string().trim().optional(),
 });
 
 const DepartSchema = z.object({
   reste: z.boolean({ invalid_type_error: 'Indiquez si la personne reste ou part' }),
+});
+
+const PosteSchema = z.object({
+  poste_jour: z.enum(POSTES_JOUR, { errorMap: () => ({ message: 'Poste du jour inconnu' }) }),
 });
 
 export function routesPointage(app: FastifyInstance): void {
@@ -49,6 +64,9 @@ export function routesPointage(app: FastifyInstance): void {
         pointe_le: equipeService.pointe_le,
         secondes_reportees: equipeService.secondes_reportees,
         reste: equipeService.reste,
+        depart_le: equipeService.depart_le,
+        secondes_absence: equipeService.secondes_absence,
+        source: equipeService.source,
       })
       .from(equipeService)
       .innerJoin(utilisateurs, eq(utilisateurs.id, equipeService.utilisateur_id))
@@ -65,9 +83,12 @@ export function routesPointage(app: FastifyInstance): void {
     const dureeMs = DUREE_SERVICE_HEURES * 3600 * 1000;
     const lignes = membres.map((m) => {
       const arrivee = m.pointe_le?.getTime() ?? null;
-      const minutesFaites = arrivee === null ? 0 : Math.max(0, Math.floor((maintenant - arrivee) / 60000));
+      // Sortie pointée : le compteur s'arrête. Les absences du shift sont déduites.
+      const fin = m.depart_le?.getTime() ?? maintenant;
+      const absence = m.secondes_absence * 1000;
+      const minutesFaites = arrivee === null ? 0 : Math.max(0, Math.floor((fin - arrivee - absence) / 60000));
       const minutesCumulees = arrivee === null ? 0 : Math.max(0,
-        Math.floor((m.secondes_reportees * 1000 + maintenant - arrivee) / 60000));
+        Math.floor((m.secondes_reportees * 1000 + fin - arrivee - absence) / 60000));
       return {
         id: m.id,
         utilisateur_id: m.utilisateur_id,
@@ -77,7 +98,10 @@ export function routesPointage(app: FastifyInstance): void {
         pointe_le: m.pointe_le?.toISOString() ?? null,
         // Attendu = inscrit à l'équipe du jour mais pas encore pointé.
         attendu: arrivee === null,
-        fin_prevue: arrivee === null ? null : new Date(arrivee + Math.max(0, dureeMs - m.secondes_reportees * 1000)).toISOString(),
+        fin_prevue: arrivee === null ? null : new Date(arrivee + absence + Math.max(0, dureeMs - m.secondes_reportees * 1000)).toISOString(),
+        // Sortie pointée à la pointeuse (NULL = encore là ou pas encore tranché).
+        depart_le: m.depart_le?.toISOString() ?? null,
+        source: m.source,
         minutes_faites: minutesFaites,
         minutes_reportees: Math.floor(m.secondes_reportees / 60),
         minutes_cumulees: minutesCumulees,
@@ -90,6 +114,7 @@ export function routesPointage(app: FastifyInstance): void {
 
     return {
       service_id: service.id,
+      pointeuse: await pointeuseActive(),
       duree_service_heures: DUREE_SERVICE_HEURES,
       presents: lignes.filter((l) => !l.attendu).length,
       attendus: lignes.filter((l) => l.attendu).length,
@@ -107,6 +132,14 @@ export function routesPointage(app: FastifyInstance): void {
     const corps = valider(PointerSchema, req.body);
     const service = await serviceOuvertCourant(db);
 
+    // Pointeuse en service : la caisse n'est plus qu'un secours, sous PIN manager.
+    let manager: { id: string; nom_complet: string } | null = null;
+    if (await pointeuseActive()) {
+      if (!corps.pin_manager) throw new ErreurMetier('PIN manager requis : les arrivées se pointent à la pointeuse', 403);
+      if (!corps.motif || corps.motif.length < 3) throw new ErreurMetier('Motif obligatoire (ex. : visage non reconnu)', 400);
+      manager = await verifierPinManager(corps.pin_manager, 'POINTAGE_ARRIVEE');
+    }
+
     const [agent] = await db
       .select()
       .from(utilisateurs)
@@ -122,18 +155,29 @@ export function routesPointage(app: FastifyInstance): void {
           eq(equipeService.utilisateur_id, corps.utilisateur_id),
         ),
       );
-    if (existant?.pointe_le) {
+    // Sorti à la pointeuse puis revenu sans y être reconnu : c'est un retour,
+    // l'absence est déduite comme si la pointeuse l'avait vu.
+    const retour = !!existant?.pointe_le && !!existant.depart_le;
+    if (existant?.pointe_le && !retour) {
       throw new ErreurMetier(`${agent.nom_complet} est déjà pointé sur ce service`, 409);
     }
 
     const arrivee = new Date();
     const posteJour = corps.poste_jour ?? existant?.poste_jour ?? agent.poste ?? agent.poste_cuisine ?? 'EQUIPIER';
+    const source = manager ? 'CAISSE' : 'OUVERTURE';
 
     const membre = await db.transaction(async (tx) => {
       const [ligne] = existant
         ? await tx
             .update(equipeService)
-            .set({ pointe_le: arrivee, poste_jour: posteJour })
+            .set(retour
+              ? {
+                  secondes_absence: existant.secondes_absence
+                    + Math.max(0, Math.floor((arrivee.getTime() - existant.depart_le!.getTime()) / 1000)),
+                  depart_le: null,
+                  reste: null,
+                }
+              : { pointe_le: arrivee, poste_jour: posteJour, source })
             .where(eq(equipeService.id, existant.id))
             .returning()
         : await tx
@@ -143,6 +187,7 @@ export function routesPointage(app: FastifyInstance): void {
               utilisateur_id: corps.utilisateur_id,
               poste_jour: posteJour,
               pointe_le: arrivee,
+              source,
             })
             .returning();
       await journaliser(tx, {
@@ -156,7 +201,10 @@ export function routesPointage(app: FastifyInstance): void {
           poste_jour: posteJour,
           arrivee: arrivee.toISOString(),
           retard: !existant,
+          retour,
+          ...(manager ? { secours_pointeuse: true, manager_id: manager.id, manager: manager.nom_complet } : {}),
         },
+        motif: manager ? corps.motif : null,
       });
       return ligne!;
     });
@@ -195,5 +243,44 @@ export function routesPointage(app: FastifyInstance): void {
 
     app.diffuser('pointage', service.id);
     return { utilisateur_id: utilisateurId, reste: corps.reste };
+  });
+
+  /**
+   * Poste du jour changé en cours de shift (appui sur la fiche du bandeau).
+   * Pour ce shift seulement : la fiche de l'employé et ses droits dans la
+   * caisse ne changent pas. Remonte au cloud (SamerTrackly lit poste_jour).
+   */
+  app.patch('/api/pointage/:utilisateurId/poste', { preHandler: garde }, async (req) => {
+    const { utilisateurId } = req.params as { utilisateurId: string };
+    const corps = valider(PosteSchema, req.body);
+    const service = await serviceOuvertCourant(db);
+
+    const [membre] = await db
+      .select()
+      .from(equipeService)
+      .where(
+        and(eq(equipeService.service_id, service.id), eq(equipeService.utilisateur_id, utilisateurId)),
+      );
+    if (!membre) throw introuvable('Membre de l’équipe du jour');
+    if (membre.poste_jour === corps.poste_jour) return { utilisateur_id: utilisateurId, poste_jour: corps.poste_jour };
+
+    await db.transaction(async (tx) => {
+      const [ligne] = await tx
+        .update(equipeService)
+        .set({ poste_jour: corps.poste_jour })
+        .where(eq(equipeService.id, membre.id))
+        .returning();
+      await ecrireOutbox(tx, 'equipe_service', 'UPDATE', ligne!.id, ligne as unknown as Record<string, unknown>);
+      await journaliser(tx, {
+        user_id: req.session!.utilisateur_id,
+        action: 'CHANGEMENT_POSTE_JOUR',
+        entite: 'equipe_service',
+        entite_id: membre.id,
+        meta: { agent_id: utilisateurId, avant: membre.poste_jour, apres: corps.poste_jour },
+      });
+    });
+
+    app.diffuser('pointage', service.id);
+    return { utilisateur_id: utilisateurId, poste_jour: corps.poste_jour };
   });
 }

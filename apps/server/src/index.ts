@@ -6,8 +6,23 @@ import { enregistrerIncident } from './modules/sante/incidents.js';
 import { etatMode } from './modules/maj/mode.js';
 import { INTERVALLE_CONSULTATION_MS } from './modules/maj/config.js';
 import { moteurMajDuSite } from './modules/maj/moteur.js';
+import { demarrerPointeuse } from './modules/pointeuse/moteur.js';
+import { appliquerMigrations } from './db/migrate.js';
 
 const PORT = Number(process.env.PORT ?? 3001);
+
+// Le code et la base avancent ENSEMBLE, quel que soit le lanceur. Les anciens
+// PosSamer.exe ne migrent pas : une mise à jour copiée par clé USB démarrait
+// alors le nouveau code sur l'ancienne base, et plus personne ne pouvait se
+// connecter (2026-10-26, colonne pointeuse_no absente). Sans effet si la base
+// est déjà à jour ; en cas d'échec, tout est annulé et le serveur ne démarre
+// pas — mieux vaut l'écran d'erreur du lanceur qu'une caisse à moitié cassée.
+try {
+  await appliquerMigrations();
+} catch (e) {
+  console.error('Mise à jour de la base impossible :', e);
+  process.exit(1);
+}
 
 const app = await construireApp({ logger: true });
 
@@ -41,6 +56,10 @@ function demarrerTachesDeFond(): void {
   void moteurSync.demarrer();
 
   moteurMaj?.demarrer(INTERVALLE_CONSULTATION_MS);
+
+  // Pointeuse Hikvision : lue toutes les 20 s si une adresse est réglée
+  // (Réglages › Pointeuse). Sans adresse, la boucle ne fait rien.
+  demarrerPointeuse(() => app.diffuser('pointage'), app.log);
 
   // Synchro automatique de l'équipe depuis SamerTrackly (si clé configurée) :
   // au démarrage puis à intervalle régulier, quand la caisse est en ligne.

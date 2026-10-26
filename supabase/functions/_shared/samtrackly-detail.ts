@@ -27,6 +27,15 @@ export interface EquipeService {
   poste_jour?: string | null;
   pointe_le?: string | null;
   reste?: boolean | null;
+  /** Sortie pointée à la pointeuse (2026-10-26). NULL = parti à la clôture. */
+  depart_le?: string | null;
+}
+
+/** `HH:MM` en UTC (= heure d'Abidjan), comme les heures du shift. */
+function heureDe(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(11, 16);
 }
 
 export interface FicheRH {
@@ -151,8 +160,12 @@ export function construirePresences(
       statut: 'Présent',
       paye: paieParAgent.get(posId) ?? 0,
       shift_nom: membre.poste_jour ?? '',
-      heure_debut: ctx.heureDebut ?? '',
-      heure_fin: ctx.heureFin ?? '',
+      // Heures RÉELLES de la personne (pointeuse, 2026-10-26) : son arrivée,
+      // et sa sortie pointée. Sans sortie pointée, elle part à la clôture.
+      // Les absences du shift n'ont pas de colonne chez SamerTrackly : elles
+      // restent visibles au siège (equipe_service.secondes_absence).
+      heure_debut: heureDe(membre.pointe_le) ?? ctx.heureDebut ?? '',
+      heure_fin: heureDe(membre.depart_le) ?? ctx.heureFin ?? '',
       date: ctx.date,
     });
   }

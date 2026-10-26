@@ -62,8 +62,10 @@ export function EquipeService({
             // clôture, le caissier ne marque que les exceptions.
             const reste = m.reste === true;
             const paye = m.salaire;
-            const depart = paye ? heure(paye.paye_le) : reste ? '—' : heure(clotureLe);
-            const departSource = paye ? 'paie' : reste ? '' : 'clôture';
+            // Une sortie pointée à la pointeuse prime sur tout le reste.
+            const depart = m.parti_le ? heure(m.parti_le) : paye ? heure(paye.paye_le) : reste ? '—' : heure(clotureLe);
+            const departSource = m.parti_le ? 'pointeuse' : paye ? 'paie' : reste ? '' : 'clôture';
+            const absence = m.minutes_absence ?? 0;
             return (
               <tr key={m.utilisateur_id} className="border-b border-filet last:border-0">
                 <td className="py-2 pr-3 font-semibold">{m.nom_complet ?? 'Nom inconnu'}</td>
@@ -72,6 +74,11 @@ export function EquipeService({
                 <td className="chiffres px-3 py-2 text-right">
                   {depart}
                   {departSource && <span className="ml-1 text-[11px] font-normal text-faible">({departSource})</span>}
+                  {absence > 0 && (
+                    <span className="block text-[11px] font-normal text-alerte-txt">
+                      absent {absence >= 60 ? `${Math.floor(absence / 60)} h ${String(absence % 60).padStart(2, '0')}` : `${absence} min`}
+                    </span>
+                  )}
                 </td>
                 <td className={`chiffres px-3 py-2 text-right ${paye ? '' : 'text-faible'}`}>
                   {paye ? formatFCFA(paye.montant) : m.taux_journalier ? `non payé (${formatFCFA(m.taux_journalier)}/j)` : '—'}
@@ -91,8 +98,9 @@ export function EquipeService({
         <span className={`chiffres ${totalPaye > 0 ? '' : 'text-faible'}`}>{formatFCFA(totalPaye)}</span>
       </div>
       <p className="mt-1.5 text-xs text-faible">
-        Arrivée = heure du clic sur « Pointer » sur le site. Départ = heure de paie pour qui est payé à la journée,
-        heure de clôture du service sinon — présumée, pas pointée.
+        Arrivée = heure de la pointeuse (ou du clic « Pointer » avant elle). Départ = sortie pointée à la pointeuse ;
+        à défaut, heure de paie pour qui est payé à la journée, heure de clôture du service sinon — présumée, pas pointée.
+        Les absences pointées pendant le shift sont déduites des heures.
       </p>
     </div>
   );

@@ -14,6 +14,11 @@ interface MembrePropose {
   reste_precedent: boolean;
 }
 
+interface EquipePointeuse {
+  active: boolean;
+  membres: (MembrePropose & { pointe_le: string | null })[];
+}
+
 /** Ouverture de service : fond de caisse, puis équipe du jour (allègement). */
 export function OuvertureService() {
   const { session, poserServiceOuvert, poserSession, afficherToast, aller } = useCaisse();
@@ -60,6 +65,27 @@ export function OuvertureService() {
    * Une seule fois : le garde empêche qu'un refetch de TanStack Query ne
    * recoche quelqu'un que la caissière vient justement de décocher.
    */
+  /**
+   * Pointeuse en service (2026-10-26) : c'est elle qui dit qui est là, avec
+   * l'heure réelle de chacun. La caissière ne coche plus personne, elle ne
+   * règle que le poste du jour. Rafraîchi : l'équipe arrive pendant qu'on compte.
+   */
+  const { data: pointeuse, isError: erreurPointeuse } = useQuery({
+    queryKey: ['equipe-pointeuse'],
+    queryFn: () => api<EquipePointeuse>('/api/services/equipe-pointeuse'),
+    enabled: etape === 'equipe',
+    refetchInterval: 15000,
+  });
+  const modePointeuse = pointeuse?.active === true;
+  useEffect(() => {
+    if (!modePointeuse) return;
+    setEquipe((e) => {
+      const copie = { ...e };
+      for (const m of pointeuse.membres) copie[m.utilisateur_id] ??= m.poste_defaut;
+      return copie;
+    });
+  }, [modePointeuse, pointeuse]);
+
   const preRempli = useRef(false);
   useEffect(() => {
     if (preRempli.current || !propositionsChargees || !propositionsActualisees || !proposes) return;
@@ -82,14 +108,18 @@ export function OuvertureService() {
     });
   };
 
+  // Avec la pointeuse, la liste à cocher n'est plus nécessaire pour ouvrir.
+  const pret = modePointeuse || ((!!pointeuse || erreurPointeuse) && propositionsChargees && propositionsActualisees);
+
   const ouvrir = async () => {
-    if (!propositionsChargees || !propositionsActualisees) return;
+    if (!pret) return;
     setEnCours(true);
     try {
       const service = await api<ServiceOuvertVue>('/api/services/ouvrir', {
         method: 'POST',
         corps: {
           fond_de_caisse: Number(montant || '0'),
+          // Mode pointeuse : seul le poste compte, le serveur refait la liste.
           equipe: Object.entries(equipe).map(([utilisateur_id, poste_jour]) => ({ utilisateur_id, poste_jour })),
         },
       });
@@ -169,6 +199,52 @@ export function OuvertureService() {
     );
   }
 
+  if (modePointeuse) {
+    const heure = (iso: string | null) =>
+      iso ? new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : null;
+    return (
+      <div className="flex min-h-full flex-col bg-fond p-6">
+        <div className="mb-5 text-center">
+          <h1 className="text-2xl font-bold text-marque-fonce">Équipe du jour</h1>
+          <p className="mt-1 text-sm text-doux">
+            Donnée par la pointeuse — ajustez seulement le poste. Les retardataires s’ajouteront en pointant.
+          </p>
+        </div>
+        <div className="mx-auto grid w-full max-w-2xl gap-2">
+          {pointeuse.membres.length === 0 && (
+            <p className="rounded-[13px] bg-surface-douce p-4 text-center text-doux">
+              Personne n’a encore pointé son entrée.
+            </p>
+          )}
+          {pointeuse.membres.map((m) => (
+            <div key={m.utilisateur_id} className="flex items-center gap-3 rounded-[13px] border-2 border-marque bg-marque-tint px-4 py-3 shadow-e1">
+              <span className="flex-1">
+                <span className="block font-semibold">{m.nom_complet}</span>
+                <span className="block text-xs text-doux">
+                  {m.pointe_le ? `Pointé à ${heure(m.pointe_le)}` : 'Reste du shift précédent'}
+                </span>
+              </span>
+              <select
+                className="champ w-44"
+                value={equipe[m.utilisateur_id] ?? m.poste_defaut}
+                onChange={(ev) => setEquipe((e) => ({ ...e, [m.utilisateur_id]: ev.target.value }))}
+              >
+                {!POSTES_JOUR.includes(m.poste_defaut as never) && <option value={m.poste_defaut}>{m.poste_defaut}</option>}
+                {POSTES_JOUR.map((p) => <option key={p} value={p}>{LIBELLES_POSTES[p]}</option>)}
+              </select>
+            </div>
+          ))}
+        </div>
+        <div className="mx-auto mt-6 flex w-full max-w-2xl gap-3">
+          <button type="button" className="btn-blanc" onClick={() => setEtape('fond')}>Retour</button>
+          <button type="button" className="btn-accent flex-1" onClick={ouvrir} disabled={enCours}>
+            {enCours ? 'Ouverture…' : `Ouvrir le service (${pointeuse.membres.length} présent(s))`}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-full flex-col bg-fond p-6">
       <div className="mb-5 text-center">
@@ -205,7 +281,7 @@ export function OuvertureService() {
       </div>
       <div className="mx-auto mt-6 flex w-full max-w-2xl gap-3">
         <button type="button" className="btn-blanc" onClick={() => setEtape('fond')}>Retour</button>
-        <button type="button" className="btn-accent flex-1" onClick={ouvrir} disabled={enCours || !propositionsChargees || !propositionsActualisees}>
+        <button type="button" className="btn-accent flex-1" onClick={ouvrir} disabled={enCours || !pret}>
           {enCours ? 'Ouverture…' : `Ouvrir le service (${Object.keys(equipe).length} présent(s))`}
         </button>
       </div>
