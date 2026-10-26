@@ -330,6 +330,27 @@
       "when": 1790435000000,
       "tag": "0046_escalope_frites",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1790436000000,
+      "tag": "0047_frites_assiettes_steaks",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1790437000000,
+      "tag": "0048_glaces_cornet",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1790438000000,
+      "tag": "0049_produits_sans_recette",
+      "breakpoints": true
     }
   ]
 }

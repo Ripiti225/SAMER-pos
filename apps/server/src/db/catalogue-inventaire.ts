@@ -44,7 +44,7 @@ export const CATALOGUE_INVENTAIRE: ProduitInventaireSeed[] = [
   { code: 'po3', categorie: 'POUL', nom: 'Rôti', prix: 0, unite: 'u', role: 'CONSO_POULET', ratio: '1', ordre: 3 },
   { code: 'po4', categorie: 'POUL', nom: 'Braise', prix: 0, unite: 'u', role: 'CONSO_POULET', ratio: '1', ordre: 4 },
   { code: 'po5', categorie: 'POUL', nom: 'Désossé', prix: 0, unite: 'u', role: 'CONSO_POULET', ratio: '1', ordre: 5 },
-  { code: 'po6', categorie: 'POUL', nom: 'Cuisses de poulet', prix: 0, unite: 'u', role: 'CONSO_POULET', ratio: '1', ordre: 6 },
+  { code: 'po6', categorie: 'POUL', nom: 'Cuisses de poulet', prix: 0, unite: 'u', role: 'CONSO_POULET', ratio: '1', ordre: 6, actif: false },
   { code: 'po7', categorie: 'POUL', nom: 'Pâte de poulet', prix: 1000, unite: 'u', role: 'AUTO_ENT', ratio: '10', ordre: 7 },
   { code: 'po8', categorie: 'POUL', nom: 'Total poulet', prix: 8000, unite: 'u', role: 'TOTAL_POULET', ratio: null, ordre: 8 },
 

@@ -10,14 +10,10 @@
  * Manaïche Zaatar ne consomme pas de fromage ») reviendrait au prochain import.
  *
  * Ce que ce jeu par défaut couvre : les liaisons **lisibles dans le nom de
- * l'article** du catalogue de marque. Rien d'autre. Sont volontairement laissés
- * VIDES, faute d'une réponse dans les noms — le manager les remplit à l'écran :
- *
- *   p3  Pain fahita          aucun article « fahita » au catalogue
- *   po6 Cuisses de poulet    « Crispy » ne dit pas combien de cuisses il prend
- *   f3  Pizza spéciale       aucune taille « spéciale » au catalogue
- *   f6  Mini pizza           aucun article
- *   g4  Cornets              vendus avec la glace, sans article propre
+ * l'article** du catalogue de marque, complétées par les réponses du
+ * propriétaire au QCM du 2026-10-26 (migrations 0045 à 0049). Les Cuisses de
+ * poulet (po6) ne sont plus comptées. Le Pain fahita va aux sandwichs hors
+ * burgers : la migration 0049 le pose par CATÉGORIE, ici par nom.
  *
  * `quantite` = unités du produit consommées par article vendu. Elle NE remplace
  * PAS `ratio` (grammes de fromage, boules, portions par sachet), qui convertit
@@ -50,6 +46,8 @@ export const RECETTES_DEFAUT: RegleRecette[] = [
   // --- Pains -------------------------------------------------------------
   { produit: 'p1', motif: /^chawarma /, quantite: 1 },
   { produit: 'p2', motif: /^(burger|chicken burger)$/, quantite: 1 },
+  // Tous les sandwichs sauf les burgers (2026-10-26, migration 0049).
+  { produit: 'p3', motif: /^(crispy|escalope|francisco|philadelphia)$/, quantite: 1 },
 
   // --- Poulet (lignes CONSO_POULET) : un demi-poulet, c'est 0,5 poulet ----
   { produit: 'po2', motif: /^poulet pane/, quantite: 1 },
@@ -94,6 +92,9 @@ export const RECETTES_DEFAUT: RegleRecette[] = [
   { produit: 'f2', motif: /^manaich (?!zaatar)/, quantite: 1 },
   { produit: 'f4', motif: /^pizza .*\(m\)$/, quantite: 1 },
   { produit: 'f5', motif: /^pizza .*\(g\)$/, quantite: 1 },
+  // Restaurants qui en vendent, Yop (2026-10-26, migration 0049).
+  { produit: 'f3', motif: /^pizza speciale/, quantite: 1 },
+  { produit: 'f6', motif: /^mini pizza/, quantite: 1 },
   { produit: 'f7', motif: /^fatayer jambon fromage$/, quantite: 1 },
   { produit: 'f8', motif: /^(burger|chicken burger|crispy|escalope|francisco|philadelphia)$/, quantite: 1 },
   { produit: 'f8', motif: /^tacos /, quantite: 1 },
@@ -102,12 +103,20 @@ export const RECETTES_DEFAUT: RegleRecette[] = [
   // --- Glaces (le ratio convertit en boules, puis en pots) ---------------
   { produit: 'g1', motif: /^glace \(2 boules\)$/, quantite: 1 },
   { produit: 'g2', motif: /^(milkshake|glace speciale)$/, quantite: 1 },
+  // Le cornet sort avec la glace (2026-10-26, migration 0048) ; pas le milkshake.
+  { produit: 'g4', motif: /^(glace \(2 boules\)|glace speciale)$/, quantite: 1 },
 
   // --- Frites (le ratio convertit les portions en sachets) ---------------
   { produit: 'fr1', motif: /\+ frites$/, quantite: 1 },
   { produit: 'fr1', motif: /^(frites|steak frites|brochette frites)$/, quantite: 1 },
   // Les escalopes sont servies avec des frites (2026-10-26, migration 0046).
   { produit: 'fr1', motif: /^(assiette escalope|escalope creme fraiche)$/, quantite: 1 },
+  // Assiettes, steaks et poulets sautés aussi (2026-10-26, migration 0047).
+  {
+    produit: 'fr1',
+    motif: /^(assiette (chawarma|chicken|hamburger|viande mixte)|steak (creme fraiche|petits pois|spaghetti)|(demi )?poulet saute (a la creme|aux legumes))$/,
+    quantite: 1,
+  },
   { produit: 'fr2', motif: /^tacos /, quantite: 1 },
 
   // --- Boissons ----------------------------------------------------------
