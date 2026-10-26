@@ -17,6 +17,12 @@ verify_jwt = false
 [functions.admin-catalogue]
 verify_jwt = false
 
+# File d'ordres du siège, relevée par chaque site avec sa clé de site. Absente
+# d'ici jusqu'au 2026-10-26 : déployée avec le défaut (jeton exigé), elle
+# répondait 401 à tous les postes avant même d'atteindre le code.
+[functions.ordres]
+verify_jwt = false
+
 # Console siège : elle s'authentifie bien par JWT Supabase, mais la
 # vérification est faite DANS la fonction (`verifierSiege`), et elle va plus
 # loin que la passerelle — celle-ci accepterait la clé anonyme, qui est
