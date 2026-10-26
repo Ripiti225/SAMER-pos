@@ -323,6 +323,13 @@
       "when": 1790434000000,
       "tag": "0045_recettes_brochette_darina",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1790435000000,
+      "tag": "0046_escalope_frites",
+      "breakpoints": true
     }
   ]
 }

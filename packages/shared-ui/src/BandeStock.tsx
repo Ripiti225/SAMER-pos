@@ -16,8 +16,11 @@ import type { StockPlat } from '@pos/shared';
  */
 export function BandeStock({ stock }: { stock: StockPlat | undefined }) {
   if (!stock) return null;
+  // Le plat est épuisé dès qu'UN de ses produits l'est (`etat` = le pire).
   const epuise = stock.etat === 'EPUISE';
-  const fond = epuise ? 'bg-alerte' : stock.etat === 'BIENTOT' ? 'bg-[#D85A30]' : 'bg-black/55';
+  // Une ligne par produit suivi (2026-10-26) : « Steak 12 · ≈ 12 » puis
+  // « Frites 3 sachets · ≈ 24 ». Le produit principal garde sa propre couleur.
+  const lignes = [{ ...stock, etat: stock.etat_produit ?? stock.etat }, ...(stock.autres ?? [])];
   return (
     <>
       {epuise && (
@@ -25,14 +28,22 @@ export function BandeStock({ stock }: { stock: StockPlat | undefined }) {
           <span className="rounded-full bg-alerte px-2.5 py-0.5 text-xs font-bold tracking-wide text-white shadow-e1">ÉPUISÉ</span>
         </div>
       )}
-      <div
-        className={`pointer-events-none absolute inset-x-0 bottom-0 truncate px-1.5 py-0.5 text-[11px] font-semibold leading-tight text-white tabular-nums ${fond}`}
-        title={stock.texte}
-      >
-        {stock.texte}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0" title={lignes.map((l) => l.texte).join(' · ')}>
+        {lignes.map((l) => (
+          <div
+            key={l.produit_id}
+            className={`truncate px-1.5 py-0.5 text-[11px] font-semibold leading-tight text-white tabular-nums ${fondDe(l.etat)}`}
+          >
+            {l.texte}
+          </div>
+        ))}
       </div>
     </>
   );
+}
+
+function fondDe(etat: StockPlat['etat']): string {
+  return etat === 'EPUISE' ? 'bg-alerte' : etat === 'BIENTOT' ? 'bg-[#D85A30]' : 'bg-black/55';
 }
 
 /**

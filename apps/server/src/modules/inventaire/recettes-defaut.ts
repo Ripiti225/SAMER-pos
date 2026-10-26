@@ -106,6 +106,8 @@ export const RECETTES_DEFAUT: RegleRecette[] = [
   // --- Frites (le ratio convertit les portions en sachets) ---------------
   { produit: 'fr1', motif: /\+ frites$/, quantite: 1 },
   { produit: 'fr1', motif: /^(frites|steak frites|brochette frites)$/, quantite: 1 },
+  // Les escalopes sont servies avec des frites (2026-10-26, migration 0046).
+  { produit: 'fr1', motif: /^(assiette escalope|escalope creme fraiche)$/, quantite: 1 },
   { produit: 'fr2', motif: /^tacos /, quantite: 1 },
 
   // --- Boissons ----------------------------------------------------------

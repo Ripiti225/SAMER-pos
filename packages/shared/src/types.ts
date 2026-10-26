@@ -779,6 +779,14 @@ export interface StockPlat {
   etat: EtatStockPlat;
   /** « Fromage 2,4 kg · ≈ 12 », « Poulet 18 · ≈ 9 », « Reste 18 ». */
   texte: string;
+  /**
+   * Les AUTRES produits suivis de la recette (2026-10-26) : le Steak Frites
+   * montre aussi ses frites. `etat` ci-dessus est alors le pire des deux —
+   * sans frites, pas de Steak Frites. Absent sur un serveur plus ancien.
+   */
+  autres?: Omit<StockPlat, 'autres' | 'etat_produit'>[];
+  /** État du produit principal SEUL quand `autres` est présent (`etat` est celui du plat). */
+  etat_produit?: EtatStockPlat;
 }
 
 export interface StockPlatsVue {

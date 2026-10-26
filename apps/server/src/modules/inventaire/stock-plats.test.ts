@@ -6,6 +6,7 @@
 import { describe, expect, test } from 'vitest';
 import type { Produit } from './calcul.js';
 import {
+  autresProduits,
   consommationParPlat,
   deduireReference,
   formaterQuantite,
@@ -191,5 +192,23 @@ describe('plats possibles, unités et seuil', () => {
     expect(formaterQuantite(1, 'sachet')).toBe('1 sachet');
     expect(formaterQuantite(4.5, 'pot')).toBe('4,5 pots');
     expect(formaterQuantite(18, 'u')).toBe('18');
+  });
+});
+
+describe('plats à plusieurs produits (2026-10-26)', () => {
+  test('le Steak Frites montre aussi ses frites, lues en sachets', () => {
+    const steak = PRODUITS.find((p) => p.code === 'pl1')!;
+    const autres = autresProduits(recette(['pl1', 1], ['fr1', 1]), PRODUITS, steak);
+    expect(autres.map((p) => p.code)).toEqual(['fr3']);
+  });
+
+  test('ni doublon, ni la référence elle-même, au plus deux', () => {
+    const pain = PRODUITS.find((p) => p.code === 'p2')!;
+    const autres = autresProduits(
+      recette(['p2', 1], ['pl4', 1], ['f8', 1], ['f4', 1], ['fr1', 1]), PRODUITS, pain,
+    );
+    expect(autres).toHaveLength(2);
+    expect(autres.map((p) => p.code)).not.toContain('p2');
+    expect(new Set(autres.map((p) => p.code)).size).toBe(2);
   });
 });

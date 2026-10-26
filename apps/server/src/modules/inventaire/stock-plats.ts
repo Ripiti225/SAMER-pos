@@ -344,9 +344,46 @@ export async function calculerStockPlats(dbx: DbOuTx): Promise<StockPlatsVue> {
     if (!reference || !connus.has(reference.produit.id)) continue;
     const stock = stockDe.get(reference.produit.id);
     if (stock === undefined) continue;
-    vue.plats[a.id] = stockDuPlat(reference, stock, consommationParPlat(recette, produits, reference.produit), seuil);
+    const principal = stockDuPlat(reference, stock, consommationParPlat(recette, produits, reference.produit), seuil);
+    const autres = autresProduits(recette, produits, reference.produit)
+      .filter((p) => connus.has(p.id) && stockDe.has(p.id))
+      .map((p) => stockDuPlat(
+        { produit: p, raison: 'INGREDIENT' }, stockDe.get(p.id)!, consommationParPlat(recette, produits, p), seuil,
+      ));
+    vue.plats[a.id] = autres.length > 0
+      ? { ...principal, etat: pireEtat([principal, ...autres]), etat_produit: principal.etat, autres }
+      : principal;
   }
   return vue;
+}
+
+/**
+ * Les produits suivis d'une recette AUTRES que la référence (2026-10-26) : les
+ * frites d'un Steak Frites, le pain d'une Assiette Hamburger. Chacun par le
+ * produit qui porte son stock (une portion de frites se lit en sachets), sans
+ * doublon, dans l'ordre du catalogue de comptage. Au plus deux : la bande tient
+ * sur la photo.
+ */
+export function autresProduits(recette: LigneRecette[], produits: Produit[], reference: Produit): Produit[] {
+  const parId = new Map(produits.map((p) => [p.id, p]));
+  const vus = new Set([reference.id]);
+  const resultat: Produit[] = [];
+  for (const r of recette) {
+    const ligne = parId.get(r.produit_id);
+    const stock = ligne ? produitDeStock(ligne, produits) : null;
+    if (!stock || vus.has(stock.id)) continue;
+    vus.add(stock.id);
+    resultat.push(stock);
+  }
+  return resultat
+    .sort((a, b) => a.categorie.localeCompare(b.categorie) || a.ordre - b.ordre)
+    .slice(0, 2);
+}
+
+const GRAVITE: Record<EtatStockPlat, number> = { OK: 0, BIENTOT: 1, EPUISE: 2 };
+/** Un plat n'est faisable que si TOUS ses produits le sont. */
+function pireEtat(stocks: { etat: EtatStockPlat }[]): EtatStockPlat {
+  return stocks.reduce<EtatStockPlat>((pire, s) => (GRAVITE[s.etat] > GRAVITE[pire] ? s.etat : pire), 'OK');
 }
 
 /**
