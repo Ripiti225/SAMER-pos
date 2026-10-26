@@ -4,6 +4,7 @@
 // on n'acquitte que jusqu'au dernier seq appliqué sans trou.
 import { clientAdmin, ErreurAuth, json, verifierCleSite } from '../_shared/auth.ts';
 import { cibleMontee, ligneAutorisee } from '../_shared/tables.ts';
+import { doitRendreLaMain } from '../_shared/budget-lot.ts';
 import {
   planifierRattrapageCatalogue,
   type CatalogueHistorique,
@@ -111,7 +112,11 @@ Deno.serve(async (req) => {
   // un simple « rien à acquitter » : le POS n'avait AUCUN moyen de savoir que
   // le cloud le refusait, ni pourquoi (panne du 2026-08-17).
   let blocage: { seq: number; table_name: string; raison: string } | undefined;
-  for (const l of lignes) {
+  const debut = Date.now();
+  for (const [traitees, l] of lignes.entries()) {
+    // Répondre avant que le POS ne raccroche (voir budget-lot.ts) : le reste
+    // du lot repart à l'appel suivant, déjà enchaîné par le POS.
+    if (doitRendreLaMain(debut, Date.now(), traitees)) break;
     const ligne = ligneAutorisee(l.table_name, l.payload ?? {}, l.record_id, restaurantId);
     if (!ligne) {
       // Table inconnue : on la GARE et on continue. S'arrêter ici gelait le
