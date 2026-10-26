@@ -6,8 +6,9 @@ import { appliquerMigrations, creerBaseSiAbsente } from '../src/db/migrate.js';
 // explicite, le pilote reprend le compte Windows (ex. HP) et les tests échouent
 // avant même leur découverte avec « role does not exist ».
 const BASE_TEST = process.env.POS_TEST_DB ?? 'pos_samer_test';
-const URL_TEST = `postgres://postgres@localhost:5432/${BASE_TEST}`;
-const ADMIN = process.env.ADMIN_DATABASE_URL ?? 'postgres://postgres@localhost:5432/postgres';
+const PORT_TEST = process.env.POS_TEST_PORT ?? '5432';
+const URL_TEST = `postgres://postgres@localhost:${PORT_TEST}/${BASE_TEST}`;
+const ADMIN = process.env.ADMIN_DATABASE_URL ?? `postgres://postgres@localhost:${PORT_TEST}/postgres`;
 
 export default async function setup(): Promise<void> {
   const admin = new pg.Client({ connectionString: ADMIN });
