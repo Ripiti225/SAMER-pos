@@ -2,8 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import { and, desc, eq, gte, lte, ne, notInArray, sql } from 'drizzle-orm';
 import { MODES_PAIEMENT, type ModePaiement } from '@pos/shared';
 import { db } from '../../db/client.js';
-import { commandeItems, commandes, notations, noteSplitItems, notesSplit, paiements, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
-import { aPermission } from '../../plugins/sessions.js';
+import { commandeItems, commandes, notations, noteSplitItems, notesSplit, paiements, servicesCaisse, tablesSalle, utilisateurs } from '../../db/schema/index.js';
+import { ErreurMetier } from '../../lib/erreurs.js';
+import { aPermission, type SessionUtilisateur } from '../../plugins/sessions.js';
+
+/** Les montants et les tables encaissées : propriétaire seulement (2026-10-26). */
+const estProprietaire = (s: SessionUtilisateur): boolean => s.role_nom === 'PROPRIETAIRE';
 import { retoursDepuis, retoursDuService } from '../services/rapport.js';
 import { conditionPaiementActif, nbRendusNet } from '../paiements/actifs.js';
 
@@ -334,9 +338,10 @@ export function routesRapports(app: FastifyInstance): void {
       .groupBy(commandeItems.nom_snapshot)
       .orderBy(commandeItems.nom_snapshot);
 
-    // Les montants (CA) ne sont envoyés QU'À qui a le Rapport X (manager/proprio).
-    // Un caissier reçoit la liste des produits pour l'inventaire, sans argent.
-    const voitMontants = await aPermission(req.session!, 'rapports.x');
+    // Les montants (CA) ne sont envoyés QU'AU PROPRIÉTAIRE (2026-10-26 ; avant :
+    // tout titulaire du Rapport X, managers compris). Les autres savent combien
+    // de tables sont encaissées, pas combien elles ont rapporté.
+    const voitMontants = estProprietaire(req.session!);
 
     return {
       service: { id: service.id, ouvert_le: service.ouvert_le.toISOString() },
@@ -354,6 +359,41 @@ export function routesRapports(app: FastifyInstance): void {
       // que le reste de l'écran — réservés au Rapport X.
       retours: await retoursServiceVisible(db, service.id, voitMontants),
     };
+  });
+
+  /**
+   * « Tables encaissées » (2026-10-26) — PROPRIÉTAIRE seulement : les tables
+   * payées du shift en cours (services OUVERTS), avec leur montant, en lecture
+   * seule. À la clôture elles partent avec le shift. Les autres comptes ne
+   * voient plus les tables payées du tout.
+   */
+  app.get('/api/rapports/tables-encaissees', { preHandler: app.exigerAuth }, async (req) => {
+    if (!estProprietaire(req.session!)) {
+      throw new ErreurMetier('Réservé au propriétaire', 403);
+    }
+    const lignes = await db
+      .select({
+        id: commandes.id,
+        numero_ticket: commandes.numero_ticket,
+        code_commande: commandes.code_commande,
+        type: commandes.type,
+        total: commandes.total,
+        encaissee_le: commandes.updated_at,
+        table_numero: tablesSalle.numero,
+        caissier: utilisateurs.nom_complet,
+      })
+      .from(commandes)
+      .innerJoin(servicesCaisse, eq(servicesCaisse.id, commandes.service_id))
+      .innerJoin(utilisateurs, eq(utilisateurs.id, servicesCaisse.caissier_id))
+      .leftJoin(tablesSalle, eq(tablesSalle.id, commandes.table_id))
+      .where(and(eq(servicesCaisse.statut, 'OUVERT'), eq(commandes.statut, 'PAYEE')))
+      .orderBy(desc(commandes.updated_at));
+
+    return lignes.map((l) => ({
+      ...l,
+      numero_ticket: Number(l.numero_ticket),
+      encaissee_le: l.encaissee_le.toISOString(),
+    }));
   });
 
   /**

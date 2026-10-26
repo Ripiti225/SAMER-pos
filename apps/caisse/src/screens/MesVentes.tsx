@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { formatFCFA, LIBELLES_STATUTS_COMMANDE, LIBELLES_TYPES_COMMANDE, type RetoursVue, type StatutCommande, type TypeCommande } from '@pos/shared';
+import { formatFCFA, LIBELLES_MODES, LIBELLES_STATUTS_COMMANDE, LIBELLES_TYPES_COMMANDE, type CommandeVue, type RetoursVue, type StatutCommande, type TypeCommande } from '@pos/shared';
 import { api } from '../api';
+import { Modale } from '../components/Modale';
 import { CarteSante } from '../components/SanteSync';
 import { EnteteEcran } from '../components/EnteteEcran';
 import { TableauBord } from '../components/TableauBord';
@@ -23,18 +25,26 @@ interface MesVentesVue {
   retours?: RetoursVue;
 }
 
-/** « Mes ventes » : les commandes du service en cours du caissier connecté. */
+/** « Tables en cours » (ex-« Mes ventes », renommé le 2026-10-26) : les commandes pas encore encaissées du service du caissier connecté. */
 export function MesVentes() {
   const { aller, rentrer, session } = useCaisse();
-  const estManager = session?.utilisateur.role === 'MANAGER' || session?.utilisateur.role === 'PROPRIETAIRE';
-  // Voir les montants (CA) = permission Rapport X (manager/propriétaire). Un
-  // caissier ne voit PAS l'argent, mais la liste des produits vendus (inventaire).
-  const voitMontants = session?.permissions.includes('rapports.x') ?? false;
+  // Le chiffre d'affaires en temps réel est réservé au PROPRIÉTAIRE
+  // (2026-10-26) : les autres comptes savent combien de tables sont encaissées,
+  // pas combien elles ont rapporté. Le serveur applique la même règle.
+  const estProprio = session?.utilisateur.role === 'PROPRIETAIRE';
+  const voitMontants = estProprio;
+  const estManager = estProprio;
 
   const { data } = useQuery({
     queryKey: ['mes-ventes'],
     queryFn: () => api<MesVentesVue>('/api/rapports/mes-ventes'),
   });
+  // Seules les tables EN COURS (2026-10-26) : une table payée n'a plus rien à
+  // faire ici — l'ouvrir menait à son écran de paiement, ce que le
+  // propriétaire ne veut plus. Elles restent comptées dans « N encaissées ».
+  // La liste des produits vendus a été retirée en même temps : l'inventaire
+  // a son propre écran.
+  const enCours = (data?.commandes ?? []).filter((c) => c.statut !== 'PAYEE' && c.statut !== 'ANNULEE');
   const { data: jour } = useQuery({
     queryKey: ['rapport-jour'],
     queryFn: () =>
@@ -60,7 +70,7 @@ export function MesVentes() {
   return (
     <div className="min-h-full bg-fond p-6">
       <EnteteEcran
-        titre="Mes ventes"
+        titre="Tables en cours"
         onRetour={rentrer}
         actions={data?.nb_payees !== undefined ? (
           <span className="rounded-full bg-surface-douce px-3 py-1.5 text-sm text-doux">
@@ -70,15 +80,18 @@ export function MesVentes() {
         ) : undefined}
       />
 
-      {!data?.service && <div className="carte p-6 text-center text-doux">Aucun service ouvert.</div>}
+      {!data?.service && !estProprio && <div className="carte p-6 text-center text-doux">Aucun service ouvert.</div>}
+      {data?.service && enCours.length === 0 && (
+        <div className="carte p-6 text-center text-doux">Aucune table en cours : tout est encaissé.</div>
+      )}
 
       <div className="space-y-2">
-        {(data?.commandes ?? []).map((c) => (
+        {enCours.map((c) => (
           <button
             key={c.id}
             type="button"
             className="carte flex w-full items-center justify-between p-4 text-left shadow-e1 transition hover:shadow-e2"
-            onClick={() => aller(c.statut === 'PAYEE' || c.statut === 'ANNULEE' ? 'paiement' : 'commande', c.id)}
+            onClick={() => aller('commande', c.id)}
           >
             <div>
               <span className="font-bold">{c.code_commande ?? `Ticket n° ${c.numero_ticket}`}</span>
@@ -98,20 +111,7 @@ export function MesVentes() {
         ))}
       </div>
 
-      {/* Produits vendus du service — pour l'inventaire (quantités, sans montant) */}
-      {(data?.produits?.length ?? 0) > 0 && (
-        <section className="mt-8">
-          <h2 className="mb-2 text-lg font-bold">Produits vendus — inventaire</h2>
-          <div className="carte divide-y divide-bordure p-0">
-            {(data?.produits ?? []).map((p) => (
-              <div key={p.nom} className="flex items-center justify-between px-4 py-2.5">
-                <span>{p.nom}</span>
-                <span className="text-lg font-bold tabular-nums">×{p.quantite}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      {estProprio && <TablesEncaissees />}
 
       {/* RETOURS du service : plats lancés en cuisine puis annulés au PIN
           manager. Ils ne sont NI dans les ventes ci-dessus, NI dans les
@@ -217,5 +217,107 @@ export function MesVentes() {
         </section>
       )}
     </div>
+  );
+}
+
+interface TableEncaissee {
+  id: string;
+  numero_ticket: number;
+  code_commande: string | null;
+  type: TypeCommande;
+  total: number;
+  encaissee_le: string;
+  table_numero: string | null;
+  caissier: string;
+}
+
+const nomTable = (t: { table_numero: string | null; code_commande: string | null; numero_ticket: number }) =>
+  t.table_numero ? `Table ${t.table_numero}` : t.code_commande ?? `Ticket n° ${t.numero_ticket}`;
+
+/**
+ * PROPRIÉTAIRE seulement (2026-10-26) : les tables payées du shift en cours,
+ * consultables SANS passer en mode caissier. À la clôture, elles partent avec
+ * le shift ; celles du shift suivant arrivent. Lecture seule : « Voir » ouvre
+ * le ticket dans une fenêtre (l'écran de paiement exigerait un fond de
+ * caisse). La réouverture d'une table payée garde sa règle (PIN manager).
+ */
+function TablesEncaissees() {
+  const [aVoir, setAVoir] = useState<TableEncaissee | null>(null);
+  const { data } = useQuery({
+    queryKey: ['tables-encaissees'],
+    queryFn: () => api<TableEncaissee[]>('/api/rapports/tables-encaissees'),
+    refetchInterval: 30_000,
+  });
+  const lignes = data ?? [];
+  return (
+    <section className="mt-8">
+      <h2 className="mb-2 text-lg font-bold">
+        Tables encaissées <span className="text-sm font-normal text-doux">— visible du propriétaire seulement</span>
+      </h2>
+      {lignes.length === 0 && (
+        <div className="carte p-4 text-center text-doux">Aucune table encaissée sur les shifts en cours.</div>
+      )}
+      <div className="space-y-2">
+        {lignes.map((t) => (
+          <div key={t.id} className="carte flex items-center justify-between gap-3 p-4 shadow-e1">
+            <div className="min-w-0">
+              <span className="font-bold">{nomTable(t)}</span>
+              <span className="ml-3 text-sm text-doux">
+                {LIBELLES_TYPES_COMMANDE[t.type]} — encaissée à{' '}
+                {new Date(t.encaissee_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · {t.caissier}
+              </span>
+            </div>
+            <div className="flex flex-none items-center gap-2">
+              <span className="mr-2 font-bold tabular-nums">{formatFCFA(t.total)}</span>
+              <button type="button" className="btn-blanc" onClick={() => setAVoir(t)}>Voir</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {aVoir && <TicketEncaisse table={aVoir} onFermer={() => setAVoir(null)} />}
+    </section>
+  );
+}
+
+/** Le ticket d'une table encaissée, en lecture seule. */
+function TicketEncaisse({ table, onFermer }: { table: TableEncaissee; onFermer: () => void }) {
+  const { data: c, isLoading } = useQuery({
+    queryKey: ['commande', table.id],
+    queryFn: () => api<CommandeVue>(`/api/commandes/${table.id}`),
+  });
+  return (
+    <Modale
+      titre={`${nomTable(table)} — ${table.caissier}`}
+      onFermer={onFermer}
+      enfants={
+        isLoading || !c ? (
+          <p className="text-doux">Chargement du ticket…</p>
+        ) : (
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              {c.items.filter((i) => i.statut_cuisine !== 'ANNULE').map((i) => (
+                <div key={i.id} className="flex justify-between gap-3">
+                  <span>{i.quantite}× {i.nom_snapshot}</span>
+                  <span className="font-semibold tabular-nums">{formatFCFA(i.total_ligne)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-baseline justify-between border-t border-bordure pt-3">
+              <span className="font-semibold">Total</span>
+              <span className="text-xl font-extrabold tabular-nums">{formatFCFA(c.total)}</span>
+            </div>
+            <div className="space-y-1 rounded-xl bg-surface-douce p-3 text-sm">
+              {c.paiements.map((p) => (
+                <div key={p.id} className="flex justify-between">
+                  <span>{LIBELLES_MODES[p.mode]}</span>
+                  <span className="font-semibold tabular-nums">{formatFCFA(p.montant)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      }
+    />
   );
 }

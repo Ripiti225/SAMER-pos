@@ -195,7 +195,7 @@ export function Supervision() {
           {peutRapports && <BandeNotesEquipe />}
 
           {/* Trois colonnes comme l'accueil caissier : mêmes tuiles, mêmes
-              teintes par fonction — « Mes ventes » est violet des deux côtés. */}
+              teintes par fonction — « Tables en cours » / « Rapports du jour » est violet des deux côtés. */}
           <div className="grid w-full grid-cols-3 gap-3.5">
             {peutRapports && (
               <CarteAction

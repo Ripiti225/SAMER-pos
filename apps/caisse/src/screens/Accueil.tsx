@@ -45,7 +45,7 @@ interface EtatInventaire {
 
 /**
  * Accueil caissier — **6 tuiles** depuis DESIGN_V2 § 6.2 : Dépenses et
- * Inventaire rejoignent Nouvelle commande, Tables, Mes ventes et J'ai fini.
+ * Inventaire rejoignent Nouvelle commande, Tables, Tables en cours et J'ai fini.
  * Entorse au §15 du cahier des charges (qui en impose 4), tranchée par le boss
  * le 2026-08-15 : ce sont deux gestes quotidiens, les enfouir dans un sous-menu
  * les ferait oublier — et sans inventaire, plus de clôture possible.
@@ -273,8 +273,8 @@ export function Accueil() {
             {peutMesVentes && (
               <CarteAction
                 couleur="#8b5cf6"
-                titre="Mes ventes"
-                sousTitre="Rapports & suivi du service"
+                titre="Tables en cours"
+                sousTitre="Commandes pas encore encaissées"
                 icone={<IconChartBar size={28} />}
                 onClick={() => aller('mes-ventes')}
               />
