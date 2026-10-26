@@ -5,6 +5,21 @@
 La clé a été copiée le **2026-08-17 à 05h01:32**, avec l'identité neutre `A_CONFIGURER`
 et les deux seuls comptes propriétaire. Tout ce qui est écrit ici est **postérieur**.
 
+> **Report du 2026-10-26 (23h50) — recettes complètes (frites, cornets, pain fahita,
+> pizzas)** : `main` à `4bf5c5d`. **6 fichiers** (3 ajoutés, 3 remplacés), **6/6 vérifiés
+> par SHA-256** ; ni caisse ni `packages/` touchés. **Migrations 0047 (frites des
+> assiettes, steaks, poulets sautés), 0048 (cornet des glaces), 0049 (pain fahita des
+> sandwichs hors burgers, Pizza Spéciale 130 g, Mini Pizza 20 g, Cuisses de poulet
+> désactivées) appliquées à la base de la clé** (port 5434) :
+> `drizzle.__drizzle_migrations` **47 → 50**. La carte de la clé a une « Pizza
+> Spéciale » (liée) mais pas de « Mini Pizza » : f6 reste sans plat, attendu. Neutralité
+> contrôlée (`A_CONFIGURER`, 0 commande, 0 service, 0 `cle_site`, 2 utilisateurs,
+> 131 articles actifs). Sauvegarde préalable `data\pgdata.backup-20261026-0049`
+> (identique). Le serveur de la clé construit l'app. Anciens fichiers :
+> `usb-backup-20261026-235102`, manifeste `usb-copy-20261026-235102.csv`. Tests : serveur
+> **82 fichiers / 515 tests**. ⚠️ Première clôture après mise à jour d'un site : recompter
+> pain fahita, cornets, frites et Darina (produits que les ventes ne retiraient pas).
+>
 > **Report du 2026-10-26 (23h10) — bande de stock à plusieurs produits, escalopes avec
 > frites** : `main` à `8b78d27`. **19 fichiers** (3 ajoutés, 16 remplacés), **19/19
 > vérifiés par SHA-256**, dont les copies `@pos/shared` (5 apps) et `@pos/shared-ui`
@@ -276,11 +291,11 @@ avant que les 7 autres restaurants ne reçoivent quoi que ce soit.
 
 | | |
 |---|---|
-| Dernière migration | **0046** (`0046_escalope_frites.sql`, report du 26/10 23h10) — 0045 = brochette unique / Darina 8 / QCM, 0044 = pointeuse |
-| Base de la clé | **migrée le 26/10 à 23h10** : `drizzle.__drizzle_migrations` compte **47 lignes sur 47**. Neutralité contrôlée : 0 commande, 0 service, 0 `cle_site`, 2 propriétaires, 131 articles actifs. Sauvegarde préalable : `datapgdata.backup-20261026-0046` |
-| 🔴 Postes déjà installés depuis une clé antérieure | **doivent appliquer les migrations manquantes jusqu'à 0046.** Depuis le report du 26/10, le **serveur** les applique lui-même au démarrage, quel que soit le lanceur (un ancien PosSamer.exe ne le faisait pas : le 26/10, connexion impossible sur le poste de dev). Contrôler quand même le résultat sur chaque poste. Un poste installé depuis la clé entre le 15/10 et le 22/10 a des copies `@pos/*` périmées (voir le report du 22/10) |
+| Dernière migration | **0049** (`0049_produits_sans_recette.sql`, report du 26/10 23h50) — 0048 = cornet des glaces, 0047 = frites, 0046 = escalopes, 0045 = brochette / Darina, 0044 = pointeuse |
+| Base de la clé | **migrée le 26/10 à 23h50** : `drizzle.__drizzle_migrations` compte **50 lignes sur 50**. Neutralité contrôlée : 0 commande, 0 service, 0 `cle_site`, 2 propriétaires, 131 articles actifs. Sauvegarde préalable : `datapgdata.backup-20261026-0049` |
+| 🔴 Postes déjà installés depuis une clé antérieure | **doivent appliquer les migrations manquantes jusqu'à 0049.** Depuis le report du 26/10, le **serveur** les applique lui-même au démarrage, quel que soit le lanceur (un ancien PosSamer.exe ne le faisait pas : le 26/10, connexion impossible sur le poste de dev). Contrôler quand même le résultat sur chaque poste. Un poste installé depuis la clé entre le 15/10 et le 22/10 a des copies `@pos/*` périmées (voir le report du 22/10) |
 | Rebuild des interfaces | **caisse recompilée le 26/10 à 23h10** (`index-CpFaEBqG.js`). KDS, serveur et client tournent en Vite dev depuis leurs sources (pas de `dist` servi) ; siège publié par Vercel depuis `main` |
-| Report du code sur la clé master | **fait le 26/10 à 23h10** (`8b78d27`) — 19 fichiers, 19/19 vérifiés, copies `@pos/*` comprises. Plus tôt le 26/10 : `1986473` (5 fichiers), `f49d567` (52 fichiers). `.env`, base (hors migrations), runtime, dépendances portables et exécutable de la clé préservés |
+| Report du code sur la clé master | **fait le 26/10 à 23h50** (`4bf5c5d`) — 6 fichiers, 6/6 vérifiés. Plus tôt le 26/10 : `8b78d27` (19), `1986473` (5), `f49d567` (52). `.env`, base (hors migrations), runtime, dépendances portables et exécutable de la clé préservés |
 | Virus Grenam | **nettoyé le 19/10** — 82 exécutables restaurés (voir le report du 19/10). Analyser le PC d'origine de l'infection (16/10, 13h26) |
 | Scripts à la racine du dossier portable | **à jour le 20/09** — tous les `.bat` et `.ps1` de `deploy/windows/` ont été recopiés |
 | Repackaging `PosSamer.exe` | **fait le 20/09 à 17h44** après la modification de `apps/desktop/main.js` ; nouvel exécutable de 74 330 255 octets copié à la racine |
