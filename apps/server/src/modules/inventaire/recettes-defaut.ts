@@ -15,10 +15,8 @@
  *
  *   p3  Pain fahita          aucun article « fahita » au catalogue
  *   po6 Cuisses de poulet    « Crispy » ne dit pas combien de cuisses il prend
- *   a10/a11 Brochettes       « Brochette Frites » ne dit pas poulet ou viande
  *   f3  Pizza spéciale       aucune taille « spéciale » au catalogue
  *   f6  Mini pizza           aucun article
- *   b4/b5 Boisson 1000/1500f dépend du prix réel de chaque boisson du site
  *   g4  Cornets              vendus avec la glace, sans article propre
  *
  * `quantite` = unités du produit consommées par article vendu. Elle NE remplace
@@ -83,6 +81,14 @@ export const RECETTES_DEFAUT: RegleRecette[] = [
   { produit: 'pl5', motif: /^5 pieces crispy/, quantite: 1 },
   { produit: 'pl5', motif: /^10 pieces crispy/, quantite: 2 },
 
+  // --- Choix du propriétaire, 2026-10-26 (QCM, migration 0045) ------------
+  // Une seule « Brochette » (a10) : la vente ne dit pas poulet ou viande.
+  { produit: 'a10', motif: /^brochette frites$/, quantite: 1 },
+  { produit: 'p2', motif: /^assiette (chicken|hamburger)$/, quantite: 1 },
+  { produit: 'pl3', motif: /^assiette chicken$/, quantite: 1 },
+  { produit: 'pl4', motif: /^assiette hamburger$/, quantite: 1 },
+  { produit: 'p1', motif: /^assiette chawarma$/, quantite: 2 },
+
   // --- Fromage (le ratio du produit convertit en grammes) ----------------
   // La Manaïche Zaatar est la seule sans fromage : le thym, c'est du thym.
   { produit: 'f2', motif: /^manaich (?!zaatar)/, quantite: 1 },
@@ -108,6 +114,10 @@ export const RECETTES_DEFAUT: RegleRecette[] = [
   { produit: 'b3', motif: /^eau celeste \(petite\)$/, quantite: 1 },
   { produit: 'b6', motif: /^fresco$/, quantite: 1 },
   { produit: 'b8', motif: /^the$/, quantite: 1 },
+  // Boissons au prix : 1 000 F → Boisson 1000f, 1 500 F → Boisson 1500f.
+  { produit: 'b4', motif: /^(boisson|cody's energie)$/, quantite: 1 },
+  { produit: 'b5', motif: /^(cody's malta|bavaria \(bouteille\))$/, quantite: 1 },
+  { produit: 'b8', motif: /^the infusion$/, quantite: 1 },
 ];
 
 /**

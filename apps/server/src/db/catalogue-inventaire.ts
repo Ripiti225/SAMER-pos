@@ -28,6 +28,8 @@ export interface ProduitInventaireSeed {
   role: string;
   ratio: string | null;
   ordre: number;
+  /** Absent = actif. */
+  actif?: boolean;
 }
 
 export const CATALOGUE_INVENTAIRE: ProduitInventaireSeed[] = [
@@ -64,8 +66,10 @@ export const CATALOGUE_INVENTAIRE: ProduitInventaireSeed[] = [
   { code: 'pl3', categorie: 'PLAT', nom: 'Chicken burger', prix: 0, unite: 'u', role: 'COMPTE', ratio: null, ordre: 3 },
   { code: 'pl4', categorie: 'PLAT', nom: 'Viande burger', prix: 0, unite: 'u', role: 'COMPTE', ratio: null, ordre: 4 },
   { code: 'pl5', categorie: 'PLAT', nom: 'Crispy 5pcs', prix: 5000, unite: 'u', role: 'COMPTE', ratio: null, ordre: 5 },
-  { code: 'a10', categorie: 'PLAT', nom: 'Brochette poulet', prix: 5000, unite: 'u', role: 'COMPTE', ratio: null, ordre: 6 },
-  { code: 'a11', categorie: 'PLAT', nom: 'Brochette viande', prix: 5000, unite: 'u', role: 'COMPTE', ratio: null, ordre: 7 },
+  // Une seule « Brochette » depuis le 2026-10-26 (migration 0045) : les ventes ne
+  // disent pas poulet ou viande. a11 reste, désactivé, pour l'historique.
+  { code: 'a10', categorie: 'PLAT', nom: 'Brochette', prix: 5000, unite: 'u', role: 'COMPTE', ratio: null, ordre: 6 },
+  { code: 'a11', categorie: 'PLAT', nom: 'Brochette viande', prix: 5000, unite: 'u', role: 'COMPTE', ratio: null, ordre: 7, actif: false },
 
   // Fromage : chaque produit consomme des grammes, f10 est le stock réel
   { code: 'f2', categorie: 'FROM', nom: 'Manaïche (100g)', prix: 0, unite: 'g', role: 'CONSO_FROMAGE', ratio: '100', ordre: 1 },
@@ -86,7 +90,8 @@ export const CATALOGUE_INVENTAIRE: ProduitInventaireSeed[] = [
   { code: 'b5', categorie: 'BOIS', nom: 'Boisson 1500f', prix: 1500, unite: 'u', role: 'COMPTE', ratio: null, ordre: 5 },
   { code: 'b6', categorie: 'BOIS', nom: 'Pot Fresco', prix: 1000, unite: 'u', role: 'COMPTE', ratio: null, ordre: 6 },
   // Elle rentre en sachets et sort au Pot Fresco : 1 sachet = 9 pots (ratio).
-  { code: 'b7', categorie: 'BOIS', nom: 'Darina', prix: 0, unite: 'sachet', role: 'DARINA', ratio: '9', ordre: 7 },
+  // 1 sachet de Darina = 8 Pots Fresco (9 jusqu'au 2026-10-26, migration 0045).
+  { code: 'b7', categorie: 'BOIS', nom: 'Darina', prix: 0, unite: 'sachet', role: 'DARINA', ratio: '8', ordre: 7 },
   { code: 'b8', categorie: 'BOIS', nom: 'Thé', prix: 1000, unite: 'u', role: 'COMPTE', ratio: null, ordre: 8 },
 
   // Glaces
