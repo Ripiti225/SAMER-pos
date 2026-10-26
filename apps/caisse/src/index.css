@@ -16,6 +16,14 @@ body {
   touch-action: manipulation;
 }
 
+/* Ajustement à l'écran (main.tsx) : #racine est réduite par `zoom`, et `100vh`
+   ne suit pas — il ne remplirait plus que 80 % de l'écran à l'échelle 0,8. On
+   le divise par l'échelle pour retrouver la pleine hauteur. Placé APRÈS
+   `@tailwind utilities` : même spécificité, donc cette règle l'emporte. */
+.h-screen {
+  height: calc(100vh / var(--echelle, 1));
+}
+
 /* ---------------------------------------------------------------------------
    Écran de connexion (DESIGN_V2 § 6.1) — écran « vitrine » : il suit le mode
    clair/sombre du poste, contrairement à l'ossature des écrans de travail.
