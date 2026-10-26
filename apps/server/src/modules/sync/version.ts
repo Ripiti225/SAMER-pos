@@ -123,7 +123,10 @@ export function calculerVersion(
   const commitFichier = fichier?.commit && RE_COMMIT.test(fichier.commit) ? fichier.commit : null;
   return {
     version_code: forcee || fichier?.version || (commit ? commit.slice(0, 7) : null),
-    commit_git: commit ?? commitFichier,
+    // Le paquet d'abord : un poste installé par la clé garde son `.git` figé
+    // au commit de l'installation, que les mises à jour à distance ne touchent
+    // pas (Angré 7E, 2026-10-26 : paquet du 24/10, `.git` du 10/09).
+    commit_git: commitFichier ?? commit,
   };
 }
 

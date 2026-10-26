@@ -77,6 +77,21 @@ describe('version du code, lue sans lancer git', () => {
     });
   });
 
+  it('VERSION.json d’une mise à jour prime sur un vieux .git resté de l’installation', () => {
+    // Cas d'Angré 7E le 2026-10-26 : `.git` figé au commit de la clé de
+    // septembre, paquet du 24/10 posé par-dessus. Le siège recevait le bon
+    // numéro mais l'ancien commit — la référence des mises à jour à distance.
+    const racine = dossierTemp();
+    mkdirSync(join(racine, '.git'), { recursive: true });
+    writeFileSync(join(racine, '.git', 'HEAD'), `${SHA}\n`);
+    const app = join(racine, 'app');
+    const profond = join(app, 'apps', 'server', 'dist');
+    mkdirSync(profond, { recursive: true });
+    writeFileSync(join(app, 'VERSION.json'), JSON.stringify({ version: '2026.10.24-1', commit: SHA2 }));
+
+    expect(calculerVersion(profond, {})).toEqual({ version_code: '2026.10.24-1', commit_git: SHA2 });
+  });
+
   it('sans dépôt ou ref cassée : version inconnue plutôt qu’un faux numéro', () => {
     expect(lireCommit(dossierTemp())).toBeNull();
 
