@@ -5,6 +5,19 @@
 La clé a été copiée le **2026-08-17 à 05h01:32**, avec l'identité neutre `A_CONFIGURER`
 et les deux seuls comptes propriétaire. Tout ce qui est écrit ici est **postérieur**.
 
+> **Report du 2026-10-26 (22h50) — Brochette unique, Darina à 8, liaisons du QCM** :
+> `main` à `1986473`. **5 fichiers** (2 ajoutés, 3 remplacés), **5/5 vérifiés par
+> SHA-256** ; ni caisse, ni `packages/`, ni `apps/desktop` touchés. **Migration 0045
+> appliquée à la base de la clé** (port 5433) : `drizzle.__drizzle_migrations`
+> **45 → 46** ; a10 = « Brochette », a11 désactivé ; Darina **8** — ⚠️ il était **VIDE**
+> sur la clé (la 0021 l'a créé sans ratio) : tout poste installé depuis la clé retirait
+> 1 sachet par Pot Fresco vendu, la 0045 le corrige au démarrage du serveur ; 12 liaisons
+> du QCM posées. Neutralité contrôlée après (`A_CONFIGURER`, 0 commande, 0 service,
+> 0 `cle_site`, 2 utilisateurs, 131 articles actifs). Sauvegarde préalable
+> `data\pgdata.backup-20261026-0045` (1 517 fichiers, identique). Le serveur de la clé
+> construit l'app. Anciens fichiers : `usb-backup-20261026-225251`, manifeste
+> `usb-copy-20261026-225251.csv`. Tests : serveur **81 fichiers / 512 tests**.
+>
 > **Report du 2026-10-26 (soir) — pointeuse Hikvision** : `main` = `siege-8-sites-et-releve`
 > à `f49d567` (pointeuse DS-K1T320EFWX, « Tables en cours » à la place de « Mes ventes »,
 > bon de réception multi-produits, caisse ajustée aux écrans < 1024×768, migrations
@@ -251,11 +264,11 @@ avant que les 7 autres restaurants ne reçoivent quoi que ce soit.
 
 | | |
 |---|---|
-| Dernière migration | **0044** (`0044_pointeuse.sql`, report du 26/10) — 0043 = stock en cuisine, 0042 = annulation de paiement |
-| Base de la clé | **migrée le 26/10** : `drizzle.__drizzle_migrations` compte **45 lignes sur 45**. Neutralité contrôlée : 0 commande, 0 service, 0 `cle_site`, 2 propriétaires, 131 articles actifs. Sauvegarde préalable : `datapgdata.backup-20261026` |
-| 🔴 Postes déjà installés depuis une clé antérieure | **doivent appliquer les migrations manquantes jusqu'à 0044.** Depuis le report du 26/10, le **serveur** les applique lui-même au démarrage, quel que soit le lanceur (un ancien PosSamer.exe ne le faisait pas : le 26/10, connexion impossible sur le poste de dev). Contrôler quand même le résultat sur chaque poste. Un poste installé depuis la clé entre le 15/10 et le 22/10 a des copies `@pos/*` périmées (voir le report du 22/10) |
+| Dernière migration | **0045** (`0045_recettes_brochette_darina.sql`, report du 26/10 22h50) — 0044 = pointeuse |
+| Base de la clé | **migrée le 26/10 à 22h50** : `drizzle.__drizzle_migrations` compte **46 lignes sur 46**. Neutralité contrôlée : 0 commande, 0 service, 0 `cle_site`, 2 propriétaires, 131 articles actifs. Sauvegarde préalable : `datapgdata.backup-20261026-0045` |
+| 🔴 Postes déjà installés depuis une clé antérieure | **doivent appliquer les migrations manquantes jusqu'à 0045.** Depuis le report du 26/10, le **serveur** les applique lui-même au démarrage, quel que soit le lanceur (un ancien PosSamer.exe ne le faisait pas : le 26/10, connexion impossible sur le poste de dev). Contrôler quand même le résultat sur chaque poste. Un poste installé depuis la clé entre le 15/10 et le 22/10 a des copies `@pos/*` périmées (voir le report du 22/10) |
 | Rebuild des interfaces | **caisse recompilée le 26/10** (`index-CEutLA9N.js`). KDS, serveur et client tournent en Vite dev depuis leurs sources (pas de `dist` servi) ; siège publié par Vercel depuis `main` |
-| Report du code sur la clé master | **fait le 26/10** (`f49d567`) — 52 fichiers, **52/52 vérifiés par SHA-256** (copies `@pos/*` déjà à niveau). Le 25/10 (`d08ca34`) : 89 fichiers + nouvel exe. `.env`, base (hors migrations), runtime, dépendances portables et exécutable de la clé préservés |
+| Report du code sur la clé master | **fait le 26/10 à 22h50** (`1986473`) — 5 fichiers, 5/5 vérifiés. Plus tôt le 26/10 (`f49d567`) : 52 fichiers. `.env`, base (hors migrations), runtime, dépendances portables et exécutable de la clé préservés |
 | Virus Grenam | **nettoyé le 19/10** — 82 exécutables restaurés (voir le report du 19/10). Analyser le PC d'origine de l'infection (16/10, 13h26) |
 | Scripts à la racine du dossier portable | **à jour le 20/09** — tous les `.bat` et `.ps1` de `deploy/windows/` ont été recopiés |
 | Repackaging `PosSamer.exe` | **fait le 20/09 à 17h44** après la modification de `apps/desktop/main.js` ; nouvel exécutable de 74 330 255 octets copié à la racine |
@@ -264,7 +277,7 @@ avant que les 7 autres restaurants ne reçoivent quoi que ce soit.
 | SQL cloud ponctuel | `sql/cloud/ajouts_samerdelly_20260908.sql` — 4 produits SamerDelly, **publication non confirmée** (voir l'entrée du 08/09) |
 | Rattrapage à lancer par site | `pnpm services:republier` — republie les explications d'écart que le cloud jetait entre le 28/08 et le 04/09. **Fait sur le 7E le 04/09** |
 | 🔴 À vérifier sur les 7 autres sites | `SELECT count(*) FROM sync_outbox WHERE synced_at IS NULL;` — la FK `notes_split_payee_par_fk` a gelé 12 h de ventes sur le 7E, elle a pu geler les leurs |
-| Tests | **verts au 26/10** — serveur : **80 fichiers / 509 tests** (sur un PostgreSQL à part : `POS_TEST_PORT=5433`) ; fonctions Supabase partagées : **209 tests**. Typecheck serveur, caisse, siège OK |
+| Tests | **verts au 26/10** — serveur : **81 fichiers / 512 tests** (sur un PostgreSQL à part : `POS_TEST_PORT=5433`) ; fonctions Supabase partagées : **209 tests**. Typecheck serveur, caisse, siège OK |
 
 > **Trou de journal à combler.** Le journal reprend au 25/08, mais les commits du
 > **22 au 24/08** (séquences, ordres du siège, console du siège, republication des
