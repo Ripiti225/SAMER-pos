@@ -26,7 +26,7 @@ import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
 import { verifierPinManager } from '../auth/pin.js';
 import { serviceOuvertCourant } from '../depenses/service.js';
-import { pointeuseActive } from '../pointeuse/presence.js';
+import { pointeuseActive, posteParDefaut } from '../pointeuse/presence.js';
 
 /** Durée d'un service (§ 6.7). Sert à la fin prévue et à la jauge. */
 export const DUREE_SERVICE_HEURES = 8;
@@ -163,7 +163,7 @@ export function routesPointage(app: FastifyInstance): void {
     }
 
     const arrivee = new Date();
-    const posteJour = corps.poste_jour ?? existant?.poste_jour ?? agent.poste ?? agent.poste_cuisine ?? 'EQUIPIER';
+    const posteJour = corps.poste_jour ?? existant?.poste_jour ?? posteParDefaut(agent);
     const source = manager ? 'CAISSE' : 'OUVERTURE';
 
     const membre = await db.transaction(async (tx) => {

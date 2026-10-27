@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { and, desc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
 import { CloturerServiceSchema, OuvrirServiceSchema, RemettreClotureSchema, TransfererServiceSchema } from '@pos/shared';
-import type { RapportZ } from '@pos/shared';
+import { versPosteJour, type PosteJour, type RapportZ } from '@pos/shared';
 import { db } from '../../db/client.js';
 import { commandes, depenses, equipeService, parametresLocaux, roles, servicesCaisse, utilisateurs } from '../../db/schema/index.js';
 import { ecrireOutbox } from '../../db/outbox.js';
@@ -88,7 +88,7 @@ export function routesServices(app: FastifyInstance): void {
    * n'ont pas faites. Au-delà d'une durée de service (DUREE_SERVICE_HEURES,
    * 8 h), la relève n'en est plus une : on ne propose plus personne.
    */
-  async function restantsDuDernierService(): Promise<Map<string, { poste_jour: string; secondes_reportees: number }>> {
+  async function restantsDuDernierService(): Promise<Map<string, { poste_jour: PosteJour | null; secondes_reportees: number }>> {
     const [dernier] = await db
       .select({ id: servicesCaisse.id, cloture_le: servicesCaisse.cloture_le })
       .from(servicesCaisse)
@@ -111,7 +111,9 @@ export function routesServices(app: FastifyInstance): void {
       .from(equipeService)
       .where(and(eq(equipeService.service_id, dernier.id), eq(equipeService.reste, true)));
     return new Map(restants.map((r) => [r.utilisateur_id, {
-      poste_jour: r.poste_jour,
+      // Une ligne écrite par l'ancienne pointeuse porte l'intitulé RH
+      // (« Sous-gérant ») : reportée telle quelle, elle bloquait l'ouverture.
+      poste_jour: versPosteJour(r.poste_jour),
       // Les absences pointées pendant le shift ne se reportent pas.
       secondes_reportees: r.secondes_reportees + (r.pointe_le
         ? Math.max(0, Math.floor((dernier.cloture_le!.getTime() - r.pointe_le.getTime()) / 1000) - r.secondes_absence)

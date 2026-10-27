@@ -13,6 +13,7 @@
  * arrive en retard (pointeuse injoignable un moment) est gardé dans le
  * journal sans rien changer à la paie déjà arrêtée.
  */
+import { versPosteJour, type PosteJour } from '@pos/shared';
 import { and, asc, desc, eq, gt, inArray, isNull, lte, or } from 'drizzle-orm';
 import { db, type DbOuTx } from '../../db/client.js';
 import { ecrireOutbox } from '../../db/outbox.js';
@@ -55,8 +56,26 @@ export async function pointeuseActive(dbx: DbOuTx = db): Promise<boolean> {
 
 type Agent = typeof utilisateurs.$inferSelect;
 
-export function posteParDefaut(agent: Pick<Agent, 'poste' | 'poste_cuisine'>): string {
-  return agent.poste ?? agent.poste_cuisine ?? 'EQUIPIER';
+/** Rôle POS → poste du jour, quand l'intitulé RH ne dit rien d'exploitable. */
+const POSTE_PAR_ROLE: Partial<Record<NonNullable<Agent['role']>, PosteJour>> = {
+  MANAGER: 'MANAGER',
+  CAISSIER: 'CAISSIER',
+  SERVEUR: 'SERVEUR',
+  CUISINE: 'CUISINIER',
+  COMPTOIRISTE: 'COMPTOIRISTE',
+  ENTRETIEN: 'PLONGE',
+};
+
+/**
+ * Poste du jour proposé pour un employé : TOUJOURS une valeur de POSTES_JOUR.
+ * L'intitulé RH (`poste`, ex. « Sous-gérant ») était repris tel quel : la
+ * caisse le renvoyait à l'ouverture et l'enum refusait le shift (2026-10-27).
+ */
+export function posteParDefaut(agent: Pick<Agent, 'poste' | 'poste_cuisine' | 'role'>): PosteJour {
+  return versPosteJour(agent.poste_cuisine)
+    ?? versPosteJour(agent.poste)
+    ?? (agent.role ? POSTE_PAR_ROLE[agent.role] : undefined)
+    ?? 'CAISSIER';
 }
 
 export type StatutEvenement = 'APPLIQUE' | 'EN_ATTENTE' | 'INCONNU' | 'IGNORE';

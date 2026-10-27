@@ -324,6 +324,33 @@ export const LIBELLES_POSTES: Record<PosteJour, string> = {
   MANAGER: 'Manager',
 };
 
+/**
+ * Ramène un intitulé libre (poste RH SamerTrackly : « Sous-gérant »,
+ * « Caissier/re »…) à un poste du jour connu, ou null. Le poste du jour est un
+ * enum à l'ouverture de service : un intitulé RH glissé dans `poste_jour` (la
+ * pointeuse le faisait, 2026-10-27) y refusait TOUTE l'ouverture.
+ *
+ * Même ordre que `mapPosteRole` côté serveur : la gérance d'abord (un caissier
+ * promu garde « caisse » dans son intitulé), la plonge avant la cuisine.
+ */
+export function versPosteJour(texte: string | null | undefined): PosteJour | null {
+  if (!texte) return null;
+  if ((POSTES_JOUR as readonly string[]).includes(texte)) return texte as PosteJour;
+  const t = texte.toLowerCase();
+  if (/g[ée]ran|manager/.test(t)) return 'MANAGER';
+  if (/plong|surface|m[ée]nag/.test(t)) return 'PLONGE';
+  if (/pizza/.test(t)) return 'PIZZAIOLO';
+  if (/grill|braise/.test(t)) return 'GRILLADE';
+  if (/comptoir/.test(t)) return 'COMPTOIRISTE';
+  if (/barman|barmaid/.test(t)) return 'BARMAN';
+  if (/cuisin|chef|aide/.test(t)) return 'CUISINIER';
+  if (/serveu/.test(t)) return 'SERVEUR';
+  if (/caiss/.test(t)) return 'CAISSIER';
+  // En dernier : « responsable cuisine » reste en cuisine.
+  if (/responsable/.test(t)) return 'MANAGER';
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // CORRECTIONS3 — circuit client ↔ serveur
 // ---------------------------------------------------------------------------
