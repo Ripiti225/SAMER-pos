@@ -5,6 +5,15 @@
 La clé a été copiée le **2026-08-17 à 05h01:32**, avec l'identité neutre `A_CONFIGURER`
 et les deux seuls comptes propriétaire. Tout ce qui est écrit ici est **postérieur**.
 
+> **Report du 2026-10-27 (17h44) — pointeuse : le poste du jour n'est plus l'intitulé
+> RH** : `main` à `328f2d3`. **10 fichiers** (1 ajouté, 9 remplacés), **10/10 vérifiés
+> par SHA-256**, dont les copies `@pos/shared` (5 apps). Avant copie, les fichiers de la
+> clé étaient bien ceux de `88cbc69` (aucune divergence). **Aucune migration**, base de
+> la clé inchangée (50/50) ; caisse non recompilée (seuls des ajouts dans
+> `constantes.ts`, utilisés par le serveur). Contrôle : `construireApp` se charge depuis
+> `D:\POS-Samer\app\apps\server`, `versPosteJour('Sous-gérant')` → `MANAGER`. Anciens
+> fichiers : `usb-backup-20261027-174430`, manifeste `usb-copy-20261027-174430.csv`.
+>
 > **Report du 2026-10-26 (23h50) — recettes complètes (frites, cornets, pain fahita,
 > pizzas)** : `main` à `4bf5c5d`. **6 fichiers** (3 ajoutés, 3 remplacés), **6/6 vérifiés
 > par SHA-256** ; ni caisse ni `packages/` touchés. **Migrations 0047 (frites des
@@ -295,7 +304,7 @@ avant que les 7 autres restaurants ne reçoivent quoi que ce soit.
 | Base de la clé | **migrée le 26/10 à 23h50** : `drizzle.__drizzle_migrations` compte **50 lignes sur 50**. Neutralité contrôlée : 0 commande, 0 service, 0 `cle_site`, 2 propriétaires, 131 articles actifs. Sauvegarde préalable : `datapgdata.backup-20261026-0049` |
 | 🔴 Postes déjà installés depuis une clé antérieure | **doivent appliquer les migrations manquantes jusqu'à 0049.** Depuis le report du 26/10, le **serveur** les applique lui-même au démarrage, quel que soit le lanceur (un ancien PosSamer.exe ne le faisait pas : le 26/10, connexion impossible sur le poste de dev). Contrôler quand même le résultat sur chaque poste. Un poste installé depuis la clé entre le 15/10 et le 22/10 a des copies `@pos/*` périmées (voir le report du 22/10) |
 | Rebuild des interfaces | **caisse recompilée le 26/10 à 23h10** (`index-CpFaEBqG.js`). KDS, serveur et client tournent en Vite dev depuis leurs sources (pas de `dist` servi) ; siège publié par Vercel depuis `main` |
-| Report du code sur la clé master | **fait le 26/10 à 23h50** (`4bf5c5d`) — 6 fichiers, 6/6 vérifiés. Plus tôt le 26/10 : `8b78d27` (19), `1986473` (5), `f49d567` (52). `.env`, base (hors migrations), runtime, dépendances portables et exécutable de la clé préservés |
+| Report du code sur la clé master | **fait le 27/10 à 17h44** (`328f2d3`) — 10 fichiers, 10/10 vérifiés, copies `@pos/shared` comprises. Le 26/10 : `4bf5c5d` (6), `8b78d27` (19), `1986473` (5), `f49d567` (52). `.env`, base (hors migrations), runtime, dépendances portables et exécutable de la clé préservés |
 | Virus Grenam | **nettoyé le 19/10** — 82 exécutables restaurés (voir le report du 19/10). Analyser le PC d'origine de l'infection (16/10, 13h26) |
 | Scripts à la racine du dossier portable | **à jour le 20/09** — tous les `.bat` et `.ps1` de `deploy/windows/` ont été recopiés |
 | Repackaging `PosSamer.exe` | **fait le 20/09 à 17h44** après la modification de `apps/desktop/main.js` ; nouvel exécutable de 74 330 255 octets copié à la racine |
