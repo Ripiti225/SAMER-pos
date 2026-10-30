@@ -155,6 +155,16 @@ et les deux seuls comptes propriétaire. Tout ce qui est écrit ici est **posté
 > `20261018000000`, la fonction `siege` et la console siège sont **publiés** (fait
 > depuis le Mac, confirmé le 19/10 ; non revérifié depuis ce poste).
 >
+> 🔴 **Réinfection, nettoyée le 30/10** : même `Grenam.VA!MSR`, attrapé à **Koumassi le
+> 28/10 à 18h19** pendant l'installation. Même schéma : 82 exécutables remplacés (533 504
+> octets), originaux cachés en `g<nom>`, 15 `g*.ico` vides. Copies virales déplacées dans
+> `D:\_QUARANTAINE_VIRUS\*.virus` (le `PosSamer.exe` viral a été supprimé par Defender),
+> originaux renommés et rendus visibles : **82/82 identiques par SHA-256** aux fichiers
+> sains de ce poste (`PosSamer.exe` = `apps/desktop/release/PosSamer.exe` du 24/10,
+> `E87058E9…`). `data\` non touché (dernière écriture 26/10 23h51). Scan Defender de `D:\`
+> sans détection hors quarantaine ; `node`, `pg_ctl`, `postgres` répondent. **Le PC de
+> Koumassi est infecté** : à nettoyer avant d'y rebrancher une clé.
+>
 > 🔴 **Virus sur la clé, nettoyé le 19/10** : `Virus:Win32/Grenam.VA!MSR` (Defender). Le
 > **16/10 vers 13h26**, sur un PC infecté, il a remplacé **82 exécutables** de la clé
 > (`PosSamer.exe`, `runtime\node\node.exe`, tout `runtime\pgsql\bin`, `electron.exe`,
