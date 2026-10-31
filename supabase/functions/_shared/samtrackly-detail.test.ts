@@ -159,6 +159,37 @@ describe('construirePresences — qui était là, et combien il a touché', () =
     assert.equal(l.heure_fin, '01:30');
   });
 
+  test('pointeuse : la présence porte l’arrivée et le départ bruts pour la paie', () => {
+    const [l] = construirePresences(
+      [{ utilisateur_id: 'pos-flora', poste_jour: 'Caisse', reste: false, source: 'POINTEUSE',
+         pointe_le: '2026-10-28T15:40:00Z', depart_le: '2026-10-28T23:10:00Z' }],
+      DEPENSES, RH, CTX,
+    );
+    assert.equal(l.pointe_arrivee, '2026-10-28T15:40:00Z');
+    assert.equal(l.pointe_depart, '2026-10-28T23:10:00Z');
+  });
+
+  test('présence saisie à l’ouverture : pas d’heure de pointeuse', () => {
+    const [l] = construirePresences(
+      [{ utilisateur_id: 'pos-flora', poste_jour: 'Caisse', reste: false, source: 'OUVERTURE',
+         pointe_le: '2026-10-28T15:40:00Z', depart_le: '2026-10-28T23:10:00Z' }],
+      DEPENSES, RH, CTX,
+    );
+    assert.equal(l.pointe_arrivee, null);
+    assert.equal(l.pointe_depart, null);
+  });
+
+  test('départ oublié à la pointeuse : la présence est créée, sans heure de départ', () => {
+    const lignes = construirePresences(
+      [{ utilisateur_id: 'pos-flora', poste_jour: 'Caisse', reste: false, source: 'POINTEUSE',
+         pointe_le: '2026-10-28T15:40:00Z', depart_le: null }],
+      DEPENSES, RH, CTX,
+    );
+    assert.equal(lignes.length, 1);
+    assert.equal(lignes[0].pointe_arrivee, '2026-10-28T15:40:00Z');
+    assert.equal(lignes[0].pointe_depart, null);
+  });
+
   test('une équipe vide ne casse rien', () => {
     assert.deepEqual(construirePresences([], DEPENSES, RH, CTX), []);
     assert.deepEqual(construirePresences(null, DEPENSES, RH, CTX), []);

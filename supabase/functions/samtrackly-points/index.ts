@@ -190,7 +190,11 @@ async function lireInventaireDuService(
     admin
       .from('entrees_stock')
       .select('produit_id, produit_code, produit_nom, quantite, fournisseur')
-      .eq('inventaire_id', inventaire.id),
+      .eq('inventaire_id', inventaire.id)
+      // Une entrée supprimée à la caisse reste en base (supprime = true) et
+      // ne compte déjà plus dans inventaire_lignes.entrees : elle ne doit pas
+      // non plus apparaître dans la Vérification.
+      .eq('supprime', false),
   ]);
 
   return {
@@ -270,7 +274,7 @@ async function transfererService(
       .eq('service_id', service.id),
     admin
       .from('equipe_service')
-      .select('utilisateur_id, poste_jour, pointe_le, reste, depart_le')
+      .select('utilisateur_id, poste_jour, pointe_le, depart_le, source, reste')
       .eq('service_id', service.id),
   ]);
 

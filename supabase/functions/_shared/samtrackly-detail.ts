@@ -29,6 +29,8 @@ export interface EquipeService {
   reste?: boolean | null;
   /** Sortie pointée à la pointeuse (2026-10-26). NULL = parti à la clôture. */
   depart_le?: string | null;
+  /** POINTEUSE, CAISSE ou OUVERTURE : seule la pointeuse donne de vraies heures. */
+  source?: string | null;
 }
 
 /** `HH:MM` en UTC (= heure d'Abidjan), comme les heures du shift. */
@@ -115,6 +117,9 @@ export interface LignePresence {
   shift_nom: string;
   heure_debut: string;
   heure_fin: string;
+  /** Horodatages bruts de la pointeuse (paie) ; null hors source POINTEUSE. */
+  pointe_arrivee: string | null;
+  pointe_depart: string | null;
   date: string | null;
 }
 
@@ -166,6 +171,10 @@ export function construirePresences(
       // restent visibles au siège (equipe_service.secondes_absence).
       heure_debut: heureDe(membre.pointe_le) ?? ctx.heureDebut ?? '',
       heure_fin: heureDe(membre.depart_le) ?? ctx.heureFin ?? '',
+      // Pour l'état de salaire : uniquement ce que la pointeuse a vu. Une
+      // présence saisie à l'ouverture ou à la caisse n'a pas d'heure fiable.
+      pointe_arrivee: membre.source === 'POINTEUSE' ? membre.pointe_le ?? null : null,
+      pointe_depart: membre.source === 'POINTEUSE' ? membre.depart_le ?? null : null,
       date: ctx.date,
     });
   }
