@@ -63,9 +63,12 @@ fonctionnement : équipe cochée à l'ouverture, pointage libre à la caisse.
 - **« Injoignable »** : pointeuse éteinte, sur un autre réseau, ou IP changée.
   Depuis le PC serveur, ouvrir `http://<IP>` dans le navigateur : la page de
   connexion Hikvision doit s'afficher.
-- **« Identifiant ou mot de passe incorrect »** : ressaisir le mot de passe
-  `admin` de la pointeuse. Après plusieurs échecs, l'appareil se verrouille
-  quelques minutes.
+- **« Mot de passe refusé »** : le POS a arrêté de lire la pointeuse pour ne pas
+  la faire bloquer ce poste (les pointages restent dans l'appareil). Ressaisir le
+  mot de passe `admin`, puis « Enregistrer et tester ». Après plusieurs refus,
+  l'appareil bloque l'adresse du poste environ 30 min et refuse alors même le bon
+  mot de passe, alors que son écran fonctionne encore : le débrancher 10 secondes
+  lève le blocage.
 - **Heures décalées** : vérifier l'heure et le fuseau de la pointeuse (étape 1.3).
 - Réglage par fichier possible sur un poste : `POINTEUSE_URL`,
   `POINTEUSE_UTILISATEUR`, `POINTEUSE_MOT_DE_PASSE` dans `apps/server/.env`

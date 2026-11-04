@@ -72,6 +72,39 @@ function enteteDigest(cfg: ConfigPointeuse, methode: string, uri: string, defi: 
 
 export class ErreurPointeuse extends Error {}
 
+/**
+ * Identifiant ou mot de passe refusé. À ne JAMAIS retenter tout seul : après
+ * quelques refus, l'appareil bloque l'adresse IP du POS une demi-heure, et
+ * refuse alors même le bon mot de passe — y compris depuis le navigateur du
+ * poste. Une boucle qui retente garde la pointeuse bloquée indéfiniment
+ * (vécu le 2026-10-28, même avec une pointeuse neuve).
+ */
+export class ErreurAuthPointeuse extends ErreurPointeuse {}
+
+/** Ni l'appareil ni ses identifiants ne répondent : inutile d'insister. */
+export const estErreurBloquante = (e: unknown): boolean =>
+  e instanceof ErreurAuthPointeuse || (e instanceof ErreurPointeuse && /injoignable/.test(e.message));
+
+/**
+ * Message d'un refus d'identifiants. L'appareil dit dans sa réponse s'il a
+ * bloqué ce poste (lockStatus / unlockTime, en secondes) ou combien d'essais
+ * il reste avant de le faire (retryLoginTime) — en XML ou en JSON.
+ */
+export function messageRefus(corps: string): string {
+  const champ = (nom: string) =>
+    new RegExp(`<${nom}>\\s*([^<]*?)\\s*</${nom}>`).exec(corps)?.[1] ?? new RegExp(`"${nom}"\\s*:\\s*"?([^",}]*)`).exec(corps)?.[1];
+  const deblocage = Number(champ('unlockTime'));
+  if (champ('lockStatus') === 'lock') {
+    const minutes = Number.isFinite(deblocage) && deblocage > 0 ? Math.ceil(deblocage / 60) : null;
+    return 'La pointeuse a bloqué ce poste après trop de mots de passe refusés'
+      + (minutes ? ` (encore ${minutes} min)` : '')
+      + ' : même le bon mot de passe est refusé d’ici là. Pour débloquer tout de suite, débranchez la pointeuse 10 secondes.';
+  }
+  const essais = champ('retryLoginTime');
+  return 'Mot de passe de la pointeuse refusé'
+    + (essais !== undefined && /^\d+$/.test(essais) ? ` — encore ${essais} essai(s) avant qu’elle bloque ce poste` : '');
+}
+
 /** Requête authentifiée : un premier essai pour obtenir le défi, puis la vraie. */
 async function requete(cfg: ConfigPointeuse, methode: string, uri: string, corps?: unknown): Promise<string> {
   const url = cfg.url.replace(/\/+$/, '') + uri;
@@ -102,7 +135,7 @@ async function requete(cfg: ConfigPointeuse, methode: string, uri: string, corps
   }
 
   const texte = await rep.text();
-  if (rep.status === 401) throw new ErreurPointeuse('Identifiant ou mot de passe de la pointeuse incorrect');
+  if (rep.status === 401) throw new ErreurAuthPointeuse(messageRefus(texte));
   if (!rep.ok) {
     const sous = /"subStatusCode"\s*:\s*"([^"]+)"/.exec(texte)?.[1] ?? /<subStatusCode>([^<]+)/.exec(texte)?.[1];
     throw new ErreurPointeuse(`La pointeuse a répondu ${rep.status}${sous ? ` (${sous})` : ''}`);
@@ -218,7 +251,8 @@ export async function enregistrerEmploye(cfg: ConfigPointeuse, employeNo: string
     // SetUp = « ajoute ou modifie » (micrologiciels récents).
     await requete(cfg, 'PUT', '/ISAPI/AccessControl/UserInfo/SetUp?format=json', fiche);
   } catch (e) {
-    if (!(e instanceof ErreurPointeuse) || /injoignable|incorrect/.test(e.message)) throw e;
+    // Mot de passe refusé : surtout ne pas l'essayer sur les autres adresses.
+    if (!(e instanceof ErreurPointeuse) || estErreurBloquante(e)) throw e;
     try {
       await requete(cfg, 'POST', '/ISAPI/AccessControl/UserInfo/Record?format=json', fiche);
     } catch {
@@ -246,7 +280,7 @@ export async function enregistrerVisage(cfg: ConfigPointeuse, employeNo: string,
     // FDSetUp = « ajoute ou remplace » (micrologiciels récents).
     await requete(cfg, 'PUT', '/ISAPI/Intelligent/FDLib/FDSetUp?format=json', formulaire());
   } catch (e) {
-    if (!(e instanceof ErreurPointeuse) || /injoignable|incorrect/.test(e.message)) throw e;
+    if (!(e instanceof ErreurPointeuse) || estErreurBloquante(e)) throw e;
     await requete(cfg, 'POST', '/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json', formulaire());
   }
 }

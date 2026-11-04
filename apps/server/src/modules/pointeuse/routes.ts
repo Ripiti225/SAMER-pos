@@ -11,9 +11,9 @@ import { parametresLocaux, pointeuseEvenements, utilisateurs } from '../../db/sc
 import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
 import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
-import { enregistrerEmploye, enregistrerVisage, ErreurPointeuse, lireInfoAppareil } from './isapi.js';
+import { enregistrerEmploye, enregistrerVisage, ErreurPointeuse, estErreurBloquante, lireInfoAppareil } from './isapi.js';
 import { photoPourPointeuse } from './photo.js';
-import { etatPointeuse, lirePointeuse, reinitialiserPointeuse } from './moteur.js';
+import { etatPointeuse, lirePointeuse, noterErreurPointeuse, reinitialiserPointeuse } from './moteur.js';
 import { appliquerEvenement, chargerConfigPointeuse, CLES_POINTEUSE } from './presence.js';
 
 const ConfigSchema = z.object({
@@ -36,7 +36,12 @@ const NumeroSchema = z.object({
 const RATTRAPAGE_INCONNUS_MS = 16 * 3600_000;
 
 function messagePointeuse(e: unknown): never {
-  if (e instanceof ErreurPointeuse) throw new ErreurMetier(e.message, 502);
+  if (e instanceof ErreurPointeuse) {
+    // Même au test ou à l'envoi : le badge le dit (« Enregistrer et tester » vient
+    // d'effacer l'erreur précédente), et un refus d'identifiants arrête la boucle.
+    noterErreurPointeuse(e);
+    throw new ErreurMetier(e.message, 502);
+  }
   throw e;
 }
 
@@ -222,8 +227,8 @@ export function routesPointeuse(app: FastifyInstance): void {
         await enregistrerEmploye(config, a.no!, a.nom);
         envoyes++;
       } catch (e) {
-        // Pointeuse injoignable : inutile d'insister pour les suivants.
-        if (e instanceof ErreurPointeuse && /injoignable|incorrect/.test(e.message)) messagePointeuse(e);
+        // Pointeuse injoignable ou mot de passe refusé : inutile d'insister pour les suivants.
+        if (estErreurBloquante(e)) messagePointeuse(e);
         echecs.push({ nom: a.nom, erreur: (e as Error).message });
         continue;
       }
@@ -240,7 +245,7 @@ export function routesPointeuse(app: FastifyInstance): void {
         await enregistrerVisage(config, a.no!, photo.jpeg);
         visages++;
       } catch (e) {
-        if (e instanceof ErreurPointeuse && /injoignable|incorrect/.test(e.message)) messagePointeuse(e);
+        if (estErreurBloquante(e)) messagePointeuse(e);
         aEnroler.push({ nom: a.nom, numero: a.no!, raison: `photo refusée par la pointeuse — ${(e as Error).message}` });
       }
     }
