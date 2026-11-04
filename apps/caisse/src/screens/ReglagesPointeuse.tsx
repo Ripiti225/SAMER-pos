@@ -9,7 +9,7 @@ import { api } from '../api';
 
 interface VuePointeuse {
   config: { url: string; utilisateur: string; mot_de_passe_defini: boolean; par_environnement: boolean };
-  etat: { configuree: boolean; appareil: string | null; modele: string | null; derniere_lecture: string | null; derniere_erreur: string | null; en_pause: boolean };
+  etat: { configuree: boolean; appareil: string | null; modele: string | null; decalage_minutes: number | null; derniere_lecture: string | null; derniere_erreur: string | null; en_pause: boolean };
   employes: { id: string; nom_complet: string; pointeuse_no: string | null }[];
   inconnus: { employe_no: string; nom_appareil: string | null; nb: number; dernier: string }[];
   derniers: { id: string; employe_no: string; nom: string; sens: 'ENTREE' | 'SORTIE'; pointe_le: string; statut: string }[];
@@ -138,6 +138,12 @@ export function Pointeuse() {
             « Lire maintenant ».
           </p>
         )}
+        {!!etat.decalage_minutes && (
+          <p className="mb-3 text-sm text-alerte-txt">
+            La pointeuse est réglée sur le fuseau {fuseau(etat.decalage_minutes)} au lieu de GMT+0 (Abidjan) : l’heure
+            qu’elle affiche est fausse. Le POS en tient compte, mais corrigez-la sur l’appareil (Système › Heure).
+          </p>
+        )}
         {etat.appareil && (
           <p className="mb-3 text-sm text-doux">
             {etat.modele ?? 'Hikvision'} · n° de série {etat.appareil}
@@ -239,6 +245,12 @@ export function Pointeuse() {
       </div>
     </section>
   );
+}
+
+/** 480 → « UTC+8 », -90 → « UTC-1:30 ». */
+function fuseau(minutes: number): string {
+  const abs = Math.abs(minutes);
+  return `UTC${minutes < 0 ? '-' : '+'}${Math.floor(abs / 60)}${abs % 60 ? `:${String(abs % 60).padStart(2, '0')}` : ''}`;
 }
 
 function LigneNumero({ employe, onEnregistrer }: {

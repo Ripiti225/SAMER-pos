@@ -12,7 +12,7 @@
 import { desc, eq } from 'drizzle-orm';
 import { db } from '../../db/client.js';
 import { pointeuseEvenements } from '../../db/schema/index.js';
-import { ErreurAuthPointeuse, lireEvenements, lireInfoAppareil, type ConfigPointeuse } from './isapi.js';
+import { ErreurAuthPointeuse, lireDecalageAppareil, lireEvenements, lireInfoAppareil, type ConfigPointeuse } from './isapi.js';
 import { appliquerEvenement, chargerConfigPointeuse, reprendreAttente } from './presence.js';
 
 export const INTERVALLE_POINTEUSE_MS = 20_000;
@@ -25,6 +25,8 @@ export interface EtatPointeuse {
   configuree: boolean;
   appareil: string | null;
   modele: string | null;
+  /** Fuseau de l'appareil en minutes sur UTC (480 = Chine) ; Abidjan attend 0. */
+  decalage_minutes: number | null;
   derniere_lecture: string | null;
   derniere_erreur: string | null;
   /** Identifiants refusés : plus de lecture automatique jusqu'à une action à l'écran. */
@@ -35,6 +37,7 @@ const etat: EtatPointeuse = {
   configuree: false,
   appareil: null,
   modele: null,
+  decalage_minutes: null,
   derniere_lecture: null,
   derniere_erreur: null,
   en_pause: false,
@@ -60,6 +63,8 @@ export async function lirePointeuse(
       const info = await lireInfoAppareil(config);
       etat.appareil = info.numero_serie;
       etat.modele = info.modele;
+      // Micrologiciel qui ne donne pas son heure : on suppose UTC, comme avant.
+      etat.decalage_minutes = await lireDecalageAppareil(config).catch(() => null);
     }
     const appareil = etat.appareil;
     const [dernier] = await db
@@ -72,7 +77,7 @@ export async function lirePointeuse(
       ? new Date(dernier.pointe_le.getTime() - CHEVAUCHEMENT_MS)
       : new Date(Date.now() - PREMIERE_LECTURE_MS);
 
-    const evenements = await lireEvenements(config, depuis);
+    const evenements = await lireEvenements(config, depuis, new Date(), etat.decalage_minutes);
     let nouveaux = 0;
     for (const ev of evenements) {
       const statut = await db.transaction((tx) => appliquerEvenement(tx, appareil, ev));
@@ -104,6 +109,7 @@ export function noterErreurPointeuse(e: unknown): void {
 export function reinitialiserPointeuse(): void {
   etat.appareil = null;
   etat.modele = null;
+  etat.decalage_minutes = null;
   etat.derniere_erreur = null;
   etat.en_pause = false;
 }
