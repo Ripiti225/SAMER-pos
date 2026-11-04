@@ -67,6 +67,12 @@ fonctionnement : équipe cochée à l'ouverture, pointage libre à la caisse.
   `admin` de la pointeuse. Après plusieurs échecs, l'appareil se verrouille
   quelques minutes.
 - **Heures décalées** : vérifier l'heure et le fuseau de la pointeuse (étape 1.3).
+- **Pointages qui arrivent des heures après coup** (vu à Samer Maroc le
+  2026-10-29 : 8 h de retard, la pointeuse était restée au fuseau de Chine) :
+  l'appareil compare la fenêtre de lecture à son heure locale. Depuis le
+  2026-10-30, le POS lit le fuseau de l'appareil et en tient compte, et
+  Réglages › Pointeuse signale un fuseau autre que GMT+0 — le corriger quand
+  même (étape 1.3), sinon l'heure affichée au personnel est fausse.
 - Réglage par fichier possible sur un poste : `POINTEUSE_URL`,
   `POINTEUSE_UTILISATEUR`, `POINTEUSE_MOT_DE_PASSE` dans `apps/server/.env`
   (prioritaire sur l'écran).

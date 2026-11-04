@@ -6,7 +6,7 @@
  * gère pas, d'où la petite implémentation ci-dessous, MD5 + qop=auth).
  *
  * Trois usages seulement :
- *   - identifier l'appareil (n° de série) — sert aussi de test de connexion ;
+ *   - identifier l'appareil (n° de série, fuseau) — sert aussi de test de connexion ;
  *   - lire les pointages depuis une date (AcsEvent, paginé) ;
  *   - créer / mettre à jour un employé dans l'appareil (le visage, lui,
  *     s'enrôle sur la pointeuse).
@@ -134,9 +134,30 @@ export function sensDuStatut(statut: unknown): 'ENTREE' | 'SORTIE' | null {
   }
 }
 
-/** Date au format attendu par l'appareil (Abidjan = UTC, pas d'heure d'été). */
-function dateIsapi(d: Date): string {
-  return d.toISOString().replace(/\.\d{3}Z$/, '+00:00');
+/**
+ * Décalage de l'horloge de l'appareil sur UTC, en minutes (Chine = 480) — lu
+ * sur son heure locale, `2026-10-29T16:04:09+08:00`. null si l'appareil ne le
+ * dit pas. Abidjan est à UTC+0, mais une pointeuse sortie d'usine est souvent
+ * à l'heure de Chine.
+ */
+export async function lireDecalageAppareil(cfg: ConfigPointeuse): Promise<number | null> {
+  const xml = await requete(cfg, 'GET', '/ISAPI/System/time');
+  const m = /<localTime>[^<]*([+-])(\d{2}):?(\d{2})\s*<\/localTime>/.exec(xml);
+  if (!m) return /<localTime>[^<]*Z\s*<\/localTime>/.test(xml) ? 0 : null;
+  return (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3]));
+}
+
+/**
+ * Date au format attendu par l'appareil, dans SON heure locale : il compare la
+ * fenêtre de recherche à son heure à lui sans tenir compte du décalage écrit.
+ * Une pointeuse à l'heure de Chine interrogée en « +00:00 » ne rendait chaque
+ * pointage que 8 h plus tard (Samer Maroc, 2026-10-29).
+ */
+function dateIsapi(d: Date, decalageMin: number): string {
+  const local = new Date(d.getTime() + decalageMin * 60_000).toISOString().slice(0, 19);
+  const abs = Math.abs(decalageMin);
+  const hhmm = `${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
+  return `${local}${decalageMin < 0 ? '-' : '+'}${hhmm}`;
 }
 
 interface ReponseAcsEvent {
@@ -159,7 +180,12 @@ interface ReponseAcsEvent {
  * n° d'employé sont gardés : un visage non reconnu ou une ouverture de porte
  * n'en ont pas.
  */
-export async function lireEvenements(cfg: ConfigPointeuse, depuis: Date, jusqua = new Date()): Promise<EvenementBrut[]> {
+export async function lireEvenements(
+  cfg: ConfigPointeuse,
+  depuis: Date,
+  jusqua = new Date(),
+  decalageMin: number | null = 0,
+): Promise<EvenementBrut[]> {
   const resultat: EvenementBrut[] = [];
   const searchID = randomBytes(8).toString('hex');
   let position = 0;
@@ -172,8 +198,8 @@ export async function lireEvenements(cfg: ConfigPointeuse, depuis: Date, jusqua 
         maxResults: 30,
         major: 5, // événements de contrôle d'accès
         minor: 0, // tous
-        startTime: dateIsapi(depuis),
-        endTime: dateIsapi(jusqua),
+        startTime: dateIsapi(depuis, decalageMin ?? 0),
+        endTime: dateIsapi(jusqua, decalageMin ?? 0),
       },
     });
     const rep = JSON.parse(texte) as ReponseAcsEvent;
