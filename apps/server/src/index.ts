@@ -23,6 +23,7 @@ console.log(`Serveur POS démarré sur le port ${PORT}${etatMode.mode === 'VALID
 moteurSync.brancherOrdres({
   imprimerRapportSequence: (rapport) => app.imprimante.imprimerRapportSequence(rapport as never),
   diffuser: (canal, id) => app.diffuser(canal as never, id),
+  deconnecter: (id) => app.sessions.detruirePourUtilisateur(id),
 });
 
 // Mise à jour à distance : construit dès maintenant (le battement et le

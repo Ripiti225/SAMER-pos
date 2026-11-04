@@ -24,11 +24,11 @@ import {
   genererCodeTemporaire,
   hacher,
   nomDuRole,
+  poserCodeTemporaire,
 } from './service.js';
 import { postesSamtrackly, synchroniserEquipe } from './sync-samtrackly.js';
 
 const MSG_PROTEGE = 'Le compte propriétaire est protégé';
-const CODE_VALIDE_JOURS = 7;
 
 export function routesEquipe(app: FastifyInstance): void {
   const garde = app.exigePermission('reglages.equipe');
@@ -199,28 +199,9 @@ export function routesEquipe(app: FastifyInstance): void {
     await exigerDroitCompte(req.session!, cibleNom, null, `Réinitialisation PIN employé ${id}`);
 
     const code = genererCodeTemporaire();
-    const expire = new Date(Date.now() + CODE_VALIDE_JOURS * 24 * 3600 * 1000);
-    await db.transaction(async (tx) => {
-      const [u] = await tx
-        .update(utilisateurs)
-        .set({
-          doit_definir_pin: true,
-          pin_temporaire_hash: await hacher(code),
-          pin_temporaire_expire: expire,
-          tentatives_pin: 0,
-          verrou_jusqua: null,
-          updated_at: new Date(),
-        })
-        .where(eq(utilisateurs.id, id))
-        .returning();
-      await ecrireOutbox(tx, 'utilisateurs', 'UPDATE', id, u as unknown as Record<string, unknown>);
-      await journaliser(tx, {
-        user_id: req.session!.utilisateur_id,
-        action: 'REINIT_PIN',
-        entite: 'utilisateurs',
-        entite_id: id,
-        meta: { cible: cible.nom_complet },
-      });
+    const expire = await poserCodeTemporaire(id, await hacher(code), {
+      user_id: req.session!.utilisateur_id,
+      meta: { cible: cible.nom_complet },
     });
     app.sessions.detruirePourUtilisateur(id); // il devra reposer son PIN
     return { code_temporaire: code, expire_le: expire.toISOString() };
