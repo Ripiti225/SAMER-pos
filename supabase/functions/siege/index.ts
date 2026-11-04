@@ -21,6 +21,7 @@ import {
   type Siege,
 } from '../_shared/auth.ts';
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { argon2id } from 'https://esm.sh/hash-wasm@4.12.0';
 import {
   construireEntreesJournee,
   construireParametresDecision,
@@ -1279,9 +1280,12 @@ Deno.serve(async (req) => {
             .select('restaurant_id, id, sequence_id, caissier_id, ouvert_le, cloture_le, statut, ecart, rapport_z')
             .order('ouvert_le', { ascending: false })
             .limit(500),
+          // Les ordres de RASAGE seulement : ceux de PIN portent l'empreinte
+          // d'un code, qui n'a rien à faire sur un écran ouvert au niveau LECTURE.
           admin
             .from('ordres_site')
             .select('id, restaurant_id, type, params, demandeur, statut, cree_le, execute_le, erreur')
+            .eq('type', 'RASER_SEQUENCE')
             .order('cree_le', { ascending: false })
             .limit(50),
         ]);
@@ -1375,6 +1379,104 @@ Deno.serve(async (req) => {
         });
 
         return jsonCors({ ordre_id: id });
+      }
+
+      // -- RÉINITIALISER LE PIN d'un travailleur, depuis la console.
+      // --
+      // -- Même chemin que le rasage : un ordre dans la file, que le site
+      // -- exécute à son prochain cycle (30 s). Le CODE TEMPORAIRE est tiré
+      // -- ici, montré une seule fois à l'administrateur, et ne part vers le
+      // -- site que HACHÉ en argon2id : le cloud n'en garde jamais le clair.
+      // -- Le travailleur le tape sur la caisse comme un code d'arrivée, puis
+      // -- pose son nouveau PIN — le siège ne choisit jamais le PIN lui-même.
+      case 'pin_reinitialiser': {
+        exigeAdmin(siege);
+
+        const travailleurId = String(corps.travailleur_id ?? '');
+        if (!uuidValide(travailleurId)) return jsonCors({ erreur: 'Travailleur non précisé' }, 400);
+
+        const [travailleur] = (await samtrackly(
+          `travailleurs?select=id,nom,restaurant_id&archived_at=is.null&id=eq.${travailleurId}`,
+        )) as { id: string; nom: string | null; restaurant_id: string | null }[];
+        if (!travailleur) return jsonCors({ erreur: 'Travailleur introuvable dans SamerTrackly' }, 404);
+        if (!travailleur.restaurant_id) {
+          return jsonCors({ erreur: 'Ce travailleur n’est rattaché à aucun restaurant' }, 400);
+        }
+
+        const { data: resto, error: errResto } = await admin
+          .from('restaurants')
+          .select('restaurant_id, nom')
+          .eq('samtrackly_id', travailleur.restaurant_id)
+          .eq('actif', true)
+          // Un poste remplacé laisse un temps son ancienne ligne : le plus récent fait foi.
+          .order('enrole_le', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (errResto) throw new Error('Lecture des restaurants impossible');
+        if (!resto) {
+          return jsonCors({ erreur: 'La caisse de ce restaurant n’est pas encore reliée au cloud' }, 409);
+        }
+
+        // Une demande plus récente remplace celle qui attend encore : seul le
+        // dernier code montré doit valoir. Si le site avait déjà pris l'ancienne,
+        // la nouvelle passe derrière et l'écrase — le résultat est le même.
+        await admin
+          .from('ordres_site')
+          .update({ statut: 'EXPIRE', erreur: 'Remplacé par une demande plus récente' })
+          .eq('restaurant_id', resto.restaurant_id)
+          .eq('type', 'REINIT_PIN')
+          .eq('statut', 'EN_ATTENTE')
+          .eq('params->>externe_id', travailleur.id);
+
+        const code = String(crypto.getRandomValues(new Uint32Array(1))[0]! % 1_000_000).padStart(6, '0');
+        const codeHash = await argon2id({
+          password: code,
+          salt: crypto.getRandomValues(new Uint8Array(16)),
+          parallelism: 1,
+          iterations: 2,
+          memorySize: 19456,
+          hashLength: 32,
+          outputType: 'encoded',
+        });
+
+        const id = crypto.randomUUID();
+        const { error } = await admin.from('ordres_site').insert({
+          id,
+          restaurant_id: resto.restaurant_id,
+          type: 'REINIT_PIN',
+          params: { externe_id: travailleur.id, nom: travailleur.nom, code_hash: codeHash },
+          demandeur: siege.nomComplet,
+          demandeur_id: siege.userId,
+          // Pas de recette à protéger ici : on laisse au site une journée pour
+          // venir chercher l'ordre (poste éteint la nuit, coupure internet).
+          expire_le: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+        });
+        if (error) throw new Error(`Création de l’ordre impossible : ${error.message}`);
+
+        await tracer(admin, siege, 'ORDRE_REINIT_PIN', {
+          entite: 'ordres_site',
+          entiteId: id,
+          portee: [resto.restaurant_id],
+          meta: { travailleur_id: travailleur.id, nom: travailleur.nom },
+        });
+
+        return jsonCors({ ordre_id: id, code, restaurant_nom: resto.nom });
+      }
+
+      // -- Où en est un ordre : la console interroge après une réinitialisation
+      // -- de PIN, pour dire quand le code est utilisable sur la caisse.
+      case 'ordre_etat': {
+        exigeAdmin(siege);
+        const id = String(corps.id ?? '');
+        if (!uuidValide(id)) return jsonCors({ erreur: 'Ordre non précisé' }, 400);
+        const { data, error } = await admin
+          .from('ordres_site')
+          .select('id, type, statut, execute_le, expire_le, erreur')
+          .eq('id', id)
+          .maybeSingle();
+        if (error) throw new Error('Lecture de l’ordre impossible');
+        if (!data) return jsonCors({ erreur: 'Ordre introuvable' }, 404);
+        return jsonCors({ ordre: data });
       }
 
       // -- Meilleurs clients du mois d'UN restaurant, et son tirage s'il a eu

@@ -250,7 +250,7 @@ export function App() {
           {ecran === 'mises-a-jour' && <MisesAJour siege={siege} filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'menu' && <Menu filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'categories' && <Categories filtre={filtreResto} onFiltre={setFiltreResto} />}
-          {ecran === 'equipe' && <Equipe filtre={filtreResto} onFiltre={setFiltreResto} />}
+          {ecran === 'equipe' && <Equipe siege={siege} filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'parametres' && <Parametres filtre={filtreResto} onFiltre={setFiltreResto} />}
         </main>
       </div>

@@ -255,6 +255,16 @@ export interface Employe {
   restaurant_nom: string | null;
 }
 
+/** État d'un ordre du siège vers un site, tel que l'action `ordre_etat` le rend. */
+export interface EtatOrdre {
+  id: string;
+  type: string;
+  statut: 'EN_ATTENTE' | 'EXECUTE' | 'ECHEC' | 'EXPIRE';
+  execute_le: string | null;
+  expire_le: string;
+  erreur: string | null;
+}
+
 /** Un membre de l'équipe d'un service, tel que l'action `equipe_service` le rend. */
 export interface MembreService {
   utilisateur_id: string;
