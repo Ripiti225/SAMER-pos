@@ -351,6 +351,13 @@
       "when": 1790438000000,
       "tag": "0049_produits_sans_recette",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1793923200000,
+      "tag": "0050_corrections_stock_initial",
+      "breakpoints": true
     }
   ]
 }
