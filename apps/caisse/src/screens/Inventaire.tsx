@@ -2,7 +2,7 @@
  * Écran Inventaire (DESIGN_V2 § 6.9) — sans inventaire validé, pas de clôture.
  *
  * Le caissier ne saisit qu'UNE chose : le compté. Stock initial (repris du
- * service précédent), entrées et sorties (ventes) viennent du serveur, le
+ * service précédent, corrigeable la première heure), entrées et sorties (ventes) viennent du serveur, le
  * théorique et l'écart en découlent. Chaque total dérivé affiche son calcul en
  * clair — sinon le caissier voit un chiffre tomber du ciel et ne peut pas le
  * contester.
@@ -13,10 +13,11 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconAlertTriangle, IconClipboardList, IconLock, IconLockOpen, IconPlus, IconPrinter, IconTrash } from '@tabler/icons-react';
 import type { EtatStockInstant, EtatStockLigne } from '@pos/shared';
-import { libelleCategorieInventaire } from '@pos/shared';
+import { libelleCategorieInventaire, libelleStatutCorrection } from '@pos/shared';
 import { api } from '../api';
 import { EnteteEcran } from '../components/EnteteEcran';
 import { Modale } from '../components/Modale';
+import { ModaleCorrectionStock, ModaleValiderCorrection } from '../components/ModaleCorrectionStock';
 import { useCaisse } from '../stores/session';
 import { fcfa } from './Depenses';
 
@@ -50,6 +51,17 @@ interface EntreeRecue {
   created_at: string;
 }
 
+interface CorrectionStock {
+  id: string;
+  produit_id: string;
+  produit_nom: string;
+  stock_reporte: number;
+  stock_apres: number;
+  statut: string;
+  sortant_nom: string | null;
+  intermediaire: boolean;
+}
+
 interface VueInventaire {
   service_id: string;
   inventaire_id: string;
@@ -61,6 +73,7 @@ interface VueInventaire {
   categories: { categorie: string; total: number; restants: number }[];
   lignes: LigneInventaire[];
   bilan: { a_compter: number; justes: number; manquants: number; surplus: number; montant: number };
+  correction_stock: { fin: string; corrections: CorrectionStock[] };
   entrees: EntreeRecue[];
 }
 
@@ -181,7 +194,15 @@ export function Inventaire() {
           <div className="space-y-3">
             {lignes.map((l) =>
               l.a_compter ? (
-                <CarteProduit key={l.produit_id} ligne={l} verrouille={verrouille} onEnregistre={rafraichir} onErreur={afficherToast} />
+                <CarteProduit
+                  key={l.produit_id}
+                  ligne={l}
+                  verrouille={verrouille}
+                  correction={data.correction_stock.corrections.find((c) => c.produit_id === l.produit_id)}
+                  peutCorriger={!verrouille && new Date(data.correction_stock.fin) > new Date()}
+                  onEnregistre={rafraichir}
+                  onErreur={afficherToast}
+                />
               ) : (
                 <LigneConsommation key={l.produit_id} ligne={l} />
               ),
@@ -277,17 +298,23 @@ function LigneConsommation({ ligne }: { ligne: LigneInventaire }) {
 function CarteProduit({
   ligne,
   verrouille,
+  correction,
+  peutCorriger,
   onEnregistre,
   onErreur,
 }: {
   ligne: LigneInventaire;
   verrouille: boolean;
+  correction?: CorrectionStock;
+  peutCorriger: boolean;
   onEnregistre: () => void;
   onErreur: (m: string) => void;
 }) {
   const [compte, setCompte] = useState(ligne.stock_compte === null ? '' : String(ligne.stock_compte));
   const [explique, setExplique] = useState(ligne.quantite_expliquee ? String(ligne.quantite_expliquee) : '');
   const [texte, setTexte] = useState(ligne.explication ?? '');
+  const [corrigerStock, setCorrigerStock] = useState(false);
+  const [validerStock, setValiderStock] = useState(false);
 
   const enregistrer = useMutation({
     mutationFn: (corps: Record<string, unknown>) =>
@@ -322,6 +349,25 @@ function CarteProduit({
         </h3>
         <span className="text-xs text-doux">{ligne.calcul}</span>
       </div>
+
+      {peutCorriger && (
+        <button type="button" className="btn-blanc mt-3" onClick={() => setCorrigerStock(true)}>
+          Modifier le stock initial
+        </button>
+      )}
+      {correction && (
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-jeton bg-surface-douce px-3 py-2 text-sm">
+          <span className="font-semibold text-fort">
+            Stock initial corrigé : {qte(correction.stock_reporte)} → {qte(correction.stock_apres)}
+          </span>
+          <span className="text-doux">{libelleStatutCorrection(correction.statut)}</span>
+          {correction.statut === 'A_VALIDER' && !correction.intermediaire && (
+            <button type="button" className="btn-blanc" onClick={() => setValiderStock(true)}>
+              Valider
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <Champ libelle="Initial" valeur={qte(ligne.stock_initial)} />
@@ -405,6 +451,29 @@ function CarteProduit({
         <div className="mt-2 text-xs font-medium text-doux">
           Montant de l’écart non justifié : {fcfa(ligne.manque_chiffre)}
         </div>
+      )}
+
+      {corrigerStock && (
+        <ModaleCorrectionStock
+          ligne={ligne}
+          onFermer={() => setCorrigerStock(false)}
+          onCorrige={() => {
+            setCorrigerStock(false);
+            onEnregistre();
+          }}
+          onErreur={onErreur}
+        />
+      )}
+      {validerStock && correction && (
+        <ModaleValiderCorrection
+          correction={correction}
+          onFermer={() => setValiderStock(false)}
+          onValide={() => {
+            setValiderStock(false);
+            onEnregistre();
+          }}
+          onErreur={onErreur}
+        />
       )}
     </div>
   );
