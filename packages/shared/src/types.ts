@@ -490,6 +490,11 @@ export interface RapportZ {
     montant_manquant: number;
   };
   /**
+   * Corrections du stock initial de ce shift : produit, chiffre repris, chiffre
+   * corrigé et état du litige à la clôture. Absent sur les anciens tickets.
+   */
+  corrections_stock_initial?: { produit: string; avant: number; apres: number; statut: string; sortant: string | null }[];
+  /**
    * Décompte de l'équipe du jour (§ 6.8) : toute personne non marquée « Reste »
    * est enregistrée comme PARTIE à la clôture.
    */
