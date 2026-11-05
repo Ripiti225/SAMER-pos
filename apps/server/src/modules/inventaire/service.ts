@@ -2,7 +2,7 @@
  * Inventaire de service — accès aux données (DESIGN_V2 § 6.9).
  * Le calcul lui-même est dans `calcul.ts`.
  */
-import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, ne, notInArray, sql } from 'drizzle-orm';
 import type { DbOuTx } from '../../db/client.js';
 import { ecrireOutbox } from '../../db/outbox.js';
 import {
@@ -54,6 +54,32 @@ export async function ventesParProduit(dbx: DbOuTx, serviceId: string): Promise<
   return new Map(lignes.map((l) => [l.produit_id, Number(l.quantite)]));
 }
 
+/**
+ * Plats déjà lancés et pas encore payés. Ils sont sortis physiquement mais ne
+ * comptent pas dans les sorties : sans ce chiffre, le caissier qui recompte
+ * prendrait une table en cours pour un stock initial faux.
+ */
+export async function ventesEnCoursParProduit(dbx: DbOuTx, serviceId: string): Promise<Map<string, number>> {
+  const lignes = await dbx
+    .select({
+      produit_id: inventaireConsommations.produit_id,
+      quantite: sql<string>`COALESCE(SUM(${commandeItems.quantite} * ${inventaireConsommations.quantite}), 0)`,
+    })
+    .from(inventaireConsommations)
+    .innerJoin(commandeItems, eq(commandeItems.article_id, inventaireConsommations.article_id))
+    .innerJoin(commandes, eq(commandes.id, commandeItems.commande_id))
+    .where(
+      and(
+        eq(commandes.service_id, serviceId),
+        notInArray(commandes.statut, ['PAYEE', 'ANNULEE']),
+        ne(commandeItems.statut_cuisine, 'ANNULE'),
+        isNotNull(commandeItems.envoye_le),
+      ),
+    )
+    .groupBy(inventaireConsommations.produit_id);
+  return new Map(lignes.map((l) => [l.produit_id, Number(l.quantite)]));
+}
+
 /** Réceptions saisies dans l'onglet « Entrées reçues », par produit. */
 export async function entreesParProduit(dbx: DbOuTx, inventaireId: string): Promise<Map<string, number>> {
   const lignes = await dbx
@@ -70,8 +96,9 @@ export async function entreesParProduit(dbx: DbOuTx, inventaireId: string): Prom
 /**
  * L'inventaire du service, créé à la volée au premier accès avec une ligne par
  * produit à compter. Le stock initial est le stock final du DERNIER inventaire
- * validé — repris, jamais modifiable : c'est la continuité d'un service à
- * l'autre, et la retaper à la main serait la première source d'écart.
+ * validé — repris, jamais retapé : c'est la continuité d'un service à l'autre.
+ * Seule une correction tracée le change, pendant la première heure du shift
+ * (`routes-correction.ts`).
  */
 export async function assurerInventaire(dbx: DbOuTx, serviceId: string): Promise<Inventaire> {
   const [existant] = await dbx
