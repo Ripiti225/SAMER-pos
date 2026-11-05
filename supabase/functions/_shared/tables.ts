@@ -119,6 +119,14 @@ export const COLONNES_VENTES: Record<string, string[]> = {
     'id', 'inventaire_id', 'produit_id', 'quantite', 'fournisseur', 'saisi_par',
     'created_at', 'supprime', 'produit_code', 'produit_nom',
   ],
+  // POS 0050 — correction du stock initial en début de shift. Le pont la
+  // transmet à SamerTrackly après le service qui l'a saisie.
+  corrections_stock_initial: [
+    'id', 'inventaire_id', 'produit_id', 'produit_code', 'produit_nom', 'produit_prix',
+    'stock_reporte', 'stock_avant', 'stock_apres', 'explication', 'saisi_par',
+    'service_sortant_id', 'caissier_sortant_id', 'shift_intermediaire_debloque',
+    'ecart_sortant_avant', 'ecart_sortant_apres', 'statut', 'valide_par', 'valide_le', 'created_at',
+  ],
 };
 
 /**

@@ -42,7 +42,8 @@ import {
   type EquipeService,
   type FicheRH,
 } from '../_shared/samtrackly-detail.ts';
-import { ErreurSamtrackly, lire, inserer, upsert, patch, supprimer, samtracklyConfigure } from '../_shared/samtrackly-api.ts';
+import { ErreurSamtrackly, lire, inserer, upsert, patch, rpc, supprimer, samtracklyConfigure } from '../_shared/samtrackly-api.ts';
+import { construireCorrectionsSamtrackly, type CorrectionCloud } from '../_shared/samtrackly-corrections.ts';
 import { ecrirePresences } from '../_shared/samtrackly-presences.ts';
 import {
   servicesARattraper,
@@ -202,6 +203,42 @@ async function lireInventaireDuService(
     lignes: lignes ?? [],
     entrees: entrees ?? [],
   };
+}
+
+/** Transmet à SamerTrackly les corrections du stock initial d'un service. */
+async function transmettreCorrections(
+  admin: SupabaseClient,
+  serviceId: string,
+  restaurantCloudId: string,
+  restaurantStId: string,
+  inventaireId: string,
+  caissierNom: string | null,
+): Promise<void> {
+  const { data, error } = await admin
+    .from('corrections_stock_initial')
+    .select(
+      'id, produit_code, produit_nom, produit_prix, stock_reporte, stock_apres, explication, statut, '
+        + 'service_sortant_id, caissier_sortant_id, saisi_par, shift_intermediaire_debloque',
+    )
+    .eq('restaurant_id', restaurantCloudId)
+    .eq('inventaire_id', inventaireId);
+  if (error) throw new ErreurSamtrackly(`Corrections de stock illisibles : ${error.message}`);
+  const corrections = (data ?? []) as unknown as CorrectionCloud[];
+  if (corrections.length === 0) return;
+
+  const noms = new Map<string, string | null>();
+  for (const id of new Set(corrections.flatMap((c) => [c.caissier_sortant_id, c.saisi_par]))) {
+    if (id) noms.set(id, (await resoudreCaissier(admin, id)).nom);
+  }
+  const lignes = construireCorrectionsSamtrackly(corrections, {
+    posServiceId: serviceId,
+    restaurantId: restaurantStId,
+    caissierPlaceNom: caissierNom,
+    noms,
+  });
+  for (const ligne of lignes) {
+    await rpc('transmettre_correction_stock_initial', { p_correction: ligne });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -410,6 +447,18 @@ async function transfererService(
       // Volontairement avalé : voir le commentaire ci-dessus. Ce sous-échec ne
       // doit pas remonter comme un échec du service.
     }
+
+    // Après l'inventaire de ce service : SamerTrackly doit déjà connaître sa
+    // ligne. C'est de l'argent : un échec fait échouer le transfert, qui sera
+    // rejoué, et la fonction SQL ignore une correction déjà connue.
+    await transmettreCorrections(
+      admin,
+      service.id,
+      service.restaurant_id,
+      restaurantStId,
+      inventaireDuService.inventaire.id,
+      caissier.nom,
+    );
   }
 
   return {
