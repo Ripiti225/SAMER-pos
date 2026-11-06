@@ -9,7 +9,7 @@ import { api } from '../api';
 
 interface VuePointeuse {
   config: { url: string; utilisateur: string; mot_de_passe_defini: boolean; par_environnement: boolean };
-  etat: { configuree: boolean; appareil: string | null; modele: string | null; derniere_lecture: string | null; derniere_erreur: string | null };
+  etat: { configuree: boolean; appareil: string | null; modele: string | null; decalage_minutes: number | null; derniere_lecture: string | null; derniere_erreur: string | null; en_pause: boolean };
   employes: { id: string; nom_complet: string; pointeuse_no: string | null }[];
   inconnus: { employe_no: string; nom_appareil: string | null; nb: number; dernier: string }[];
   derniers: { id: string; employe_no: string; nom: string; sens: 'ENTREE' | 'SORTIE'; pointe_le: string; statut: string }[];
@@ -35,12 +35,19 @@ const heure = (iso: string) =>
 
 export function Pointeuse() {
   const qc = useQueryClient();
-  const [msg, setMsg] = useState<{ texte: string; ok?: boolean } | null>(null);
+  const [msg, setMsg] = useState<{ texte: string; ok?: boolean; connexion?: boolean } | null>(null);
   const { data } = useQuery({
     queryKey: ['admin', 'pointeuse'],
     queryFn: () => api<VuePointeuse>('/api/admin/pointeuse'),
     refetchInterval: 20000,
   });
+  // Une lecture a réussi depuis : le refus affiché est périmé. Il faisait croire
+  // à un mot de passe faux sous un badge « Connectée ».
+  const derniereLecture = data?.etat.derniere_lecture;
+  const lectureEnErreur = !!data?.etat.derniere_erreur;
+  useEffect(() => {
+    if (derniereLecture && !lectureEnErreur) setMsg((m) => (m?.connexion ? null : m));
+  }, [derniereLecture, lectureEnErreur]);
   const [url, setUrl] = useState<string | null>(null);
   const [utilisateur, setUtilisateur] = useState<string | null>(null);
   const [motDePasse, setMotDePasse] = useState('');
@@ -63,12 +70,12 @@ export function Pointeuse() {
         : { texte: 'Pointeuse retirée : l’équipe se coche de nouveau à la main à l’ouverture', ok: true });
       rafraichir();
     },
-    onError: (e: Error) => { setMsg({ texte: e.message }); rafraichir(); },
+    onError: (e: Error) => { setMsg({ texte: e.message, connexion: true }); rafraichir(); },
   });
   const lire = useMutation({
     mutationFn: () => api<{ nouveaux: number }>('/api/admin/pointeuse/lire', { method: 'POST' }),
     onSuccess: (r) => { setMsg({ texte: `${r.nouveaux} nouveau(x) pointage(s) lu(s)`, ok: true }); rafraichir(); },
-    onError: (e: Error) => setMsg({ texte: e.message }),
+    onError: (e: Error) => { setMsg({ texte: e.message, connexion: true }); rafraichir(); },
   });
   const [aEnroler, setAEnroler] = useState<ResultatEnvoi['a_enroler']>([]);
   const envoyer = useMutation({
@@ -120,10 +127,23 @@ export function Pointeuse() {
           <span className={`rounded-full px-3 py-1 text-xs font-bold ${
             !etat.configuree ? 'bg-surface-douce text-doux' : etat.derniere_erreur ? 'bg-alerte-tint text-alerte-txt' : 'bg-ok-tint text-ok-txt'
           }`}>
-            {!etat.configuree ? 'Non configurée' : etat.derniere_erreur ? 'Injoignable' : 'Connectée'}
+            {!etat.configuree ? 'Non configurée' : etat.en_pause ? 'Mot de passe refusé' : etat.derniere_erreur ? 'Injoignable' : 'Connectée'}
           </span>
         </div>
         {etat.derniere_erreur && <p className="mb-3 text-sm text-alerte-txt">{etat.derniere_erreur}</p>}
+        {etat.en_pause && (
+          <p className="mb-3 text-sm text-doux">
+            Le POS a arrêté de lire la pointeuse pour ne pas la faire bloquer ce poste. Corrigez le mot de passe
+            ci-dessous puis « Enregistrer et tester » — ou, si vous l’avez changé sur la pointeuse elle-même,
+            « Lire maintenant ».
+          </p>
+        )}
+        {!!etat.decalage_minutes && (
+          <p className="mb-3 text-sm text-alerte-txt">
+            La pointeuse est réglée sur le fuseau {fuseau(etat.decalage_minutes)} au lieu de GMT+0 (Abidjan) : l’heure
+            qu’elle affiche est fausse. Le POS en tient compte, mais corrigez-la sur l’appareil (Système › Heure).
+          </p>
+        )}
         {etat.appareil && (
           <p className="mb-3 text-sm text-doux">
             {etat.modele ?? 'Hikvision'} · n° de série {etat.appareil}
@@ -225,6 +245,12 @@ export function Pointeuse() {
       </div>
     </section>
   );
+}
+
+/** 480 → « UTC+8 », -90 → « UTC-1:30 ». */
+function fuseau(minutes: number): string {
+  const abs = Math.abs(minutes);
+  return `UTC${minutes < 0 ? '-' : '+'}${Math.floor(abs / 60)}${abs % 60 ? `:${String(abs % 60).padStart(2, '0')}` : ''}`;
 }
 
 function LigneNumero({ employe, onEnregistrer }: {
