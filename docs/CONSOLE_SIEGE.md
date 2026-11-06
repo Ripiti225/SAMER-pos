@@ -96,7 +96,7 @@ maintenant, au design « Duo contrasté » (DESIGN_V2 § 6.12).
 | Clôtures | fond, compté, théorique, **écart** coloré au-delà de 2 000 F, ticket Z complet à la demande (blocs nommés, tous les champs, JSON brut dépliable) | `restaurants`, `clotures`, `rapport_z` |
 | Inventaire | pour la journée choisie, toutes les entrées POS et SamerTrackly regroupées par restaurant puis fournisseur, avant les explications d'écart ; un ADMIN peut prendre la même décision que dans SamerTrackly, LECTURE consulte seulement | `inventaire_explications`, `decider_explication_inventaire` |
 | Recettes d’inventaire | catalogue de comptage d’un restaurant ; un ADMIN crée un produit et associe les articles vendus avec leur quantité consommée. Le cloud diffuse ensuite les deux tables vers le POS. La création de produits À la Braise est bloquée. | `inventaire_catalogue`, `inventaire_produit_creer`, `inventaire_recette_enregistrer` |
-| Équipe | les travailleurs du groupe, filtrables par restaurant, **en lecture seule** | `equipe` |
+| Équipe | les travailleurs du groupe, filtrables par restaurant, fiche **en lecture seule** ; un ADMIN réinitialise le **PIN de caisse** | `equipe`, `pin_reinitialiser`, `ordre_etat` |
 
 Pour faire apparaître les produits déjà présents dans une caisse, ouvrir sur le
 POS du restaurant **Administration → Recettes d’inventaire → Envoyer les produits
@@ -181,6 +181,34 @@ a déclenché l'entrée d'audit `ECART_CAISSE` sur le site.
 
 L'écran Équipe porte à l'écran la raison de sa lecture seule, pour qu'on ne
 cherche pas un bouton « Ajouter » qui manquerait par oubli.
+
+### Réinitialiser un PIN depuis le siège (2026-10-26)
+
+Un employé qui a oublié son PIN n'a plus besoin qu'un encadrant passe par
+Réglages › Équipe sur la caisse : un ADMIN clique la clé sur sa fiche.
+
+1. La fonction `siege` (`pin_reinitialiser`) tire un **code à 6 chiffres**, le
+   montre une fois à l'écran, et pose un ordre `REINIT_PIN` dans `ordres_site`
+   qui ne porte que son **empreinte argon2id** (`hash-wasm`, lisible par
+   l'`argon2` du poste — un test le prouve avec une empreinte réelle). Le cloud
+   ne garde jamais le code en clair.
+2. Le poste du restaurant prend l'ordre (≤ 30 s), retrouve le compte par
+   `externe_id` (l'id SamerTrackly), le remet en « PIN à définir », remet les
+   verrous anti-force brute à zéro, coupe ses sessions, et trace `REINIT_PIN`
+   (`origine: SIEGE`, nom du demandeur) — comme la réinitialisation faite sur
+   place, dont il partage le code (`poserCodeTemporaire`).
+3. L'employé touche son profil sur la caisse, tape le code, pose son PIN.
+
+L'écran suit l'ordre (`ordre_etat`) et ne dit « utilisable » qu'une fois la
+caisse passée. Refusés côté poste : le compte **PROPRIÉTAIRE** (il se
+réinitialise sur la caisse), un employé pas encore descendu sur ce site. Une
+nouvelle demande remplace celle qui attend encore ; l'ordre expire après 24 h.
+Le bouton n'apparaît que pour un restaurant enrôlé. L'écran Séquences ne liste
+plus que les ordres de rasage : ceux de PIN portent une empreinte qui n'a rien
+à faire sous les yeux du niveau LECTURE.
+
+Un poste antérieur à cette version répond « Ordre inconnu de cette version du
+POS » : la console l'affiche, il faut d'abord mettre le poste à jour.
 
 ## Lancer
 

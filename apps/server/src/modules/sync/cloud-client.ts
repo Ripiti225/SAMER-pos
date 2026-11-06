@@ -130,7 +130,7 @@ export class ClientCloud {
   }
 
   /**
-   * ORDRES du siège en attente pour ce site (raser une séquence, aujourd'hui).
+   * ORDRES du siège en attente pour ce site (raser une séquence, réinitialiser un PIN).
    * Le site vient les CHERCHER : un mini-PC derrière la box d'un restaurant
    * n'est pas joignable depuis l'extérieur, le cloud ne peut rien lui pousser.
    */
