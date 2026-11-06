@@ -1971,7 +1971,7 @@ sortant par son code ou celui d'un manager, sinon le litige part dans SamerTrack
 
 - [ ] **Step 2: Écrire la notice de déploiement**
 
-Lister dans cet ordre : SQL SamerTrackly et écrans ; migration cloud, puis `sync-push` et `samtrackly-points` ; mise à jour des caisses. Préciser pour chaque étape la commande, le contrôle et le retour arrière.
+Lister dans cet ordre : SQL SamerTrackly et écrans ; migration cloud, puis `sync-push`, `sync-pull` et `samtrackly-points` ; mise à jour des caisses. Préciser pour chaque étape la commande, le contrôle et le retour arrière.
 
 - [ ] **Step 3: Lancer toute la vérification**
 

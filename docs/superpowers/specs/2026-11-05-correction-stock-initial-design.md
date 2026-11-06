@@ -217,7 +217,7 @@ rôles SamerTrackly `manager` et `directeur`.
 L'ordre évite qu'un site envoie une table que le cloud refuserait :
 
 1. SamerTrackly : SQL, puis écrans.
-2. Cloud : migration, puis `sync-push` et `samtrackly-points`.
+2. Cloud : migration, puis `sync-push`, `sync-pull` (ils partagent `tables.ts`) et `samtrackly-points`.
 3. Caisse : mise à jour de chaque site.
 
 Sans mise à jour, un site garde son comportement actuel.
