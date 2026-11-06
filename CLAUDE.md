@@ -119,6 +119,17 @@ retour. **Les deux branches sont obligatoires** : ne compter que la ligne
 laisserait la fraude la plus simple ouverte — encaisser, puis supprimer la table
 entière au lieu de l'article.
 
+### Correction du stock initial
+Pendant la première heure du shift (à partir de `ouvert_le`, jamais de la connexion),
+le caissier peut corriger le stock initial d'un produit, avec une explication
+obligatoire. Le chiffre change tout de suite. On **recalcule** l'écart du sortant, on
+ne soustrait jamais la correction : un surplus annulé ne devient pas un faux manquant.
+
+Un manquant créé ou augmenté est imputé au sortant par son code, ou par celui d'un
+manager avant la clôture. Sinon, le litige part dans SamerTrackly : Valider (le sortant
+paie) ou Annuler (le caissier sur place paie). Dans tous les cas, le stock de la caisse
+reste le chiffre corrigé.
+
 ### Paiement
 - Une commande passe à PAYEE uniquement si `SUM(paiements.montant) == commandes.total` — vérifié en transaction côté serveur.
 - Paiement mixte : l'UI affiche le « Reste à payer » en très grand, mis à jour à chaque ajout ; bouton Valider désactivé tant que reste > 0.

@@ -88,6 +88,8 @@ export type ActionAudit =
   | 'NUMERO_POINTEUSE'
   | 'VALIDATION_INVENTAIRE'
   | 'DEBLOCAGE_INVENTAIRE'
+  | 'CORRECTION_STOCK_INITIAL'
+  | 'VALIDATION_CORRECTION_STOCK'
   // « Pas maintenant » sur le bandeau de mise à jour (PIN gérant, un seul
   // report de 30 min) : on garde qui a décalé la coupure de la caisse.
   | 'REPORT_MAJ';

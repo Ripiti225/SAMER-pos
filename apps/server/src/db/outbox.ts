@@ -62,7 +62,8 @@ export type TableSynchronisee =
   | 'depenses'
   | 'inventaires_service'
   | 'inventaire_lignes'
-  | 'entrees_stock';
+  | 'entrees_stock'
+  | 'corrections_stock_initial';
 
 export async function ecrireOutbox(
   tx: DbOuTx,

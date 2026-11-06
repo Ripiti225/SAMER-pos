@@ -1,5 +1,5 @@
 import type { CommandeItemVue, CommandeVue, EtatStockInstant, NoteSplitVue, PaiementVue, PosteImpression, RapportSequence, RapportZ } from '@pos/shared';
-import { estLivraisonSansEncaissement, formatFCFA, libelleCategorieInventaire, libellePartenaire, LIBELLES_MODES, LIBELLES_POSTE_IMPRESSION, LIBELLES_TYPES_COMMANDE, vueSousNote } from '@pos/shared';
+import { estLivraisonSansEncaissement, formatFCFA, libelleCategorieInventaire, libellePartenaire, libelleStatutCorrection, LIBELLES_MODES, LIBELLES_POSTE_IMPRESSION, LIBELLES_TYPES_COMMANDE, vueSousNote } from '@pos/shared';
 import type { PrinterService } from './PrinterService.js';
 
 const LARGEUR = 42;
@@ -194,6 +194,16 @@ export class ConsolePrinter implements PrinterService {
                     `  ${z.inventaire.manquants} manquant(s), ${z.inventaire.surplus} surplus`,
                     formatFCFA(z.inventaire.montant_manquant),
                   ),
+          ]
+        : []),
+      ...(z.corrections_stock_initial?.length
+        ? [
+            '-'.repeat(LARGEUR),
+            'Corrections du stock initial :',
+            ...z.corrections_stock_initial.flatMap((c) => [
+              ligne(`  ${c.produit}`, `${qte(c.avant)} -> ${qte(c.apres)}`),
+              `    ${libelleStatutCorrection(c.statut)}`,
+            ]),
           ]
         : []),
       // Retours : articles déjà lancés en cuisine puis annulés au PIN manager.

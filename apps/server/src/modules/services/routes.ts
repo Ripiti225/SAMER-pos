@@ -15,6 +15,7 @@ import { sequenceOuverte } from './sequences.js';
 import { totalDepenses } from '../depenses/service.js';
 import { DUREE_SERVICE_HEURES } from '../pointage/routes.js';
 import { equipePointee, pointeuseActive, posteParDefaut, solderAttente } from '../pointeuse/presence.js';
+import { correctionsDuService } from '../inventaire/correction.js';
 import { etatInventaire } from '../inventaire/service.js';
 import { aPermission } from '../../plugins/sessions.js';
 import { permissionsDuRole } from '../roles/service.js';
@@ -674,6 +675,13 @@ export function routesServices(app: FastifyInstance): void {
           surplus: inventaire.bilan.surplus,
           montant_manquant: inventaire.bilan.montant,
         },
+        corrections_stock_initial: (await correctionsDuService(tx, inventaire.inventaire.id)).map((c) => ({
+          produit: c.produit_nom,
+          avant: c.stock_reporte,
+          apres: c.stock_apres,
+          statut: c.statut,
+          sortant: c.sortant_nom,
+        })),
         equipe,
         ...stats,
       };

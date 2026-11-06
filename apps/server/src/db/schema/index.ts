@@ -695,7 +695,7 @@ export const inventaireLignes = pgTable('inventaire_lignes', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   inventaire_id: uuid('inventaire_id').notNull().references(() => inventairesService.id, { onDelete: 'cascade' }),
   produit_id: uuid('produit_id').notNull().references(() => produitsInventaire.id, { onDelete: 'cascade' }),
-  /** Stock final du service précédent — repris, jamais modifiable. */
+  /** Stock final du service précédent — corrigeable pendant la première heure du shift (`routes-correction.ts`). */
   stock_initial: numeric('stock_initial', { precision: 12, scale: 2 }).notNull().default('0'),
   entrees: numeric('entrees', { precision: 12, scale: 2 }).notNull().default('0'),
   sorties: numeric('sorties', { precision: 12, scale: 2 }).notNull().default('0'),
@@ -767,6 +767,39 @@ export const entreesStock = pgTable('entrees_stock', {
 }, (t) => [
   index('idx_entrees_stock_inventaire').on(t.inventaire_id),
   check('entrees_stock_quantite_check', sql`${t.quantite} > 0`),
+]);
+
+/** Correction du stock initial en début de shift (migration 0050). */
+export const correctionsStockInitial = pgTable('corrections_stock_initial', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  inventaire_id: uuid('inventaire_id').notNull().references(() => inventairesService.id, { onDelete: 'cascade' }),
+  produit_id: uuid('produit_id').notNull().references(() => produitsInventaire.id, { onDelete: 'cascade' }),
+  produit_code: text('produit_code').notNull(),
+  produit_nom: text('produit_nom').notNull(),
+  produit_prix: integer('produit_prix').notNull(),
+  /** Le chiffre repris du sortant : il survit à une correction remplacée. */
+  stock_reporte: numeric('stock_reporte', { precision: 12, scale: 2 }).notNull(),
+  stock_avant: numeric('stock_avant', { precision: 12, scale: 2 }).notNull(),
+  stock_apres: numeric('stock_apres', { precision: 12, scale: 2 }).notNull(),
+  explication: text('explication').notNull(),
+  saisi_par: uuid('saisi_par').notNull().references(() => utilisateurs.id),
+  service_sortant_id: uuid('service_sortant_id').references(() => servicesCaisse.id),
+  caissier_sortant_id: uuid('caissier_sortant_id').references(() => utilisateurs.id),
+  shift_intermediaire_debloque: boolean('shift_intermediaire_debloque').notNull().default(false),
+  ecart_sortant_avant: numeric('ecart_sortant_avant', { precision: 12, scale: 2 }),
+  ecart_sortant_apres: numeric('ecart_sortant_apres', { precision: 12, scale: 2 }),
+  statut: text('statut').notNull(),
+  valide_par: uuid('valide_par').references(() => utilisateurs.id),
+  valide_le: timestamp('valide_le', { withTimezone: true }),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check('corrections_stock_initial_stock_check', sql`${t.stock_apres} >= 0`),
+  check('corrections_stock_initial_explication_check', sql`length(btrim(${t.explication})) > 0`),
+  check(
+    'corrections_stock_initial_statut_check',
+    sql`${t.statut} IN ('SANS_LITIGE','A_VALIDER','RECONNUE_SORTANT','VALIDEE_MANAGER','REMPLACEE')`,
+  ),
+  uniqueIndex('corrections_stock_initial_active').on(t.inventaire_id, t.produit_id).where(sql`${t.statut} <> 'REMPLACEE'`),
 ]);
 
 // ---------------------------------------------------------------------------

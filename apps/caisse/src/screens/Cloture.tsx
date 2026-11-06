@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { RapportZ, ReconciliationPreview, UtilisateurPublic } from '@pos/shared';
-import { formatFCFA, libellePartenaire, LIBELLES_MODES, type ModePaiement, PARTENAIRES } from '@pos/shared';
+import { formatFCFA, libellePartenaire, libelleStatutCorrection, LIBELLES_MODES, type ModePaiement, PARTENAIRES } from '@pos/shared';
 import { api } from '../api';
 import { Modale } from '../components/Modale';
 import { Numpad } from '../components/Numpad';
@@ -524,6 +524,19 @@ export function Cloture() {
                     : ''}
                   Information manager — sans effet sur la vente ni sur l’écart de caisse.
                 </div>
+              </div>
+            )}
+
+            {!!rapport.corrections_stock_initial?.length && (
+              <div className="rounded-xl bg-surface-douce p-3 text-sm">
+                <div className="font-semibold text-fort">Corrections du stock initial</div>
+                <ul className="mt-1 space-y-1 text-xs text-doux">
+                  {rapport.corrections_stock_initial.map((c) => (
+                    <li key={c.produit}>
+                      {c.produit} : {c.avant} → {c.apres} · {libelleStatutCorrection(c.statut)}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 

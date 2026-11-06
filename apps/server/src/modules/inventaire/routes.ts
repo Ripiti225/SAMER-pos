@@ -1,8 +1,8 @@
 ﻿/**
  * Écran Inventaire (DESIGN_V2 § 6.9) — sans inventaire validé, pas de clôture.
  *
- * Le caissier ne saisit qu'UNE chose : le compté. Stock initial (repris),
- * entrées (onglet Entrées reçues) et sorties (ventes du service) viennent du
+ * Le caissier ne saisit qu'UNE chose : le compté. Stock initial (repris,
+ * corrigeable la première heure : `routes-correction.ts`), entrées (onglet Entrées reçues) et sorties (ventes du service) viennent du
  * serveur ; le théorique et l'écart en découlent. Après validation, tout passe
  * en lecture seule.
  *
@@ -29,6 +29,7 @@ import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
 import { verifierPinManager } from '../auth/pin.js';
 import { serviceOuvertCourant } from '../depenses/service.js';
+import { correctionsDuService, finFenetre } from './correction.js';
 import { etatInventaire } from './service.js';
 import { tirerEtatStock } from './etat-stock.js';
 import { expliqueeInvalide } from './calcul.js';
@@ -130,6 +131,10 @@ export function routesInventaire(app: FastifyInstance): void {
       categories: [...categories.values()],
       lignes: etat.lignes,
       bilan: etat.bilan,
+      correction_stock: {
+        fin: finFenetre(service.ouvert_le).toISOString(),
+        corrections: await correctionsDuService(db, etat.inventaire.id),
+      },
       entrees: entrees.map((e) => ({
         ...e,
         quantite: Number(e.quantite),

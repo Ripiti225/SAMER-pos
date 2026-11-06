@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import type { CommandeItemVue, CommandeVue, EtatStockInstant, NoteSplitVue, PaiementVue, PosteImpression, RapportSequence, RapportZ } from '@pos/shared';
-import { clePosteImprimante, estLivraisonSansEncaissement, formatFCFA, libelleCategorieInventaire, libellePartenaire, LIBELLES_MODES, LIBELLES_POSTE_IMPRESSION, LIBELLES_TYPES_COMMANDE, titreRecuSousNote, vueSousNote } from '@pos/shared';
+import { clePosteImprimante, estLivraisonSansEncaissement, formatFCFA, libelleCategorieInventaire, libellePartenaire, libelleStatutCorrection, LIBELLES_MODES, LIBELLES_POSTE_IMPRESSION, LIBELLES_TYPES_COMMANDE, titreRecuSousNote, vueSousNote } from '@pos/shared';
 import { db } from '../db/client.js';
 import { enregistrerIncident } from '../modules/sante/incidents.js';
 import { clientsFidelite, parametresLocaux, restaurant } from '../db/schema/index.js';
@@ -742,6 +742,15 @@ export class EscposPrinter implements PrinterService {
           }
           r.ligne('Information manager -');
           r.ligne('sans effet sur la vente.');
+        }
+
+        if (z.corrections_stock_initial?.length) {
+          r.tiret();
+          r.gras(true).ligne('CORRECTIONS STOCK INITIAL').gras(false);
+          for (const c of z.corrections_stock_initial) {
+            r.duo(c.produit, `${quantite(c.avant)} -> ${quantite(c.apres)}`);
+            r.ligne(`  ${libelleStatutCorrection(c.statut)}`);
+          }
         }
 
         // Bloc RETOURS : articles déjà partis en cuisine puis supprimés au PIN

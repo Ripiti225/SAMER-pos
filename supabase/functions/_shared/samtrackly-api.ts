@@ -89,6 +89,15 @@ export function upsert<T = Record<string, unknown>>(
   ) as Promise<T[]>;
 }
 
+/** Appel d'une fonction SQL de SamerTrackly. */
+export function rpc(nom: string, args: Record<string, unknown>): Promise<unknown[]> {
+  return appeler(
+    `rpc/${nom}`,
+    { method: 'POST', headers: entetes(), body: JSON.stringify(args) },
+    `RPC ${nom}`,
+  );
+}
+
 /** Met à jour une ligne existante par son id. Ne crée jamais de ligne. */
 export function patch(
   table: string,
