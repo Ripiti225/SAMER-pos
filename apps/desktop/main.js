@@ -18,7 +18,7 @@ const PORT = process.env.PORT || 3001;
 // exige un lanceur plus récent est refusé (il faudra d'abord changer
 // PosSamer.exe). À incrémenter à chaque repackaging qui change le comportement
 // de la mise à jour. 1 = premier lanceur capable de mettre à jour à distance.
-const NUMERO_LANCEUR = 1;
+const NUMERO_LANCEUR = 2;
 // Jeton des routes /api/maj/lanceur/* : tiré à chaque lancement, transmis au
 // seul serveur que ce lanceur démarre. Un poste du réseau ne peut donc pas
 // couper la caisse en appelant ces routes.
