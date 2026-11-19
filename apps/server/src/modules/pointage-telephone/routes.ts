@@ -29,6 +29,7 @@ import {
   utilisateurs,
 } from '../../db/schema/index.js';
 import { ErreurMetier, introuvable } from '../../lib/erreurs.js';
+import QRCode from 'qrcode';
 import { adresseReseauLocale } from '../../lib/reseau.js';
 import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
@@ -127,7 +128,7 @@ export function routesPointageTelephone(app: FastifyInstance): void {
       : [];
     return {
       actif: await telephoneActif(),
-      restaurant: resto ? { nom: resto.nom, couleur_hex: resto.couleur_hex } : null,
+      restaurant: resto ? { nom: resto.nom, marque: resto.marque, couleur_hex: resto.couleur_hex } : null,
       compte: compte ?? null,
     };
   });
@@ -327,9 +328,12 @@ export function routesPointageTelephone(app: FastifyInstance): void {
       .innerJoin(utilisateurs, eq(utilisateurs.id, appareilsPointage.utilisateur_id))
       .where(eq(appareilsPointage.statut, 'ACTIF'))
       .orderBy(asc(utilisateurs.nom_complet));
+    const url = ip ? `http://${ip}:${port}/pointage.html` : null;
     return {
       actif: await telephoneActif(),
-      url: ip ? `http://${ip}:${port}/pointage.html` : null,
+      url,
+      // À afficher près de la pointeuse / en salle de pause : on le scanne connecté au wifi.
+      qr: url ? await QRCode.toDataURL(url, { margin: 1, width: 320 }) : null,
       telephones: rattaches.map((r) => ({ ...r, cree_le: r.cree_le.toISOString() })),
     };
   });
