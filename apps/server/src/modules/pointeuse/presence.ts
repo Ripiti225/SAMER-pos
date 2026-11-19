@@ -49,6 +49,26 @@ export async function chargerConfigPointeuse(dbx: DbOuTx = db): Promise<ConfigPo
   };
 }
 
+/**
+ * Pointage par téléphone (2026-11-19) : ses événements entrent dans le MÊME
+ * journal que la pointeuse, sous un appareil `TELEPHONE:<id du téléphone>`.
+ * Le premier pointage gagne : un second (doigt ou téléphone) est sans effet.
+ */
+export const PREFIXE_TELEPHONE = 'TELEPHONE:';
+export const CLE_TELEPHONE_ACTIF = 'pointage_telephone_actif';
+
+export type SourcePointage = 'POINTEUSE' | 'TELEPHONE';
+
+export function sourceDeLAppareil(appareil: string): SourcePointage {
+  return appareil.startsWith(PREFIXE_TELEPHONE) ? 'TELEPHONE' : 'POINTEUSE';
+}
+
+/** Réglages › Pointage par téléphone activé sur ce site. */
+export async function telephoneActif(dbx: DbOuTx = db): Promise<boolean> {
+  const [p] = await dbx.select().from(parametresLocaux).where(eq(parametresLocaux.cle, CLE_TELEPHONE_ACTIF));
+  return p?.valeur === true;
+}
+
 /** Pointeuse en service sur ce site : l'équipe ne se coche plus à la main. */
 export async function pointeuseActive(dbx: DbOuTx = db): Promise<boolean> {
   return (await chargerConfigPointeuse(dbx)) !== null;
@@ -89,6 +109,8 @@ export async function appliquerEvenement(
   tx: DbOuTx,
   appareil: string,
   ev: EvenementBrut,
+  // Téléphone : l'employé est déjà identifié par son PIN (pas de n° pointeuse).
+  opts: { utilisateurId?: string } = {},
 ): Promise<StatutEvenement | null> {
   const [deja] = await tx
     .select({ id: pointeuseEvenements.id })
@@ -98,10 +120,14 @@ export async function appliquerEvenement(
 
   // Horloge de l'appareil en avance : on ne date jamais dans le futur.
   const t = new Date(Math.min(ev.pointe_le.getTime(), Date.now()));
+  const source = sourceDeLAppareil(appareil);
   const [agent] = await tx
     .select()
     .from(utilisateurs)
-    .where(and(eq(utilisateurs.pointeuse_no, ev.employe_no), eq(utilisateurs.actif, true)));
+    .where(and(
+      opts.utilisateurId ? eq(utilisateurs.id, opts.utilisateurId) : eq(utilisateurs.pointeuse_no, ev.employe_no),
+      eq(utilisateurs.actif, true),
+    ));
 
   const noter = async (statut: StatutEvenement, sens: 'ENTREE' | 'SORTIE', serviceId: string | null = null) => {
     await tx.insert(pointeuseEvenements).values({
@@ -179,7 +205,7 @@ export async function appliquerEvenement(
           utilisateur_id: agent.id,
           poste_jour: posteParDefaut(agent),
           pointe_le: t,
-          source: 'POINTEUSE',
+          source,
         })
         .returning();
       await ecrireOutbox(tx, 'equipe_service', 'INSERT', ligne!.id, ligne as unknown as Record<string, unknown>);
@@ -195,7 +221,7 @@ export async function appliquerEvenement(
               depart_le: null,
               reste: null,
             }
-          : { pointe_le: t, source: 'POINTEUSE' })
+          : { pointe_le: t, source })
         .where(eq(equipeService.id, membre.id))
         .returning();
       await ecrireOutbox(tx, 'equipe_service', 'UPDATE', ligne!.id, ligne as unknown as Record<string, unknown>);
@@ -217,6 +243,8 @@ export async function appliquerEvenement(
 export interface MembrePointe {
   /** null = arrivée datée de l'ouverture (relève restée du shift précédent). */
   pointe_le: Date | null;
+  /** Appareil de la première Entrée retenue (null = relève, sans pointage). */
+  source: SourcePointage | null;
   evenements: string[];
 }
 
@@ -260,6 +288,7 @@ export async function equipePointee(dbx: DbOuTx, restants: Iterable<string>): Pr
     const entrees = attente.filter((e) => e.utilisateur_id === id && e.pointe_le.getTime() > derniereSortie);
     equipe.set(id, {
       pointe_le: entrees[0]?.pointe_le ?? null,
+      source: entrees[0] ? sourceDeLAppareil(entrees[0].appareil) : null,
       evenements: entrees.map((e) => e.id),
     });
   }
@@ -287,7 +316,7 @@ export async function reprendreAttente(tx: DbOuTx): Promise<number> {
       nom: ev.nom_appareil,
       sens: ev.sens as 'ENTREE' | 'SORTIE',
       pointe_le: ev.pointe_le,
-    });
+    }, sourceDeLAppareil(ev.appareil) === 'TELEPHONE' && ev.utilisateur_id ? { utilisateurId: ev.utilisateur_id } : {});
   }
   return enAttente.length;
 }

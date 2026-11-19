@@ -14,7 +14,7 @@ import { calculerStatsService, reconciliationAuto, retoursDuService } from './ra
 import { sequenceOuverte } from './sequences.js';
 import { totalDepenses } from '../depenses/service.js';
 import { DUREE_SERVICE_HEURES } from '../pointage/routes.js';
-import { equipePointee, pointeuseActive, posteParDefaut, solderAttente } from '../pointeuse/presence.js';
+import { equipePointee, pointeuseActive, posteParDefaut, solderAttente, telephoneActif } from '../pointeuse/presence.js';
 import { correctionsDuService } from '../inventaire/correction.js';
 import { etatInventaire } from '../inventaire/service.js';
 import { aPermission } from '../../plugins/sessions.js';
@@ -196,6 +196,9 @@ export function routesServices(app: FastifyInstance): void {
 
     const restants = await restantsDuDernierService();
     const avecPointeuse = await pointeuseActive();
+    // Sans pointeuse, le téléphone n'apporte que les arrivées qu'il a pointées :
+    // la liste cochée par le caissier reste la règle pour tous les autres.
+    const avecTelephone = !avecPointeuse && (await telephoneActif());
     const service = await db.transaction(async (tx) => {
       // Rattache le shift à la séquence ouverte (créée à la volée si aucune).
       const sequenceId = await sequenceOuverte(tx);
@@ -220,9 +223,11 @@ export function routesServices(app: FastifyInstance): void {
       // Avec la pointeuse, c'est ELLE qui dit qui est là (heure réelle du
       // pointage) ; la caisse ne transmet plus que le poste du jour choisi.
       const membresOuverture: { utilisateur_id: string; poste_jour: string; pointe_le: Date; source: string }[] = [];
-      if (avecPointeuse) {
-        const postes = new Map((corps.equipe ?? []).map((m) => [m.utilisateur_id, m.poste_jour]));
-        const pointes = await equipePointee(tx, restants.keys());
+      const postes = new Map((corps.equipe ?? []).map((m) => [m.utilisateur_id, m.poste_jour]));
+      if (avecPointeuse || avecTelephone) {
+        // Avec la pointeuse, la relève restée vient d'elle aussi ; avec le
+        // téléphone seul, la caisse la coche comme avant.
+        const pointes = await equipePointee(tx, avecPointeuse ? restants.keys() : []);
         const agents = pointes.size === 0 ? [] : await tx
           .select()
           .from(utilisateurs)
@@ -233,12 +238,16 @@ export function routesServices(app: FastifyInstance): void {
             utilisateur_id: a.id,
             poste_jour: postes.get(a.id) ?? restants.get(a.id)?.poste_jour ?? posteParDefaut(a),
             pointe_le: p.pointe_le ?? ouvertureLe,
-            source: p.pointe_le ? 'POINTEUSE' : 'OUVERTURE',
+            source: p.pointe_le ? (p.source ?? 'POINTEUSE') : 'OUVERTURE',
           });
         }
         await solderAttente(tx, s!.id, [...pointes.values()].flatMap((p) => p.evenements));
-      } else {
+      }
+      if (!avecPointeuse) {
+        // Pointé au téléphone ET coché : l'heure du téléphone fait foi.
+        const dejaPointes = new Set(membresOuverture.map((m) => m.utilisateur_id));
         for (const m of corps.equipe ?? []) {
+          if (dejaPointes.has(m.utilisateur_id)) continue;
           membresOuverture.push({ ...m, pointe_le: ouvertureLe, source: 'OUVERTURE' });
         }
       }

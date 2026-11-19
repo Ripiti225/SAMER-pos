@@ -19,6 +19,7 @@ import { LIBELLES_POSTES, POSTES_JOUR, type PosteJour } from '@pos/shared';
 import { api } from '../api';
 import { Modale } from './Modale';
 import { ModalePinManager } from './ModalePinManager';
+import { BoutonDemandesTelephone, SelfiesPointage } from './PointageTelephone';
 import { useAffichage } from '../stores/affichage';
 import { useCaisse } from '../stores/session';
 
@@ -37,9 +38,9 @@ export interface MembrePointage {
   heures_faites: boolean;
   reste: boolean | null;
   salaire_paye: boolean;
-  /** Sortie pointée à la pointeuse. */
+  /** Sortie pointée à la pointeuse ou au téléphone. */
   depart_le: string | null;
-  source: 'POINTEUSE' | 'CAISSE' | 'OUVERTURE';
+  source: 'POINTEUSE' | 'TELEPHONE' | 'CAISSE' | 'OUVERTURE';
 }
 
 export interface VuePointage {
@@ -163,6 +164,7 @@ export function BandeauEquipe() {
           />
         </button>
 
+        <BoutonDemandesTelephone onErreur={afficherToast} />
         {peutPointer && (
           <button
             type="button"
@@ -275,7 +277,8 @@ function FicheAgent({ membre, duree, onChoisir }: { membre: MembrePointage; dure
         ) : (
           <>
             <span className="mt-2 block text-[11.5px] font-medium text-vitrine-txt-doux">
-              Arrivé <b className="font-bold text-vitrine-txt">{hhmm(membre.pointe_le)}</b> ·{' '}
+              Arrivé <b className="font-bold text-vitrine-txt">{hhmm(membre.pointe_le)}</b>
+              {membre.source === 'TELEPHONE' && <span title="Pointé au téléphone (selfie)"> 📱</span>} ·{' '}
               {membre.depart_le ? (
                 <>sorti <b className="font-bold text-vitrine-txt">{hhmm(membre.depart_le)}</b></>
               ) : (
@@ -441,6 +444,7 @@ function ModalePoste({
       onFermer={onFermer}
       enfants={
         <div>
+          <SelfiesPointage equipeId={membre.id} />
           <p className="mb-4 text-sm text-doux">
             Pour ce shift seulement. Les droits de la personne dans la caisse ne changent pas.
           </p>

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -26,7 +27,8 @@ export default defineConfig({
       },
       workbox: {
         // Le shell de l'app est mis en cache ; les données passent toujours par l'API locale
-        navigateFallbackDenylist: [/^\/api/, /^\/ws/],
+        // /pointage.html est une page à part (téléphones des employés).
+        navigateFallbackDenylist: [/^\/api/, /^\/ws/, /^\/pointage/],
         // Les photos viennent de SamerTrackly/Supabase. Une fois vues sur un
         // poste, elles doivent rester disponibles immédiatement sur le LAN,
         // même si internet disparaît ou si un autre caissier se connecte.
@@ -48,6 +50,16 @@ export default defineConfig({
       },
     }),
   ],
+  // Deux pages : la caisse et le pointage par téléphone (2026-11-19), servies
+  // toutes deux par le mini-PC sur le port 3001.
+  build: {
+    rollupOptions: {
+      input: {
+        caisse: fileURLToPath(new URL('./index.html', import.meta.url)),
+        pointage: fileURLToPath(new URL('./pointage.html', import.meta.url)),
+      },
+    },
+  },
   server: {
     port: 5173,
     host: true,

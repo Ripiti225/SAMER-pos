@@ -149,3 +149,20 @@ shift clôturé, plus aucune correction côté caisse : le ticket Z reste figé.
   `ANNULATION_PAIEMENT`) et les regagne si elle est payée à nouveau.
 - Audit `ANNULATION_PAIEMENT` (au nom de l'administrateur, motif, mode,
   contre-passation, caissier demandeur) et outbox dans la même transaction.
+
+## Pointage par téléphone — suites possibles (2026-11-19)
+
+- Écran d'ouverture du shift, site SANS pointeuse : afficher dans la liste à
+  cocher les arrivées déjà pointées au téléphone (avec leur heure). Aujourd'hui
+  elles entrent dans l'équipe à l'ouverture même si le caissier ne les coche
+  pas, mais la liste ne les montre pas encore comme « déjà là ».
+- Création du premier PIN (`/api/auth/poser-pin`) : aucun verrou sur les
+  essais de code temporaire (6 chiffres). Ajouter le même verrou progressif
+  que le PIN (5 échecs → 30 s…), la page téléphone l'expose désormais aux
+  employés sans passage par la caisse.
+- Selfie : `capture="user"` ouvre la caméra de face, mais certains Android
+  laissent choisir une photo de la galerie. Pour l'interdire tout à fait, il
+  faudrait la caméra en direct (getUserMedia), qui exige une page en HTTPS :
+  certificat local sur le mini-PC.
+- Délier un téléphone sans en rattacher un autre (téléphone perdu, départ
+  d'un employé) depuis Réglages › Pointage par téléphone.
