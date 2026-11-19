@@ -169,6 +169,16 @@ describe('construirePresences — qui était là, et combien il a touché', () =
     assert.equal(l.pointe_depart, '2026-10-28T23:10:00Z');
   });
 
+  test('téléphone : la présence porte aussi l’arrivée et le départ bruts', () => {
+    const [l] = construirePresences(
+      [{ utilisateur_id: 'pos-flora', poste_jour: 'Caisse', reste: false, source: 'TELEPHONE',
+         pointe_le: '2026-11-19T07:58:00Z', depart_le: '2026-11-19T16:02:00Z' }],
+      DEPENSES, RH, CTX,
+    );
+    assert.equal(l.pointe_arrivee, '2026-11-19T07:58:00Z');
+    assert.equal(l.pointe_depart, '2026-11-19T16:02:00Z');
+  });
+
   test('présence saisie à l’ouverture : pas d’heure de pointeuse', () => {
     const [l] = construirePresences(
       [{ utilisateur_id: 'pos-flora', poste_jour: 'Caisse', reste: false, source: 'OUVERTURE',
