@@ -208,6 +208,55 @@ export function finBlocage(echecs: Date[], maintenant: Date): Date | null {
   return maintenant.getTime() < fin ? new Date(fin) : null;
 }
 
+/** Ce qu'on imprime sur l'autocollant et ce qui ouvre la page d'activation. */
+export interface FicheRestaurant {
+  telephone: string | null;
+  adresse: string | null;
+  prefixe_promo: string | null;
+  slug_site: string | null;
+}
+
+const PREFIXE = /^[A-HJKM-Z]{3}$/;
+const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+/** Champ texte facultatif : vide = NULL. */
+function texteFacultatif(v: unknown): string | null | undefined {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== 'string') return undefined;
+  const t = v.trim();
+  return t ? t : null;
+}
+
+/**
+ * Fiche promo d'un restaurant, telle que la console l'envoie. Le préfixe est
+ * mis en majuscules ; il ne prend ni I ni L, confondus avec 1 à la saisie.
+ */
+export function lireFicheRestaurant(corps: Record<string, unknown>): { valeur?: FicheRestaurant; erreur?: string } {
+  const telBrut = texteFacultatif(corps.telephone);
+  if (telBrut === undefined) return { erreur: 'Téléphone invalide' };
+  const telephone = telBrut === null ? null : normaliserTelephone(telBrut);
+  if (telBrut !== null && !telephone) return { erreur: 'Téléphone invalide : 10 chiffres, par exemple 07 77 30 33 33' };
+
+  const adresse = texteFacultatif(corps.adresse);
+  if (adresse === undefined || (adresse && adresse.length > 160)) return { erreur: 'Adresse trop longue (160 caractères au plus)' };
+
+  const prefixeBrut = texteFacultatif(corps.prefixe_promo);
+  if (prefixeBrut === undefined) return { erreur: 'Préfixe invalide' };
+  const prefixe_promo = prefixeBrut === null ? null : prefixeBrut.toUpperCase();
+  if (prefixe_promo && !PREFIXE.test(prefixe_promo)) {
+    return { erreur: 'Le préfixe fait 3 lettres, sans I ni L (confondus avec 1)' };
+  }
+
+  const slugBrut = texteFacultatif(corps.slug_site);
+  if (slugBrut === undefined) return { erreur: 'Identifiant du site invalide' };
+  const slug_site = slugBrut === null ? null : slugBrut.toLowerCase();
+  if (slug_site && (slug_site.length > 40 || !SLUG.test(slug_site))) {
+    return { erreur: 'Identifiant du site : lettres minuscules, chiffres et tirets (ex. angre-7e)' };
+  }
+
+  return { valeur: { telephone, adresse, prefixe_promo, slug_site } };
+}
+
 /** Nouveau lot, tel que la console l'envoie. */
 export interface LotDemande {
   restaurant_id: string;

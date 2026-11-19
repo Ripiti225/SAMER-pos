@@ -17,12 +17,24 @@ export class ErreurSiege extends Error {
  * base directement : la RLS y est forcée sans politique, une lecture directe
  * exigerait la clé `service_role` dans le navigateur.
  */
-export async function appelSiege<T>(action: string, corps: Record<string, unknown> = {}): Promise<T> {
+export function appelSiege<T>(action: string, corps: Record<string, unknown> = {}): Promise<T> {
+  return appelFonction<T>('siege', action, corps);
+}
+
+/**
+ * Appelle l'Edge Function `promo` — codes promo cartes. Fonction à part de
+ * `siege` (déjà longue), même session, mêmes messages d'erreur.
+ */
+export function appelPromo<T>(action: string, corps: Record<string, unknown> = {}): Promise<T> {
+  return appelFonction<T>('promo', action, corps);
+}
+
+async function appelFonction<T>(fonction: 'siege' | 'promo', action: string, corps: Record<string, unknown>): Promise<T> {
   const { data: sess } = await supabase.auth.getSession();
   const jeton = sess.session?.access_token;
   if (!jeton) throw new ErreurSiege('Connexion requise', 401);
 
-  const rep = await supabase.functions.invoke(`siege`, {
+  const rep = await supabase.functions.invoke(fonction, {
     body: { action, ...corps },
     headers: { Authorization: `Bearer ${jeton}` },
   });
@@ -319,4 +331,67 @@ export interface ClientsMois {
   /** Classement d'aujourd'hui ; après le tirage, c'est `tirage.participants` qui fait foi. */
   participants: ParticipantTirage[];
   tirage: TirageClients | null;
+}
+
+// ---------------------------------------------------------------------------
+// Codes promo cartes (fonction `promo`, docs/PROMO_CARTES.md).
+// ---------------------------------------------------------------------------
+
+/** Un lot et ses compteurs, tel que l'action `lots` le rend (`promo_lots_stats`). */
+export interface LotPromo {
+  restaurant_id: string;
+  id: string;
+  libelle: string;
+  pourcentage: number;
+  valide_du: string;
+  valide_au: string;
+  quantite: number;
+  annule_le: string | null;
+  cree_par: string | null;
+  cree_le: string;
+  actives: number;
+  reserves: number;
+  utilises: number;
+  annules: number;
+  utilises_sur_place: number;
+  utilises_telephone: number;
+  utilises_site: number;
+  ca: number;
+  remise: number;
+  conflits: number;
+}
+
+/** Fiche promo d'un restaurant du cloud (action `restaurants_promo`). */
+export interface FichePromo {
+  restaurant_id: string;
+  code: string;
+  nom: string;
+  marque: 'SAMER' | 'AL_KAYAN' | 'A_LA_BRAISE';
+  telephone: string | null;
+  adresse: string | null;
+  prefixe_promo: string | null;
+  slug_site: string | null;
+  /** Le préfixe est alors figé : il est imprimé sur des codes. */
+  a_des_lots: boolean;
+}
+
+/** Un numéro à relancer (action `relances`) : le code n'arrive que masqué. */
+export interface RelancePromo {
+  restaurant_id: string;
+  lot_id: string;
+  libelle: string;
+  pourcentage: number;
+  code_masque: string;
+  telephone: string;
+  active_le: string;
+  valide_au: string;
+}
+
+/** Un code d'un lot (action `lot_codes`, ADMIN). */
+export interface CodePromo {
+  code: string;
+  statut: 'DISPONIBLE' | 'RESERVE' | 'UTILISE' | 'ANNULE';
+  active_le: string | null;
+  utilise_le: string | null;
+  utilise_canal: 'SUR_PLACE' | 'TELEPHONE' | 'SITE' | null;
 }

@@ -6,7 +6,9 @@
 //     celle de Vercel). Actions `consulter`, `activer`, `verifier`, `reserver`.
 //     Limite : 10 codes faux par IP et par heure, puis 1 h de blocage.
 //   * la CONSOLE DU SIÈGE : jeton de session, comme la fonction `siege`.
-//     Actions `lots`, `lot_creer`, `lot_annuler`, `lot_codes`, `relances`.
+//     Actions `lots`, `lot_creer`, `lot_annuler`, `lot_codes`, `relances`,
+//     `restaurants_promo`, `restaurant_promo_modifier`, `exclusions`,
+//     `categorie_exclure`.
 //
 // Ce que cette fonction NE FAIT JAMAIS : passer un code en UTILISE. Seule la
 // caisse consomme un code (R10), hors ligne, et le remonte par l'outbox.
@@ -31,6 +33,7 @@ import {
   FENETRE_ESSAIS_MS,
   ESSAIS_MAX,
   finBlocage,
+  lireFicheRestaurant,
   lireLignes,
   lireLot,
   masquerCode,
@@ -341,13 +344,21 @@ async function reserverPremier<T extends { code: CodeLigne }>(
 // ---------------------------------------------------------------------------
 
 /** Trace une action du siège. Best-effort, comme dans la fonction `siege`. */
-async function tracer(admin: SupabaseClient, siege: Siege, action: string, entiteId: string, portee: string, meta: unknown) {
+async function tracer(
+  admin: SupabaseClient,
+  siege: Siege,
+  action: string,
+  entite: string,
+  entiteId: string,
+  portee: string,
+  meta: unknown,
+) {
   try {
     await admin.from('siege_audit').insert({
       user_id: siege.userId,
       nom_complet: siege.nomComplet,
       action,
-      entite: 'promo_lots',
+      entite,
       entite_id: entiteId,
       portee: [portee],
       meta,
@@ -418,7 +429,7 @@ async function porteConsole(
         // Les refus de la fonction SQL (préfixe manquant, restaurant inactif) sont écrits pour l'écran.
         if (error) return jsonCors({ erreur: error.message }, 400);
         const id = data as string;
-        await tracer(admin, siege, 'PROMO_LOT_CREE', id, valeur.restaurant_id, valeur);
+        await tracer(admin, siege, 'PROMO_LOT_CREE', 'promo_lots', id, valeur.restaurant_id, valeur);
         return jsonCors({ lot_id: id });
       }
 
@@ -432,7 +443,7 @@ async function porteConsole(
           p_lot_id: corps.lot_id,
         });
         if (error) return jsonCors({ erreur: error.message }, 400);
-        await tracer(admin, siege, 'PROMO_LOT_ANNULE', corps.lot_id, corps.restaurant_id, { codes_annules: data });
+        await tracer(admin, siege, 'PROMO_LOT_ANNULE', 'promo_lots', corps.lot_id, corps.restaurant_id, { codes_annules: data });
         return jsonCors({ codes_annules: data });
       }
 
@@ -489,6 +500,95 @@ async function porteConsole(
         return jsonCors({
           relances: lignes.map(({ code, ...reste }) => ({ ...reste, code_masque: masquerCode(code) })),
         });
+      }
+
+      // -- Fiches promo des restaurants : ce qui s'imprime sur l'autocollant.
+      // -- `a_des_lots` : le préfixe est alors figé, il est sur des codes imprimés.
+      case 'restaurants_promo': {
+        const [{ data, error }, { data: lots, error: e2 }] = await Promise.all([
+          admin
+            .from('restaurants')
+            .select('restaurant_id, code, nom, marque, telephone, adresse, prefixe_promo, slug_site')
+            .eq('actif', true)
+            .order('nom'),
+          admin.from('promo_lots').select('restaurant_id'),
+        ]);
+        if (error || e2) throw new Error('Lecture des restaurants impossible');
+        const avecLots = new Set((lots ?? []).map((l) => l.restaurant_id as string));
+        return jsonCors({
+          restaurants: (data ?? []).map((r) => ({ ...r, a_des_lots: avecLots.has(r.restaurant_id as string) })),
+        });
+      }
+
+      case 'restaurant_promo_modifier': {
+        exigeAdmin(siege);
+        if (!uuidValide(corps.restaurant_id)) return jsonCors({ erreur: 'Restaurant non précisé' }, 400);
+        const restaurantId = corps.restaurant_id;
+        const { valeur, erreur } = lireFicheRestaurant(corps);
+        if (!valeur) return jsonCors({ erreur }, 400);
+
+        const { data: actuel, error } = await admin
+          .from('restaurants')
+          .select('prefixe_promo')
+          .eq('restaurant_id', restaurantId)
+          .maybeSingle();
+        if (error) throw new Error('Lecture du restaurant impossible');
+        if (!actuel) return jsonCors({ erreur: 'Restaurant introuvable' }, 404);
+        if (actuel.prefixe_promo !== valeur.prefixe_promo) {
+          const { count, error: e2 } = await admin
+            .from('promo_lots')
+            .select('id', { count: 'exact', head: true })
+            .eq('restaurant_id', restaurantId);
+          if (e2) throw new Error('Lecture des lots impossible');
+          if ((count ?? 0) > 0) {
+            return jsonCors({ erreur: 'Ce restaurant a déjà des lots : son préfixe est imprimé sur des autocollants, il ne change plus.' }, 409);
+          }
+        }
+
+        const { error: e3 } = await admin.from('restaurants').update(valeur).eq('restaurant_id', restaurantId);
+        if (e3) {
+          // 23505 : index unique sur le préfixe ou l'identifiant du site.
+          if (e3.code === '23505') return jsonCors({ erreur: 'Ce préfixe ou cet identifiant de site est déjà pris par un autre restaurant.' }, 409);
+          if (e3.code === '23514') return jsonCors({ erreur: 'Valeur refusée par la base : vérifiez le préfixe et le téléphone.' }, 400);
+          throw new Error('Enregistrement impossible');
+        }
+        await tracer(admin, siege, 'PROMO_FICHE_RESTAURANT', 'restaurants', restaurantId, restaurantId, valeur);
+        return jsonCors({ ok: true });
+      }
+
+      // -- Catégories exclues des codes carte (Chawarma). Une ligne avec
+      // -- `exclue: false` lève l'exclusion et descend quand même aux caisses.
+      case 'exclusions': {
+        const restaurantId = filtreRestaurant(corps);
+        if (restaurantId === undefined) return jsonCors({ erreur: 'Restaurant invalide' }, 400);
+        let requete = admin.from('promo_categories_exclues').select('restaurant_id, id, exclue');
+        if (restaurantId) requete = requete.eq('restaurant_id', restaurantId);
+        const { data, error } = await requete;
+        if (error) throw new Error('Lecture des exclusions impossible');
+        return jsonCors({ exclusions: data ?? [] });
+      }
+
+      case 'categorie_exclure': {
+        exigeAdmin(siege);
+        if (!uuidValide(corps.restaurant_id) || !uuidValide(corps.categorie_id) || typeof corps.exclue !== 'boolean') {
+          return jsonCors({ erreur: 'Catégorie non précisée' }, 400);
+        }
+        const { error } = await admin.from('promo_categories_exclues').upsert(
+          {
+            restaurant_id: corps.restaurant_id,
+            id: corps.categorie_id,
+            exclue: corps.exclue,
+            modifie_par: siege.nomComplet,
+            modifie_le: new Date().toISOString(),
+          },
+          { onConflict: 'restaurant_id,id' },
+        );
+        if (error) {
+          if (error.code === '23503') return jsonCors({ erreur: 'Cette catégorie n’existe pas dans ce restaurant.' }, 404);
+          throw new Error('Enregistrement impossible');
+        }
+        await tracer(admin, siege, corps.exclue ? 'PROMO_CATEGORIE_EXCLUE' : 'PROMO_CATEGORIE_REMISEE', 'promo_categories_exclues', corps.categorie_id, corps.restaurant_id, {});
+        return jsonCors({ ok: true });
       }
 
       default:

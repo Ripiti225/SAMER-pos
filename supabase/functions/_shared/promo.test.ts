@@ -7,6 +7,7 @@ import {
   codesUtilisablesParNumero,
   decisionActivation,
   finBlocage,
+  lireFicheRestaurant,
   lireLignes,
   lireLot,
   masquerCode,
@@ -157,4 +158,24 @@ test('un lot mal rempli est refusé avec un message clair', () => {
   assert.ok(lireLot({ ...ok, du: '2026-02-30' }, creation).erreur, 'date impossible');
   assert.ok(lireLot({ ...ok, au: '2028-01-01' }, creation).erreur, 'plus d’un an');
   assert.equal(lireLot({ ...ok, du: '2026-11-19' }, creation).valeur?.valide_du, '2026-11-19T00:00:00.000Z', 'aujourd’hui accepté');
+});
+
+test('la fiche promo d’un restaurant est normalisée, vide = effacé', () => {
+  assert.deepEqual(
+    lireFicheRestaurant({ telephone: '07 77 30 33 33', adresse: '  Riviera Palmeraie ', prefixe_promo: 'pam', slug_site: 'Palmeraie' }).valeur,
+    { telephone: '+2250777303333', adresse: 'Riviera Palmeraie', prefixe_promo: 'PAM', slug_site: 'palmeraie' },
+  );
+  assert.deepEqual(lireFicheRestaurant({ telephone: '', adresse: null, prefixe_promo: ' ', slug_site: undefined }).valeur, {
+    telephone: null, adresse: null, prefixe_promo: null, slug_site: null,
+  });
+});
+
+test('une fiche mal remplie est refusée avec un message clair', () => {
+  assert.ok(lireFicheRestaurant({ telephone: '77303333' }).erreur);
+  assert.ok(lireFicheRestaurant({ prefixe_promo: 'PAL' }).erreur, 'pas de L');
+  assert.ok(lireFicheRestaurant({ prefixe_promo: 'PA' }).erreur);
+  assert.ok(lireFicheRestaurant({ slug_site: 'angre 7e' }).erreur);
+  assert.ok(lireFicheRestaurant({ slug_site: '-angre' }).erreur);
+  assert.ok(lireFicheRestaurant({ adresse: 'x'.repeat(161) }).erreur);
+  assert.ok(lireFicheRestaurant({ telephone: 42 }).erreur);
 });

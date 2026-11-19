@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { appelSiege, ErreurSiege, type Siege } from '../api';
 import { Erreur, Info, PastilleMarque, Squelette } from '../components/Etat';
+import { ExclusionsPromo } from '../components/ExclusionsPromo';
 import { useRestaurants, type FiltreResto } from '../restaurants';
 
 interface CategorieCloud {
@@ -119,6 +120,10 @@ export function Categories({ filtre }: { filtre: FiltreResto; onFiltre: (v: Filt
               son ancien catalogue y est publié une seule fois, sans écraser les fiches déjà corrigées au siège.
             </p>
           </div>
+
+          {enroles.length > 0 && (
+            <ExclusionsPromo enroles={enroles} categories={data?.categories ?? []} parDefaut={filtre} lectureSeule={lectureSeule} />
+          )}
 
           <div className="rounded-jeton border border-filet bg-carte p-4">
             <h2 className="mb-2 text-[12px] font-bold uppercase tracking-wide text-faible">La catégorie</h2>
