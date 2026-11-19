@@ -43,3 +43,9 @@ verify_jwt = true
 # authentifiée par clé de site, comme sync-pull et ordres.
 [functions.maj]
 verify_jwt = false
+
+# Codes promo cartes (PROMO-03) : deux portes, vérifiées DANS la fonction —
+# secret partagé pour le serveur du site, jeton de session pour la console
+# (comme `siege`). La passerelle ne doit rien filtrer avant.
+[functions.promo]
+verify_jwt = false

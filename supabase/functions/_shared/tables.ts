@@ -18,6 +18,9 @@ export const COLONNES_VENTES: Record<string, string[]> = {
     // Sans lui, le siège ne peut pas voir quel caissier laisse partir des
     // courses partenaires sans aucun moyen de rappeler le client.
     'contact_client',
+    // 2026-11-19 — code promo « carte colis » (PROMO-02), à côté du happy hour
+    // (`promo_id` / `promo_montant`). Migration 20261119000000_promo_cartes.sql.
+    'code_promo_id', 'code_promo_code', 'code_promo_montant', 'code_promo_canal',
   ],
   commande_items: [
     'id', 'commande_id', 'article_id', 'combo_id', 'nom_snapshot', 'prix_unitaire',
@@ -28,6 +31,12 @@ export const COLONNES_VENTES: Record<string, string[]> = {
     'id', 'commande_id', 'numero', 'libelle', 'type', 'statut', 'sous_total',
     'promo_montant', 'remise_montant', 'fidelite_montant', 'client_fidelite_id',
     'fidelite_points', 'montant', 'service_id', 'payee_par', 'created_at', 'payee_le',
+    'code_promo_montant',
+  ],
+  // 2026-11-19 — événements des codes promo cartes (PROMO-02). Déclarée AVANT
+  // que les caisses ne l'envoient : une table absente d'ici gèlerait l'outbox.
+  promo_utilisations: [
+    'id', 'code_id', 'commande_id', 'evenement', 'canal', 'montant', 'created_at',
   ],
   note_split_items: ['id', 'note_id', 'commande_item_id', 'quantite', 'montant_brut'],
   paiements: [

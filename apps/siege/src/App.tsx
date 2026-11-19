@@ -6,6 +6,7 @@ import { modeInitial, poserMode, type Mode } from './affichage';
 import type { FiltreResto } from './restaurants';
 import { supabase } from './supabase';
 import { ClientsMois } from './screens/ClientsMois';
+import { CodesPromo } from './screens/CodesPromo';
 import { Clotures } from './screens/Clotures';
 import { Connexion } from './screens/Connexion';
 import { Equipe } from './screens/Equipe';
@@ -19,12 +20,13 @@ import { SanteSites } from './screens/SanteSites';
 import { Sequences } from './screens/Sequences';
 import { TableauBord } from './screens/TableauBord';
 
-type Ecran = 'tableau-bord' | 'clotures' | 'clients-mois' | 'inventaire' | 'recettes-inventaire' | 'sequences' | 'sante-sites' | 'mises-a-jour' | 'menu' | 'categories' | 'equipe' | 'parametres';
+type Ecran = 'tableau-bord' | 'clotures' | 'clients-mois' | 'codes-promo' | 'inventaire' | 'recettes-inventaire' | 'sequences' | 'sante-sites' | 'mises-a-jour' | 'menu' | 'categories' | 'equipe' | 'parametres';
 
 const SECTIONS: { cle: Ecran; libelle: string }[] = [
   { cle: 'tableau-bord', libelle: 'Tableau de bord' },
   { cle: 'clotures', libelle: 'Clôtures' },
   { cle: 'clients-mois', libelle: 'Clients du mois' },
+  { cle: 'codes-promo', libelle: 'Codes promo cartes' },
   { cle: 'inventaire', libelle: 'Inventaire' },
   { cle: 'recettes-inventaire', libelle: 'Recettes d’inventaire' },
   { cle: 'sequences', libelle: 'Séquences' },
@@ -243,6 +245,7 @@ export function App() {
           {ecran === 'tableau-bord' && <TableauBord filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'clotures' && <Clotures filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'clients-mois' && <ClientsMois filtre={filtreResto} onFiltre={setFiltreResto} />}
+          {ecran === 'codes-promo' && <CodesPromo siege={siege} filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'inventaire' && <Inventaire siege={siege} filtre={filtreResto} onFiltre={setFiltreResto} />}
           {ecran === 'recettes-inventaire' && <RecettesInventaire siege={siege} filtre={filtreResto} />}
           {ecran === 'sequences' && <Sequences filtre={filtreResto} onFiltre={setFiltreResto} />}
