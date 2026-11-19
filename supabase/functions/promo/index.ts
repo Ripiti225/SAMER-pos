@@ -494,11 +494,24 @@ async function porteConsole(
           return jsonCors({ erreur: 'Nombre de jours invalide' }, 400);
         }
         const jusqua = jours === null ? null : new Date(Date.now() + (jours as number) * 24 * 3600 * 1000).toISOString();
-        const lignes = await toutesLesLignes<Record<string, unknown> & { code: string }>((de, a) =>
+        const lignes = await toutesLesLignes<Record<string, unknown> & { code: string; restaurant_id: string; lot_id: string }>((de, a) =>
           admin.rpc('promo_relances', { p_restaurant_id: restaurantId, p_jusqua: jusqua }).range(de, a),
         );
+        // Le pourcentage du lot, pour que le message de relance dise « ton −20 % »
+        // sans le supposer. Lu à part : promo_relances ne le rend pas.
+        const lotIds = [...new Set(lignes.map((l) => l.lot_id))];
+        const pourcentages = new Map<string, number>();
+        if (lotIds.length > 0) {
+          const { data: lots, error } = await admin.from('promo_lots').select('id, pourcentage').in('id', lotIds);
+          if (error) throw new Error('Lecture des lots impossible');
+          for (const l of lots ?? []) pourcentages.set(l.id as string, l.pourcentage as number);
+        }
         return jsonCors({
-          relances: lignes.map(({ code, ...reste }) => ({ ...reste, code_masque: masquerCode(code) })),
+          relances: lignes.map(({ code, ...reste }) => ({
+            ...reste,
+            pourcentage: pourcentages.get(reste.lot_id) ?? null,
+            code_masque: masquerCode(code),
+          })),
         });
       }
 
