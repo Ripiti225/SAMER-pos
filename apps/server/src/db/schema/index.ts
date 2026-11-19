@@ -18,6 +18,7 @@ import {
   pgEnum,
   pgSequence,
   pgTable,
+  customType,
   primaryKey,
   smallint,
   text,
@@ -372,7 +373,8 @@ export const equipeService = pgTable('equipe_service', {
   // Sortie → Entrée du shift, DÉDUIT des heures faites.
   depart_le: timestamp('depart_le', { withTimezone: true }),
   secondes_absence: integer('secondes_absence').notNull().default(0),
-  // Qui a daté l'arrivée : POINTEUSE, CAISSE (secours PIN manager) ou OUVERTURE.
+  // Qui a daté l'arrivée : POINTEUSE, TELEPHONE (2026-11-19), CAISSE (secours
+  // PIN manager) ou OUVERTURE.
   source: text('source').notNull().default('OUVERTURE'),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex('equipe_service_service_utilisateur_key').on(t.service_id, t.utilisateur_id)]);
@@ -395,6 +397,42 @@ export const pointeuseEvenements = pgTable('pointeuse_evenements', {
   service_id: uuid('service_id').references(() => servicesCaisse.id, { onDelete: 'set null' }),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex('pointeuse_evenements_numero_key').on(t.appareil, t.numero)]);
+
+/**
+ * Pointage par téléphone (2026-11-19) : téléphone rattaché à un compte. Le
+ * téléphone garde une clé aléatoire (cookie httpOnly), on n'en garde que
+ * l'empreinte SHA-256. Un téléphone actif = un compte, un compte = un téléphone
+ * actif ; un changement de téléphone attend le gérant (EN_ATTENTE).
+ */
+export const appareilsPointage = pgTable('appareils_pointage', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  utilisateur_id: uuid('utilisateur_id').notNull().references(() => utilisateurs.id, { onDelete: 'cascade' }),
+  cle_hash: text('cle_hash').notNull(),
+  libelle: text('libelle'),
+  // ACTIF | EN_ATTENTE | REMPLACE | REFUSE
+  statut: text('statut').notNull(),
+  cree_le: timestamp('cree_le', { withTimezone: true }).notNull().defaultNow(),
+  decide_par: uuid('decide_par').references(() => utilisateurs.id),
+  decide_le: timestamp('decide_le', { withTimezone: true }),
+}, (t) => [
+  check('appareils_pointage_statut_check', sql`${t.statut} IN ('ACTIF','EN_ATTENTE','REMPLACE','REFUSE')`),
+  uniqueIndex('appareils_pointage_actif_key').on(t.utilisateur_id).where(sql`${t.statut} = 'ACTIF'`),
+  uniqueIndex('appareils_pointage_attente_key').on(t.utilisateur_id).where(sql`${t.statut} = 'EN_ATTENTE'`),
+  uniqueIndex('appareils_pointage_cle_actif_key').on(t.cle_hash).where(sql`${t.statut} = 'ACTIF'`),
+]);
+
+/**
+ * Selfie pris au pointage par téléphone, rattaché à l'événement par
+ * (appareil, numero) : une arrivée en attente est rejouée à l'ouverture.
+ */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' });
+
+export const photosPointage = pgTable('photos_pointage', {
+  appareil: text('appareil').notNull(),
+  numero: bigint('numero', { mode: 'number' }).notNull(),
+  jpeg: bytea('jpeg').notNull(),
+  cree_le: timestamp('cree_le', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ name: 'photos_pointage_pkey', columns: [t.appareil, t.numero] })]);
 
 // Sessions serveur PERSISTÉES : survivent à un redémarrage du serveur/mini-PC
 // (le magasin les recharge au démarrage). Cookie httpOnly = id de session.

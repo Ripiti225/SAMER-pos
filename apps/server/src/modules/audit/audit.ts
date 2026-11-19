@@ -86,6 +86,15 @@ export type ActionAudit =
   // Pointeuse Hikvision : réglage de l'appareil et n° employé d'une personne.
   | 'REGLAGE_POINTEUSE'
   | 'NUMERO_POINTEUSE'
+  // Pointage par téléphone (2026-11-19) : pointage avec selfie, téléphone
+  // rattaché, refus d'un 2e compte, changement de téléphone et décision du gérant.
+  | 'POINTAGE_TELEPHONE'
+  | 'REGLAGE_POINTAGE_TELEPHONE'
+  | 'APPAREIL_RATTACHE'
+  | 'APPAREIL_DEJA_RATTACHE'
+  | 'APPAREIL_CHANGEMENT_DEMANDE'
+  | 'APPAREIL_CHANGEMENT_ACCEPTE'
+  | 'APPAREIL_CHANGEMENT_REFUSE'
   | 'VALIDATION_INVENTAIRE'
   | 'DEBLOCAGE_INVENTAIRE'
   | 'CORRECTION_STOCK_INITIAL'

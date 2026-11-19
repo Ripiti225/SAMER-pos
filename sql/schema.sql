@@ -345,7 +345,7 @@ CREATE TABLE equipe_service (
   secondes_absence INTEGER NOT NULL DEFAULT 0 CHECK (secondes_absence >= 0),
   -- Qui a daté l'arrivée : la pointeuse, la caisse (secours PIN manager) ou
   -- l'ouverture du shift (fonctionnement d'avant la pointeuse).
-  source         TEXT NOT NULL DEFAULT 'OUVERTURE' CHECK (source IN ('POINTEUSE','CAISSE','OUVERTURE')),
+  source         TEXT NOT NULL DEFAULT 'OUVERTURE' CHECK (source IN ('POINTEUSE','TELEPHONE','CAISSE','OUVERTURE')),
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (service_id, utilisateur_id)
 );
@@ -368,6 +368,33 @@ CREATE TABLE pointeuse_evenements (
   UNIQUE (appareil, numero)
 );
 CREATE INDEX idx_pointeuse_evenements_utilisateur ON pointeuse_evenements (utilisateur_id, pointe_le);
+
+-- Pointage par téléphone (2026-11-19) : un téléphone actif = un compte, un
+-- compte = un téléphone actif ; changement de téléphone validé par le gérant.
+-- Seule l'empreinte SHA-256 de la clé du téléphone (cookie httpOnly) est gardée.
+CREATE TABLE appareils_pointage (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  utilisateur_id UUID NOT NULL REFERENCES utilisateurs(id) ON DELETE CASCADE,
+  cle_hash       TEXT NOT NULL,
+  libelle        TEXT,
+  statut         TEXT NOT NULL CHECK (statut IN ('ACTIF','EN_ATTENTE','REMPLACE','REFUSE')),
+  cree_le        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  decide_par     UUID REFERENCES utilisateurs(id),
+  decide_le      TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX appareils_pointage_actif_key ON appareils_pointage (utilisateur_id) WHERE statut = 'ACTIF';
+CREATE UNIQUE INDEX appareils_pointage_attente_key ON appareils_pointage (utilisateur_id) WHERE statut = 'EN_ATTENTE';
+CREATE UNIQUE INDEX appareils_pointage_cle_actif_key ON appareils_pointage (cle_hash) WHERE statut = 'ACTIF';
+
+-- Selfie du pointage par téléphone, rattaché à l'événement par (appareil, numero).
+CREATE TABLE photos_pointage (
+  appareil  TEXT NOT NULL,
+  numero    BIGINT NOT NULL,
+  jpeg      BYTEA NOT NULL,
+  cree_le   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (appareil, numero)
+);
+CREATE INDEX idx_photos_pointage_cree_le ON photos_pointage (cree_le);
 
 -- Registre des dépenses du service (§6.8) : services_caisse.depenses en est la
 -- SOMME, la caissière ne retape aucun total.

@@ -32,6 +32,7 @@ import { routesPoste } from './modules/poste/affichage.js';
 import { routesDepenses } from './modules/depenses/routes.js';
 import { routesPointage } from './modules/pointage/routes.js';
 import { routesPointeuse } from './modules/pointeuse/routes.js';
+import { routesPointageTelephone } from './modules/pointage-telephone/routes.js';
 import { routesInventaire } from './modules/inventaire/routes.js';
 import { routesCorrectionStock } from './modules/inventaire/routes-correction.js';
 import { routesCatalogueAdmin } from './modules/catalogue/admin-catalogue.js';
@@ -84,6 +85,7 @@ export async function construireApp(options: { logger?: boolean } = {}): Promise
   routesDepenses(app);
   routesPointage(app);
   routesPointeuse(app);
+  routesPointageTelephone(app);
   routesInventaire(app);
   routesCorrectionStock(app);
   routesCatalogueAdmin(app);
