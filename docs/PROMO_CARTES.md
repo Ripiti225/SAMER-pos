@@ -96,3 +96,39 @@ tracées dans `siege_audit`.
 
 Contrôle : sans session, `{"action":"lots"}` répond 401 « Connexion requise » ;
 sans secret, `{"action":"verifier"}` répond 401 « Accès refusé ».
+
+## Où chaque règle est vérifiée (PROMO-05)
+
+Deux jeux de tests, selon qui applique la règle :
+
+- **Base** : `supabase/tests/promo_regles.sql`. À coller dans l'éditeur SQL de
+  `pos-samer-cloud`. Il se termine toujours par une erreur volontaire, qui
+  annule tout ce qu'il a écrit : « PROMO TESTS OK — n vérifications » ou
+  « PROMO ÉCHEC — » suivi de la règle cassée. Sans trace, rejouable en production.
+- **Fonction `promo`** : `node --experimental-strip-types --test supabase/functions/_shared/promo.test.ts`.
+
+| Règle | Ce qui la garantit | Test |
+|---|---|---|
+| R1 usage unique | contraintes de statut ; réservation par `UPDATE … WHERE statut = 'DISPONIBLE'` : une seule gagne | SQL |
+| R2 restaurant | fonction `promo` (`refusUtilisation`) | TS |
+| R3 validité | fonction `promo`, dernier jour inclus | TS |
+| R4 exclusion Chawarma | table `promo_categories_exclues` (descend aux caisses) ; remise estimée hors lignes exclues | SQL + TS |
+| R5 montant | arrondi ligne par ligne comme la caisse | TS |
+| R6 un code par commande | caisse (PROMO-09) | — |
+| R7 panier sans éligible | fonction `promo` (`NO_ELIGIBLE_ITEM`) | TS |
+| R8 annulation de commande | caisse (PROMO-10) | — |
+| R9 libération des réservations | `promo_liberer_reservations` + pg_cron (PROMO-04) | SQL, sauté tant que PROMO-04 n'est pas appliqué |
+| R10 seule la caisse consomme | aucune action du site n'écrit `UTILISE` | revue de code |
+| R11 un code, un numéro | `UPDATE … WHERE telephone IS NULL` : le second numéro ne trouve plus rien | SQL + TS |
+| R12 recherche par numéro | format `+225XXXXXXXXXX` (contrainte) ; le plus proche de l'expiration d'abord | SQL + TS |
+| R13 consentement | contrainte « pas de numéro sans consentement » + refus côté fonction | SQL + TS |
+
+Le script vérifie aussi le tirage d'un lot (codes uniques, préfixe), son
+annulation (les utilisés restent), les compteurs de la console, les relances,
+la version qui fait descendre chaque modification aux caisses, et que rien
+n'est ouvert à la clé publique (fonctions et tables).
+
+Une vraie course entre deux connexions ne se rejoue pas depuis l'éditeur SQL :
+le test vérifie la condition qui la tranche. Postgres réévalue un `UPDATE …
+WHERE statut = 'DISPONIBLE'` mis en attente par un autre : le second ne trouve
+plus la ligne.
