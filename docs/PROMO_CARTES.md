@@ -132,3 +132,34 @@ Une vraie course entre deux connexions ne se rejoue pas depuis l'éditeur SQL :
 le test vérifie la condition qui la tranche. Postgres réévalue un `UPDATE …
 WHERE statut = 'DISPONIBLE'` mis en attente par un autre : le second ne trouve
 plus la ligne.
+
+## Planche vinyle (PROMO-07)
+
+Console › Codes promo cartes › « Planche PDF » sur un lot. Fabriquée dans le
+navigateur à partir des codes du lot (hors codes annulés) : rien n'est stocké,
+elle se retélécharge à volonté. Code : `apps/siege/src/planche/`.
+
+- **PDF impression + découpe** (`lot-<id>-impression-decoupe.pdf`) : une page =
+  une feuille de 1 000 × 1 000 mm à l'échelle 1:1. Autocollant 85 × 55 mm,
+  fond perdu 2 mm, écart 4 mm, marge 20 mm : 10 × 16 = 160 par feuille ; la
+  dernière feuille n'a pas d'emplacement vide.
+- **Trait de coupe** : rectangle à coins arrondis de 3 mm, 0,25 pt, dans la
+  couleur d'accompagnement `CutContour` (Separation, magenta à l'écran), en
+  surimpression, sur le calque `CutContour`. Le RIP l'envoie au traceur ; il
+  ne s'imprime pas. Aucun repère de calage : l'imprimeur pose les siens dans
+  la marge.
+- **SVG de découpe seule** : un fichier par feuille
+  (`lot-<id>-decoupe-seule[-feuille-n-sur-N].svg`), mêmes positions, en mm.
+  Le brief prévoyait un seul fichier : un traceur coupe une feuille à la fois.
+- **Impression** : CMJN, polices incorporées (Archivo Black, Inter, Kaushan
+  Script, JetBrains Mono), QR vectoriel de 22 mm, correction M, qui ouvre
+  `https://samer-delivery-site.vercel.app/fr/promo?c=<CODE>`. Textes et QR à
+  3 mm au moins du trait de coupe, aucun texte sous 2 mm (≈ 6 pt). Une adresse
+  trop longue est raccourcie à sa première virgule, et la console le dit.
+- **Réglages** (feuille, autocollant, fond perdu, écart, marge, rayon) :
+  modifiables dans la fenêtre, retenus par le navigateur.
+
+Écarts avec la maquette du 19/11 : QR porté de 20,7 à 22 mm (brief), bandeau
+du bas remonté pour rester à 3 mm du bord. Les couleurs CMJN des marques sont
+des équivalences à valider sur une épreuve de l'imprimeur
+(`apps/siege/src/planche/contenu.ts`, `COULEURS`).

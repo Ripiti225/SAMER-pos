@@ -5,6 +5,7 @@ import { formatFCFA } from '@pos/shared';
 import { appelPromo, ErreurSiege, type CodePromo, type FichePromo, type LotPromo, type RelancePromo, type Siege } from '../api';
 import { Erreur, Info, PastilleMarque, Squelette } from '../components/Etat';
 import { FiltreRestaurant } from '../components/FiltreRestaurant';
+import { PlancheLot } from '../components/PlancheLot';
 import {
   csvCodes,
   csvRelances,
@@ -153,7 +154,9 @@ const COULEURS_ETAT: Record<EtatLot, string> = {
 
 function VueLots({ admin, restaurantId, nomResto }: { admin: boolean; restaurantId: string | null; nomResto: (id: string) => string }) {
   const [aAnnuler, setAAnnuler] = useState<LotPromo | null>(null);
+  const [aImprimer, setAImprimer] = useState<LotPromo | null>(null);
   const [erreurCsv, setErreurCsv] = useState<string | null>(null);
+  const fiches = useFiches();
   const { data, isPending, error } = useQuery({
     queryKey: ['promo_lots', restaurantId],
     queryFn: () => appelPromo<{ lots: LotPromo[] }>('lots', { restaurant_id: restaurantId }),
@@ -246,7 +249,12 @@ function VueLots({ admin, restaurantId, nomResto }: { admin: boolean; restaurant
                     {admin && (
                       <td className="px-4 py-3.5">
                         <div className="flex justify-end gap-2">
-                          <button type="button" className="btn-blanc !min-h-[36px] !px-3 !text-[13px]" disabled title="La planche à imprimer arrive avec la prochaine étape (PROMO-07)">
+                          <button
+                            type="button"
+                            className="btn-blanc !min-h-[36px] !px-3 !text-[13px]"
+                            disabled={etat === 'ANNULE'}
+                            onClick={() => setAImprimer(l)}
+                          >
                             Planche PDF
                           </button>
                           <button
@@ -285,6 +293,13 @@ function VueLots({ admin, restaurantId, nomResto }: { admin: boolean; restaurant
       </p>
 
       {aAnnuler && <AnnulerLot lot={aAnnuler} nomResto={nomResto(aAnnuler.restaurant_id)} onFermer={() => setAAnnuler(null)} />}
+      {aImprimer && (
+        <PlancheLot
+          lot={aImprimer}
+          fiche={fiches.data?.restaurants.find((f) => f.restaurant_id === aImprimer.restaurant_id)}
+          onFermer={() => setAImprimer(null)}
+        />
+      )}
     </>
   );
 }
