@@ -185,6 +185,9 @@ export const FLUX_DESCENTE: Record<string, string[]> = {
   // 2026-10-15 — note des caissiers, calculée par SamerTrackly
   // (publier-notes-pos) : chaque caissier la voit sur l'accueil de sa caisse.
   NOTES: ['notes_caissiers'],
+  // 2026-11-20 — codes promo cartes (PROMO-08) : la caisse valide un code hors
+  // ligne. Les lots d'abord, pour qu'un code n'arrive jamais avant son lot.
+  PROMO_CODES: ['promo_lots', 'promo_codes', 'promo_categories_exclues'],
 };
 
 /**

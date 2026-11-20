@@ -996,3 +996,51 @@ export const notesCaissiers = pgTable('notes_caissiers', {
   periode_fin: date('periode_fin'),
   calcule_le: timestamp('calcule_le', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Codes promo « cartes colis » (migration 0052, PROMO-08) — descendus du cloud
+// (flux PROMO_CODES). Les colonnes `local_*` ne viennent pas du cloud : ce que
+// CETTE caisse a fait du code, que la descente ne touche jamais. Pas de clé
+// étrangère, pour la même raison que notes_caissiers.
+export const promoLots = pgTable('promo_lots', {
+  id: uuid('id').primaryKey(),
+  libelle: text('libelle').notNull(),
+  pourcentage: integer('pourcentage').notNull(),
+  valide_du: timestamp('valide_du', { withTimezone: true }).notNull(),
+  valide_au: timestamp('valide_au', { withTimezone: true }).notNull(),
+  quantite: integer('quantite').notNull(),
+  annule_le: timestamp('annule_le', { withTimezone: true }),
+  cree_par: text('cree_par'),
+  cree_le: timestamp('cree_le', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const promoCodes = pgTable('promo_codes', {
+  id: uuid('id').primaryKey(),
+  lot_id: uuid('lot_id').notNull(),
+  code: text('code').notNull(),
+  statut: text('statut').notNull(),
+  telephone: text('telephone'),
+  active_le: timestamp('active_le', { withTimezone: true }),
+  consentement_relance: boolean('consentement_relance').notNull().default(false),
+  reserve_le: timestamp('reserve_le', { withTimezone: true }),
+  reserve_source: text('reserve_source'),
+  reserve_ref: text('reserve_ref'),
+  utilise_le: timestamp('utilise_le', { withTimezone: true }),
+  utilise_commande_id: uuid('utilise_commande_id'),
+  utilise_canal: text('utilise_canal'),
+  local_statut: text('local_statut'),
+  local_commande_id: uuid('local_commande_id'),
+  local_canal: text('local_canal'),
+  local_le: timestamp('local_le', { withTimezone: true }),
+}, (t) => [
+  uniqueIndex('promo_codes_code_key').on(t.code),
+  index('promo_codes_telephone_idx').on(t.telephone).where(sql`${t.telephone} IS NOT NULL`),
+  check('promo_codes_local_statut_check', sql`${t.local_statut} IS NULL OR ${t.local_statut} IN ('RESERVE','UTILISE')`),
+  check('promo_codes_local_canal_check', sql`${t.local_canal} IS NULL OR ${t.local_canal} IN ('SUR_PLACE','TELEPHONE','SITE')`),
+]);
+
+export const promoCategoriesExclues = pgTable('promo_categories_exclues', {
+  id: uuid('id').primaryKey(),
+  exclue: boolean('exclue').notNull().default(true),
+  modifie_par: text('modifie_par'),
+  modifie_le: timestamp('modifie_le', { withTimezone: true }).notNull().defaultNow(),
+});

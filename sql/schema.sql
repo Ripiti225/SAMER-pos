@@ -886,6 +886,57 @@ CREATE UNIQUE INDEX IF NOT EXISTS "corrections_stock_initial_active"
   ON "corrections_stock_initial" ("inventaire_id", "produit_id") WHERE "statut" <> 'REMPLACEE';
 
 -- ============================================================================
+-- Codes promo « cartes colis » — miroir local (migration 0052, PROMO-08)
+-- Descendent du cloud (flux PROMO_CODES). Les colonnes `local_*` ne viennent
+-- pas du cloud : ce que cette caisse a fait du code. La descente ne les touche
+-- jamais, si bien que le statut d'un code ne recule pas sur la caisse.
+-- Pas de clé étrangère : une ligne arrivée avant son parent ferait échouer
+-- toute la descente.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS "promo_lots" (
+  "id" uuid PRIMARY KEY NOT NULL,
+  "libelle" text NOT NULL,
+  "pourcentage" integer NOT NULL,
+  "valide_du" timestamp with time zone NOT NULL,
+  "valide_au" timestamp with time zone NOT NULL,
+  "quantite" integer NOT NULL,
+  "annule_le" timestamp with time zone,
+  "cree_par" text,
+  "cree_le" timestamp with time zone NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS "promo_codes" (
+  "id" uuid PRIMARY KEY NOT NULL,
+  "lot_id" uuid NOT NULL,
+  "code" text NOT NULL,
+  "statut" text NOT NULL,
+  "telephone" text,
+  "active_le" timestamp with time zone,
+  "consentement_relance" boolean NOT NULL DEFAULT false,
+  "reserve_le" timestamp with time zone,
+  "reserve_source" text,
+  "reserve_ref" text,
+  "utilise_le" timestamp with time zone,
+  "utilise_commande_id" uuid,
+  "utilise_canal" text,
+  "local_statut" text,
+  "local_commande_id" uuid,
+  "local_canal" text,
+  "local_le" timestamp with time zone,
+  CONSTRAINT "promo_codes_local_statut_check" CHECK ("local_statut" IS NULL OR "local_statut" IN ('RESERVE','UTILISE')),
+  CONSTRAINT "promo_codes_local_canal_check" CHECK ("local_canal" IS NULL OR "local_canal" IN ('SUR_PLACE','TELEPHONE','SITE'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "promo_codes_code_key" ON "promo_codes" ("code");
+CREATE INDEX IF NOT EXISTS "promo_codes_telephone_idx" ON "promo_codes" ("telephone") WHERE "telephone" IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS "promo_categories_exclues" (
+  "id" uuid PRIMARY KEY NOT NULL,
+  "exclue" boolean NOT NULL DEFAULT true,
+  "modifie_par" text,
+  "modifie_le" timestamp with time zone NOT NULL DEFAULT now()
+);
+
+-- ============================================================================
 -- FIN — Tables sprint 1 : restaurant, parametres_locaux, utilisateurs,
 -- categories, articles, prix_canaux, groupes_options, options, supplements,
 -- combos, combo_articles, promotions, zones, tables_salle, services_caisse,
@@ -894,4 +945,5 @@ CREATE UNIQUE INDEX IF NOT EXISTS "corrections_stock_initial_active"
 -- Ajouts DESIGN_V2 (migration 0021) : depenses, produits_inventaire,
 -- inventaires_service, inventaire_lignes, entrees_stock.
 -- Migration 0022 : inventaire_consommations (recettes d'inventaire).
+-- Migration 0052 : promo_lots, promo_codes, promo_categories_exclues (codes promo cartes).
 -- ============================================================================
