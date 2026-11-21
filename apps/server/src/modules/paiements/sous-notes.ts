@@ -7,7 +7,8 @@ import { conditionPaiementActif } from './actifs.js';
 import { ErreurMetier } from '../../lib/erreurs.js';
 import { journaliser } from '../audit/audit.js';
 import { lireBareme, trouverOuCreer, utiliserPoints } from '../fidelite/service.js';
-import { recalculerTotaux, totalLigne, verrouillerCommande } from '../commandes/service.js';
+import { lignesPourCodePromo, recalculerTotaux, totalLigne, verrouillerCommande } from '../commandes/service.js';
+import { lignesExclues } from '../promo/service.js';
 
 type AllocationActive = {
   commande_item_id: string;
@@ -15,6 +16,7 @@ type AllocationActive = {
   statut: string;
   promo_montant: number;
   remise_montant: number;
+  code_promo_montant: number;
   fidelite_montant: number;
   sous_total: number;
 };
@@ -37,6 +39,7 @@ async function allocationsActives(tx: DbOuTx, commandeId: string): Promise<Alloc
       statut: notesSplit.statut,
       promo_montant: notesSplit.promo_montant,
       remise_montant: notesSplit.remise_montant,
+      code_promo_montant: notesSplit.code_promo_montant,
       fidelite_montant: notesSplit.fidelite_montant,
       sous_total: notesSplit.sous_total,
     })
@@ -91,6 +94,26 @@ export async function creerSousNoteArticles(
   const promoMontant = allouerReduction(Math.max(0, c.promo_montant - promoDeja), sousTotal, brutDisponible);
   const remiseMontant = allouerReduction(Math.max(0, c.remise_montant - remiseDeja), sousTotal, brutDisponible);
 
+  // Code promo carte : au prorata des lignes ÉLIGIBLES seulement — une note qui
+  // ne prend que du Chawarma ne reçoit rien de la remise du code (R4).
+  let codeMontant = 0;
+  if (c.code_promo_montant > 0) {
+    const exclues = await lignesExclues(tx, lignesPourCodePromo(actifs));
+    const eligible = (itemId: string) => !exclues.has(itemId);
+    const unitaire = new Map(actifs.map((i) => [i.id, totalLigne({ ...i, quantite: 1 })]));
+    const eligibleTotal = actifs.filter((i) => eligible(i.id)).reduce((s, i) => s + totalLigne(i), 0);
+    const eligibleAlloue = allocations
+      .filter((a) => eligible(a.commande_item_id))
+      .reduce((s, a) => s + (unitaire.get(a.commande_item_id) ?? 0) * a.quantite, 0);
+    const eligibleSelection = lignes.filter((l) => eligible(l.item.id)).reduce((s, l) => s + l.montant_brut, 0);
+    const codeDeja = allocations.reduce((s, a) => s + a.code_promo_montant, 0);
+    codeMontant = allouerReduction(
+      Math.max(0, c.code_promo_montant - codeDeja),
+      eligibleSelection,
+      Math.max(eligibleSelection, eligibleTotal - eligibleAlloue),
+    );
+  }
+
   let clientFideliteId = corps.client_fidelite_id ?? null;
   if (corps.telephone_fidelite) {
     clientFideliteId = (await trouverOuCreer(tx, corps.telephone_fidelite)).id;
@@ -103,7 +126,7 @@ export async function creerSousNoteArticles(
     fidelitePersonnelle = corps.fidelite_points * bareme.valeur_point_fcfa;
     fideliteMontant += fidelitePersonnelle;
   }
-  const montant = sousTotal - promoMontant - remiseMontant - fideliteMontant;
+  const montant = sousTotal - promoMontant - remiseMontant - codeMontant - fideliteMontant;
   if (montant <= 0) throw new ErreurMetier('Cette sélection doit conserver un montant positif', 400);
 
   const numero = notesExistantes.reduce((max, n) => Math.max(max, n.numero), 0) + 1;
@@ -118,6 +141,7 @@ export async function creerSousNoteArticles(
       sous_total: sousTotal,
       promo_montant: promoMontant,
       remise_montant: remiseMontant,
+      code_promo_montant: codeMontant,
       fidelite_montant: fideliteMontant,
       client_fidelite_id: clientFideliteId,
       fidelite_points: corps.fidelite_points,

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { MODES_PAIEMENT, PINS_INTERDITS, POSTES_JOUR, TYPES_COMMANDE } from './constantes.js';
+import { CANAUX_CODE_PROMO } from './promo.js';
 
 /** PIN 4 à 6 chiffres, hors liste interdite (§14.1). */
 export const PinSchema = z
@@ -556,3 +557,14 @@ export type PaiementInput = z.infer<typeof PaiementSchema>;
 export type CreerSousNoteInput = z.infer<typeof CreerSousNoteSchema>;
 export type CreerRoleInput = z.infer<typeof CreerRoleSchema>;
 export type ModifierRoleInput = z.infer<typeof ModifierRoleSchema>;
+
+/** Code promo carte (brief PROMO § 5) : le code de l'autocollant OU le numéro du client. */
+export const AppliquerCodePromoSchema = z.object({
+  saisie: z.string().trim().min(1, 'Tapez le code promo ou le numéro du client').max(30, 'Saisie trop longue'),
+  canal: z.enum(CANAUX_CODE_PROMO, { errorMap: () => ({ message: 'Choisissez comment le client commande' }) }),
+});
+export type AppliquerCodePromoInput = z.infer<typeof AppliquerCodePromoSchema>;
+
+export const CanalCodePromoSchema = z.object({
+  canal: z.enum(CANAUX_CODE_PROMO, { errorMap: () => ({ message: 'Choisissez comment le client commande' }) }),
+});

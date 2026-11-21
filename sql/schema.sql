@@ -475,13 +475,24 @@ CREATE TABLE commandes (
   motif_offert   TEXT,                              -- obligatoire à la clôture
   promo_id       UUID REFERENCES promotions(id),
   promo_montant  INTEGER NOT NULL DEFAULT 0,
+  -- Code promo carte (migration 0053) : réduction à part du happy hour,
+  -- cumulable en cascade ; le code est réservé par cette caisse (promo_codes).
+  code_promo_id      UUID,
+  code_promo_code    TEXT,
+  code_promo_montant INTEGER NOT NULL DEFAULT 0,
+  code_promo_canal   TEXT,
   total          INTEGER NOT NULL DEFAULT 0,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT remise_motif_obligatoire
     CHECK (remise_montant = 0 OR (remise_motif IS NOT NULL AND remise_par IS NOT NULL)),
   CONSTRAINT motif_offert_obligatoire
-    CHECK (offert = false OR statut <> 'PAYEE' OR motif_offert IS NOT NULL)
+    CHECK (offert = false OR statut <> 'PAYEE' OR motif_offert IS NOT NULL),
+  CONSTRAINT commandes_code_promo_check CHECK (
+    code_promo_montant >= 0
+    AND (code_promo_canal IS NULL OR code_promo_canal IN ('SUR_PLACE','TELEPHONE','SITE'))
+    AND ((code_promo_id IS NULL) = (code_promo_code IS NULL))
+    AND (code_promo_id IS NOT NULL OR code_promo_montant = 0))
 );
 CREATE INDEX idx_commandes_service ON commandes (service_id);
 CREATE INDEX idx_commandes_jour ON commandes (created_at);
@@ -538,6 +549,7 @@ CREATE TABLE notes_split (
   sous_total   INTEGER NOT NULL CHECK (sous_total > 0),
   promo_montant INTEGER NOT NULL DEFAULT 0 CHECK (promo_montant >= 0),
   remise_montant INTEGER NOT NULL DEFAULT 0 CHECK (remise_montant >= 0),
+  code_promo_montant INTEGER NOT NULL DEFAULT 0 CHECK (code_promo_montant >= 0),  -- 0053
   fidelite_montant INTEGER NOT NULL DEFAULT 0 CHECK (fidelite_montant >= 0),
   client_fidelite_id UUID,
   fidelite_points INTEGER NOT NULL DEFAULT 0,

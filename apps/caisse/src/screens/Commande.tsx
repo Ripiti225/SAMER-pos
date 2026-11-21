@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   IconArrowLeft,
   IconArrowsMove,
@@ -31,6 +31,7 @@ import { api } from '../api';
 import { optionsCatalogue } from '../catalogue-cache';
 import { optionsStockPlats } from '../stock-plats';
 import { BandeStock } from '@pos/shared-ui';
+import { CodePromo } from '../components/CodePromo';
 import { Modale } from '../components/Modale';
 import { ModalePinManager } from '../components/ModalePinManager';
 import { PiluleSync } from '../components/SanteSync';
@@ -49,6 +50,9 @@ export function Commande() {
   const [annulationOuverte, setAnnulationOuverte] = useState(false);
   const [infosLivraisonOuverte, setInfosLivraisonOuverte] = useState(false);
   const [deplacement, setDeplacement] = useState<{ item: CommandeItemVue } | { commande: true } | null>(null);
+  // Code promo tapé mais pas vérifié : envoi en cuisine et encaissement bloqués.
+  const [codeNonVerifie, setCodeNonVerifie] = useState(false);
+  const signalerCodeNonVerifie = useCallback((v: boolean) => setCodeNonVerifie(v), []);
 
   const { data: catalogue } = useQuery(optionsCatalogue);
   const { data: stockPlats } = useQuery(optionsStockPlats);
@@ -500,6 +504,11 @@ export function Commande() {
                       <div className="min-w-0">
                         <p className="font-semibold leading-tight">{item.nom_snapshot}</p>
                         <p className="text-sm text-marque-clair">{formatFCFA(item.prix_unitaire)}</p>
+                        {commande.code_promo && item.exclue_code_promo && item.statut_cuisine !== 'ANNULE' && (
+                          <span className="mt-1 inline-block rounded-[6px] border border-ard-600 px-1.5 py-0.5 text-xs font-bold text-ard-txt-doux">
+                            non éligible
+                          </span>
+                        )}
                         {item.quantite_payee > 0 && (
                           <span className="mt-1 inline-block rounded-full bg-ok/20 px-2 py-0.5 text-xs font-bold text-ok">
                             Payé — {item.quantite_payee}
@@ -514,8 +523,11 @@ export function Commande() {
                     </div>
                     {/* Total de ligne en attente de recalcul serveur : on affiche
                         un point de suspension, jamais un montant calculé ici. */}
-                    <p className="font-bold tabular-nums">
+                    <p className="text-right font-bold tabular-nums">
                       {enRecalcul ? '…' : formatFCFA(item.total_ligne)}
+                      {!enRecalcul && item.remise_code_promo > 0 && (
+                        <span className="block text-sm font-bold text-ok">−{formatFCFA(item.remise_code_promo)}</span>
+                      )}
                     </p>
                   </div>
                   {/* Option offerte : pas de « (0 F) », comme sur le reçu. */}
@@ -600,9 +612,27 @@ export function Commande() {
           <div className="flex-none space-y-3 border-t border-ard-700 bg-ard-900 p-4">
             {/* Les montants restent EXACTEMENT ceux du serveur pendant qu'une
                 saisie est en vol : on signale le recalcul, on ne devine rien. */}
+            {/* Code promo carte : pas pour une livraison partenaire (payée par la
+                plateforme) ni pour un Kdo — il n'y a rien à remiser. */}
+            {!livraisonExterne && !commande.offert && (
+              <CodePromo
+                commande={commande}
+                desactive={saisie.enAttente}
+                onVue={rafraichir}
+                onErreur={afficherToast}
+                onNonVerifie={signalerCodeNonVerifie}
+              />
+            )}
             <div className={`space-y-1 ${saisie.enAttente ? 'opacity-60' : ''}`}>
               {commande.promo_montant > 0 && (
                 <Ligne libelle={`Promo ${commande.promo_nom ?? ''}`} valeur={`−${formatFCFA(commande.promo_montant)}`} vert />
+              )}
+              {commande.code_promo_montant > 0 && commande.code_promo && (
+                <Ligne
+                  libelle={`Code promo −${commande.code_promo.pourcentage} % (hors Chawarma)`}
+                  valeur={`−${formatFCFA(commande.code_promo_montant)}`}
+                  vert
+                />
               )}
               {commande.remise_montant > 0 && (
                 <Ligne libelle="Remise" valeur={`−${formatFCFA(commande.remise_montant)}`} vert />
@@ -696,7 +726,7 @@ export function Commande() {
             <button
               type="button"
               onClick={() => envoyerCuisine.mutate()}
-              disabled={itemsActifs.length === 0 || saisie.enAttente}
+              disabled={itemsActifs.length === 0 || saisie.enAttente || codeNonVerifie}
               className="flex h-14 w-full items-center justify-center gap-2 rounded-[13px] bg-marque-tint text-lg font-bold text-marque-fonce shadow-e1 transition hover:brightness-95 disabled:opacity-40"
             >
               <IconSend size={20} /> Envoyer en cuisine
@@ -728,7 +758,7 @@ export function Commande() {
             <button
               type="button"
               onClick={() => (commande.offert ? setOffrirOuvert(true) : aller('paiement', commande.id))}
-              disabled={commande.total <= 0 || saisie.enAttente}
+              disabled={commande.total <= 0 || saisie.enAttente || codeNonVerifie}
               className="flex h-14 w-full items-center justify-center gap-2 rounded-[13px] bg-marque text-lg font-bold text-sur-marque shadow-e2 transition hover:brightness-105 active:translate-y-px disabled:opacity-40"
             >
               {commande.offert

@@ -505,6 +505,11 @@ export const commandes = pgTable('commandes', {
   motif_offert: text('motif_offert'),
   promo_id: uuid('promo_id').references(() => promotions.id),
   promo_montant: integer('promo_montant').notNull().default(0),
+  // Code promo carte (0053) : réduction à part du happy hour, cumulable en cascade.
+  code_promo_id: uuid('code_promo_id'),
+  code_promo_code: text('code_promo_code'),
+  code_promo_montant: integer('code_promo_montant').notNull().default(0),
+  code_promo_canal: text('code_promo_canal'),
   total: integer('total').notNull().default(0),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -519,6 +524,13 @@ export const commandes = pgTable('commandes', {
   check(
     'remise_motif_obligatoire',
     sql`${t.remise_montant} = 0 OR (${t.remise_motif} IS NOT NULL AND ${t.remise_par} IS NOT NULL)`,
+  ),
+  check(
+    'commandes_code_promo_check',
+    sql`${t.code_promo_montant} >= 0
+      AND (${t.code_promo_canal} IS NULL OR ${t.code_promo_canal} IN ('SUR_PLACE','TELEPHONE','SITE'))
+      AND ((${t.code_promo_id} IS NULL) = (${t.code_promo_code} IS NULL))
+      AND (${t.code_promo_id} IS NOT NULL OR ${t.code_promo_montant} = 0)`,
   ),
   // Un Kdo ne peut pas être clôturé sans dire pourquoi il a été offert. La règle
   // est appliquée côté serveur ; ce CHECK est la ceinture de sécurité (un cadeau
@@ -565,6 +577,7 @@ export const notesSplit = pgTable('notes_split', {
   sous_total: integer('sous_total').notNull(),
   promo_montant: integer('promo_montant').notNull().default(0),
   remise_montant: integer('remise_montant').notNull().default(0),
+  code_promo_montant: integer('code_promo_montant').notNull().default(0),
   fidelite_montant: integer('fidelite_montant').notNull().default(0),
   client_fidelite_id: uuid('client_fidelite_id').references(() => clientsFidelite.id),
   fidelite_points: integer('fidelite_points').notNull().default(0),
