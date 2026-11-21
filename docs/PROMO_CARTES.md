@@ -46,7 +46,7 @@ fermée jusqu'au branchement du site (PROMO-11).
 
 | Action | Corps | Réponse `ok: true` |
 |---|---|---|
-| `consulter` | `code` | `restaurant`, `pourcentage`, `valide_du`, `valide_au`, `deja_garde` |
+| `consulter` | `code` | `restaurant`, `pourcentage`, `valide_du`, `valide_au`, `deja_garde`, `exclusions` (noms des catégories exclues, triés) |
 | `activer` | `code`, `telephone`, `consentement: true` | `deja`, `restaurant`, `pourcentage`, dates |
 | `verifier` | `slug_site`, `code` **ou** `telephone`, `lignes?` | `code_masque`, `code` (si tapé), `pourcentage`, `valide_au`, `remise_estimee?` |
 | `reserver` | idem + `ref_site` | idem + `reserve_jusqua` (2 h) |
