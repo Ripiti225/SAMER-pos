@@ -16,7 +16,9 @@ import {
   repartir,
   type CanalCodePromo,
 } from '@pos/shared';
+import { randomUUID } from 'node:crypto';
 import type { DbOuTx } from '../../db/client.js';
+import { ecrireOutbox } from '../../db/outbox.js';
 import { articles, comboArticles, promoCategoriesExclues, promoCodes, promoLots } from '../../db/schema/index.js';
 import { ErreurMetier } from '../../lib/erreurs.js';
 import { statutEffectif, type StatutCloud, type StatutLocal } from './statut.js';
@@ -189,6 +191,19 @@ export async function detailCodePromo(
 }
 
 /**
+ * Événement d'un code, remonté au cloud par l'outbox (PROMO-10). Pas de table
+ * locale : seule la montée en a besoin, et le cloud en déduit le statut du
+ * code (supabase/migrations/20261121000000) — premier encaissement gagnant.
+ */
+async function evenement(
+  tx: DbOuTx,
+  e: { code_id: string; commande_id: string; evenement: 'RESERVE' | 'UTILISE' | 'LIBERE'; canal: string | null; montant: number },
+): Promise<void> {
+  const id = randomUUID();
+  await ecrireOutbox(tx, 'promo_utilisations', 'INSERT', id, { id, ...e, created_at: new Date().toISOString() });
+}
+
+/**
  * Réserve le code pour cette commande. La condition est dans l'UPDATE : si deux
  * postes du même site le tapent au même instant, un seul trouve la ligne libre.
  */
@@ -204,13 +219,38 @@ export async function reserverCode(tx: DbOuTx, codeId: string, commandeId: strin
     )
     .returning({ id: promoCodes.id });
   if (!pris) throw new ErreurMetier('Ce code vient d’être pris par une autre commande.', 409);
+  await evenement(tx, { code_id: codeId, commande_id: commandeId, evenement: 'RESERVE', canal, montant: 0 });
 }
 
 /** Libère le code réservé par cette commande (annulée, ou code retiré) — R8. */
 export async function libererCode(tx: DbOuTx, codeId: string | null, commandeId: string): Promise<void> {
   if (!codeId) return;
-  await tx
+  const [libere] = await tx
     .update(promoCodes)
     .set({ local_statut: null, local_commande_id: null, local_canal: null, local_le: null })
-    .where(and(eq(promoCodes.id, codeId), eq(promoCodes.local_statut, 'RESERVE'), eq(promoCodes.local_commande_id, commandeId)));
+    .where(and(eq(promoCodes.id, codeId), eq(promoCodes.local_statut, 'RESERVE'), eq(promoCodes.local_commande_id, commandeId)))
+    .returning({ id: promoCodes.id });
+  if (libere) await evenement(tx, { code_id: codeId, commande_id: commandeId, evenement: 'LIBERE', canal: null, montant: 0 });
+}
+
+/**
+ * Encaissement (R1, R10) : seule la caisse fait passer un code à UTILISE.
+ * Dans la transaction du paiement, avec l'événement qui le dira au cloud.
+ */
+export async function consommerCode(
+  tx: DbOuTx,
+  c: { id: string; code_promo_id: string | null; code_promo_canal: string | null; code_promo_montant: number },
+): Promise<void> {
+  if (!c.code_promo_id) return;
+  await tx
+    .update(promoCodes)
+    .set({ local_statut: 'UTILISE', local_commande_id: c.id, local_canal: c.code_promo_canal, local_le: new Date() })
+    .where(eq(promoCodes.id, c.code_promo_id));
+  await evenement(tx, {
+    code_id: c.code_promo_id,
+    commande_id: c.id,
+    evenement: 'UTILISE',
+    canal: c.code_promo_canal,
+    montant: c.code_promo_montant,
+  });
 }

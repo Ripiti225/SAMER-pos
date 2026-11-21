@@ -3,13 +3,14 @@
  * Panier de la maquette : Chawarma 3 000 (exclu), Pizza 6 000, Jus 1 500.
  */
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { eq, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { CommandeVue } from '@pos/shared';
 import { construireApp } from '../src/app.js';
+import { ConsolePrinter } from '../src/printer/ConsolePrinter.js';
 import { db, fermerDb } from '../src/db/client.js';
-import { articles, categories, notesSplit, promoCategoriesExclues, promoCodes, promoLots, promotions } from '../src/db/schema/index.js';
+import { articles, categories, notesSplit, promoCategoriesExclues, promoCodes, promoLots, promotions, syncOutbox } from '../src/db/schema/index.js';
 import { PIN_CAISSIER, PIN_MANAGER, resetDonnees, seConnecter, type Donnees } from './aide.js';
 
 let app: FastifyInstance;
@@ -165,5 +166,59 @@ describe('code promo carte en caisse', () => {
 
     const reste = (await app.inject({ method: 'GET', url: `/api/commandes/${id}`, cookies })).json() as CommandeVue;
     expect(reste.total).toBe(9000);
+  });
+});
+
+describe('encaissement et remontée au cloud (PROMO-10)', () => {
+  const evenements = async (codeId: string) =>
+    (await db.select().from(syncOutbox).where(eq(syncOutbox.table_name, 'promo_utilisations')))
+      .map((l) => l.payload as Record<string, unknown>)
+      .filter((p) => p.code_id === codeId)
+      .map((p) => `${p.evenement}:${p.montant}`);
+
+  it('l’encaissement passe le code UTILISE ici, et le dit au cloud avec le montant', async () => {
+    const id = await commande(panier());
+    const c = (await appliquer(id, 'PAM-7K3QX', 'TELEPHONE')).json().commande as CommandeVue;
+    const r = await app.inject({
+      method: 'POST', url: `/api/commandes/${id}/paiements`, cookies,
+      payload: { mode: 'ESPECES', montant: c.total, montant_recu: c.total },
+    });
+    expect(r.statusCode, r.body).toBe(200);
+    expect((r.json() as CommandeVue).statut).toBe('PAYEE');
+    expect(await local(ids.libre)).toMatchObject({ local_statut: 'UTILISE', local_commande_id: id, local_canal: 'TELEPHONE' });
+    expect(await evenements(ids.libre)).toEqual(['RESERVE:0', 'UTILISE:1500']);
+
+    const ailleurs = await commande(panier());
+    const refus = await appliquer(ailleurs, 'PAM-7K3QX');
+    expect(refus.json().erreur).toMatch(/déjà servi/);
+  });
+
+  it('une commande annulée remonte la libération du code', async () => {
+    const id = await commande(panier());
+    await appliquer(id, 'PAM-7K3QX');
+    await app.inject({ method: 'POST', url: `/api/commandes/${id}/annuler`, cookies, payload: { motif: 'Client parti', pin_manager: PIN_MANAGER } });
+    expect(await evenements(ids.libre)).toEqual(['RESERVE:0', 'LIBERE:0']);
+  });
+
+  it('un repas offert ne garde pas de code promo', async () => {
+    const id = await commande(panier());
+    await appliquer(id, 'PAM-7K3QX');
+    await db.execute(sql`UPDATE commandes SET offert = true WHERE id = ${id}`);
+    const r = await app.inject({ method: 'POST', url: `/api/commandes/${id}/offrir`, cookies, payload: { motif: 'Client fidèle' } });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().erreur).toMatch(/Retirez d’abord le code promo/);
+  });
+});
+
+describe('ticket (PROMO-10)', () => {
+  it('affiche le code masqué et la remise, jamais le code en clair', async () => {
+    const id = await commande(panier());
+    const c = (await appliquer(id, 'PAM-7K3QX')).json().commande as CommandeVue;
+    const espion = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await new ConsolePrinter().imprimerFacture(c);
+    const ticket = espion.mock.calls.map((a) => String(a[0])).join('\n');
+    espion.mockRestore();
+    expect(ticket).toMatch(/Code promo -20 % PAM-•••QX\s+-1\s?500/);
+    expect(ticket).not.toContain('PAM-7K3QX');
   });
 });

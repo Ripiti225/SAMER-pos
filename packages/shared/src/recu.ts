@@ -20,6 +20,7 @@ export function vueSousNote(commande: CommandeVue, note: NoteSplitVue): Commande
     sous_total: note.sous_total,
     promo_montant: note.promo_montant,
     remise_montant: note.remise_montant,
+    code_promo_montant: note.code_promo_montant,
     fidelite_montant: note.fidelite_montant,
     client_fidelite_id: note.client_fidelite_id,
     total: note.montant,

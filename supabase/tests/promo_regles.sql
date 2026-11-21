@@ -227,6 +227,55 @@ BEGIN
     n := n + 1;
   END;
 
+  -- ── Événements des caisses (PROMO-10) : le cloud en tire le statut ──────
+  IF to_regprocedure('promo_appliquer_evenement()') IS NULL THEN
+    sautes := array_append(sautes, 'événements des caisses (PROMO-10 pas encore appliqué)');
+  ELSE
+    v_lot2 := promo_lot_creer(v_resto, 'TEST PROMO-10', 20, now() - interval '1 day', now() + interval '2 days', 2, 'test');
+    SELECT array_agg(id ORDER BY code) INTO v_ids FROM promo_codes WHERE lot_id = v_lot2;
+    -- Réservé puis libéré par la même commande de caisse.
+    INSERT INTO promo_utilisations (restaurant_id, id, code_id, commande_id, evenement, canal, created_at)
+    VALUES (v_resto, gen_random_uuid(), v_ids[1], '00000000-0000-4000-8000-0000000000c1', 'RESERVE', 'SUR_PLACE', now());
+    IF (SELECT statut || '/' || reserve_source FROM promo_codes WHERE id = v_ids[1]) <> 'RESERVE/POS' THEN
+      RAISE EXCEPTION 'PROMO ÉCHEC — événements : RESERVE n’a pas réservé le code pour la caisse';
+    END IF;
+    n := n + 1;
+    INSERT INTO promo_utilisations (restaurant_id, id, code_id, commande_id, evenement, created_at)
+    VALUES (v_resto, gen_random_uuid(), v_ids[1], '00000000-0000-4000-8000-0000000000c2', 'LIBERE', now());
+    IF (SELECT statut FROM promo_codes WHERE id = v_ids[1]) <> 'RESERVE' THEN
+      RAISE EXCEPTION 'PROMO ÉCHEC — événements : une AUTRE commande a libéré la réservation';
+    END IF;
+    INSERT INTO promo_utilisations (restaurant_id, id, code_id, commande_id, evenement, created_at)
+    VALUES (v_resto, gen_random_uuid(), v_ids[1], '00000000-0000-4000-8000-0000000000c1', 'LIBERE', now());
+    IF (SELECT statut FROM promo_codes WHERE id = v_ids[1]) <> 'DISPONIBLE' THEN
+      RAISE EXCEPTION 'PROMO ÉCHEC — événements : LIBERE n’a pas rendu le code disponible';
+    END IF;
+    n := n + 1;
+    -- Utilisé, même après annulation du lot ; un second encaissement devient un conflit.
+    PERFORM promo_lot_annuler(v_resto, v_lot2);
+    INSERT INTO promo_utilisations (restaurant_id, id, code_id, commande_id, evenement, canal, montant, created_at)
+    VALUES (v_resto, '00000000-0000-4000-8000-0000000000e1', v_ids[2], '00000000-0000-4000-8000-0000000000c3', 'UTILISE', 'TELEPHONE', 1900, now());
+    IF (SELECT statut || '/' || utilise_canal FROM promo_codes WHERE id = v_ids[2]) <> 'UTILISE/TELEPHONE' THEN
+      RAISE EXCEPTION 'PROMO ÉCHEC — événements : un code encaissé n’est pas UTILISE (lot annulé entre-temps)';
+    END IF;
+    n := n + 1;
+    INSERT INTO promo_utilisations (restaurant_id, id, code_id, commande_id, evenement, canal, montant, created_at)
+    VALUES (v_resto, gen_random_uuid(), v_ids[2], '00000000-0000-4000-8000-0000000000c4', 'UTILISE', 'SUR_PLACE', 1900, now());
+    IF (SELECT count(*) FROM promo_conflits WHERE code_id = v_ids[2]) <> 1
+       OR (SELECT utilise_commande_id FROM promo_codes WHERE id = v_ids[2]) <> '00000000-0000-4000-8000-0000000000c3' THEN
+      RAISE EXCEPTION 'PROMO ÉCHEC — événements : le double encaissement n’a pas créé de conflit, ou le premier a perdu le code';
+    END IF;
+    n := n + 1;
+    -- Rejeu du premier événement (UPSERT de sync-push) : rien ne bouge.
+    INSERT INTO promo_utilisations (restaurant_id, id, code_id, commande_id, evenement, canal, montant, created_at)
+    VALUES (v_resto, '00000000-0000-4000-8000-0000000000e1', v_ids[2], '00000000-0000-4000-8000-0000000000c3', 'UTILISE', 'TELEPHONE', 1900, now())
+    ON CONFLICT (restaurant_id, id) DO UPDATE SET montant = EXCLUDED.montant;
+    IF (SELECT count(*) FROM promo_conflits WHERE code_id = v_ids[2]) <> 1 THEN
+      RAISE EXCEPTION 'PROMO ÉCHEC — événements : un rejeu a été compté deux fois';
+    END IF;
+    n := n + 1;
+  END IF;
+
   -- ── R4 : exclusion de catégorie (Chawarma) ───────────────────────────────
   SELECT id INTO v_cat FROM categories WHERE restaurant_id = v_resto LIMIT 1;
   IF v_cat IS NULL THEN
