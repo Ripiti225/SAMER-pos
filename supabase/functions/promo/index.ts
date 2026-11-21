@@ -6,7 +6,8 @@
 //     celle de Vercel). Actions `consulter`, `activer`, `verifier`, `reserver`.
 //     Limite : 10 codes faux par IP et par heure, puis 1 h de blocage.
 //   * la CONSOLE DU SIÈGE : jeton de session, comme la fonction `siege`.
-//     Actions `lots`, `lot_creer`, `lot_annuler`, `lot_codes`, `relances`,
+//     Actions `lots`, `lot_bilan`, `lot_creer`, `lot_annuler`, `lot_codes`,
+//     `conflit_traiter`, `relances`,
 //     `restaurants_promo`, `restaurant_promo_modifier`, `exclusions`,
 //     `categorie_exclure`.
 //
@@ -472,6 +473,37 @@ async function porteConsole(
         if (error) return jsonCors({ erreur: error.message }, 400);
         await tracer(admin, siege, 'PROMO_LOT_ANNULE', 'promo_lots', corps.lot_id, corps.restaurant_id, { codes_annules: data });
         return jsonCors({ codes_annules: data });
+      }
+
+      // -- Bilan d'un lot (PROMO-13). Niveau LECTURE : aucun numéro de client ;
+      // -- les seuls codes montrés sont déjà utilisés, donc sans valeur.
+      case 'lot_bilan': {
+        if (!uuidValide(corps.restaurant_id) || !uuidValide(corps.lot_id)) {
+          return jsonCors({ erreur: 'Lot non précisé' }, 400);
+        }
+        const { data, error } = await admin.rpc('promo_lot_bilan', {
+          p_restaurant_id: corps.restaurant_id,
+          p_lot_id: corps.lot_id,
+        });
+        if (error) throw new Error('Lecture du bilan impossible');
+        if (!data) return jsonCors({ erreur: 'Ce lot n’existe pas.' }, 404);
+        return jsonCors({ bilan: data });
+      }
+
+      // -- « Marquer traité » un code encaissé deux fois, après vérification avec le restaurant.
+      case 'conflit_traiter': {
+        exigeAdmin(siege);
+        if (!uuidValide(corps.restaurant_id) || !uuidValide(corps.conflit_id)) {
+          return jsonCors({ erreur: 'Conflit non précisé' }, 400);
+        }
+        const { data, error } = await admin.rpc('promo_conflit_traiter', {
+          p_restaurant_id: corps.restaurant_id,
+          p_conflit_id: corps.conflit_id,
+        });
+        if (error) throw new Error('Enregistrement impossible');
+        if (!data) return jsonCors({ erreur: 'Ce conflit est déjà traité.' }, 409);
+        await tracer(admin, siege, 'PROMO_CONFLIT_TRAITE', 'promo_conflits', corps.conflit_id, corps.restaurant_id, {});
+        return jsonCors({ ok: true });
       }
 
       // -- Les codes en clair d'un lot, pour l'impression et le CSV de contrôle.

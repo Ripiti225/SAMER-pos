@@ -23,20 +23,13 @@ import {
   type EtatLot,
 } from '../promo';
 import { restoChoisi, useRestaurants, type FiltreResto } from '../restaurants';
+import { telechargerCsv as telecharger } from '../telechargement';
+import { BilanLot } from './BilanLot';
 
 type Vue = 'lots' | 'relances' | 'fiches';
 
 const message = (e: unknown, defaut: string) => (e instanceof ErreurSiege ? e.message : defaut);
 
-/** Le fichier part en UTF-8 avec BOM : sans lui, Excel abîme les accents. */
-function telecharger(nom: string, contenu: string) {
-  const url = URL.createObjectURL(new Blob(['﻿', contenu], { type: 'text/csv;charset=utf-8' }));
-  const lien = document.createElement('a');
-  lien.href = url;
-  lien.download = nom;
-  lien.click();
-  URL.revokeObjectURL(url);
-}
 
 function useFiches() {
   return useQuery({
@@ -155,6 +148,7 @@ const COULEURS_ETAT: Record<EtatLot, string> = {
 function VueLots({ admin, restaurantId, nomResto }: { admin: boolean; restaurantId: string | null; nomResto: (id: string) => string }) {
   const [aAnnuler, setAAnnuler] = useState<LotPromo | null>(null);
   const [aImprimer, setAImprimer] = useState<LotPromo | null>(null);
+  const [ouvert, setOuvert] = useState<LotPromo | null>(null);
   const [erreurCsv, setErreurCsv] = useState<string | null>(null);
   const fiches = useFiches();
   const { data, isPending, error } = useQuery({
@@ -175,6 +169,9 @@ function VueLots({ admin, restaurantId, nomResto }: { admin: boolean; restaurant
 
   if (error) return <Erreur texte={message(error, 'Lecture des lots impossible')} />;
   if (isPending) return <Squelette lignes={4} />;
+  if (ouvert) {
+    return <BilanLot lot={ouvert} admin={admin} nomResto={nomResto(ouvert.restaurant_id)} onRetour={() => setOuvert(null)} />;
+  }
 
   return (
     <>
@@ -216,7 +213,14 @@ function VueLots({ admin, restaurantId, nomResto }: { admin: boolean; restaurant
                 return (
                   <tr key={l.id} className="border-b border-filet last:border-0">
                     <td className="px-4 py-3.5">
-                      <div className="font-semibold">{l.libelle}</div>
+                      <button
+                        type="button"
+                        className="text-left font-semibold text-marque-sur-plan underline-offset-2 hover:underline"
+                        title="Voir le bilan du lot"
+                        onClick={() => setOuvert(l)}
+                      >
+                        {l.libelle}
+                      </button>
                       <div className="text-[13px] text-doux">{nomResto(l.restaurant_id)} · −{l.pourcentage} %</div>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3.5">

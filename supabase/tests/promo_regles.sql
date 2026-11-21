@@ -294,6 +294,73 @@ BEGIN
   EXCEPTION WHEN foreign_key_violation THEN n := n + 1;
   END;
 
+  -- ── Bilan d'un lot (PROMO-13) ────────────────────────────────────────────
+  IF to_regprocedure('promo_lot_bilan(uuid,uuid)') IS NULL OR to_regprocedure('promo_appliquer_evenement()') IS NULL THEN
+    sautes := array_append(sautes, 'bilan d’un lot (PROMO-13 ou PROMO-10 pas encore appliqué)');
+  ELSE
+    v_lot2 := promo_lot_creer(v_resto, 'TEST PROMO-13', 20, now() - interval '2 days', now() + interval '2 days', 3, 'test');
+    SELECT array_agg(id ORDER BY code) INTO v_ids FROM promo_codes WHERE lot_id = v_lot2;
+    UPDATE promo_codes SET telephone = A, active_le = now() - interval '1 day', consentement_relance = true WHERE id = v_ids[1];
+    UPDATE promo_codes SET telephone = B, active_le = now(), consentement_relance = true WHERE id = v_ids[2];
+    INSERT INTO commandes (restaurant_id, id, numero_ticket, statut, total, code_promo_montant, code_promo_canal, created_at)
+    VALUES (v_resto, '00000000-0000-4000-8000-0000000000d1', 991001, 'PAYEE', 8000, 2000, 'TELEPHONE', now()),
+           (v_resto, '00000000-0000-4000-8000-0000000000d2', 991002, 'PAYEE', 5000, 1000, 'SUR_PLACE', now());
+    INSERT INTO promo_utilisations (restaurant_id, id, code_id, commande_id, evenement, canal, montant, created_at)
+    VALUES (v_resto, gen_random_uuid(), v_ids[1], '00000000-0000-4000-8000-0000000000d1', 'UTILISE', 'TELEPHONE', 2000, now());
+    INSERT INTO promo_utilisations (restaurant_id, id, code_id, commande_id, evenement, canal, montant, created_at)
+    VALUES (v_resto, gen_random_uuid(), v_ids[1], '00000000-0000-4000-8000-0000000000d2', 'UTILISE', 'SUR_PLACE', 1000, now());
+
+    DECLARE b jsonb := promo_lot_bilan(v_resto, v_lot2);
+    BEGIN
+      IF (b->>'imprimes')::int <> 3 OR (b->>'gardes')::int <> 2 OR (b->>'utilises')::int <> 1 THEN
+        RAISE EXCEPTION 'PROMO ÉCHEC — bilan : tunnel faux (%/%/%)', b->>'imprimes', b->>'gardes', b->>'utilises';
+      END IF;
+      n := n + 1;
+      -- Le second encaissement (conflit) ne gonfle ni le CA ni la remise.
+      IF (b->>'ca')::int <> 8000 OR (b->>'remise')::int <> 2000 OR (b->>'panier_moyen')::int <> 8000 THEN
+        RAISE EXCEPTION 'PROMO ÉCHEC — bilan : CA % / remise % / panier % au lieu de 8000 / 2000 / 8000', b->>'ca', b->>'remise', b->>'panier_moyen';
+      END IF;
+      n := n + 1;
+      IF (b->>'delai_median_heures')::numeric NOT BETWEEN 23.5 AND 24.5 THEN
+        RAISE EXCEPTION 'PROMO ÉCHEC — bilan : délai médian % h au lieu de 24', b->>'delai_median_heures';
+      END IF;
+      IF (SELECT (k->>'utilises')::int FROM jsonb_array_elements(b->'canaux') k WHERE k->>'canal' = 'TELEPHONE') <> 1
+         OR (SELECT sum((j->>'gardes')::int) FROM jsonb_array_elements(b->'jours') j) <> 2
+         OR (SELECT sum((j->>'utilises')::int) FROM jsonb_array_elements(b->'jours') j) <> 1 THEN
+        RAISE EXCEPTION 'PROMO ÉCHEC — bilan : canaux ou jour par jour faux';
+      END IF;
+      n := n + 1;
+      IF jsonb_array_length(b->'conflits') <> 1
+         OR (b->'conflits'->0->>'remise_en_trop')::int <> 1000
+         OR (b->'conflits'->0->'a'->>'numero_ticket')::int <> 991001
+         OR (b->'conflits'->0->'b'->>'numero_ticket')::int <> 991002
+         OR jsonb_array_length(b->'utilisations') <> 1
+         OR b->'utilisations'->0 ? 'telephone' THEN
+        RAISE EXCEPTION 'PROMO ÉCHEC — bilan : conflit ou liste des utilisations faux (ou numéro du client exposé)';
+      END IF;
+      n := n + 1;
+    END;
+
+    -- « Marquer traité » : une seule fois, et l'alerte de la liste disparaît.
+    SELECT * INTO v_stats FROM promo_lots_stats(v_resto) s WHERE s.id = v_lot2;
+    IF v_stats.conflits <> 1 THEN
+      RAISE EXCEPTION 'PROMO ÉCHEC — bilan : la liste des lots compte % conflits au lieu de 1', v_stats.conflits;
+    END IF;
+    IF NOT promo_conflit_traiter(v_resto, (promo_lot_bilan(v_resto, v_lot2)->'conflits'->0->>'id')::uuid)
+       OR promo_conflit_traiter(v_resto, (promo_lot_bilan(v_resto, v_lot2)->'conflits'->0->>'id')::uuid) THEN
+      RAISE EXCEPTION 'PROMO ÉCHEC — bilan : « marquer traité » ne marche pas une et une seule fois';
+    END IF;
+    SELECT * INTO v_stats FROM promo_lots_stats(v_resto) s WHERE s.id = v_lot2;
+    IF v_stats.conflits <> 0 OR NOT (promo_lot_bilan(v_resto, v_lot2)->'conflits'->0->>'resolu')::boolean THEN
+      RAISE EXCEPTION 'PROMO ÉCHEC — bilan : un conflit traité reste en alerte, ou disparaît du bilan';
+    END IF;
+    n := n + 1;
+    IF promo_lot_bilan(v_autre, v_lot2) IS NOT NULL THEN
+      RAISE EXCEPTION 'PROMO ÉCHEC — bilan : un lot est lisible sous un autre restaurant';
+    END IF;
+    n := n + 1;
+  END IF;
+
   -- ── Droits : rien n'est ouvert à la clé publique ─────────────────────────
   IF EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace s ON s.oid = p.pronamespace
               WHERE s.nspname = 'public' AND p.proname LIKE 'promo\_%'

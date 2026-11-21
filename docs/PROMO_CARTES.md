@@ -78,6 +78,8 @@ Jeton de session, comme la fonction `siege`.
 | `lots` (`restaurant_id?`) | tous | lots et compteurs : gardés, réservés, utilisés par canal, CA, remise, conflits |
 | `lot_creer` (`restaurant_id`, `libelle`, `quantite`, `pourcentage?`, `du?`, `au?`) | ADMIN | crée le lot et ses codes ; par défaut du lendemain pendant 28 jours |
 | `lot_annuler` (`restaurant_id`, `lot_id`) | ADMIN | codes non utilisés → `ANNULE` |
+| `lot_bilan` (`restaurant_id`, `lot_id`) | tous | bilan du lot (PROMO-13) : tunnel, CA, remise, panier moyen, délai médian gardé → utilisé, jour par jour, canaux, conflits, utilisations — sans numéro de client |
+| `conflit_traiter` (`restaurant_id`, `conflit_id`) | ADMIN | marque traité un code encaissé deux fois (tracé `PROMO_CONFLIT_TRAITE`) ; 409 si déjà traité |
 | `lot_codes` (`restaurant_id`, `lot_id`) | ADMIN | codes en clair et coordonnées du restaurant, pour l'impression |
 | `relances` (`restaurant_id?`, `jours?`) | ADMIN | numéros gardés avec consentement, non utilisés, qui expirent dans `jours` (3 par défaut, `null` = tous) |
 
