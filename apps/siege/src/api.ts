@@ -361,6 +361,51 @@ export interface LotPromo {
   conflits: number;
 }
 
+export type CanalPromo = 'SUR_PLACE' | 'TELEPHONE' | 'SITE';
+
+/** Une commande d'un conflit, telle que le cloud la connaît (champs nuls si pas encore remontée). */
+export interface CommandeConflit {
+  numero_ticket: number | null;
+  le: string | null;
+  canal: CanalPromo | null;
+  total: number | null;
+  caissier: string | null;
+}
+
+/** Bilan d'un lot (action `lot_bilan`, PROMO-13) : aucun numéro de client. */
+export interface BilanLot {
+  imprimes: number;
+  gardes: number;
+  reserves: number;
+  utilises: number;
+  /** Commandes encaissées avec un code du lot, annulées exclues. */
+  commandes: number;
+  ca: number;
+  remise: number;
+  panier_moyen: number | null;
+  delai_median_heures: number | null;
+  jours: Array<{ jour: string; gardes: number; utilises: number }>;
+  canaux: Array<{ canal: CanalPromo; utilises: number; ca: number }>;
+  conflits: Array<{
+    id: string;
+    code: string;
+    resolu: boolean;
+    detecte_le: string;
+    a: CommandeConflit;
+    b: CommandeConflit;
+    remise_en_trop: number;
+  }>;
+  utilisations: Array<{
+    code: string;
+    le: string;
+    canal: CanalPromo;
+    numero_ticket: number | null;
+    total: number | null;
+    remise: number | null;
+    annulee: boolean;
+  }>;
+}
+
 /** Fiche promo d'un restaurant du cloud (action `restaurants_promo`). */
 export interface FichePromo {
   restaurant_id: string;

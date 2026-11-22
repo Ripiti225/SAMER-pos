@@ -46,7 +46,7 @@ fermée jusqu'au branchement du site (PROMO-11).
 
 | Action | Corps | Réponse `ok: true` |
 |---|---|---|
-| `consulter` | `code` | `restaurant`, `pourcentage`, `valide_du`, `valide_au`, `deja_garde` |
+| `consulter` | `code` | `restaurant`, `pourcentage`, `valide_du`, `valide_au`, `deja_garde`, `exclusions` (noms des catégories exclues, triés) |
 | `activer` | `code`, `telephone`, `consentement: true` | `deja`, `restaurant`, `pourcentage`, dates |
 | `verifier` | `slug_site`, `code` **ou** `telephone`, `lignes?` | `code_masque`, `code` (si tapé), `pourcentage`, `valide_au`, `remise_estimee?` |
 | `reserver` | idem + `ref_site` | idem + `reserve_jusqua` (2 h) |
@@ -78,6 +78,8 @@ Jeton de session, comme la fonction `siege`.
 | `lots` (`restaurant_id?`) | tous | lots et compteurs : gardés, réservés, utilisés par canal, CA, remise, conflits |
 | `lot_creer` (`restaurant_id`, `libelle`, `quantite`, `pourcentage?`, `du?`, `au?`) | ADMIN | crée le lot et ses codes ; par défaut du lendemain pendant 28 jours |
 | `lot_annuler` (`restaurant_id`, `lot_id`) | ADMIN | codes non utilisés → `ANNULE` |
+| `lot_bilan` (`restaurant_id`, `lot_id`) | tous | bilan du lot (PROMO-13) : tunnel, CA, remise, panier moyen, délai médian gardé → utilisé, jour par jour, canaux, conflits, utilisations — sans numéro de client |
+| `conflit_traiter` (`restaurant_id`, `conflit_id`) | ADMIN | marque traité un code encaissé deux fois (tracé `PROMO_CONFLIT_TRAITE`) ; 409 si déjà traité |
 | `lot_codes` (`restaurant_id`, `lot_id`) | ADMIN | codes en clair et coordonnées du restaurant, pour l'impression |
 | `relances` (`restaurant_id?`, `jours?`) | ADMIN | numéros gardés avec consentement, non utilisés, qui expirent dans `jours` (3 par défaut, `null` = tous) |
 
@@ -96,3 +98,70 @@ tracées dans `siege_audit`.
 
 Contrôle : sans session, `{"action":"lots"}` répond 401 « Connexion requise » ;
 sans secret, `{"action":"verifier"}` répond 401 « Accès refusé ».
+
+## Où chaque règle est vérifiée (PROMO-05)
+
+Deux jeux de tests, selon qui applique la règle :
+
+- **Base** : `supabase/tests/promo_regles.sql`. À coller dans l'éditeur SQL de
+  `pos-samer-cloud`. Il se termine toujours par une erreur volontaire, qui
+  annule tout ce qu'il a écrit : « PROMO TESTS OK — n vérifications » ou
+  « PROMO ÉCHEC — » suivi de la règle cassée. Sans trace, rejouable en production.
+- **Fonction `promo`** : `node --experimental-strip-types --test supabase/functions/_shared/promo.test.ts`.
+
+| Règle | Ce qui la garantit | Test |
+|---|---|---|
+| R1 usage unique | contraintes de statut ; réservation par `UPDATE … WHERE statut = 'DISPONIBLE'` : une seule gagne | SQL |
+| R2 restaurant | fonction `promo` (`refusUtilisation`) | TS |
+| R3 validité | fonction `promo`, dernier jour inclus | TS |
+| R4 exclusion Chawarma | table `promo_categories_exclues` (descend aux caisses) ; remise estimée hors lignes exclues | SQL + TS |
+| R5 montant | arrondi ligne par ligne comme la caisse | TS |
+| R6 un code par commande | caisse (PROMO-09) | — |
+| R7 panier sans éligible | fonction `promo` (`NO_ELIGIBLE_ITEM`) | TS |
+| R8 annulation de commande | caisse (PROMO-10) | — |
+| R9 libération des réservations | `promo_liberer_reservations` + pg_cron (PROMO-04) | SQL, sauté tant que PROMO-04 n'est pas appliqué |
+| R10 seule la caisse consomme | aucune action du site n'écrit `UTILISE` | revue de code |
+| R11 un code, un numéro | `UPDATE … WHERE telephone IS NULL` : le second numéro ne trouve plus rien | SQL + TS |
+| R12 recherche par numéro | format `+225XXXXXXXXXX` (contrainte) ; le plus proche de l'expiration d'abord | SQL + TS |
+| R13 consentement | contrainte « pas de numéro sans consentement » + refus côté fonction | SQL + TS |
+
+Le script vérifie aussi le tirage d'un lot (codes uniques, préfixe), son
+annulation (les utilisés restent), les compteurs de la console, les relances,
+la version qui fait descendre chaque modification aux caisses, et que rien
+n'est ouvert à la clé publique (fonctions et tables).
+
+Une vraie course entre deux connexions ne se rejoue pas depuis l'éditeur SQL :
+le test vérifie la condition qui la tranche. Postgres réévalue un `UPDATE …
+WHERE statut = 'DISPONIBLE'` mis en attente par un autre : le second ne trouve
+plus la ligne.
+
+## Planche vinyle (PROMO-07)
+
+Console › Codes promo cartes › « Planche PDF » sur un lot. Fabriquée dans le
+navigateur à partir des codes du lot (hors codes annulés) : rien n'est stocké,
+elle se retélécharge à volonté. Code : `apps/siege/src/planche/`.
+
+- **PDF impression + découpe** (`lot-<id>-impression-decoupe.pdf`) : une page =
+  une feuille de 1 000 × 1 000 mm à l'échelle 1:1. Autocollant 85 × 55 mm,
+  fond perdu 2 mm, écart 4 mm, marge 20 mm : 10 × 16 = 160 par feuille ; la
+  dernière feuille n'a pas d'emplacement vide.
+- **Trait de coupe** : rectangle à coins arrondis de 3 mm, 0,25 pt, dans la
+  couleur d'accompagnement `CutContour` (Separation, magenta à l'écran), en
+  surimpression, sur le calque `CutContour`. Le RIP l'envoie au traceur ; il
+  ne s'imprime pas. Aucun repère de calage : l'imprimeur pose les siens dans
+  la marge.
+- **SVG de découpe seule** : un fichier par feuille
+  (`lot-<id>-decoupe-seule[-feuille-n-sur-N].svg`), mêmes positions, en mm.
+  Le brief prévoyait un seul fichier : un traceur coupe une feuille à la fois.
+- **Impression** : CMJN, polices incorporées (Archivo Black, Inter, Kaushan
+  Script, JetBrains Mono), QR vectoriel de 22 mm, correction M, qui ouvre
+  `https://samer-delivery-site.vercel.app/fr/promo?c=<CODE>`. Textes et QR à
+  3 mm au moins du trait de coupe, aucun texte sous 2 mm (≈ 6 pt). Une adresse
+  trop longue est raccourcie à sa première virgule, et la console le dit.
+- **Réglages** (feuille, autocollant, fond perdu, écart, marge, rayon) :
+  modifiables dans la fenêtre, retenus par le navigateur.
+
+Écarts avec la maquette du 19/11 : QR porté de 20,7 à 22 mm (brief), bandeau
+du bas remonté pour rester à 3 mm du bord. Les couleurs CMJN des marques sont
+des équivalences à valider sur une épreuve de l'imprimeur
+(`apps/siege/src/planche/contenu.ts`, `COULEURS`).

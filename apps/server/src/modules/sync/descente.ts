@@ -19,7 +19,9 @@ import type { ClientCloud, LigneDescente } from './cloud-client.js';
  * catégorie d'un article diffusé).
  */
 // NOTES (2026-10-15) : note des caissiers calculée par SamerTrackly, lecture seule ici.
-const FLUX = ['CATALOGUE', 'PROMOTIONS', 'UTILISATEURS', 'PARAMETRES', 'ROLES', 'NOTES'] as const;
+// PROMO_CODES (2026-11-20) : lots, codes et catégories exclues des codes promo
+// cartes de CE restaurant, pour valider un code hors ligne (modules/promo).
+const FLUX = ['CATALOGUE', 'PROMOTIONS', 'UTILISATEURS', 'PARAMETRES', 'ROLES', 'NOTES', 'PROMO_CODES'] as const;
 
 /** Cible de conflit par table (id sauf combo_articles et parametres_locaux). */
 const CONFLIT: Record<string, string[]> = {
@@ -50,6 +52,12 @@ const CONFLIT: Record<string, string[]> = {
   inventaire_consommations: ['id'],
   // Note des caissiers : une ligne par utilisateur du site (clé = son id).
   notes_caissiers: ['id'],
+  // Codes promo cartes. L'UPSERT n'écrit que les colonnes reçues : les colonnes
+  // `local_*` de promo_codes (ce que cette caisse a fait du code) ne viennent
+  // pas du cloud et ne sont donc jamais écrasées — le statut ne recule pas.
+  promo_lots: ['id'],
+  promo_codes: ['id'],
+  promo_categories_exclues: ['id'],
   // `role_permissions` n'est PAS dans cette table : elle ne s'applique pas par
   // UPSERT mais par REMPLACEMENT — voir `appliquerPermissionsRole`.
 };

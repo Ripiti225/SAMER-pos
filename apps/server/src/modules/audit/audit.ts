@@ -49,6 +49,9 @@ export type ActionAudit =
   | 'CREATION_EMPLOYE'
   | 'MODIF_EMPLOYE'
   | 'REINIT_PIN'
+  // Codes promo cartes (PROMO-09)
+  | 'CODE_PROMO_APPLIQUE'
+  | 'CODE_PROMO_RETIRE'
   | 'DESACTIVATION_EMPLOYE'
   | 'MODIF_ZONE'
   | 'MODIF_TABLE'

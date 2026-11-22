@@ -29,6 +29,8 @@ export type TableSynchronisee =
   | 'utilisateurs'
   // Sprint 4C : disponibilité locale (remonte au cloud à titre d'information).
   | 'disponibilite_locale'
+  // Codes promo cartes (PROMO-10) : événements RESERVE / UTILISE / LIBERE, sans table locale.
+  | 'promo_utilisations'
   /**
    * 2026-08-25 — référentiel de salle. Sans lui, le cloud reçoit
    * `commandes.table_id`, un uuid qu'il ne sait traduire avec rien : le siège

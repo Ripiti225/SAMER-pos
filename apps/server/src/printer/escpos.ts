@@ -71,6 +71,8 @@ function ascii(s: string): string {
   return s
     .replace(/−/g, '-')
     .replace(/[’‘]/g, "'")
+    // Code promo masqué (PAM-•••QX) : l'étoile se lit, l'espace ferait croire à un trou.
+    .replace(/•/g, '*')
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .replace(/[   ]/g, ' ')
@@ -454,6 +456,7 @@ function corpsArticles(r: Ruban, c: CommandeVue): void {
   r.tiret();
   r.duo('Sous-total', formatFCFA(c.sous_total));
   if (c.promo_montant > 0) r.duo(`Promo ${c.promo_nom ?? ''}`, `-${formatFCFA(c.promo_montant)}`);
+  if (c.code_promo_montant > 0 && c.code_promo) r.duo(`Code promo -${c.code_promo.pourcentage} % ${c.code_promo.code_masque}`, `-${formatFCFA(c.code_promo_montant)}`);
   if (c.remise_montant > 0) r.duo('Remise', `-${formatFCFA(c.remise_montant)}`);
   if (c.fidelite_montant > 0) r.duo('Fidelite', `-${formatFCFA(c.fidelite_montant)}`);
   r.gras(true).taille(2).duo('TOTAL', formatFCFA(c.total)).taille().gras(false);

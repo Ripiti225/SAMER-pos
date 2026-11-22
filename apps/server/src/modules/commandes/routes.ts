@@ -4,6 +4,8 @@ import type { CommandeEnCoursVue } from '@pos/shared';
 import {
   AjouterItemSchema,
   AnnulerCommandeSchema,
+  AppliquerCodePromoSchema,
+  CanalCodePromoSchema,
   AnnulerItemSchema,
   CreerCommandeSchema,
   DeplacerCommandeSchema,
@@ -24,6 +26,7 @@ import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
 import { verifierPinManager } from '../auth/pin.js';
 import { exigerAccesTable } from '../tables/propriete.js';
+import { libererCode, lignesExclues, reserverCode, resoudreSaisie } from '../promo/service.js';
 import { imprimerBonsEnvoi } from '../../printer/bons.js';
 import {
   paiementExistePourCommande,
@@ -37,12 +40,21 @@ import {
   exigerModifiable,
   figerNouvelItem,
   genererCodeCommande,
+  lignesPourCodePromo,
   majStatutTable,
   marquerEnvoiCuisine,
   recalculerTotaux,
   serviceOuvertDe,
   verrouillerCommande,
 } from './service.js';
+
+/** Code promo, remise : rien ne change plus une fois qu'un client a commencé à payer. */
+async function exigerAvantPaiement(tx: Parameters<typeof paiementExistePourCommande>[0], id: string, message: string) {
+  if (await paiementExistePourCommande(tx, id)) throw new ErreurMetier(message, 409);
+  if (await sousNoteArticlesActiveExiste(tx, id)) {
+    throw new ErreurMetier('Annulez d’abord les paiements par articles en attente', 409);
+  }
+}
 
 export function routesCommandes(app: FastifyInstance): void {
   // Nouvelle commande — exige un service ouvert (le n° de ticket est définitif)
@@ -276,6 +288,7 @@ export function routesCommandes(app: FastifyInstance): void {
         .where(and(eq(commandeItems.commande_id, id), ne(commandeItems.statut_cuisine, 'ANNULE')));
       const sourceVide = Number(reste?.nb ?? 0) === 0;
       if (sourceVide) {
+        await libererCode(tx, source.code_promo_id, id);
         const [majSource] = await tx.update(commandes).set({ statut: 'ANNULEE', updated_at: new Date() })
           .where(eq(commandes.id, id)).returning();
         await ecrireOutbox(tx, 'commandes', 'UPDATE', id, majSource as unknown as Record<string, unknown>);
@@ -566,6 +579,101 @@ export function routesCommandes(app: FastifyInstance): void {
     return vue;
   });
 
+  /**
+   * Code promo carte (brief PROMO § 5) : le code de l'autocollant OU le numéro
+   * du client. Validé HORS LIGNE sur les codes descendus, puis réservé pour
+   * cette commande. Pas de PIN manager : c'est un droit du client, pas une
+   * faveur. Un seul code par commande (R6), avant tout paiement.
+   */
+  app.post('/api/commandes/:id/code-promo', { preHandler: app.exigePermission('salle.commande') }, async (req) => {
+    const { id } = req.params as { id: string };
+    const corps = valider(AppliquerCodePromoSchema, req.body);
+
+    const resultat = await db.transaction(async (tx) => {
+      const c = await verrouillerCommande(tx, id);
+      exigerModifiable(c);
+      await exigerAvantPaiement(tx, id, 'Le code promo ne peut plus changer après un paiement');
+      if (c.code_promo_id) {
+        throw new ErreurMetier('Un seul code par commande : retirez d’abord celui qui est appliqué.', 409);
+      }
+      const trouve = await resoudreSaisie(tx, corps.saisie, id, new Date());
+
+      // R7 : il faut au moins une ligne remisable.
+      const items = await tx.select().from(commandeItems).where(eq(commandeItems.commande_id, id));
+      const lignes = lignesPourCodePromo(items);
+      if (lignes.length === 0) throw new ErreurMetier('Ajoutez d’abord les articles de la commande.', 400);
+      const exclues = await lignesExclues(tx, lignes);
+      if (lignes.every((l) => exclues.has(l.id))) {
+        throw new ErreurMetier('Aucun article éligible : le code ne s’applique pas au Chawarma.', 400);
+      }
+
+      await reserverCode(tx, trouve.code.id, id, corps.canal);
+      await tx
+        .update(commandes)
+        .set({ code_promo_id: trouve.code.id, code_promo_code: trouve.code.code, code_promo_canal: corps.canal, updated_at: new Date() })
+        .where(eq(commandes.id, id));
+      await journaliser(tx, {
+        user_id: req.session!.utilisateur_id,
+        action: 'CODE_PROMO_APPLIQUE',
+        entite: 'commandes',
+        entite_id: id,
+        meta: { code_id: trouve.code.id, par_numero: trouve.parNumero, canal: corps.canal, pourcentage: trouve.lot.pourcentage },
+      });
+      await recalculerTotaux(tx, id);
+      return { commande: await chargerCommandeVue(tx, id), autres_codes: trouve.autres, par_numero: trouve.parNumero };
+    });
+
+    app.diffuser('commande', id);
+    return resultat;
+  });
+
+  app.delete('/api/commandes/:id/code-promo', { preHandler: app.exigePermission('salle.commande') }, async (req) => {
+    const { id } = req.params as { id: string };
+    const vue = await db.transaction(async (tx) => {
+      const c = await verrouillerCommande(tx, id);
+      exigerModifiable(c);
+      await exigerAvantPaiement(tx, id, 'Le code promo ne peut plus changer après un paiement');
+      if (!c.code_promo_id) return chargerCommandeVue(tx, id);
+      await libererCode(tx, c.code_promo_id, id);
+      await tx
+        .update(commandes)
+        .set({ code_promo_id: null, code_promo_code: null, code_promo_canal: null, code_promo_montant: 0, updated_at: new Date() })
+        .where(eq(commandes.id, id));
+      await journaliser(tx, {
+        user_id: req.session!.utilisateur_id,
+        action: 'CODE_PROMO_RETIRE',
+        entite: 'commandes',
+        entite_id: id,
+        montant: c.code_promo_montant,
+        meta: { code_id: c.code_promo_id },
+      });
+      await recalculerTotaux(tx, id);
+      return chargerCommandeVue(tx, id);
+    });
+    app.diffuser('commande', id);
+    return vue;
+  });
+
+  // Canal du code (sur place, téléphone, site) : modifiable jusqu'à l'encaissement.
+  app.put('/api/commandes/:id/code-promo/canal', { preHandler: app.exigePermission('salle.commande') }, async (req) => {
+    const { id } = req.params as { id: string };
+    const corps = valider(CanalCodePromoSchema, req.body);
+    const vue = await db.transaction(async (tx) => {
+      const c = await verrouillerCommande(tx, id);
+      exigerModifiable(c);
+      if (!c.code_promo_id) throw new ErreurMetier('Aucun code promo sur cette commande', 409);
+      const [maj] = await tx
+        .update(commandes)
+        .set({ code_promo_canal: corps.canal, updated_at: new Date() })
+        .where(eq(commandes.id, id))
+        .returning();
+      await ecrireOutbox(tx, 'commandes', 'UPDATE', id, maj as unknown as Record<string, unknown>);
+      return chargerCommandeVue(tx, id);
+    });
+    app.diffuser('commande', id);
+    return vue;
+  });
+
   // Remise : PIN manager + motif OBLIGATOIRES (§ actions protégées), audit
   app.post('/api/commandes/:id/remise', { preHandler: app.exigePermission('caisse.remise') }, async (req) => {
     const { id } = req.params as { id: string };
@@ -627,6 +735,8 @@ export function routesCommandes(app: FastifyInstance): void {
       if (await sousNoteArticlesActiveExiste(tx, id)) {
         throw new ErreurMetier('Annulez d’abord les paiements par articles en attente', 409);
       }
+      // R8 : annulée avant encaissement, le code redevient utilisable (et reste sur le numéro).
+      await libererCode(tx, c.code_promo_id, id);
       const [maj] = await tx
         .update(commandes)
         .set({ statut: 'ANNULEE', updated_at: new Date() })
@@ -677,6 +787,7 @@ export function routesCommandes(app: FastifyInstance): void {
         .from(commandeItems)
         .where(eq(commandeItems.commande_id, id));
       if (Number(compte?.nb ?? 0) > 0) return { abandonnee: false };
+      await libererCode(tx, c.code_promo_id, id);
 
       const [maj] = await tx
         .update(commandes)

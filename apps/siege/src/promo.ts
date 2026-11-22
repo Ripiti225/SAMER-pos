@@ -1,6 +1,6 @@
 // Onglet « Codes promo cartes » — règles d'affichage, sans React ni réseau.
 // Abidjan est à UTC+0 toute l'année : une date du jour est une date UTC.
-import type { CodePromo, LotPromo, RelancePromo } from './api';
+import type { BilanLot, CanalPromo, CodePromo, LotPromo, RelancePromo } from './api';
 
 const JOUR_MS = 24 * 3600 * 1000;
 
@@ -164,4 +164,57 @@ export function lienWhatsApp(relance: RelancePromo, nomResto: string): string {
     `Bonjour ! Ton −${relance.pourcentage} % chez ${nomResto} expire ${jour} ${jourMois(relance.valide_au)}. ` +
     'Donne simplement ton numéro à ta prochaine commande.';
   return `https://wa.me/${relance.telephone.replace(/^\+/, '')}?text=${encodeURIComponent(message)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Bilan d'un lot (PROMO-13)
+// ---------------------------------------------------------------------------
+
+/** Libellés des canaux sur l'écran du bilan. */
+export const CANAUX_BILAN: Record<CanalPromo, string> = {
+  SUR_PLACE: 'Caisse (sur place, à emporter)',
+  TELEPHONE: 'Téléphone',
+  SITE: 'Site (WhatsApp)',
+};
+
+/** Part arrondie, en pourcentage lisible ; `null` quand la base est vide. */
+export function part(n: number, sur: number): string | null {
+  if (sur <= 0) return null;
+  const p = (n / sur) * 100;
+  return `${p > 0 && p < 10 ? Math.round(p * 10) / 10 : Math.round(p)} %`.replace('.', ',');
+}
+
+/** Délai médian « gardé → utilisé » : en heures sous deux jours, en jours au-delà. */
+export function delaiLisible(heures: number | null): string {
+  if (heures === null) return '—';
+  if (heures < 1) return 'moins d’1 h';
+  if (heures < 48) return `${Math.round(heures)} h`;
+  return `${Math.round(heures / 24)} jours`;
+}
+
+/** `2026-11-22T13:05:00Z` → `22/11 13:05` (Abidjan = UTC). */
+export function jourHeure(iso: string): string {
+  return `${jourMois(iso)} ${iso.slice(11, 16)}`;
+}
+
+/** Taille d'une barre (hauteur ou largeur) en % de la plus grande ; 0 reste à 0. */
+export function proportion(n: number, max: number): string {
+  return max > 0 ? `${Math.round((n / max) * 100)}%` : '0%';
+}
+
+/** CSV du bilan : une ligne par code utilisé, sans numéro de client. */
+export function csvBilan(bilan: BilanLot): string {
+  const lignes = [['Code', 'Utilisé le', 'Canal', 'Ticket', 'Total (FCFA)', 'Remise (FCFA)', 'Commande annulée']];
+  for (const u of bilan.utilisations) {
+    lignes.push([
+      u.code,
+      jourHeure(u.le),
+      LIBELLES_CANAL[u.canal],
+      u.numero_ticket === null ? '' : String(u.numero_ticket),
+      u.total === null ? '' : String(u.total),
+      u.remise === null ? '' : String(u.remise),
+      u.annulee ? 'oui' : 'non',
+    ]);
+  }
+  return `${lignes.map((l) => l.map(cellule).join(';')).join('\r\n')}\r\n`;
 }

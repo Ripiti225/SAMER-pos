@@ -50,7 +50,16 @@ export function SelectionArticlesPaiement({
   const promoSelection = part(commande.promo_montant, notesActives.reduce((s, note) => s + note.promo_montant, 0));
   const remiseSelection = part(commande.remise_montant, notesActives.reduce((s, note) => s + note.remise_montant, 0));
   const fideliteGlobaleSelection = part(commande.fidelite_montant, notesActives.reduce((s, note) => s + note.fidelite_montant, 0));
-  const totalSelection = Math.max(0, totalBrut - promoSelection - remiseSelection - fideliteGlobaleSelection);
+  // Code promo carte : au prorata des lignes ÉLIGIBLES, comme le serveur (une
+  // sélection de Chawarma seul n'en prend rien). Estimation : le serveur tranche.
+  const eligibleBrut = (quantite: (item: (typeof disponibles)[number]) => number) =>
+    disponibles.filter((item) => !item.exclue_code_promo).reduce((s, item) => s + (item.total_ligne / item.quantite) * quantite(item), 0);
+  const eligibleSelection = eligibleBrut((item) => quantites[item.id] ?? 0);
+  const eligibleDisponible = eligibleBrut((item) => item.quantite_disponible);
+  const codeRestant = Math.max(0, commande.code_promo_montant - notesActives.reduce((s, note) => s + note.code_promo_montant, 0));
+  const codeSelection =
+    eligibleSelection <= 0 ? 0 : eligibleSelection >= eligibleDisponible ? codeRestant : Math.floor((codeRestant * eligibleSelection) / eligibleDisponible);
+  const totalSelection = Math.max(0, totalBrut - promoSelection - remiseSelection - codeSelection - fideliteGlobaleSelection);
   const toutSelectionne = disponibles.every((item) => (quantites[item.id] ?? 0) === item.quantite_disponible);
 
   const changer = (id: string, maximum: number, delta: number) => {

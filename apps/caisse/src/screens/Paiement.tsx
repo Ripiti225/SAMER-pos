@@ -332,6 +332,13 @@ export function Paiement() {
               {commande.promo_montant > 0 && (
                 <LigneTotal libelle={`Promo ${commande.promo_nom ?? ''}`} valeur={`−${formatFCFA(commande.promo_montant)}`} vert />
               )}
+              {commande.code_promo_montant > 0 && commande.code_promo && (
+                <LigneTotal
+                  libelle={`Code promo −${commande.code_promo.pourcentage} % · ${commande.code_promo.code_masque}`}
+                  valeur={`−${formatFCFA(commande.code_promo_montant)}`}
+                  vert
+                />
+              )}
               {commande.remise_montant > 0 && (
                 <LigneTotal libelle="Remise" valeur={`−${formatFCFA(commande.remise_montant)}`} vert />
               )}

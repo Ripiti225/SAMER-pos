@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { CodePromo, LotPromo, RelancePromo } from './api';
+import type { BilanLot, CodePromo, LotPromo, RelancePromo } from './api';
 import {
+  csvBilan,
   csvCodes,
+  delaiLisible,
+  proportion,
+  jourHeure,
+  part,
   csvRelances,
   datesParDefaut,
   etatLot,
@@ -134,5 +139,44 @@ describe('relance WhatsApp', () => {
     expect(expireDans(r.valide_au, new Date('2026-11-21T10:00:00Z'))).toBe('demain');
     expect(expireDans(r.valide_au, new Date('2026-11-22T10:00:00Z'))).toBe('aujourd’hui');
     expect(expireDans(r.valide_au, new Date('2026-11-19T10:00:00Z'))).toBe('dans 3 jours');
+  });
+});
+
+describe('bilan d’un lot', () => {
+  it('donne les parts lisibles, avec une décimale sous 10 %', () => {
+    expect(part(44, 200)).toBe('22 %');
+    expect(part(14, 200)).toBe('7 %');
+    expect(part(3, 200)).toBe('1,5 %');
+    expect(part(0, 200)).toBe('0 %');
+    expect(part(3, 0)).toBeNull();
+  });
+
+  it('écrit le délai médian en heures, puis en jours', () => {
+    expect(delaiLisible(null)).toBe('—');
+    expect(delaiLisible(0.4)).toBe('moins d’1 h');
+    expect(delaiLisible(23.6)).toBe('24 h');
+    expect(delaiLisible(72.2)).toBe('3 jours');
+  });
+
+  it('dimensionne les barres sur la plus haute', () => {
+    expect(proportion(9, 9)).toBe('100%');
+    expect(proportion(3, 9)).toBe('33%');
+    expect(proportion(0, 0)).toBe('0%');
+    expect(jourHeure('2026-11-22T13:05:41Z')).toBe('22/11 13:05');
+  });
+
+  it('exporte une ligne par code utilisé, sans numéro de client', () => {
+    const bilan = {
+      utilisations: [
+        { code: 'PAM-7K3QX', le: '2026-11-22T13:05:00Z', canal: 'TELEPHONE', numero_ticket: 1042, total: 12000, remise: 2400, annulee: false },
+        { code: 'PAM-H4M2P', le: '2026-11-23T09:00:00Z', canal: 'SITE', numero_ticket: null, total: null, remise: null, annulee: false },
+      ],
+    } as unknown as BilanLot;
+
+    expect(csvBilan(bilan)).toBe(
+      'Code;Utilisé le;Canal;Ticket;Total (FCFA);Remise (FCFA);Commande annulée\r\n' +
+        'PAM-7K3QX;22/11 13:05;téléphone;1042;12000;2400;non\r\n' +
+        'PAM-H4M2P;23/11 09:00;site;;;;non\r\n',
+    );
   });
 });

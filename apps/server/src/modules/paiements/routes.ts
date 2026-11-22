@@ -15,6 +15,7 @@ import { valider } from '../../lib/valider.js';
 import { journaliser } from '../audit/audit.js';
 import { verifierPinAdministrateur } from '../auth/pin.js';
 import { crediterVente, debiterPaiementPoints } from '../fidelite/service.js';
+import { consommerCode } from '../promo/service.js';
 import {
   chargerCommandeVue,
   codeLibreDansService,
@@ -276,6 +277,8 @@ export function routesPaiements(app: FastifyInstance): void {
           .where(eq(commandes.id, id))
           .returning();
         await ecrireOutbox(tx, 'commandes', 'UPDATE', id, maj as unknown as Record<string, unknown>);
+        // Code promo carte : utilisé à l'encaissement, et nulle part ailleurs (R10).
+        await consommerCode(tx, maj!);
         await majStatutTable(tx, c.table_id, 'LIBRE');
         // CORRECTIONS3 point 4 : l'encaissement efface les appels/badges
         // résiduels de la table (traités par le caissier).
@@ -362,6 +365,7 @@ export function routesPaiements(app: FastifyInstance): void {
       if (!estLivraisonSansEncaissement(c.partenaire)) {
         throw new ErreurMetier('Cette commande s’encaisse normalement', 400);
       }
+      if (c.code_promo_id) throw new ErreurMetier('Retirez d’abord le code promo : une livraison partenaire n’en prend pas', 409);
 
       // Rattachement au service du caissier (comme un paiement) pour l'audit et
       // la comptabilisation dans SON rapport Z.
@@ -419,6 +423,7 @@ export function routesPaiements(app: FastifyInstance): void {
       if (c.statut === 'PAYEE') throw new ErreurMetier('Cette commande est déjà clôturée', 409);
       if (!c.offert) throw new ErreurMetier('Cette commande n’est pas un Kdo', 400);
       if (c.total <= 0) throw new ErreurMetier('Ajoutez des articles avant de valider le Kdo', 400);
+      if (c.code_promo_id) throw new ErreurMetier('Retirez d’abord le code promo : un repas offert n’en prend pas', 409);
 
       const serviceId = c.service_id ?? service.id;
       const [maj] = await tx

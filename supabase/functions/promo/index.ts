@@ -6,7 +6,8 @@
 //     celle de Vercel). Actions `consulter`, `activer`, `verifier`, `reserver`.
 //     Limite : 10 codes faux par IP et par heure, puis 1 h de blocage.
 //   * la CONSOLE DU SIÈGE : jeton de session, comme la fonction `siege`.
-//     Actions `lots`, `lot_creer`, `lot_annuler`, `lot_codes`, `relances`,
+//     Actions `lots`, `lot_bilan`, `lot_creer`, `lot_annuler`, `lot_codes`,
+//     `conflit_traiter`, `relances`,
 //     `restaurants_promo`, `restaurant_promo_modifier`, `exclusions`,
 //     `categorie_exclure`.
 //
@@ -165,6 +166,32 @@ async function lireRestaurant(admin: SupabaseClient, colonne: 'restaurant_id' | 
   return data as { restaurant_id: string; nom: string; marque: string; telephone: string | null; adresse: string | null; slug_site: string | null } | null;
 }
 
+/**
+ * Noms des catégories exclues du restaurant (« Hors Chawarma »), pour que la
+ * page dise la vérité quand le siège change les exclusions. Les combos qui
+ * contiennent un article exclu le sont aussi, sans être listés ici.
+ */
+async function lireExclusions(admin: SupabaseClient, restaurantId: string): Promise<string[]> {
+  const { data, error } = await admin
+    .from('promo_categories_exclues')
+    .select('id')
+    .eq('restaurant_id', restaurantId)
+    .eq('exclue', true);
+  if (error) throw new Error('Lecture des exclusions impossible');
+  const ids = (data ?? []).map((l) => (l as { id: string }).id);
+  if (ids.length === 0) return [];
+  const { data: categories, error: e2 } = await admin
+    .from('categories')
+    .select('nom')
+    .eq('restaurant_id', restaurantId)
+    .in('id', ids);
+  if (e2) throw new Error('Lecture des catégories impossible');
+  return (categories ?? [])
+    .map((c) => (c as { nom: string | null }).nom?.trim())
+    .filter((nom): nom is string => !!nom)
+    .sort((a, b) => a.localeCompare(b, 'fr'));
+}
+
 /** Ce que la page d'activation affiche avant que le client tape son numéro. */
 async function consulter(admin: SupabaseClient, corps: Record<string, unknown>, maintenant: Date): Promise<ResultatSite> {
   const code = normaliserCode(corps.code);
@@ -183,6 +210,7 @@ async function consulter(admin: SupabaseClient, corps: Record<string, unknown>, 
       pourcentage: lu.lot.pourcentage,
       valide_du: lu.lot.valide_du,
       valide_au: lu.lot.valide_au,
+      exclusions: await lireExclusions(admin, resto.restaurant_id),
     },
   };
 }
@@ -445,6 +473,37 @@ async function porteConsole(
         if (error) return jsonCors({ erreur: error.message }, 400);
         await tracer(admin, siege, 'PROMO_LOT_ANNULE', 'promo_lots', corps.lot_id, corps.restaurant_id, { codes_annules: data });
         return jsonCors({ codes_annules: data });
+      }
+
+      // -- Bilan d'un lot (PROMO-13). Niveau LECTURE : aucun numéro de client ;
+      // -- les seuls codes montrés sont déjà utilisés, donc sans valeur.
+      case 'lot_bilan': {
+        if (!uuidValide(corps.restaurant_id) || !uuidValide(corps.lot_id)) {
+          return jsonCors({ erreur: 'Lot non précisé' }, 400);
+        }
+        const { data, error } = await admin.rpc('promo_lot_bilan', {
+          p_restaurant_id: corps.restaurant_id,
+          p_lot_id: corps.lot_id,
+        });
+        if (error) throw new Error('Lecture du bilan impossible');
+        if (!data) return jsonCors({ erreur: 'Ce lot n’existe pas.' }, 404);
+        return jsonCors({ bilan: data });
+      }
+
+      // -- « Marquer traité » un code encaissé deux fois, après vérification avec le restaurant.
+      case 'conflit_traiter': {
+        exigeAdmin(siege);
+        if (!uuidValide(corps.restaurant_id) || !uuidValide(corps.conflit_id)) {
+          return jsonCors({ erreur: 'Conflit non précisé' }, 400);
+        }
+        const { data, error } = await admin.rpc('promo_conflit_traiter', {
+          p_restaurant_id: corps.restaurant_id,
+          p_conflit_id: corps.conflit_id,
+        });
+        if (error) throw new Error('Enregistrement impossible');
+        if (!data) return jsonCors({ erreur: 'Ce conflit est déjà traité.' }, 409);
+        await tracer(admin, siege, 'PROMO_CONFLIT_TRAITE', 'promo_conflits', corps.conflit_id, corps.restaurant_id, {});
+        return jsonCors({ ok: true });
       }
 
       // -- Les codes en clair d'un lot, pour l'impression et le CSV de contrôle.

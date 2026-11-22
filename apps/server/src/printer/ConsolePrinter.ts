@@ -57,6 +57,7 @@ export class ConsolePrinter implements PrinterService {
     lignes.push('-'.repeat(LARGEUR));
     lignes.push(ligne('Sous-total', formatFCFA(c.sous_total)));
     if (c.promo_montant > 0) lignes.push(ligne(`Promo ${c.promo_nom ?? ''}`, `-${formatFCFA(c.promo_montant)}`));
+    if (c.code_promo_montant > 0 && c.code_promo) lignes.push(ligne(`Code promo -${c.code_promo.pourcentage} % ${c.code_promo.code_masque}`, `-${formatFCFA(c.code_promo_montant)}`));
     if (c.remise_montant > 0) lignes.push(ligne('Remise', `-${formatFCFA(c.remise_montant)}`));
     lignes.push(ligne('TOTAL A PAYER', formatFCFA(c.total)));
     lignes.push('='.repeat(LARGEUR));
@@ -81,6 +82,7 @@ export class ConsolePrinter implements PrinterService {
     lignes.push('-'.repeat(LARGEUR));
     lignes.push(ligne('Sous-total', formatFCFA(c.sous_total)));
     if (c.promo_montant > 0) lignes.push(ligne(`Promo ${c.promo_nom ?? ''}`, `-${formatFCFA(c.promo_montant)}`));
+    if (c.code_promo_montant > 0 && c.code_promo) lignes.push(ligne(`Code promo -${c.code_promo.pourcentage} % ${c.code_promo.code_masque}`, `-${formatFCFA(c.code_promo_montant)}`));
     if (c.remise_montant > 0) lignes.push(ligne('Remise', `-${formatFCFA(c.remise_montant)}`));
     lignes.push(ligne('TOTAL', formatFCFA(c.total)));
     lignes.push('-'.repeat(LARGEUR));

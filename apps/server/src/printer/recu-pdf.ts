@@ -108,6 +108,7 @@ export function construireRecuPdf(
 
   duo('Sous-total', formatFCFA(c.sous_total));
   if (c.promo_montant > 0) duo(`Promo ${c.promo_nom ?? ''}`.trim(), `-${formatFCFA(c.promo_montant)}`);
+  if (c.code_promo_montant > 0 && c.code_promo) duo(`Code promo -${c.code_promo.pourcentage} % ${c.code_promo.code_masque}`, `-${formatFCFA(c.code_promo_montant)}`);
   if (c.remise_montant > 0) duo('Remise', `-${formatFCFA(c.remise_montant)}`);
   if (c.fidelite_montant > 0) duo('Points utilisés', `-${formatFCFA(c.fidelite_montant)}`);
   duo('TOTAL', formatFCFA(c.total), true, 12);

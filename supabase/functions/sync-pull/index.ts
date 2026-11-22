@@ -30,6 +30,10 @@ Deno.serve(async (req) => {
   const resultat: Record<string, { lignes: LigneDescente[]; version: number }> = {};
 
   for (const [flux, tables] of Object.entries(FLUX_DESCENTE)) {
+    // Un flux n'est servi qu'à la caisse qui le demande. Une caisse antérieure à
+    // PROMO_CODES ne le connaît pas : sans ce filtre, elle recevrait à chaque
+    // passage (version 0) les milliers de codes du restaurant, pour les ignorer.
+    if (!(flux.toLowerCase() in versions)) continue;
     const depuis = Number(versions[flux.toLowerCase()] ?? 0);
     let maxVersion = depuis;
     let incomplet = false;

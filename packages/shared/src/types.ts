@@ -1,3 +1,4 @@
+import type { CanalCodePromo } from './promo.js';
 import type {
   ModePaiement,
   Partenaire,
@@ -274,6 +275,10 @@ export interface CommandeItemVue {
   /** Sprint 2 : true = déjà parti en cuisine (annulation = action protégée). */
   envoye: boolean;
   total_ligne: number;
+  /** Remise du code promo carte sur cette ligne (0 sans code). */
+  remise_code_promo: number;
+  /** Ligne d'une catégorie exclue des codes carte (Chawarma) : « non éligible ». */
+  exclue_code_promo: boolean;
 }
 
 export interface PaiementVue {
@@ -315,6 +320,7 @@ export interface NoteSplitVue {
   sous_total: number;
   promo_montant: number;
   remise_montant: number;
+  code_promo_montant: number;
   fidelite_montant: number;
   client_fidelite_id: string | null;
   fidelite_points: number;
@@ -333,6 +339,15 @@ export interface NoteSplitVue {
     supplements: { nom: string; prix: number }[];
   }[];
   paiements: PaiementVue[];
+}
+
+/** Code promo carte d'une commande : jamais en clair s'il a été trouvé par le numéro du client. */
+export interface CodePromoVue {
+  code_masque: string;
+  pourcentage: number;
+  canal: CanalCodePromo;
+  /** Dernier jour de validité (ISO). */
+  valide_au: string;
 }
 
 export interface CommandeVue {
@@ -357,6 +372,9 @@ export interface CommandeVue {
   remise_motif: string | null;
   promo_montant: number;
   promo_nom: string | null;
+  /** Code promo carte appliqué (brief PROMO § 5), réservé par cette caisse. */
+  code_promo: CodePromoVue | null;
+  code_promo_montant: number;
   fidelite_montant: number;
   client_fidelite_id: string | null;
   total: number;

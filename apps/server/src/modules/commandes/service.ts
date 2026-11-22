@@ -9,7 +9,8 @@
 import { randomInt } from 'node:crypto';
 import { and, eq, isNull, notInArray, sql } from 'drizzle-orm';
 import type { CommandeVue, CommandeItemVue, TypeCommande } from '@pos/shared';
-import { categorieVisiblePour, libellePartenaire, PREFIXE_CODE_TYPE } from '@pos/shared';
+import { categorieVisiblePour, libellePartenaire, masquerCodePromo, PREFIXE_CODE_TYPE } from '@pos/shared';
+import type { CanalCodePromo } from '@pos/shared';
 import type { DbOuTx } from '../../db/client.js';
 import {
   articles,
@@ -33,6 +34,7 @@ import { promotionActive, type PromotionDb } from '../catalogue/promos.js';
 import { optionsAutoriseesPourArticle } from '../catalogue/options.js';
 import { articleDisponible } from '../catalogue/disponibilite.js';
 import { categorieDisponibleMaintenant } from '../catalogue/horaires.js';
+import { detailCodePromo, type LigneCommande } from '../promo/service.js';
 
 export type CommandeDb = typeof commandes.$inferSelect;
 export type ItemDb = typeof commandeItems.$inferSelect;
@@ -110,6 +112,13 @@ export async function codeLibreDansService(
     meta: { ancien: c.code_commande, nouveau, numero_ticket: Number(c.numero_ticket), service_id: serviceId },
   });
   return nouveau;
+}
+
+/** Les lignes actives d'une commande, montant calculé, pour le code promo carte. */
+export function lignesPourCodePromo(items: ItemDb[]): LigneCommande[] {
+  return items
+    .filter((i) => i.statut_cuisine !== 'ANNULE')
+    .map((i) => ({ id: i.id, article_id: i.article_id, combo_id: i.combo_id, montant: totalLigne(i) }));
 }
 
 export function totalLigne(item: Pick<ItemDb, 'prix_unitaire' | 'quantite' | 'supplements'>): number {
@@ -288,9 +297,15 @@ export async function recalculerTotaux(tx: DbOuTx, commandeId: string, quand = n
   if (!avant) throw introuvable('Commande');
   const remise = Math.min(avant.remise_montant, sousTotal);
   const promoMontant = meilleure ? Math.min(meilleure.montant, sousTotal - remise) : 0;
+  // Code promo carte (PROMO-09) : après le happy hour, en cascade, hors lignes exclues.
+  let codeMontant = 0;
+  if (avant.code_promo_id) {
+    const detail = await detailCodePromo(tx, avant.code_promo_id, lignesPourCodePromo(actifs), meilleure?.promo ?? null, promoMontant);
+    codeMontant = Math.min(detail?.total ?? 0, Math.max(0, sousTotal - remise - promoMontant));
+  }
   // Sprint 4 B : la remise fidélité (points) réduit aussi le total.
-  const fidelite = Math.min(avant.fidelite_montant, Math.max(0, sousTotal - remise - promoMontant));
-  let total = Math.max(0, sousTotal - remise - promoMontant - fidelite);
+  const fidelite = Math.min(avant.fidelite_montant, Math.max(0, sousTotal - remise - promoMontant - codeMontant));
+  let total = Math.max(0, sousTotal - remise - promoMontant - codeMontant - fidelite);
 
   // Une sous-note ARTICLES est un mini-reçu figé. Les ajouts ou augmentations
   // ultérieurs ne doivent jamais modifier ce qu'un convive a déjà accepté.
@@ -308,12 +323,14 @@ export async function recalculerTotaux(tx: DbOuTx, commandeId: string, quand = n
     const notesFigees = notesArticles.reduce((s, note) => s + note.montant, 0);
     const remiseFigee = notesArticles.reduce((s, note) => s + note.remise_montant, 0);
     const promoFigee = notesArticles.reduce((s, note) => s + note.promo_montant, 0);
+    const codeFige = notesArticles.reduce((s, note) => s + note.code_promo_montant, 0);
     const fideliteFigee = notesArticles.reduce((s, note) => s + note.fidelite_montant, 0);
     const libreBrut = Math.max(0, sousTotal - brutFige);
     const libreRemise = Math.max(0, remise - remiseFigee);
     const librePromo = Math.max(0, promoMontant - promoFigee);
+    const libreCode = Math.max(0, codeMontant - codeFige);
     const libreFidelite = Math.max(0, fidelite - fideliteFigee);
-    total = notesFigees + Math.max(0, libreBrut - libreRemise - librePromo - libreFidelite);
+    total = notesFigees + Math.max(0, libreBrut - libreRemise - librePromo - libreCode - libreFidelite);
   }
 
   const [maj] = await tx
@@ -323,6 +340,7 @@ export async function recalculerTotaux(tx: DbOuTx, commandeId: string, quand = n
       remise_montant: remise,
       promo_id: meilleure?.promo.id ?? null,
       promo_montant: promoMontant,
+      code_promo_montant: codeMontant,
       fidelite_montant: fidelite,
       total,
       updated_at: new Date(),
@@ -362,6 +380,11 @@ export async function chargerCommandeVue(dbx: DbOuTx, commandeId: string): Promi
       : Promise.resolve([]),
   ]);
 
+  // Code promo carte : remise et éligibilité de chaque ligne, pour l'addition.
+  const detailCode = c.code_promo_id
+    ? await detailCodePromo(dbx, c.code_promo_id, lignesPourCodePromo(items), promoLigne[0] ?? null, c.promo_montant)
+    : null;
+
   // Somme NETTE : un paiement annulé et sa contre-passation s'annulent.
   const paye = lignesPaiements.reduce((s, p) => s + p.montant, 0);
   // Listes : la paire annulée sort des paiements, et va dans `paiements_annules`.
@@ -390,6 +413,8 @@ export async function chargerCommandeVue(dbx: DbOuTx, commandeId: string): Promi
     statut_cuisine: i.statut_cuisine as CommandeItemVue['statut_cuisine'],
     envoye: i.envoye_le !== null,
     total_ligne: i.statut_cuisine === 'ANNULE' ? 0 : totalLigne(i),
+    remise_code_promo: detailCode?.parLigne.get(i.id) ?? 0,
+    exclue_code_promo: detailCode?.exclues.has(i.id) ?? false,
     };
   });
 
@@ -411,6 +436,16 @@ export async function chargerCommandeVue(dbx: DbOuTx, commandeId: string): Promi
     remise_motif: c.remise_motif,
     promo_montant: c.promo_montant,
     promo_nom: promoLigne[0]?.nom ?? null,
+    code_promo:
+      c.code_promo_code && detailCode
+        ? {
+            code_masque: masquerCodePromo(c.code_promo_code),
+            pourcentage: detailCode.pourcentage,
+            canal: (c.code_promo_canal ?? 'SUR_PLACE') as CanalCodePromo,
+            valide_au: detailCode.valideAu.toISOString(),
+          }
+        : null,
+    code_promo_montant: c.code_promo_montant,
     fidelite_montant: c.fidelite_montant,
     client_fidelite_id: c.client_fidelite_id,
     total: c.total,
@@ -447,6 +482,7 @@ export async function chargerCommandeVue(dbx: DbOuTx, commandeId: string): Promi
         sous_total: n.sous_total,
         promo_montant: n.promo_montant,
         remise_montant: n.remise_montant,
+        code_promo_montant: n.code_promo_montant,
         fidelite_montant: n.fidelite_montant,
         client_fidelite_id: n.client_fidelite_id,
         fidelite_points: n.fidelite_points,
@@ -493,6 +529,7 @@ export function construireFactureDisponible(c: CommandeVue): CommandeVue {
   const sousTotalFige = notesActives.reduce((s, note) => s + note.sous_total, 0);
   const promoFigee = notesActives.reduce((s, note) => s + note.promo_montant, 0);
   const remiseFigee = notesActives.reduce((s, note) => s + note.remise_montant, 0);
+  const codeFige = notesActives.reduce((s, note) => s + note.code_promo_montant, 0);
   const fideliteFigee = notesActives.reduce((s, note) => s + note.fidelite_montant, 0);
   const montantFige = notesActives.reduce((s, note) => s + note.montant, 0);
   return {
@@ -500,6 +537,7 @@ export function construireFactureDisponible(c: CommandeVue): CommandeVue {
     sous_total: Math.max(0, c.sous_total - sousTotalFige),
     promo_montant: Math.max(0, c.promo_montant - promoFigee),
     remise_montant: Math.max(0, c.remise_montant - remiseFigee),
+    code_promo_montant: Math.max(0, c.code_promo_montant - codeFige),
     fidelite_montant: Math.max(0, c.fidelite_montant - fideliteFigee),
     total: Math.max(0, c.total - montantFige),
     paye: 0,
