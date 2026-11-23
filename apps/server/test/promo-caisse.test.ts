@@ -10,7 +10,7 @@ import type { CommandeVue } from '@pos/shared';
 import { construireApp } from '../src/app.js';
 import { ConsolePrinter } from '../src/printer/ConsolePrinter.js';
 import { db, fermerDb } from '../src/db/client.js';
-import { articles, categories, notesSplit, promoCategoriesExclues, promoCodes, promoLots, promotions, syncOutbox } from '../src/db/schema/index.js';
+import { articles, categories, clientsFidelite, notesSplit, promoCategoriesExclues, promoCodes, promoLots, promotions, syncOutbox } from '../src/db/schema/index.js';
 import { PIN_CAISSIER, PIN_MANAGER, resetDonnees, seConnecter, type Donnees } from './aide.js';
 
 let app: FastifyInstance;
@@ -107,6 +107,44 @@ describe('code promo carte en caisse', () => {
     expect((r.json().commande as CommandeVue).code_promo).toMatchObject({ code_masque: 'PAM-•••2P', canal: 'TELEPHONE' });
     expect((await local(ids.telTot)).local_statut).toBe('RESERVE');
     expect((await local(ids.telTard)).local_statut).toBeNull();
+  });
+
+  it('code gardé sur un numéro : le client fidélité est rattaché, sans ressaisie', async () => {
+    const id = await commande(panier());
+    const c = (await appliquer(id, '0708123421')).json().commande as CommandeVue;
+    const [client] = await db.select().from(clientsFidelite).where(eq(clientsFidelite.id, c.client_fidelite_id!));
+    // Le format de la fidélité (tapé au pavé), pas celui des codes promo.
+    expect(client?.telephone).toBe('0708123421');
+
+    // Carte de l'autocollant activée avec ce numéro : même client, pas de doublon.
+    const autre = await commande(panier());
+    const vue = (await appliquer(autre, 'PAM-9TQ7D')).json().commande as CommandeVue;
+    expect(vue.client_fidelite_id).toBe(client!.id);
+    expect(await db.select().from(clientsFidelite)).toHaveLength(1);
+  });
+
+  it('retrouve un client fidélité saisi avec des espaces, et n’écrase pas celui déjà choisi', async () => {
+    const [espace] = await db.insert(clientsFidelite).values({ id: randomUUID(), telephone: '07 08 12 34 21' }).returning();
+    const id = await commande(panier());
+    expect(((await appliquer(id, 'PAM-H4M2P')).json().commande as CommandeVue).client_fidelite_id).toBe(espace!.id);
+
+    const [choisi] = await db.insert(clientsFidelite).values({ id: randomUUID(), telephone: '0101010101' }).returning();
+    const autre = await commande(panier());
+    await app.inject({ method: 'POST', url: `/api/commandes/${autre}/fidelite`, cookies, payload: { telephone: '0101010101' } });
+    expect(((await appliquer(autre, 'PAM-9TQ7D')).json().commande as CommandeVue).client_fidelite_id).toBe(choisi!.id);
+  });
+
+  it('autocollant sans numéro : aucun client inventé', async () => {
+    const id = await commande(panier());
+    expect(((await appliquer(id, 'PAM-7K3QX')).json().commande as CommandeVue).client_fidelite_id).toBeNull();
+  });
+
+  it('livraison : le contact du client est rempli par le numéro du code', async () => {
+    const c = await app.inject({ method: 'POST', url: '/api/commandes', cookies, payload: { type: 'LIVRAISON', partenaire: 'GLOVO' } });
+    const id = c.json().id as string;
+    await app.inject({ method: 'POST', url: `/api/commandes/${id}/items`, cookies, payload: { article_id: donnees.pizza_id, quantite: 1, options: [], supplements: [] } });
+    const vue = (await appliquer(id, '0708123421', 'TELEPHONE')).json().commande as CommandeVue;
+    expect(vue.contact_client).toBe('0708123421');
   });
 
   it('refuse en clair ce qui ne doit pas passer', async () => {

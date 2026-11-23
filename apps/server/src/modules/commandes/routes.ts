@@ -27,6 +27,7 @@ import { journaliser } from '../audit/audit.js';
 import { verifierPinManager } from '../auth/pin.js';
 import { exigerAccesTable } from '../tables/propriete.js';
 import { libererCode, lignesExclues, reserverCode, resoudreSaisie } from '../promo/service.js';
+import { trouverOuCreerParTelephonePromo } from '../fidelite/service.js';
 import { imprimerBonsEnvoi } from '../../printer/bons.js';
 import {
   paiementExistePourCommande,
@@ -608,16 +609,37 @@ export function routesCommandes(app: FastifyInstance): void {
       }
 
       await reserverCode(tx, trouve.code.id, id, corps.canal);
+      // Code gardé sur le numéro du client (trouvé par ce numéro, ou carte
+      // activée avec lui sur le site) : le client est connu, on ne le redemande
+      // pas. Sa fiche fidélité est rattachée, et une livraison reçoit son
+      // contact. Rien n'écrase ce que le caissier a déjà saisi.
+      const telephone = trouve.code.telephone;
+      const client = telephone && !c.client_fidelite_id ? await trouverOuCreerParTelephonePromo(tx, telephone) : null;
+      const contact = telephone && c.type === 'LIVRAISON' && !c.contact_client ? telephone.replace(/^\+225/, '') : null;
       await tx
         .update(commandes)
-        .set({ code_promo_id: trouve.code.id, code_promo_code: trouve.code.code, code_promo_canal: corps.canal, updated_at: new Date() })
+        .set({
+          code_promo_id: trouve.code.id,
+          code_promo_code: trouve.code.code,
+          code_promo_canal: corps.canal,
+          ...(client ? { client_fidelite_id: client.id } : {}),
+          ...(contact ? { contact_client: contact } : {}),
+          updated_at: new Date(),
+        })
         .where(eq(commandes.id, id));
       await journaliser(tx, {
         user_id: req.session!.utilisateur_id,
         action: 'CODE_PROMO_APPLIQUE',
         entite: 'commandes',
         entite_id: id,
-        meta: { code_id: trouve.code.id, par_numero: trouve.parNumero, canal: corps.canal, pourcentage: trouve.lot.pourcentage },
+        meta: {
+          code_id: trouve.code.id,
+          par_numero: trouve.parNumero,
+          canal: corps.canal,
+          pourcentage: trouve.lot.pourcentage,
+          client_rattache: client?.id ?? null,
+          contact_rempli: !!contact,
+        },
       });
       await recalculerTotaux(tx, id);
       return { commande: await chargerCommandeVue(tx, id), autres_codes: trouve.autres, par_numero: trouve.parNumero };

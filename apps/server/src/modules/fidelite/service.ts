@@ -68,6 +68,21 @@ export async function trouverOuCreer(tx: DbOuTx, telephone: string): Promise<Cli
 }
 
 /**
+ * Client d'un numéro venu d'un code promo carte (`+225XXXXXXXXXX`). La fidélité
+ * garde le numéro tel que tapé au pavé (`07…`, 10 chiffres) : on compare donc
+ * les seuls chiffres, et un client créé ici prend ce même format local.
+ */
+export async function trouverOuCreerParTelephonePromo(tx: DbOuTx, telephonePromo: string): Promise<ClientDb> {
+  const local = telephonePromo.replace(/^\+225/, '');
+  const [existant] = await tx
+    .select()
+    .from(clientsFidelite)
+    .where(sql`regexp_replace(${clientsFidelite.telephone}, '[^0-9]', '', 'g') IN (${local}, ${`225${local}`})`)
+    .limit(1);
+  return existant ?? trouverOuCreer(tx, local);
+}
+
+/**
  * Solde vérifiable (§ règle des 24 h) : l'utilisation de points est refusée si
  * la dernière descente cloud date de plus de 24 h, pour éviter la double
  * dépense entre canaux (POS ↔ SAMER DELIV).
